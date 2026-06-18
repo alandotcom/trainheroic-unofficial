@@ -492,6 +492,24 @@ This creates A1: Back Squat, A2: Front Squat displayed as a superset.
 | 14 | RPE | rating |
 | 18 | Time (seconds, alt) | `0:30` |
 
+> **The unit is fixed per exercise — you cannot set it at prescribe time (verified).**
+> On save the API discards the `param_1_type`/`param_2_type` you send and restores
+> the exercise's library defaults. The `param_*_data_N` *values* are kept, so a
+> value sent under the wrong assumed unit renders under the exercise's real unit.
+> - **`param_1_type` (primary) is always forced to the exercise default.** e.g. stock
+>   `Run` (id 82) is `10` (miles); sending `6` (meters) is ignored and `200` shows as
+>   *200 miles*. To program meters, pick a meters-native exercise (`Sprint` 127,
+>   `Rowing` 101, `Shuttle Sprint` 42523) or a custom exercise — there is no metric
+>   "Run". `library_cache.py resolve` now prints `param_1_unit`/`param_2_unit`; check it.
+> - **`param_2_type` (secondary) is forced to the default too, with one exception:**
+>   if the exercise has no secondary param (default `0`/none) you may add weight
+>   (`1`) — this is how weighted Pull-Ups/Dips work. You cannot swap an exercise's
+>   existing secondary unit, and **`2` (% of max) and `14` (RPE) never stick on a
+>   weight-default lift — both coerce to weight, so the numbers render as pounds.**
+>   Put % or RPE in the `instruction` text instead.
+> - `build_workout.py` reads the local exercise cache and prints a `WARNING` when a
+>   sent param type will be overridden.
+
 **Common param type combos (from 2067 exercises):**
 - `p1=3, p2=None` — Reps only (801 exercises, e.g. Plyo Lunge, Lateral Lunge)
 - `p1=3, p2=1` — Reps @ Weight (619 exercises, e.g. Back Squat, Bench Press, Deadlift)
@@ -510,7 +528,7 @@ This creates A1: Back Squat, A2: Front Squat displayed as a superset.
 - `no_sets` = 0 (normal), non-zero may indicate special handling
 - `instruction` = Per-exercise coach notes
 
-**Note:** The API ignores the `title` field and uses the exercise's real title from `exercise_id`. It also may override `param_2_type` based on the exercise's default parameters.
+**Note:** The API ignores the `title` field and uses the exercise's real title from `exercise_id`. It also overrides **both** `param_1_type` and `param_2_type` to the exercise's library defaults (see the fixed-unit note above) — the data values you send are kept, but the unit is the exercise's, not the one you requested.
 
 #### Step 5: Publish Session
 ```
@@ -836,7 +854,15 @@ Many existing exercises default to bodyweight (p2=0 or p2=None):
 
 ### Distance-Based Exercises
 
-Set `param_1_type: 5` for distance (displayed as yards):
+The distance unit is the exercise's fixed default (see the fixed-unit note under
+"Parameter types") — you only get the unit the exercise already carries. The
+examples below work because the `exercise_id`s are **custom** exercises created
+with that `param_1_type`; sending `param_1_type: 5` to a stock reps or miles
+exercise is ignored. To get a unit a stock exercise lacks, create a custom
+exercise with the unit you want, or pick a stock exercise whose default matches
+(`Sprint` 127 = meters, a `*yd` carry = yards, `Run` 82 = miles).
+
+For a custom exercise created with `param_1_type: 5`, distance displays as yards:
 
 ```json
 {
