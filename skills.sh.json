@@ -1,0 +1,10 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "groupings": [
+    {
+      "title": "TrainHeroic",
+      "description": "Authenticated access to the TrainHeroic coaching API: athletes, teams, programs, exercise resolution, workout building, and analytics.",
+      "skills": ["trainheroic-api"]
+    }
+  ]
+}
