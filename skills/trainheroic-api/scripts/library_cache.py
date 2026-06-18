@@ -46,6 +46,31 @@ import th_client  # noqa: E402  (reused auth + request layer)
 
 DEFAULT_DB = Path.home() / ".trainheroic" / "library.db"
 LIBRARY_PATH = "/v5/exerciseLibrary/all"
+
+# Display labels for TrainHeroic parameter types. The unit is FIXED PER EXERCISE
+# (the API forces param_1_type/param_2_type back to the library default on save),
+# so the resolve/search output surfaces it to stop callers from picking, say, the
+# miles "Run" for a metric workout. Keep in sync with build_workout.PARAM_UNIT.
+PARAM_UNIT = {
+    0: None, 1: "lb", 2: "%max", 3: "reps", 4: "sec", 5: "yd", 6: "m",
+    7: "in", 10: "mi", 11: "ft", 12: "in", 13: "bpm", 14: "RPE", 18: "sec",
+}
+
+
+def unit_label(param_type):
+    """Human label for a param type, e.g. 10 -> 'mi'. None/unknown -> None."""
+    if param_type is None:
+        return None
+    return PARAM_UNIT.get(_coerce_int(param_type))
+
+
+def _with_units(row):
+    """Annotate an exercise dict with param_1_unit/param_2_unit for display."""
+    if not isinstance(row, dict):
+        return row
+    row["param_1_unit"] = unit_label(row.get("param_1_type"))
+    row["param_2_unit"] = unit_label(row.get("param_2_type"))
+    return row
 TAG_PATHS = {
     3: "/2.0/coach/tags/getByType/3",  # exercise category
     4: "/2.0/coach/tags/getByType/4",  # training effect
@@ -401,7 +426,21 @@ class ExerciseCache:
     def get(self, ex_id):
         self.ensure_fresh()
         row = self.conn.execute("SELECT * FROM exercise WHERE id=?", (_coerce_int(ex_id),)).fetchone()
-        return dict(row) if row else None
+        return _with_units(dict(row)) if row else None
+
+    def defaults(self, ex_id):
+        """Return (param_1_type, param_2_type) for an exercise id, or None if unknown.
+
+        Offline lookup used by build_workout to warn when a sent param type will be
+        overridden. Does not force a refresh on a miss — a miss just means no warning.
+        """
+        row = self.conn.execute(
+            "SELECT param_1_type, param_2_type FROM exercise WHERE id=?",
+            (_coerce_int(ex_id),),
+        ).fetchone()
+        if not row:
+            return None
+        return _coerce_int(row["param_1_type"]), _coerce_int(row["param_2_type"])
 
     def search(self, query, limit=20):
         self.ensure_fresh()
@@ -414,7 +453,7 @@ class ExerciseCache:
             "WHERE f.title MATCH ? ORDER BY rank LIMIT ?",
             (match, limit),
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [_with_units(dict(r)) for r in rows]
 
     def resolve(self, name):
         """Best-effort name -> exercise. Returns (exercise|None, candidates)."""
@@ -442,7 +481,7 @@ class ExerciseCache:
             "FROM exercise WHERE lower(title)=lower(?) ORDER BY can_edit LIMIT 1",
             (name.strip(),),
         ).fetchone()
-        return dict(row) if row else None
+        return _with_units(dict(row)) if row else None
 
     def stats(self):
         def n(sql):

@@ -178,6 +178,24 @@ Most common combos: `p1=3,p2=1` (reps @ weight, e.g. Back Squat), `p1=3,p2=0`
 `param_1_data_N` is the value for param 1 in set N; `param_2_data_N` likewise for
 param 2. `param_count` is the number of sets (max 10).
 
+### The unit is fixed per exercise (verified)
+
+On save the API **discards the `param_1_type`/`param_2_type` you send and restores
+the exercise's library defaults.** Your `param_*_data_N` values are kept, so a value
+sent under the wrong assumed unit silently renders under the exercise's real unit.
+
+- **`param_1_type` (primary): always forced to the exercise default.** You cannot
+  change the primary unit at prescribe time. Stock `Run` (id 82) is miles, so a
+  "200 m run" written on `Run` renders as *200 miles*. For meters use a meters-native
+  exercise (`Sprint` 127, `Rowing` 101, `Shuttle Sprint` 42523) or a custom exercise.
+- **`param_2_type` (secondary): forced to the default too, except** you may add weight
+  (`1`) to an exercise that has no secondary param (default `0`/none) — that is how
+  weighted Pull-Ups/Dips work. `2` (% of max) and `14` (RPE) do **not** stick on a
+  weight-default lift; both coerce to weight and render as pounds.
+- Check an exercise's real units first: `library_cache.py resolve "<name>"` prints
+  `param_1_unit`/`param_2_unit`. `build_workout.py` also prints a `WARNING` when a
+  sent param type will be overridden, and its read-back labels the stored units.
+
 ## Prescription patterns
 
 - **Superset**: send multiple exercises in one array, same `workout_set_id`/
@@ -187,12 +205,19 @@ param 2. `param_count` is the number of sets (max 10).
 - **Pyramid**: vary both params up then down across the slots
   (e.g. reps `5,3,1,3,5` at weight `185,225,275,225,185`).
 - **Bodyweight**: `param_2_type: 0` and leave every `param_2_data_N` empty.
-- **RPE (verified caveat)**: setting `param_2_type: 14` (RPE) does **not** stick
-  on exercises whose library default param is weight — the API overrides it back
-  to weight, so your RPE numbers render as pounds. Reliable approach: prescribe
-  reps with `param_2_type: 0` (load left blank for athlete autoregulation) and put
-  the target in the exercise `instruction` (e.g. `"RPE 8"`). The `instruction`
-  field round-trips intact.
+- **Weighted bodyweight** (weighted Pull-Up/Dip): add `param_2_type: 1` with loads.
+  Adding weight sticks *only* on exercises whose default secondary is none (`0`).
+- **Max / AMRAP reps (verified)**: the rep slots are free text — put the literal
+  string `"Max"` (or `"AMRAP"`, `"ME"`) in `param_1_data_N`; it round-trips verbatim
+  and you can mix it with numbers (e.g. last set `"Max"`). The builder accepts
+  `"reps": ["Max", "Max"]` or `"reps": [5, 5, "Max"]`.
+- **RPE and % of max (verified caveat)**: `param_2_type: 14` (RPE) and `2` (% of max)
+  do **not** stick on exercises whose library default param is weight — the API
+  overrides them back to weight, so the numbers render as pounds. Reliable approach:
+  prescribe reps with `param_2_type: 0` (load left blank for athlete autoregulation)
+  and put the target in the exercise `instruction` (e.g. `"RPE 8"` or `"75% of max"`).
+  The `instruction` field round-trips intact. (This is one case of the fixed-unit
+  rule above.)
 
 ## Common exercise IDs
 
@@ -211,6 +236,31 @@ param 2. `param_count` is the number of sets (max 10).
 Full library: `GET /v5/exerciseLibrary/all`. Custom exercises:
 `POST /2.0/coach/exercise/create` with your own `title`, `param_1_type`,
 `param_2_type`.
+
+## Leaderboards (Red Zone)
+
+A block can be a **leaderboard** — TrainHeroic's "Red Zone" competition score. The
+UI shows a trophy and "FOR <UNIT>". It is encoded on the block, not the exercise,
+and is a separate unit system (it has Feet/Meters/Calories even when the exercise
+param is locked to another unit):
+
+- `redzone_type` = the score unit; setting it `> 0` flags `is_redzone = 1`.
+- `smaller_is_better = 1` makes the lowest score win (use for Time/Seconds).
+- `redzone_instruction` = optional scoring note.
+
+`redzone_type` values: `0` For Completion, `1` Weight, `2` Reps, `3` Rounds,
+`4` Time, `5` Yards, `6` Meters, `7` Feet, `8` Calories, `10` Miles, `12` Inches,
+`15` Watts, `17` Velocity, `18` Seconds.
+
+In `build_workout.py` add `"leaderboard"` to a block: a unit string (`"rounds"`,
+`"time"`, `"calories"`, ...) or `{"unit": "time", "lowest_wins": true,
+"instruction": "..."}`. Time/Seconds default to lowest-wins.
+
+**When to set one (ask if unclear).** For an **AMRAP**, score = `rounds` (or `reps`);
+for a **"for time"** workout, score = `time` (lowest wins); for a max-distance/row,
+the distance/calorie unit. If the coach's intent is ambiguous, ask rather than guess.
+For an AMRAP also program **multiple sets** (one per expected round) — assume a fit
+athlete's round count (e.g. ~5–6 rounds for a ~10–12 min triplet) and confirm if unsure.
 
 ## Editing and managing sessions
 

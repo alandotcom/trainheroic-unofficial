@@ -23,6 +23,9 @@ Spec format (JSON)
       "title": "Primary Press",
       "type": 2,                       // 1=Conditioning 2=Hypertrophy 4=Strength (default 2)
       "instruction": "",               // optional block note
+      "leaderboard": "rounds",         // optional Red Zone score: rounds/reps/time/
+                                       //   calories/meters/miles/weight/... or
+                                       //   {"unit":"time","lowest_wins":true}
       "exercises": [
         // reps as a per-set list:
         {"id": 1162, "title": "Bench Press", "reps": [10,10,8,8], "rpe": 8},
@@ -60,6 +63,128 @@ import sys
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 import th_client as th  # noqa: E402
+import library_cache as lib  # noqa: E402  (unit labels + per-exercise defaults)
+
+PARAM_UNIT = lib.PARAM_UNIT  # {10: "mi", 6: "m", 3: "reps", 1: "lb", ...}
+
+# Block-level leaderboard ("Red Zone"). redzone_type > 0 turns the block into a
+# leaderboard scored in that unit; the UI shows a trophy + "FOR <LABEL>". This is
+# the exercise-independent competition score (note: it has Feet/Meters even where
+# the exercise param is locked to another unit). Values from the coach app bundle.
+LEADERBOARD_TYPE = {
+    "completion": 0, "for completion": 0,
+    "weight": 1, "lb": 1, "load": 1,
+    "reps": 2, "rep": 2,
+    "rounds": 3, "round": 3,
+    "time": 4,
+    "yards": 5, "yd": 5,
+    "meters": 6, "m": 6,
+    "feet": 7, "ft": 7,
+    "calories": 8, "cal": 8, "cals": 8,
+    "miles": 10, "mi": 10,
+    "inches": 12, "in": 12,
+    "watts": 15, "w": 15,
+    "velocity": 17, "m/s": 17,
+    "seconds": 18, "sec": 18, "s": 18,
+}
+LEADERBOARD_LABEL = {
+    0: "For Completion", 1: "Weight", 2: "Reps", 3: "Rounds", 4: "Time", 5: "Yards",
+    6: "Meters", 7: "Feet", 8: "Calories", 10: "Miles", 12: "Inches", 13: "Other",
+    15: "Watts", 16: "Percent", 17: "Velocity", 18: "Seconds",
+}
+
+
+def _unit(param_type):
+    return PARAM_UNIT.get(param_type) or "?"
+
+
+def resolve_leaderboard(block):
+    """Map a block's optional `leaderboard` spec to (is_redzone, redzone_type,
+    smaller_is_better, redzone_instruction). Returns (None, 0, None, "") when the
+    block has no leaderboard.
+
+    Spec forms:
+      "leaderboard": "reps"                              # unit string
+      "leaderboard": 3                                   # raw redzone_type int
+      "leaderboard": {"unit": "time", "lowest_wins": true, "instruction": "..."}
+    """
+    lb = block.get("leaderboard")
+    if lb is None:
+        return None, 0, None, ""
+    instr, lowest = "", None
+    if isinstance(lb, dict):
+        unit = lb.get("unit", lb.get("type"))
+        instr = lb.get("instruction", "")
+        lowest = lb.get("lowest_wins")
+    else:
+        unit = lb
+    if isinstance(unit, str):
+        rz = LEADERBOARD_TYPE.get(unit.strip().lower())
+        if rz is None:
+            raise ValueError(
+                f"unknown leaderboard unit {unit!r}; use one of "
+                f"{sorted(set(LEADERBOARD_TYPE))}"
+            )
+    else:
+        rz = int(unit)
+    # Default: lowest-wins for Time/Seconds (fastest wins), highest-wins otherwise.
+    if lowest is None:
+        lowest = rz in (4, 18)
+    return 1, rz, (1 if lowest else 0), instr
+
+
+def unit_advisories(blocks):
+    """Warn when a spec asks for a param type the API will silently override.
+
+    The API forces param_1_type/param_2_type back to each exercise's library
+    default on save (units are fixed per exercise; see references). This reads the
+    local exercise cache (offline, no refresh on miss) and flags the cases that
+    would otherwise render wrong — a metric distance on the miles-default "Run",
+    %-of-max or RPE on a weight lift, a load on an exercise whose secondary unit
+    is not weight. Best-effort: any lookup failure just yields no advisory.
+
+    Returns (notes, warnings) as two lists of strings.
+    """
+    notes, warnings = [], []
+    try:
+        cache = lib.ExerciseCache()
+    except Exception:
+        return notes, warnings
+    for b in blocks:
+        for ex in b.get("exercises", []):
+            try:
+                defaults = cache.defaults(ex["id"])
+            except Exception:
+                defaults = None
+            if not defaults:
+                continue
+            def_p1, def_p2 = defaults
+            label = f"{b.get('title','?')} / {ex.get('title') or ex['id']}"
+
+            sent_p1 = ex.get("param_1_type")
+            if sent_p1 is not None and int(sent_p1) != def_p1:
+                warnings.append(
+                    f"{label}: param_1_type {sent_p1} ({_unit(int(sent_p1))}) is ignored — "
+                    f"this exercise is fixed to {_unit(def_p1)}; values render as {_unit(def_p1)}."
+                )
+            elif def_p1 not in (3, None):
+                notes.append(f"{label}: values are in {_unit(def_p1)} (the exercise's fixed primary unit).")
+
+            if ex.get("weight") is not None:
+                sent_p2 = int(ex.get("param_2_type", 1))
+                eff_p2 = 1 if def_p2 in (0, None) else def_p2
+                if sent_p2 != eff_p2:
+                    if sent_p2 in (2, 14):
+                        warnings.append(
+                            f"{label}: {_unit(sent_p2)} does not stick on this exercise — it renders as "
+                            f"{_unit(eff_p2)}. Put it in the exercise 'instr' text and leave load blank."
+                        )
+                    else:
+                        warnings.append(
+                            f"{label}: load renders as {_unit(eff_p2)}, not {_unit(sent_p2)} "
+                            f"(this exercise's secondary unit is fixed)."
+                        )
+    return notes, warnings
 
 
 def _slots(values, n=10):
@@ -130,6 +255,12 @@ def delete_sessions_on_date(program_id, y, m, d):
 
 
 def build(program_id, blocks, date=None, timeline_day=None, publish=True):
+    notes, warnings = unit_advisories(blocks)
+    for n in notes:
+        print(f"  note: {n}", file=sys.stderr)
+    for w in warnings:
+        print(f"  WARNING: {w}", file=sys.stderr)
+
     if timeline_day is not None:
         path = f"/2.0/coach/calendar/workout/createWorkoutForTimelineDay/{program_id}/{timeline_day}/null"
     else:
@@ -139,12 +270,17 @@ def build(program_id, blocks, date=None, timeline_day=None, publish=True):
     _require_ok("createWorkout", status, sess)
     workout_id, pw_id = sess["workout_id"], sess["id"]
 
-    block_payload = [{
-        "workout_id": workout_id, "order": i + 1, "type": b.get("type", 2),
-        "instruction": b.get("instruction", ""), "is_redzone": None, "redzone_type": 0,
-        "exercises": [], "exerciseKeys": [], "key": f"k::{workout_id}{i+1}",
-        "title": b["title"],
-    } for i, b in enumerate(blocks)]
+    block_payload = []
+    for i, b in enumerate(blocks):
+        is_rz, rz_type, smaller, rz_instr = resolve_leaderboard(b)
+        block_payload.append({
+            "workout_id": workout_id, "order": i + 1, "type": b.get("type", 2),
+            "instruction": b.get("instruction", ""),
+            "is_redzone": is_rz, "redzone_type": rz_type,
+            "smaller_is_better": smaller, "redzone_instruction": rz_instr,
+            "exercises": [], "exerciseKeys": [], "key": f"k::{workout_id}{i+1}",
+            "title": b["title"],
+        })
     status, created = th.request("POST", "/2.0/coach/calendar/saveProgramWorkoutSets", block_payload)
     _require_ok("saveProgramWorkoutSets", status, created)
     by_order = {blk["order"]: blk["id"] for blk in created}
@@ -175,14 +311,23 @@ def read_session(program_id, y, m, d, pw_id):
         sys.exit(1)
     print(f"Session pw={pw_id}  date={pw.get('year')}-{pw.get('month')}-{pw.get('day')}  published={pw.get('published')}")
     for b in sorted(pw["sets"].values(), key=lambda s: s["order"]):
-        print(f"  [{b['order']}] {b['title']}")
+        rz = b.get("redzone_type")
+        lb = ""
+        if rz:
+            tag = LEADERBOARD_LABEL.get(rz, f"type {rz}")
+            lb = f"   🏆 FOR {tag.upper()}" + (" (lowest wins)" if b.get("smaller_is_better") else "")
+        print(f"  [{b['order']}] {b['title']}{lb}")
         for ex in sorted(b["exercises"], key=lambda e: e["order"]):
             reps = [ex[f"param_1_data_{i}"] for i in range(1, 11) if ex[f"param_1_data_{i}"]]
             p2 = [ex[f"param_2_data_{i}"] for i in range(1, 11) if ex[f"param_2_data_{i}"]]
-            unit = {1: "lb", 2: "%", 14: "RPE"}.get(ex["param_2_type"], "")
-            load = f" @ {','.join(p2)} {unit}" if p2 else ""
+            # Units are whatever the API actually stored (it overrides the spec to
+            # the exercise default), so label from the stored param types.
+            u1 = PARAM_UNIT.get(ex["param_1_type"])
+            u2 = PARAM_UNIT.get(ex["param_2_type"])
+            prim = ",".join(reps) + ((" " + u1) if (u1 and u1 != "reps") else "")
+            load = f"  @ {','.join(p2)}" + ((" " + u2) if u2 else "") if p2 else ""
             note = f"   [{ex['instruction']}]" if ex.get("instruction") else ""
-            print(f"      {ex['order']}. {ex['title']}  {','.join(reps)}{load}{note}")
+            print(f"      {ex['order']}. {ex['title']}  {prim}{load}{note}")
 
 
 def _parse_date(s):

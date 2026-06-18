@@ -109,6 +109,16 @@ querying the store — it covers the zones, the prune-vs-accumulate rule, the
 
 ## Building a workout
 
+**Confirm the program before you build, and confirm before you publish.** Writing a
+session to a real coaching calendar is athlete-facing and hard to undo. When the
+request is at all ambiguous — which team/program/calendar, which date, the exact
+exercises, sets/reps/load, distance units, or how a scheme should be structured —
+**ask clarifying follow-up questions first; do not guess.** Restate the program you
+intend to build (blocks, exercises, prescriptions) and get explicit confirmation
+before publishing. When in doubt, build with `--no-publish` (a draft) and show the
+read-back for review rather than publishing unprompted. Only publish a new workout
+once the user has confirmed the program is what they want.
+
 Use `build_workout.py` rather than hand-assembling calls. It runs the whole
 sequence (program → session → blocks → exercises → publish), fills every field
 that otherwise makes the exercise step return HTTP 500, and encodes prescriptions
@@ -128,9 +138,15 @@ JSON
 python3 "$SKILL/scripts/build_workout.py" --program 4980851 --date 2026-6-22 --replace day.json
 ```
 
-Two exercises in one block become a superset. `--replace` deletes any existing
-session on that date first (idempotent re-runs); `--no-publish` leaves a draft;
-`--read --pw <id>` prints a built session back to verify it.
+Two exercises in one block become a superset. Add `"leaderboard": "rounds"` (or
+`reps`/`time`/`calories`/`meters`/… or `{"unit":"time","lowest_wins":true}`) to a
+block to make it a scored Red Zone leaderboard (trophy + "FOR <UNIT>"). `--replace`
+deletes any existing session on that date first (idempotent re-runs); `--no-publish`
+leaves a draft; `--read --pw <id>` prints a built session back to verify it.
+
+For an **AMRAP**, score by `rounds`/`reps` and program multiple sets (one per
+expected round — assume a fit athlete's count); for **"for time"**, score by `time`.
+Ask the coach when the scheme or score is ambiguous rather than guessing.
 
 Load `references/workout-creation.md` before building manually or when doing
 something the builder does not cover (drop sets, pyramids, %-of-max, the raw
@@ -140,10 +156,16 @@ field list, or the parameter-type table).
 
 Environment-specific facts that defy reasonable assumptions:
 
-- **RPE is not a structured param.** `param_2_type: 14` (RPE) is silently
-  overridden to weight on any lift whose library default is weight, so RPE values
-  render as pounds. Put RPE in the exercise `instruction` and leave load blank.
-  The builder does this from an exercise's `rpe`.
+- **Units are fixed per exercise — you can't set them at prescribe time.** On save
+  the API discards the `param_1_type`/`param_2_type` you send and restores the
+  exercise's library defaults (the *values* are kept). So the stock `Run` (miles)
+  can't be made metric; a "200 m run" on it shows as 200 *miles*. And `param_2_type`
+  `2` (% of max) and `14` (RPE) coerce to weight on a weight lift, rendering as
+  pounds — put % or RPE in the `instruction` (the builder does this from `rpe`).
+  You *can* add weight (`1`) to a no-secondary-param lift (weighted Pull-Ups). Check
+  units with `library_cache.py resolve` (`param_1_unit`/`param_2_unit`); the builder
+  prints a `WARNING` when a sent type will be overridden. "Max"/"AMRAP" reps work as
+  free text in the rep slots.
 - **`saveWorkoutSetExercises` returns HTTP 500** unless every field is present:
   all ten `param_1_data_N`/`param_2_data_N` slots (empty string for unused),
   `set_num`, `key`, `setKey`, `eType`, `tags`, `use_count`. The builder fills
@@ -156,10 +178,22 @@ Environment-specific facts that defy reasonable assumptions:
 - **A created session exposes two IDs**: `workout_id` (for adding blocks) and `id`
   (the programWorkout id, used to publish and to delete).
 - **The API ignores the exercise `title` you send** and uses the real title for
-  `exercise_id`; it may also override `param_2_type` from the exercise default.
+  `exercise_id`; it also overrides both `param_1_type` and `param_2_type` to the
+  exercise default (see the units gotcha above).
 - **Response envelopes vary.** `2.0/coach/*` tag/exercise endpoints wrap data as
   `{"success": 1, "data": {...}}`; most others return bare objects/arrays.
 - **This API is undocumented and can change.** `references/api-reference.md` has a
   "Still Unexplored" section listing known gaps.
-- **Confirm before destructive calls** (archive athlete, delete team, delete
-  exercise, remove/unpublish session) — these act on the user's live account.
+- **Destructive actions always require explicit user action.** For any call that
+  deletes, archives, or removes live data — archive/restore athlete, delete team,
+  delete custom exercise, remove or unpublish a session, delete team code — you must:
+  1. **never run it autonomously** (no destructive call without the user's explicit
+     go-ahead in the moment — prior approval does not carry over to a new action);
+  2. **print a clear WARNING** stating exactly what will be affected, that it acts on
+     the live account, and that it is hard or impossible to undo;
+  3. **offer the user the option to do it themselves** — hand them the exact command
+     (e.g. `th_client.py delete /v5/teamCodes/874586`) or the UI steps, so they can
+     run it rather than having you do it.
+  **Publishing a new workout** is athlete-facing: confirm the program first (see
+  "Building a workout") and ask clarifying questions when anything is unclear instead
+  of guessing.
