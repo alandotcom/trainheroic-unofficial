@@ -28,6 +28,8 @@ CLI
   library_cache.py get <id>              # one exercise as JSON
   library_cache.py stats                 # row counts per zone + cursors
   library_cache.py cursors               # the sync_state watermark table
+  library_cache.py create '<json>'       # create a custom exercise (API) + write-through
+  library_cache.py forget <id>           # drop an exercise from the mirror (cache-only)
 
 This module is import-friendly: `from library_cache import ExerciseCache`.
 """
@@ -118,7 +120,7 @@ CREATE TABLE IF NOT EXISTS block (
 );
 CREATE TABLE IF NOT EXISTS prescribed_set (
   id INTEGER PRIMARY KEY, block_id INTEGER,
-  exercise_id INTEGER REFERENCES exercise(id),
+  exercise_id INTEGER,   -- soft join to exercise(id); the library is a cache and may lag
   set_index INTEGER,
   param_1_type INTEGER, param_1_value REAL,
   param_2_type INTEGER, param_2_value REAL,
@@ -501,6 +503,24 @@ def main():
         match, candidates = cache.resolve(" ".join(rest))
         print(json.dumps({"match": match, "candidates": candidates}, indent=2))
         sys.exit(0 if match else 3)
+    elif cmd == "create":
+        if not rest:
+            _eprint("create requires an exercise JSON body (or - for stdin)")
+            sys.exit(1)
+        raw = sys.stdin.read() if rest[0] == "-" else rest[0]
+        status, resp = th_client.request("POST", "/2.0/coach/exercise/create", json.loads(raw))
+        if not (200 <= status < 300):
+            _eprint(f"create failed (HTTP {status}): {resp}")
+            sys.exit(1)
+        ex = _unwrap(resp)
+        cache.record_upsert(ex)  # write-through: mirror stays correct without a re-sync
+        print(json.dumps(ex, indent=2))
+    elif cmd == "forget":
+        if not rest:
+            _eprint("forget requires an exercise id")
+            sys.exit(1)
+        cache.record_delete(rest[0])  # cache-only; run after deleting via the API
+        print(f"Removed exercise {rest[0]} from the local mirror.")
     else:
         _eprint(f"Unknown command: {cmd}")
         sys.exit(1)
