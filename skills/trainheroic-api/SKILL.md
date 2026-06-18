@@ -9,7 +9,8 @@ metadata:
 # TrainHeroic API
 
 Authenticated access to the (reverse-engineered) TrainHeroic coaching API, plus a
-spec-driven workout builder and a local exercise-library cache.
+spec-driven workout builder and a local SQLite store (exercise cache + programming
+history).
 
 - Coach base URL: `https://api.trainheroic.com`
 - Login endpoint: `https://apis.trainheroic.com/auth`
@@ -35,9 +36,10 @@ wherever this skill lives, then call them:
 ```bash
 SKILL=skills/trainheroic-api      # or .claude/skills/trainheroic-api once installed
 
-python3 "$SKILL/scripts/th_client.py"     whoami         # raw API client
-python3 "$SKILL/scripts/library_cache.py" resolve "Bench Press"   # name -> id
-python3 "$SKILL/scripts/build_workout.py" --help        # spec-driven session builder
+python3 "$SKILL/scripts/th_client.py"       whoami       # raw API client
+python3 "$SKILL/scripts/library_cache.py"   resolve "Bench Press"  # local exercise store
+python3 "$SKILL/scripts/programming_sync.py"             # pull programming into the store
+python3 "$SKILL/scripts/build_workout.py"   --help       # spec-driven session builder
 ```
 
 Start a session with `th_client.py whoami`: it confirms auth and returns the
@@ -65,7 +67,7 @@ instead of the session token — pass `--auth api-token`.
 |------|---------------|
 | Athletes | list `GET /v5/athletes`, invite `POST /v5/athletes/inviteToTeam`, archive/restore |
 | Teams | list `GET /1.0/coach/teams`, create `POST /1.0/coach/team/createWithTitleAndCode`, codes under `/v5/teams/{id}/teamCodes` |
-| Programs | list `GET /1.0/coach/programs`, detail `GET /3.0/coach/program/{id}` |
+| Programs | list `GET /1.0/coach/programs`, detail `GET /3.0/coach/program/{id}`, mirror history with `programming_sync.py` |
 | Exercises | resolve via `library_cache.py` (below), create `POST /2.0/coach/exercise/create` |
 | Sessions / workouts | build with `build_workout.py` (below) |
 | Analytics | readiness, 1RM history, training summary, compliance under `/v5/analytics/*` |
@@ -88,13 +90,22 @@ python3 "$SKILL/scripts/library_cache.py" sync --force            # refresh the 
 `resolve` exits non-zero with a candidate list when a name is ambiguous; pick the
 right ID from there. The mirror auto-refreshes on a 7-day TTL and on a miss.
 
+After creating a custom exercise, go through the cache so the mirror stays
+current without a re-sync; after deleting one via the API, drop it from the mirror:
+
+```bash
+python3 "$SKILL/scripts/library_cache.py" create '{"title":"Sandbag Clean","param_1_type":3,"param_2_type":1}'
+python3 "$SKILL/scripts/library_cache.py" forget 7721170   # cache-only, run after an API delete
+```
+
 `library_cache.py` is also a durable local store (SQLite at
 `~/.trainheroic/library.db`): `stats` shows row counts per zone and `cursors`
-shows the incremental-sync watermarks. Beyond the exercise mirror it scaffolds a
-programming-data schema. Load `references/data-warehouse.md` when working on the
-DB schema, adding a sync, or querying the store — it covers the zones, the
-prune-vs-accumulate rule, the `source='seed'` convention, and what the API cannot
-provide (performance history has no write path).
+shows the incremental-sync watermarks. Beyond the exercise mirror it holds a
+**programming-history** zone — run `programming_sync.py` to pull a coach's
+prescribed programs (standalone programs plus team group-programs) into it. Load
+`references/data-warehouse.md` when working on the DB schema, adding a sync, or
+querying the store — it covers the zones, the prune-vs-accumulate rule, the
+`source` provenance flag, and the per-calendar month-window the sync must walk.
 
 ## Building a workout
 
@@ -137,9 +148,11 @@ Environment-specific facts that defy reasonable assumptions:
   all ten `param_1_data_N`/`param_2_data_N` slots (empty string for unused),
   `set_num`, `key`, `setKey`, `eType`, `tags`, `use_count`. The builder fills
   these — prefer it over raw calls.
-- **`GET /1.0/coach/programs/edit/{cal}/{y}/{m}/{d}` returns the whole calendar**,
-  not just that date. Its `programWorkouts` is every session; match yours by the
-  `id` returned at create time, not `programWorkouts[0]`.
+- **`GET /1.0/coach/programs/edit/{cal}/{y}/{m}/{d}` returns every session in that
+  date's *month*** — not just the day, and not the whole calendar (other months
+  come back empty). Match yours by the `id` returned at create time, not
+  `programWorkouts[0]`; to read a whole program, walk month by month as
+  `programming_sync.py` does.
 - **A created session exposes two IDs**: `workout_id` (for adding blocks) and `id`
   (the programWorkout id, used to publish and to delete).
 - **The API ignores the exercise `title` you send** and uses the real title for

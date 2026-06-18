@@ -14,6 +14,15 @@ library_cache.py get <id>           # one exercise as JSON
 library_cache.py sync [--force]     # refresh the reference mirror from the API
 library_cache.py stats              # row counts per zone + cursors
 library_cache.py cursors            # the sync_state watermark table
+library_cache.py create '<json>'    # create a custom exercise (API) + write-through
+library_cache.py forget <id>        # drop an exercise from the mirror (cache-only)
+```
+
+Programming history is synced by a separate script:
+
+```bash
+programming_sync.py            # pull every calendar into the programming zone
+programming_sync.py <cal_id>   # one calendar/program id
 ```
 
 ## Zones
@@ -38,14 +47,24 @@ delete history on a short fetch window.
 - IDs follow the API's own integers (Back Squat = 1, Bench Press = 1162);
   id-less entries are skipped (this is the ~2384 → 2371 gap).
 
-### Programming zone — schema scaffolding only
+### Programming zone — implemented
 
-`program`, `program_session`, `block`, `prescribed_set`.
+`program`, `program_session`, `block`, `prescribed_set`, populated by
+`programming_sync.py`.
 
-- Tables and indexes exist; **nothing populates them yet.** They are forward
-  scaffolding for mirroring a coach's prescribed programming.
-- **Accumulate-only** — never pruned. A future programming sync should upsert by
-  primary key and advance a `sync_state` cursor.
+- **Calendars to pull** = the union of `/1.0/coach/programs` (standalone) and each
+  team's `group_program` from `/1.0/coach/teams`.
+- **Sourced from `GET /1.0/coach/programs/edit/{cal}/{y}/{m}/1`**, walked month by
+  month across a window (`MONTHS_BACK`/`MONTHS_FWD`): that endpoint returns only
+  the queried month's sessions, not the whole calendar.
+- **Accumulate-only** — never pruned, so it retains history even after a session
+  is deleted on TrainHeroic. Each sync upserts every session and rebuilds that
+  session's own blocks/sets (delete + re-insert) to absorb edits, then advances
+  `sync_state('programming', <cal_id>)`. Re-running is idempotent.
+- `prescribed_set` holds one row per prescribed set (the API's `param_N_data_1..10`
+  slots expanded). `prescribed_set.exercise_id` is a **soft** join to
+  `exercise(id)` — not an enforced FK, since the library cache may lag custom
+  exercises and a sync must not fail on a cache miss.
 
 ## `sync_state` — incremental watermarks
 
