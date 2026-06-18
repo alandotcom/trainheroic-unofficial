@@ -630,11 +630,116 @@ Creates a reusable session template in the library.
 
 ### Messaging
 
+Chat between a coach and athletes/teams. A **stream** is a conversation; a
+**comment** is a message in it. Reverse-engineered and verified against a live
+account (see `messaging_sync.py` / `message_send.py`).
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/v5/messaging/streams` | Messaging streams |
-| GET | `/v5/messaging/streams/{streamId}/comments?lastCommentId=` | Stream comments |
-| GET | `/v5/messaging/reactions` | Reactions |
+| GET | `/v5/messaging/streams` | List conversations (bucketed) |
+| GET | `/v5/messaging/streams/{streamId}/comments?lastCommentId={id}` | Messages in a stream; `lastCommentId` returns only comments newer than that id |
+| POST | `/v5/messaging/streams/{streamId}/comments` | **Send a message** (athlete-facing, immediate) |
+| DELETE | `/v5/messaging/streams/{streamId}/comments/{commentId}` | **Delete a message** (soft delete) |
+| GET | `/v5/messaging/reactions` | Reaction catalog (Like/Love/Fire/Trophy/…) |
+| GET | `/v5/notifications/counts` | Unread message counts (cheap "anything new?" poll) |
+
+#### `GET /v5/messaging/streams` Response
+
+Conversations grouped into four buckets. Each entry's `id` is the **stream id**
+(distinct from `teamId`/`userId`) used by every other messaging call.
+```json
+{
+  "teams":    [ { "id": 37731134, "teamId": 4945224, "title": "Test Team", "isOwner": true, "logo": "...", "lastViewed": 1781808863 } ],
+  "athletes": [ { "id": 37730920, "userId": 2855688, "teamId": 4945209, "title": "[Demo] Kyle Jones", "metadata": { "nameFirst": "...", "nameLast": "..." }, "logo": "..." } ],
+  "programs": [],
+  "coaches":  []
+}
+```
+
+#### `GET /v5/messaging/streams/{streamId}/comments?lastCommentId={id}` Response
+
+Array of comments, oldest→newest. Pass the highest `id` you've stored as
+`lastCommentId` to fetch only newer ones (verified: returns `[]` when none are
+newer). A blank `lastCommentId=` returns the whole stream.
+```json
+[
+  {
+    "id": 125652586,
+    "timestamp": 1781809398,
+    "content": "Nice work today!",
+    "imageUrl": null,
+    "thumbnailUrl": null,
+    "authorName": "A Cohen",
+    "authorLogo": "https://static.trainheroic.com/avatar-2025/A/avatar-AC.png",
+    "replies": [],
+    "reactions": [],
+    "isAuthor": true
+  }
+]
+```
+- `isAuthor: false` is a message you **received**; `true` is one you sent.
+- `id` doubles as the incremental cursor (`lastCommentId`).
+- `replies[]` holds threaded replies as nested comment objects; `reactions[]`
+  holds reactions on the comment (decode via `/v5/messaging/reactions`).
+
+#### `POST /v5/messaging/streams/{streamId}/comments` (send)
+
+Returns the created comment (same shape as above). **The required field the
+obvious guesses miss is `feed_id`** — the stream id repeated in the body.
+`{ "content": "..." }` alone returns `400 Invalid parameters`; the full body the
+web client sends is:
+```json
+{
+  "type": 0,
+  "content": "Nice work today!",
+  "photo_url": "",
+  "photoUrl": "",
+  "access_level": 0,
+  "parent_feed_item_id": null,
+  "feed_id": 37730920
+}
+```
+- `feed_id` = the `{streamId}` from the path (required).
+- `parent_feed_item_id` = a comment id to post a threaded reply; `null` for a
+  top-level message.
+- Trimming any of the other fields also returns `400 Invalid parameters` —
+  send the whole body.
+- There is **no server-side draft state**: a POST is delivered immediately.
+
+#### `DELETE /v5/messaging/streams/{streamId}/comments/{commentId}`
+
+Soft delete (sets `deleted_at`). No body. Returns the underlying row, which
+reveals a comment can attach to more than chat:
+```json
+{
+  "id": 125652586, "created_by": 2855687, "type": 0, "access_level": 0,
+  "content": "...", "photo_url": "", "deleted_at": "2026-06-18T19:05:35.000000Z",
+  "parent_feed_item_id": null, "program_workout_id": null,
+  "saved_workout_set_id": null, "group_id": null, "saved_workout_id": null
+}
+```
+
+#### `GET /v5/notifications/counts` Response
+
+The cheap gate before fanning out across streams:
+```json
+{
+  "countNotViewed": 0,
+  "countNotificationNotViewed": 0,
+  "countMessagingNotViewed": 0,
+  "messaging": { "countDirectNotViewed": 0, "countTeamNotViewed": 0 }
+}
+```
+
+#### Real-time channel (not needed for a sync)
+
+The web client receives live messages over a separate long-poll channel —
+`adapter.trainheroic.com/messaging?timestamp={ms}` (global) and
+`adapter.trainheroic.com/messaging/team/{teamId}?timestamp={ms}` (per team),
+loaded as a cross-origin iframe stream. A coach-side **sync does not need it**:
+polling the REST `comments` endpoint with `lastCommentId` captures the same
+messages. The entire chat UI is served from `adapter.trainheroic.com` and embedded
+in `coachapp.trainheroic.com/messaging` as the `messagingHub` iframe.
 
 ---
 

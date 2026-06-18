@@ -10,7 +10,7 @@ metadata:
 
 Authenticated access to the (reverse-engineered) TrainHeroic coaching API, plus a
 spec-driven workout builder and a local SQLite store (exercise cache + programming
-history).
+history + message history).
 
 - Coach base URL: `https://api.trainheroic.com`
 - Login endpoint: `https://apis.trainheroic.com/auth`
@@ -39,6 +39,8 @@ SKILL=skills/trainheroic-api      # or .claude/skills/trainheroic-api once insta
 python3 "$SKILL/scripts/th_client.py"       whoami       # raw API client
 python3 "$SKILL/scripts/library_cache.py"   resolve "Bench Press"  # local exercise store
 python3 "$SKILL/scripts/programming_sync.py"             # pull programming into the store
+python3 "$SKILL/scripts/messaging_sync.py"               # pull chat messages into the store
+python3 "$SKILL/scripts/message_send.py"    streams      # list conversations / draft + send
 python3 "$SKILL/scripts/build_workout.py"   --help       # spec-driven session builder
 ```
 
@@ -70,6 +72,7 @@ instead of the session token — pass `--auth api-token`.
 | Programs | list `GET /1.0/coach/programs`, detail `GET /3.0/coach/program/{id}`, mirror history with `programming_sync.py` |
 | Exercises | resolve via `library_cache.py` (below), create `POST /2.0/coach/exercise/create` |
 | Sessions / workouts | build with `build_workout.py` (below) |
+| Messaging | sync chat with `messaging_sync.py`, draft/send with `message_send.py` (below) |
 | Analytics | readiness, 1RM history, training summary, compliance under `/v5/analytics/*` |
 
 Load `references/api-reference.md` when you need an endpoint's exact request or
@@ -152,9 +155,55 @@ Load `references/workout-creation.md` before building manually or when doing
 something the builder does not cover (drop sets, pyramids, %-of-max, the raw
 field list, or the parameter-type table).
 
+## Messaging
+
+A **stream** is a conversation (a team, or a 1:1 with an athlete); a **comment**
+is a message. The store mirrors both, and sending is gated.
+
+**Sync messages you receive** with `messaging_sync.py` into the local store's
+messaging zone (`message_stream` → `message_comment`, accumulate-only):
+
+```bash
+python3 "$SKILL/scripts/messaging_sync.py"            # incremental: only new comments per stream
+python3 "$SKILL/scripts/messaging_sync.py" --full     # re-pull every stream (refresh reactions/replies)
+python3 "$SKILL/scripts/messaging_sync.py" 37730920   # one stream id
+```
+
+It walks every conversation and pulls comments newer than the per-stream cursor
+(`sync_state('messaging', stream_id)` = the highest comment id seen), so re-runs
+are cheap. Received messages are `is_author=0`; check `GET /v5/notifications/counts`
+(`countMessagingNotViewed`) first as a cheap "anything new?" gate. The real-time
+web channel (`adapter.trainheroic.com`) isn't needed — REST polling sees the same
+messages.
+
+**Sending is athlete-facing and immediate** — TrainHeroic chat has no server-side
+draft state, so a POST is delivered at once. `message_send.py` therefore separates
+drafting from sending, and you must get the user's explicit go-ahead in the moment
+before sending (see Destructive actions in Gotchas):
+
+```bash
+python3 "$SKILL/scripts/message_send.py" streams                       # find the stream id
+python3 "$SKILL/scripts/message_send.py" read   37730920               # recent messages
+python3 "$SKILL/scripts/message_send.py" draft  37730920 "Great session today!"   # PREVIEW only — never sends
+python3 "$SKILL/scripts/message_send.py" send   37730920 "Great session today!"   # actually delivers (gate behind user OK)
+python3 "$SKILL/scripts/message_send.py" send   37730920 "Nice PR!" --reply-to 125652586   # threaded reply
+```
+
+Default to `draft`: it prints the exact payload and target conversation without
+touching the account. Run `send` only after the user confirms the wording and
+recipient. `delete <stream> <commentId>` removes a message (soft delete) and is
+destructive — same gate.
+
 ## Gotchas
 
 Environment-specific facts that defy reasonable assumptions:
+
+- **Sending a chat message needs `feed_id` in the body** — the stream id from the
+  path, repeated. `{"content": "..."}` returns `400 Invalid parameters`; so does
+  trimming any field. Send the full body (`type`, `content`, `photo_url`,
+  `photoUrl`, `access_level`, `parent_feed_item_id`, `feed_id`) — `message_send.py`
+  does. There is **no draft state**: a POST is delivered immediately, so gate sends
+  behind explicit user confirmation.
 
 - **Units are fixed per exercise — you can't set them at prescribe time.** On save
   the API discards the `param_1_type`/`param_2_type` you send and restores the
@@ -186,7 +235,9 @@ Environment-specific facts that defy reasonable assumptions:
   "Still Unexplored" section listing known gaps.
 - **Destructive actions always require explicit user action.** For any call that
   deletes, archives, or removes live data — archive/restore athlete, delete team,
-  delete custom exercise, remove or unpublish a session, delete team code — you must:
+  delete custom exercise, remove or unpublish a session, delete team code, delete a
+  message — and for **sending a chat message** (athlete-facing, instant, no draft
+  state) — you must:
   1. **never run it autonomously** (no destructive call without the user's explicit
      go-ahead in the moment — prior approval does not carry over to a new action);
   2. **print a clear WARNING** stating exactly what will be affected, that it acts on
