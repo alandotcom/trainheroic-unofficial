@@ -8,9 +8,12 @@ venv/
 # OS
 .DS_Store
 
-# Local TrainHeroic session cache (should live in ~/.trainheroic, never in-repo)
+# Local TrainHeroic state (lives in ~/.trainheroic, never in-repo)
 .trainheroic/
 session.json
+*.db
+*.sqlite
+*.sqlite3
 
 # Editor / env
 .env
