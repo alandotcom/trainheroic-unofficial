@@ -155,6 +155,35 @@ CREATE TABLE IF NOT EXISTS prescribed_set (
 CREATE INDEX IF NOT EXISTS idx_block_session ON block(program_session_id);
 CREATE INDEX IF NOT EXISTS idx_pset_block ON prescribed_set(block_id);
 CREATE INDEX IF NOT EXISTS idx_psession_program ON program_session(program_id);
+
+-- Messaging zone: chat streams (conversations) + their comments (messages).
+-- Accumulate-only like programming: a comment soft-deleted on TrainHeroic stays
+-- here as history. Streams come from GET /v5/messaging/streams; comments from
+-- GET /v5/messaging/streams/{id}/comments, walked incrementally by comment id.
+CREATE TABLE IF NOT EXISTS message_stream (
+  id          INTEGER PRIMARY KEY,  -- messaging stream id (NOT team/user id)
+  kind        TEXT,                 -- 'team' | 'athlete' | 'program' | 'coach'
+  title       TEXT,
+  team_id     INTEGER,              -- for team/athlete streams
+  user_id     INTEGER,              -- athlete user id on 1:1 streams
+  last_viewed INTEGER,              -- unix ts the coach last opened the stream
+  raw TEXT, source TEXT DEFAULT 'api'
+);
+CREATE TABLE IF NOT EXISTS message_comment (
+  id          INTEGER PRIMARY KEY,  -- comment id; also the lastCommentId cursor
+  stream_id   INTEGER,
+  ts          INTEGER,              -- unix seconds (the comment's timestamp)
+  content     TEXT,
+  author_name TEXT,
+  author_logo TEXT,
+  image_url   TEXT,
+  is_author   INTEGER DEFAULT 0,    -- 1 = sent by this coach, 0 = received
+  parent_id   INTEGER,              -- reply parent comment id; NULL for top-level
+  reactions   TEXT,                 -- JSON array as returned by the API
+  raw TEXT, source TEXT DEFAULT 'api'
+);
+CREATE INDEX IF NOT EXISTS idx_mcomment_stream ON message_comment(stream_id, ts);
+CREATE INDEX IF NOT EXISTS idx_mcomment_unread ON message_comment(stream_id, is_author);
 """
 
 # Columns mirrored straight from an exercise object.
@@ -499,6 +528,11 @@ class ExerciseCache:
                 "program_sessions": n("SELECT COUNT(*) AS n FROM program_session"),
                 "blocks": n("SELECT COUNT(*) AS n FROM block"),
                 "prescribed_sets": n("SELECT COUNT(*) AS n FROM prescribed_set"),
+            },
+            "messaging": {
+                "streams": n("SELECT COUNT(*) AS n FROM message_stream"),
+                "comments": n("SELECT COUNT(*) AS n FROM message_comment"),
+                "received": n("SELECT COUNT(*) AS n FROM message_comment WHERE is_author=0"),
             },
             "cursors": self.cursors(),
         }

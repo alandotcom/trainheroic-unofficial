@@ -18,16 +18,19 @@ library_cache.py create '<json>'    # create a custom exercise (API) + write-thr
 library_cache.py forget <id>        # drop an exercise from the mirror (cache-only)
 ```
 
-Programming history is synced by a separate script:
+Programming history and messages are synced by separate scripts:
 
 ```bash
 programming_sync.py            # pull every calendar into the programming zone
 programming_sync.py <cal_id>   # one calendar/program id
+messaging_sync.py              # pull every chat stream into the messaging zone
+messaging_sync.py --full       # re-pull every stream from the beginning
+messaging_sync.py <stream_id>  # one stream id
 ```
 
 ## Zones
 
-The DB holds two zones that follow deliberately different rules. The split is
+The DB holds three zones that follow deliberately different rules. The split is
 load-bearing: applying the reference zone's prune logic to records would silently
 delete history on a short fetch window.
 
@@ -65,6 +68,28 @@ delete history on a short fetch window.
   slots expanded). `prescribed_set.exercise_id` is a **soft** join to
   `exercise(id)` — not an enforced FK, since the library cache may lag custom
   exercises and a sync must not fail on a cache miss.
+
+### Messaging zone — implemented
+
+`message_stream`, `message_comment`, populated by `messaging_sync.py`.
+
+- **Conversations** from `GET /v5/messaging/streams` (buckets `teams`, `athletes`,
+  `programs`, `coaches`). Each entry's `id` is the **stream id** — distinct from
+  `teamId`/`userId` and what every other messaging call keys on; `message_stream`
+  records `kind`, `team_id`, `user_id`, `last_viewed`.
+- **Messages** from `GET /v5/messaging/streams/{id}/comments?lastCommentId={cursor}`,
+  walked incrementally: the cursor is the highest comment id stored, written to
+  `sync_state('messaging', stream_id)`, so a normal run only pulls newer comments.
+  `--full` passes a blank cursor to re-pull a whole stream (the only way to refresh
+  reactions/replies on already-synced comments, since the incremental call returns
+  newer-than-cursor only).
+- **Accumulate-only** — comments are upserted by id and never pruned, so a message
+  soft-deleted on TrainHeroic is retained here as history (same rule as programming).
+- `message_comment.is_author` is `0` for received messages, `1` for ones this coach
+  sent. `parent_id` holds a reply's parent comment id (threaded `replies[]` are
+  flattened into rows); `reactions` keeps the API's array as JSON.
+- `message_send.py send` write-throughs the created comment so the store stays
+  correct without a re-sync; the next `messaging_sync.py` then advances the cursor.
 
 ## `sync_state` — incremental watermarks
 
