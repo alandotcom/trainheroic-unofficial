@@ -11,8 +11,8 @@ import {
   buildSearchText,
   coerceInt,
   type ExerciseIndex,
+  presentExercise,
   rankSearch,
-  unitLabel,
   unwrapEnvelope,
   withUnits,
 } from "./exercise-util";
@@ -132,10 +132,7 @@ export class ExerciseLibrary implements ExerciseIndex {
     await this.ensureFresh();
     const s = this.#byId.get(id);
     if (!s) return null;
-    const full = { ...s.raw };
-    full.param_1_unit = unitLabel(full.param_1_type);
-    full.param_2_unit = unitLabel(full.param_2_type);
-    return full;
+    return presentExercise(s.raw);
   }
 
   async defaults(id: number): Promise<{ param1: number | null; param2: number | null } | null> {
