@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 This package is `@trainheroic-unofficial/cloudflare`, the hosted Worker. For the workspace
-dependency graph and shared conventions, read [../../../CLAUDE.md](../../../CLAUDE.md) first.
+dependency graph and shared conventions, read [../../CLAUDE.md](../../CLAUDE.md) first.
 Operational setup lives in [DEPLOY.md](./DEPLOY.md).
 
 ## Role

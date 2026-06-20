@@ -16,21 +16,18 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mcp
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.32.1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: mcp/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
 
@@ -38,7 +35,7 @@ jobs:
         run: pnpm --filter @trainheroic-unofficial/coach-mcp build:mcpb
 
       - name: Sign and verify
-        working-directory: mcp/packages/local
+        working-directory: packages/coach-mcp
         env:
           # Optional: set these repo secrets to a real code-signing cert for a verified
           # publisher. Without them the bundle is self-signed (installable; Desktop shows it
@@ -58,15 +55,15 @@ jobs:
           pnpm exec mcpb verify dist/trainheroic-coach-mcp.mcpb
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trainheroic-coach-mcp
-          path: mcp/packages/local/dist/trainheroic-coach-mcp.mcpb
+          path: packages/coach-mcp/dist/trainheroic-coach-mcp.mcpb
           if-no-files-found: error
 
       - name: Attach to the GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          files: mcp/packages/local/dist/trainheroic-coach-mcp.mcpb
+          files: packages/coach-mcp/dist/trainheroic-coach-mcp.mcpb
           fail_on_unmatched_files: true

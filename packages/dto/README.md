@@ -4,7 +4,7 @@ Domain DTOs and zod schemas for the TrainHeroic API. This package is the single 
 truth for request and response shapes; the SDK, the MCP tool layer, and the CLI all import
 their types from here instead of redefining them.
 
-Part of the [trainheroic-unofficial](../../../README.md) workspace.
+Part of the [trainheroic-unofficial](../../README.md) workspace.
 
 ## Install
 

@@ -32,7 +32,7 @@ Point `TH` at the CLI — the installed binary, or the built bundle in this repo
 
 ```bash
 TH="trainheroic"                                   # if installed (npm i -g @trainheroic-unofficial/cli)
-TH="node $PWD/mcp/packages/cli/dist/cli.mjs"        # from this repo, after: pnpm -C mcp --filter @trainheroic-unofficial/cli build
+TH="node $PWD/packages/cli/dist/cli.mjs"            # from this repo, after: pnpm --filter @trainheroic-unofficial/cli build
 ```
 
 Start a session with `$TH whoami`: it confirms auth and returns the coach's `id`,
@@ -217,7 +217,7 @@ Environment-specific facts that defy reasonable assumptions:
 
 ## Beyond the CLI
 
-The same SDK powers two MCP servers in `mcp/` (see `mcp/README.md`):
+The same SDK powers two MCP servers (see `README.md`):
 `@trainheroic-unofficial/coach-mcp` (local, single-user, stdio) and
 `@trainheroic-unofficial/cloudflare` (hosted, multi-tenant). The hosted server adds a
 programming/messaging history warehouse (D1); `references/data-warehouse.md` documents

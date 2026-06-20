@@ -5,7 +5,7 @@ authenticates over OAuth 2.1, and the worker stores per-tenant data in D1. It se
 shared tool set from `@trainheroic-unofficial/core` plus a set of D1-backed warehouse sync
 tools that only exist here.
 
-Part of the [trainheroic-unofficial](../../../README.md) workspace. For a single-user setup
+Part of the [trainheroic-unofficial](../../README.md) workspace. For a single-user setup
 with no Cloudflare account, use the `local` package instead. Deployment is documented in
 [DEPLOY.md](./DEPLOY.md).
 
