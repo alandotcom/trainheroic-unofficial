@@ -1,7 +1,7 @@
 # TrainHeroic MCP
 
 A remote [Model Context Protocol](https://modelcontextprotocol.io) server that wraps
-the (reverse-engineered) TrainHeroic coaching API, deployed as a Cloudflare Worker.
+the TrainHeroic coaching API, deployed as a Cloudflare Worker.
 It lets an MCP client (Claude and others) authenticate a TrainHeroic coach and manage
 athletes, teams, programs, sessions, exercises, analytics, and chat.
 
@@ -142,7 +142,7 @@ migrations, and `pnpm deploy`. Then add the deployed `/mcp` URL to your MCP clie
 
 ## Limitations
 
-- TrainHeroic's API is undocumented and reverse-engineered; shapes can change.
+- TrainHeroic's API is undocumented; shapes can change.
 - No upstream refresh token exists, so the server stores credentials to re-login.
   This is acceptable for a private (single-org) deployment; reconsider for multi-org.
 - Bulk syncs (`programming_sync` over many calendars/months) fan out subrequests and

@@ -7,12 +7,12 @@ import { registerMessagingTools } from "@trainheroic-unofficial/core";
 import { registerRawTools } from "@trainheroic-unofficial/core";
 import { registerReadTools } from "@trainheroic-unofficial/core";
 import { registerWorkoutTools } from "@trainheroic-unofficial/core";
-import { TrainHeroicClient } from "@trainheroic-unofficial/js";
-import { InMemoryExerciseIndex } from "./exercise-index";
+import { ExerciseLibrary, TrainHeroicClient } from "@trainheroic-unofficial/js";
+import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
 
 // Single-user local MCP server over stdio. No OAuth and no database: credentials come
-// from the environment and the exercise library is cached in memory. Launch it from an
-// MCP client (command + args + env). The hosted Cloudflare path lives in src/index.ts.
+// from the environment and the exercise library is cached on disk (JSON). Launch it from
+// an MCP client (command + args + env). The hosted Cloudflare path lives in cloudflare/.
 async function main(): Promise<void> {
   const email = process.env.TRAINHEROIC_EMAIL;
   const password = process.env.TRAINHEROIC_PASSWORD;
@@ -22,7 +22,10 @@ async function main(): Promise<void> {
   }
 
   const client = new TrainHeroicClient(email, password);
-  const ctx: ToolContext = { client, index: new InMemoryExerciseIndex(client) };
+  const ctx: ToolContext = {
+    client,
+    index: new ExerciseLibrary(client, new JsonFileLibraryCache()),
+  };
 
   const server = new McpServer({ name: "trainheroic-local", version: "0.1.0" });
   registerReadTools(server, ctx);

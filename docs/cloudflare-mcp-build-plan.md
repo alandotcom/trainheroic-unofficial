@@ -255,6 +255,6 @@ gotchas. Keep this as pure functions so it is unit-testable without network.
   machine; watch for IP-based rate limits or bot defenses on `apis.trainheroic.com`.
 - **`api-token` assumption** — confirm `session-token` covers every endpoint before
   dropping the dual-header path.
-- **Undocumented API drift** — TH is reverse-engineered; keep `references/` as the
+- **Undocumented API drift** — TH is undocumented; keep `references/` as the
   contract and fail loudly on shape changes.
 ```

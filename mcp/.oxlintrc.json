@@ -23,6 +23,10 @@
     "unicorn/prefer-type-error": "off",
     "require-await": "off",
     "no-await-in-loop": "off",
+    "no-negated-condition": "off",
+    "unicorn/no-negated-condition": "off",
+    "unicorn/no-lonely-if": "off",
+    "max-lines": "off",
     "max-lines-per-function": ["warn", { "max": 120 }]
   },
   "overrides": [

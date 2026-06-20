@@ -303,7 +303,7 @@ per-user from the login form.
 4. **TH rate limits / blocking** — a hosted Worker hits TH from Cloudflare egress IPs
    rather than a coach's machine. Watch for IP-based throttling or bot defenses on
    `apis.trainheroic.com`.
-5. **Terms of service** — TH's API is reverse-engineered and undocumented; hosting a
+5. **Terms of service** — TH's API is undocumented; hosting a
    multi-tenant service against it carries more exposure than a personal script.
 6. **Keeping the skill** — decide whether the Python skill stays as the local/dev
    path while the Worker serves remote, or the Worker fully replaces it.

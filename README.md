@@ -2,7 +2,7 @@
 
 [![skills.sh](https://skills.sh/b/alandotcom/trainheroic-skill)](https://skills.sh/alandotcom/trainheroic-skill)
 
-An [Agent Skill](https://agentskills.io/) for the (reverse-engineered) TrainHeroic
+An [Agent Skill](https://agentskills.io/) for the TrainHeroic
 coach/athlete REST API. It authenticates, caches the session, resolves exercise
 IDs locally, builds and publishes workouts from a JSON spec, and ships a full
 endpoint reference.

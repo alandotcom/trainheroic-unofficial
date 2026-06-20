@@ -1,3 +1,4 @@
+import type { TrainHeroicClient } from "./client";
 import {
   asExerciseList,
   buildSearchText,
@@ -10,8 +11,8 @@ import {
   unitLabel,
   unwrapEnvelope,
   withUnits,
-} from "@trainheroic-unofficial/js";
-import type { TrainHeroicClient } from "@trainheroic-unofficial/js";
+} from "./exercise-util";
+import { type LibraryCache, MemoryLibraryCache } from "./library-cache";
 
 const LIBRARY_PATH = "/v5/exerciseLibrary/all";
 const CREATE_PATH = "/2.0/coach/exercise/create";
@@ -59,21 +60,58 @@ function toRow(s: Stored): ExerciseRow {
 }
 
 /**
- * In-memory exercise mirror for the single-user local server: fetch the library once,
- * hold it in a Map for the life of the process. No database, same resolve/search/unit
- * behavior as the D1-backed store via the shared exercise-util helpers.
+ * The exercise library held in memory for fast queries and persisted through a
+ * LibraryCache (JSON file for a CLI/local server, in-memory by default). Same
+ * resolve/search/unit behavior as the D1-backed store, with no database.
  */
-export class InMemoryExerciseIndex implements ExerciseIndex {
+export class ExerciseLibrary implements ExerciseIndex {
   readonly #client: TrainHeroicClient;
+  readonly #cache: LibraryCache;
   #byId = new Map<number, Stored>();
-  #loadedAt = 0;
+  #loaded = false;
+  #fetchedAt = 0;
 
-  constructor(client: TrainHeroicClient) {
+  constructor(client: TrainHeroicClient, cache: LibraryCache = new MemoryLibraryCache()) {
     this.#client = client;
+    this.#cache = cache;
+  }
+
+  #hydrate(list: ReadonlyArray<Record<string, unknown>>, fetchedAt: number): void {
+    const next = new Map<number, Stored>();
+    for (const ex of list) {
+      const s = toStored(ex);
+      if (s) next.set(s.id, s);
+    }
+    this.#byId = next;
+    this.#fetchedAt = fetchedAt;
+    this.#loaded = true;
+  }
+
+  async #ensureLoaded(): Promise<void> {
+    if (this.#loaded) return;
+    const snap = await this.#cache.load();
+    if (snap && snap.exercises.length > 0 && Date.now() - snap.fetchedAt <= TTL_MS) {
+      this.#hydrate(snap.exercises, snap.fetchedAt);
+    } else {
+      await this.refresh();
+    }
+  }
+
+  async #persist(): Promise<void> {
+    await this.#cache.save({
+      fetchedAt: this.#fetchedAt,
+      exercises: [...this.#byId.values()].map((s) => s.raw),
+    });
   }
 
   async ensureFresh(force = false): Promise<void> {
-    if (force || this.#byId.size === 0 || Date.now() - this.#loadedAt > TTL_MS) {
+    if (force) {
+      await this.refresh();
+      return;
+    }
+    if (!this.#loaded) {
+      await this.#ensureLoaded();
+    } else if (Date.now() - this.#fetchedAt > TTL_MS) {
       await this.refresh();
     }
   }
@@ -83,14 +121,9 @@ export class InMemoryExerciseIndex implements ExerciseIndex {
     if (!res.ok) throw new Error(`Exercise library fetch failed (HTTP ${res.status}).`);
     const list = asExerciseList(res.data);
     if (list.length === 0) throw new Error("Exercise library returned no rows; keeping the cache.");
-    const next = new Map<number, Stored>();
-    for (const ex of list) {
-      const s = toStored(ex);
-      if (s) next.set(s.id, s);
-    }
-    this.#byId = next;
-    this.#loadedAt = Date.now();
-    return { synced: next.size };
+    this.#hydrate(list, Date.now());
+    await this.#persist();
+    return { synced: this.#byId.size };
   }
 
   async get(id: number): Promise<Record<string, unknown> | null> {
@@ -151,23 +184,28 @@ export class InMemoryExerciseIndex implements ExerciseIndex {
   }
 
   async create(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    await this.ensureFresh();
     const res = await this.#client.request("POST", CREATE_PATH, { body });
     if (!res.ok) throw new Error(`Exercise create failed (HTTP ${res.status}).`);
     const ex = unwrapEnvelope(res.data);
     if (ex && typeof ex === "object") {
       const s = toStored(ex as Record<string, unknown>);
-      if (s) this.#byId.set(s.id, s);
+      if (s) {
+        this.#byId.set(s.id, s);
+        await this.#persist();
+      }
     }
     return ex as Record<string, unknown>;
   }
 
   async recordDelete(id: number): Promise<void> {
-    this.#byId.delete(id);
+    await this.ensureFresh();
+    if (this.#byId.delete(id)) await this.#persist();
   }
 
   async stats(): Promise<Record<string, unknown>> {
     let custom = 0;
     for (const s of this.#byId.values()) if (s.can_edit === 1) custom += 1;
-    return { exercises: this.#byId.size, custom, loaded: this.#loadedAt > 0 };
+    return { exercises: this.#byId.size, custom, loaded: this.#loaded, fetchedAt: this.#fetchedAt };
   }
 }

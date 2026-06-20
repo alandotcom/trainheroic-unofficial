@@ -1,0 +1,26 @@
+{
+  "name": "@trainheroic-unofficial/cli",
+  "version": "0.1.0",
+  "description": "Command-line tool for the TrainHeroic coaching API.",
+  "type": "module",
+  "bin": {
+    "trainheroic": "./dist/cli.mjs"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@trainheroic-unofficial/js": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "tsdown": "^0.22.3",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

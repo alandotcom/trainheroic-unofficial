@@ -4,3 +4,5 @@ export * from "./exercise-util";
 export * from "./workout-encode";
 export * from "./workout-session";
 export * from "./messaging";
+export * from "./exercise-index";
+export * from "./library-cache";
