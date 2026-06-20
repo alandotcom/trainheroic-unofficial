@@ -9,6 +9,7 @@
       "@trainheroic-unofficial/core",
       "@trainheroic-unofficial/cli",
       "@trainheroic-unofficial/coach-mcp",
+      "@trainheroic-unofficial/athlete-mcp",
       "@trainheroic-unofficial/cloudflare"
     ]
   ],

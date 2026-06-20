@@ -1,0 +1,20 @@
+{
+  "id": 474271,
+  "email_workout_preview": 0,
+  "email_new_posts": 0,
+  "email_coach_posts": 1,
+  "email_like": 0,
+  "email_comment": 0,
+  "mobile_workout_preview": 1,
+  "mobile_new_posts": 0,
+  "mobile_coach_posts": 1,
+  "mobile_like": 0,
+  "mobile_comment": 0,
+  "auto_update_wm": 0,
+  "show_exercises_trainheroic": 1,
+  "show_programs_trainheroic": 1,
+  "show_calendars_trainheroic": 1,
+  "show_workout_set_exercise_templates_trainheroic": 1,
+  "survey_team_enabled": 1,
+  "survey_one_to_one_enabled": 1
+}

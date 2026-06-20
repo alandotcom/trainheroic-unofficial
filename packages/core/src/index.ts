@@ -1,6 +1,7 @@
 export * from "./context";
 export * from "./confirm";
 export * from "./tools/reads";
+export * from "./tools/athlete-training";
 export * from "./tools/athletes";
 export * from "./tools/teams";
 export * from "./tools/analytics";

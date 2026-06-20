@@ -130,7 +130,7 @@ export function isRecord(x: unknown): x is Record<string, unknown> {
  * exact title, then prefix, then count of matched tokens, with shorter titles and
  * standard (non-custom) exercises preferred on ties.
  */
-export function rankSearch<T extends { title: string; can_edit: number }>(
+export function rankSearch<T extends { title: string; can_edit?: number }>(
   rows: readonly T[],
   query: string,
   limit: number,
@@ -144,7 +144,8 @@ export function rankSearch<T extends { title: string; can_edit: number }>(
     if (title.startsWith(q)) score += 100;
     for (const tok of tokens) if (title.includes(tok)) score += 10;
     score -= title.length * 0.05;
-    if (row.can_edit === 0) score += 1;
+    // A missing can_edit (e.g. athlete history rows) is treated as standard (non-custom).
+    if ((row.can_edit ?? 0) === 0) score += 1;
     return { row, score };
   });
   return scored
@@ -156,6 +157,29 @@ export function rankSearch<T extends { title: string; can_edit: number }>(
 export function chunk<T>(items: readonly T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Map over items with a bounded number of concurrent workers. Used to fan out upstream
+ * fetches (per-exercise history, the CLI export) without bursting the host all at once or,
+ * on workerd, blowing the subrequest budget.
+ */
+export async function mapPool<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = Array.from({ length: items.length });
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      out[i] = await fn(items[i] as T, i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
   return out;
 }
 

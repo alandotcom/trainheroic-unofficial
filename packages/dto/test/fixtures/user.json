@@ -1,0 +1,49 @@
+{
+  "id": 100001,
+  "date_of_birth": "1990-01-01",
+  "email": "athlete@example.com",
+  "gender": "male",
+  "gender_enum": 1,
+  "height": {
+    "value": 0,
+    "unit": "inch"
+  },
+  "image_avatar": {
+    "original_full_path": "https://static.trainheroic.com/avatar-2025/X/avatar-XX.png",
+    "thumb_full_path": "https://static.trainheroic.com/avatar-2025/X/avatar-XX.png"
+  },
+  "last_login": "2026-06-20T00:02:02Z",
+  "city": null,
+  "state": null,
+  "country": null,
+  "name_first": "Alan",
+  "name_last": "Athlete",
+  "use_metric": false,
+  "username": "athlete@example.com",
+  "weight": {
+    "value": 149,
+    "unit": "pound"
+  },
+  "commitment_description": "",
+  "track_athlete_onboarding": {
+    "id": 334999,
+    "user_id": 100001,
+    "mobile_app_onboarding_flow_started_at": "2021-06-24 18:41:15",
+    "mobile_app_rating_given_at": null,
+    "mobile_app_rating_dismissed_at": null,
+    "mobile_profile_update_prompted_at": "2021-06-24 18:41:46",
+    "mobile_early_access_education_prompted_at": null,
+    "mobile_athlete_pro_trial_prompted_at": "2021-10-25 14:42:57",
+    "mobile_athlete_pro_trial_expiring_prompted_at": "2021-11-16 15:07:23"
+  },
+  "profile_validated": "2021-06-24 18:42:23",
+  "exclude_from_leaderboards": null,
+  "training_week_starts_on_monday": false,
+  "athleteTrial": {
+    "isInAthleteTrial": false,
+    "daysRemainingInAthleteTrial": 0,
+    "hasExpiredAthleteTrial": true,
+    "expiresAtTimestamp": 1636382576
+  },
+  "hasActiveAthleteProLicense": false
+}
