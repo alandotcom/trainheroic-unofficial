@@ -30,6 +30,27 @@ pnpm fmt          # oxfmt (this repo uses oxfmt, not prettier, despite .prettier
 pnpm check        # fmt:check + lint + typecheck + test; run this before considering work done
 ```
 
+## Releasing
+
+Versioning and publishing use [Changesets](https://github.com/changesets/changesets),
+configured in `.changeset/config.json` (`access: public`, `baseBranch: main`). Publishing is
+local-only for now; there is no release GitHub Action. You must be logged in to npm (`npm
+whoami`) with publish rights on the `@trainheroic-unofficial` scope.
+
+```bash
+pnpm changeset          # author a changeset: pick packages, bump type, write a summary line
+pnpm version-packages   # apply pending changesets: bump versions + changelogs, rewrite
+                        #   internal workspace:* ranges, delete the consumed changeset files
+pnpm release            # pnpm build, then `changeset publish`
+```
+
+`changeset publish` detects pnpm and shells out to `pnpm publish`, so `workspace:*` deps are
+rewritten to real versions in the published manifests and an npm 2FA OTP prompt works
+interactively. It only publishes packages whose version isn't already on the registry, so
+re-running is safe. The private `cloudflare` worker is excluded automatically (it is
+`private: true`); the five publishable packages are `dto`, `js`, `core`, `cli`, and
+`coach-mcp`.
+
 `dev`, `start`, `deploy`, `cf-typegen`, and the D1 migration scripts do not exist at the
 workspace root. They are per-package, so run them with a filter or from inside the package
 directory:
