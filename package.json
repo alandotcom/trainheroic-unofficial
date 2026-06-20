@@ -14,7 +14,8 @@
     "lint": "oxlint --deny-warnings",
     "fmt": "oxfmt packages",
     "fmt:check": "oxfmt --check packages",
-    "check": "pnpm run fmt:check && pnpm run lint && pnpm run typecheck && pnpm run test",
+    "check:versions": "node scripts/check-versions.mjs",
+    "check": "pnpm run check:versions && pnpm run fmt:check && pnpm run lint && pnpm run typecheck && pnpm run test",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm run build && changeset publish"
