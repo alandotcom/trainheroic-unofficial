@@ -1,14 +1,7 @@
+import { fetchStreams } from "../messaging/send";
 import { OrgScopedStore } from "./base";
 import { cursorUpsertStmt, runBatches } from "./d1";
 import { coerceInt, isRecord } from "./exercise-util";
-
-// kind -> the bucket key the streams endpoint returns it under.
-const BUCKETS: ReadonlyArray<[string, string]> = [
-  ["team", "teams"],
-  ["athlete", "athletes"],
-  ["program", "programs"],
-  ["coach", "coaches"],
-];
 
 export type StreamSyncResult = {
   stream: number;
@@ -21,20 +14,7 @@ export type StreamSyncResult = {
 /** Messaging zone: conversations (streams) + comments. Incremental, accumulate-only. */
 export class MessagingStore extends OrgScopedStore {
   async listStreams(): Promise<Array<{ stream: Record<string, unknown>; kind: string }>> {
-    const res = await this.client.request<Record<string, unknown>>("GET", "/v5/messaging/streams");
-    if (!res.ok || !isRecord(res.data)) {
-      throw new Error(`GET /v5/messaging/streams failed (HTTP ${res.status}).`);
-    }
-    const out: Array<{ stream: Record<string, unknown>; kind: string }> = [];
-    for (const [kind, key] of BUCKETS) {
-      const bucket = res.data[key];
-      if (Array.isArray(bucket)) {
-        for (const s of bucket) {
-          if (isRecord(s) && coerceInt(s.id) !== null) out.push({ stream: s, kind });
-        }
-      }
-    }
-    return out;
+    return fetchStreams(this.client);
   }
 
   #upsertStreamStmt(

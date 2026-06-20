@@ -1,12 +1,17 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { buildCommentPayload, deleteComment, readLive, sendComment } from "../../messaging/send";
-import { MessagingStore } from "../../store/messaging";
+import {
+  buildCommentPayload,
+  deleteComment,
+  fetchStreams,
+  readLive,
+  sendComment,
+} from "../../messaging/send";
 import { confirmGate, NOT_CONFIRMED } from "../confirm";
 import { attempt, DESTRUCTIVE, errorResult, idParam, jsonResult, READ, toId } from "../context";
 import type { ToolContext } from "../context";
 
-function registerReads(server: McpServer, ctx: ToolContext, store: MessagingStore): void {
+function registerReads(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "messaging_conversations",
     {
@@ -17,7 +22,7 @@ function registerReads(server: McpServer, ctx: ToolContext, store: MessagingStor
     },
     () =>
       attempt(async () => {
-        const streams = await store.listStreams();
+        const streams = await fetchStreams(ctx.client);
         return jsonResult(
           streams.map(({ stream, kind }) => ({
             id: stream.id,
@@ -63,7 +68,7 @@ function registerReads(server: McpServer, ctx: ToolContext, store: MessagingStor
   );
 }
 
-function registerWrites(server: McpServer, ctx: ToolContext, store: MessagingStore): void {
+function registerWrites(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "message_send",
     {
@@ -95,11 +100,6 @@ function registerWrites(server: McpServer, ctx: ToolContext, store: MessagingSto
           text,
           replyTo === undefined ? null : toId(replyTo),
         );
-        try {
-          await store.recordComment(id, comment);
-        } catch {
-          /* write-through is best-effort; the send already succeeded */
-        }
         return jsonResult({ sent: true, comment });
       }),
   );
@@ -131,7 +131,6 @@ function registerWrites(server: McpServer, ctx: ToolContext, store: MessagingSto
 
 /** Live messaging: list/read conversations, draft a message, and the gated send/delete. */
 export function registerMessagingTools(server: McpServer, ctx: ToolContext): void {
-  const store = new MessagingStore(ctx.db, ctx.client);
-  registerReads(server, ctx, store);
-  registerWrites(server, ctx, store);
+  registerReads(server, ctx);
+  registerWrites(server, ctx);
 }

@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { McpAgent } from "agents/mcp";
+import { ExerciseStore } from "../store/exercises";
 import { TrainHeroicClient } from "../trainheroic/client";
 import type { Props } from "../types";
 import type { ToolContext } from "./context";
@@ -24,17 +25,15 @@ export class TrainHeroicMCP extends McpAgent<Env, State, Props> {
     const props = this.props;
     if (!props) throw new Error("Missing authentication context");
 
-    const ctx: ToolContext = {
-      client: new TrainHeroicClient(props.email, props.password),
-      db: this.env.TH_DB,
-      props,
-    };
+    const client = new TrainHeroicClient(props.email, props.password);
+    const ctx: ToolContext = { client, index: new ExerciseStore(this.env.TH_DB, client) };
 
     registerReadTools(this.server, ctx);
     registerRawTools(this.server, ctx);
     registerExerciseTools(this.server, ctx);
     registerWorkoutTools(this.server, ctx);
-    registerSyncTools(this.server, ctx);
     registerMessagingTools(this.server, ctx);
+    // Warehouse syncs persist to D1 (hosted only).
+    registerSyncTools(this.server, this.env.TH_DB, client);
   }
 }

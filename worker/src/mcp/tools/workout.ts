@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { ExerciseStore } from "../../store/exercises";
+import type { ExerciseIndex } from "../../store/exercise-util";
 import { type BlockSpec, unitAdvisory } from "../../workout/encode";
 import {
   buildSession,
@@ -55,13 +55,13 @@ function parseDate(s: string): WorkoutDate {
 
 async function collectAdvisories(
   blocks: BlockSpec[],
-  store: ExerciseStore,
+  index: ExerciseIndex,
 ): Promise<{ notes: string[]; warnings: string[] }> {
   const pairs = blocks.flatMap((b) => b.exercises.map((ex) => ({ block: b, ex })));
   const defaults = await Promise.all(
     pairs.map((p) => {
       const id = Number(p.ex.id);
-      return Number.isFinite(id) ? store.defaults(id) : Promise.resolve(null);
+      return Number.isFinite(id) ? index.defaults(id) : Promise.resolve(null);
     }),
   );
   const notes: string[] = [];
@@ -78,8 +78,6 @@ async function collectAdvisories(
 
 /** Workout building, read-back, publishing, and removal. */
 export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void {
-  const store = new ExerciseStore(ctx.db, ctx.client);
-
   server.registerTool(
     "workout_build",
     {
@@ -106,7 +104,7 @@ export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void 
         if (date !== undefined) opts.date = parseDate(date);
         if (timelineDay !== undefined) opts.timelineDay = timelineDay;
 
-        const advisories = await collectAdvisories(typed, store);
+        const advisories = await collectAdvisories(typed, ctx.index);
         const built = await buildSession(ctx.client, opts);
         const readback = opts.date
           ? await readSession(ctx.client, programId, opts.date, built.pwId)

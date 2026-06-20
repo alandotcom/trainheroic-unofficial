@@ -1,4 +1,33 @@
+import { coerceInt, isRecord } from "../store/exercise-util";
 import type { TrainHeroicClient } from "../trainheroic/client";
+
+// kind -> the bucket key the streams endpoint returns it under.
+const BUCKETS: ReadonlyArray<[string, string]> = [
+  ["team", "teams"],
+  ["athlete", "athletes"],
+  ["program", "programs"],
+  ["coach", "coaches"],
+];
+
+/** Live list of chat streams, flattened to (stream, kind) tuples. */
+export async function fetchStreams(
+  client: TrainHeroicClient,
+): Promise<Array<{ stream: Record<string, unknown>; kind: string }>> {
+  const res = await client.request<Record<string, unknown>>("GET", "/v5/messaging/streams");
+  if (!res.ok || !isRecord(res.data)) {
+    throw new Error(`GET /v5/messaging/streams failed (HTTP ${res.status}).`);
+  }
+  const out: Array<{ stream: Record<string, unknown>; kind: string }> = [];
+  for (const [kind, key] of BUCKETS) {
+    const bucket = res.data[key];
+    if (Array.isArray(bucket)) {
+      for (const s of bucket) {
+        if (isRecord(s) && coerceInt(s.id) !== null) out.push({ stream: s, kind });
+      }
+    }
+  }
+  return out;
+}
 
 /**
  * The exact chat comment body the web app sends. The non-obvious required field is
