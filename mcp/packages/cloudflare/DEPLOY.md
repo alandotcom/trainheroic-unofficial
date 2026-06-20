@@ -62,12 +62,36 @@ The client runs dynamic client registration and the OAuth flow automatically. Th
 browser opens the TrainHeroic login page; after sign-in the client receives its token
 and the tools become available.
 
+MCP Inspector and the Cloudflare AI Playground connect to the URL directly. Claude Desktop
+needs the `mcp-remote` bridge with `--transport http-only`:
+
+```jsonc
+{
+  "mcpServers": {
+    "trainheroic": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://trainheroic-mcp.<your-subdomain>.workers.dev/mcp",
+        "--transport",
+        "http-only",
+      ],
+    },
+  },
+}
+```
+
 ## Notes
 
 - **Custom domain.** The library derives the protected-resource `resource` from the
   request origin, which is correct for the `workers.dev` host. Behind a custom domain
   that differs from the Worker hostname, set `resourceMetadata.resource` in
   `src/index.ts` to the canonical `/mcp` URL.
+- **Rate limiting.** Two native bindings in `wrangler.jsonc` under `ratelimits`
+  (`LOGIN_RATE_LIMITER` for the login surface, `MCP_RATE_LIMITER` for `/mcp`), keyed on client
+  IP at the edge. Tune `limit`/`period` (period is 10 or 60); rerun `pnpm cf-typegen` after
+  editing. Counters are best-effort and per-colo.
 - **Re-deploying schema changes.** Add a new file under `migrations/` and re-run
   `pnpm db:migrate`. Never edit an already-applied migration.
 - **Rotating `COOKIE_ENCRYPTION_KEY`.** Rotating it invalidates in-flight `/authorize`

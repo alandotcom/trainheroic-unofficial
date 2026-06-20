@@ -27,6 +27,12 @@ context and registers what `core` provides.
 - The exercise cache is a JSON file (`~/.trainheroic/library.json`, or `TRAINHEROIC_CACHE_FILE`).
 - This server registers the shared core tools and deliberately omits the D1 warehouse sync
   tools, which depend on storage only the hosted worker has.
+- MCPB packaging: `mcpb/manifest.json` + `mcpb/icon.png` are committed; `tsdown.mcpb.config.ts`
+  builds a fully self-contained bundle (every dep inlined, no `node_modules`) into
+  `mcpb/server/index.mjs` (gitignored), then `mcpb pack` zips it to `dist/*.mcpb`. The
+  manifest maps `user_config` email/password onto the same two env vars `server.ts` reads;
+  the password is `sensitive` (OS keychain). Do not expose `TRAINHEROIC_CACHE_FILE` as
+  `user_config` (a user-set output path is a write primitive).
 
 ## Commands
 
@@ -34,6 +40,7 @@ context and registers what `core` provides.
 pnpm start       # tsx src/server.ts (needs the two env vars)
 pnpm inspect     # MCP Inspector over stdio (forwards the two env vars via -e)
 pnpm build       # tsdown -> dist/server.mjs (the trainheroic-coach-mcp bin)
+pnpm build:mcpb  # bundle + pack the Desktop extension -> dist/trainheroic-coach-mcp.mcpb
 pnpm typecheck
 pnpm test
 ```
