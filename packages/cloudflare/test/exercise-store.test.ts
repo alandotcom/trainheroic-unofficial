@@ -65,8 +65,7 @@ describe("ExerciseStore refresh + reads", () => {
 
     const resolved = await store.resolve("Back Squat");
     expect(resolved.match?.id).toBe(1);
-    expect(resolved.match?.param_1_unit).toBe("reps");
-    expect(resolved.match?.param_2_unit).toBe("lb");
+    expect(resolved.match?.units).toEqual(["reps", "lb"]);
   });
 
   it("searches by token and returns full objects from get", async () => {
@@ -78,7 +77,9 @@ describe("ExerciseStore refresh + reads", () => {
 
     const ex = await store.get(1162);
     expect(ex?.title).toBe("Bench Press");
-    expect(ex?.param_1_unit).toBe("reps");
+    expect(ex?.units).toEqual(["reps", "lb"]);
+    expect(ex).not.toHaveProperty("param_1_type");
+    expect(ex).not.toHaveProperty("param_2_type");
   });
 });
 

@@ -42,8 +42,9 @@ describe("unitLabel / withUnits", () => {
       user_id: null,
       use_count: 0,
     });
-    expect(view.param_1_unit).toBe("reps");
-    expect(view.param_2_unit).toBe("lb");
+    expect(view.units).toEqual(["reps", "lb"]);
+    expect(view).not.toHaveProperty("param_1_type");
+    expect(view).not.toHaveProperty("param_2_type");
   });
 });
 

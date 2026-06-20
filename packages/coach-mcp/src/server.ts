@@ -27,7 +27,7 @@ async function main(): Promise<void> {
     index: new ExerciseLibrary(client, new JsonFileLibraryCache()),
   };
 
-  const server = new McpServer({ name: "trainheroic-local", version: "0.1.0" });
+  const server = new McpServer({ name: "trainheroic-local", version: "0.2.0" });
   registerReadTools(server, ctx);
   registerRawTools(server, ctx);
   registerExerciseTools(server, ctx);

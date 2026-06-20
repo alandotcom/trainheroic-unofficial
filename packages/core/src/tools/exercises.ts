@@ -19,7 +19,8 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
       description:
         "Map a name to an exercise id via the local mirror. Returns the match plus ranked " +
         "candidates; when ambiguous, match is null and you should pick from candidates. " +
-        "Units (param_1_unit/param_2_unit) are fixed per exercise — check them before prescribing.",
+        "Each result's `units` array lists the fixed measurement units by entry slot; they " +
+        "are fixed per exercise — check them before prescribing.",
       inputSchema: { name: z.string().min(1) },
       annotations: READ,
     },

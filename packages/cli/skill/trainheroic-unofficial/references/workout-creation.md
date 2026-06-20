@@ -229,9 +229,10 @@ sent under the wrong assumed unit silently renders under the exercise's real uni
   (`1`) to an exercise that has no secondary param (default `0`/none) — that is how
   weighted Pull-Ups/Dips work. `2` (% of max) and `14` (RPE) do **not** stick on a
   weight-default lift; both coerce to weight and render as pounds.
-- Check an exercise's real units first: `$TH exercise resolve "<name>"` prints
-  `param_1_unit`/`param_2_unit`. the workout builder also prints a `WARNING` when a
-  sent param type will be overridden, and its read-back labels the stored units.
+- Check an exercise's real units first: `$TH exercise resolve "<name>"` prints a
+  `units` array, ordered by entry slot (`[param 1, param 2]`). the workout builder also
+  prints a `WARNING` when a sent param type will be overridden, and its read-back labels
+  the stored units.
 
 ## Prescription patterns
 

@@ -39,8 +39,7 @@ describe("ExerciseLibrary", () => {
     ]);
     const r = await new ExerciseLibrary(client()).resolve("Back Squat");
     expect(r.match?.id).toBe(1);
-    expect(r.match?.param_1_unit).toBe("reps");
-    expect(r.match?.param_2_unit).toBe("lb");
+    expect(r.match?.units).toEqual(["reps", "lb"]);
   });
 
   it("searches by token and gets full objects", async () => {
@@ -50,7 +49,11 @@ describe("ExerciseLibrary", () => {
     ]);
     const lib = new ExerciseLibrary(client());
     expect((await lib.search("press")).some((e) => e.id === 1162)).toBe(true);
-    expect((await lib.get(1))?.title).toBe("Back Squat");
+    const full = await lib.get(1);
+    expect(full?.title).toBe("Back Squat");
+    expect(full?.units).toEqual(["reps", null]);
+    expect(full).not.toHaveProperty("param_1_type");
+    expect(full).not.toHaveProperty("param_2_type");
   });
 
   it("refuses to wipe the cache on an empty response", async () => {

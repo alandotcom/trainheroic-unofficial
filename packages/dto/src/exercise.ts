@@ -11,10 +11,14 @@ export type ExerciseRow = {
   use_count: number;
 };
 
-/** A row annotated with human-readable unit labels for display. */
-export type ExerciseView = ExerciseRow & {
-  param_1_unit: string | null;
-  param_2_unit: string | null;
+/**
+ * A row presented for display. The raw param-type codes are dropped and the fixed
+ * measurement units are surfaced positionally in `units`, ordered by entry slot
+ * (param 1, then param 2). Positional, not semantic: param 2 is not always the load
+ * — some exercises reverse the slots — so the units are not labelled by role.
+ */
+export type ExerciseView = Omit<ExerciseRow, "param_1_type" | "param_2_type"> & {
+  units: Array<string | null>;
 };
 
 /** The outcome of resolving a name: a single match (or null) plus ranked candidates. */

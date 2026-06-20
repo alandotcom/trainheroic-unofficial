@@ -57,13 +57,28 @@ export function unitLabel(paramType: unknown): string | null {
   return PARAM_UNIT[t] ?? null;
 }
 
-/** Annotate a row with human-readable units for display. */
+/**
+ * Fixed measurement units for an exercise, ordered by entry slot (param 1, then param 2).
+ * Positional, not semantic: some exercises reverse the slots, so the array is not labelled
+ * by role. A null entry is an unset slot.
+ */
+export function exerciseUnits(param1: unknown, param2: unknown): Array<string | null> {
+  return [unitLabel(param1), unitLabel(param2)];
+}
+
+/** Present a row for display: drop the raw param-type codes, surface units positionally. */
 export function withUnits(row: ExerciseRow): ExerciseView {
-  return {
-    ...row,
-    param_1_unit: unitLabel(row.param_1_type),
-    param_2_unit: unitLabel(row.param_2_type),
-  };
+  const { param_1_type, param_2_type, ...rest } = row;
+  return { ...rest, units: exerciseUnits(param_1_type, param_2_type) };
+}
+
+/**
+ * Present a full raw exercise object for display: drop the raw param-type codes and add the
+ * positional `units` array. Keeps every other field of the raw object intact.
+ */
+export function presentExercise(raw: Record<string, unknown>): Record<string, unknown> {
+  const { param_1_type, param_2_type, ...rest } = raw;
+  return { ...rest, units: exerciseUnits(param_1_type, param_2_type) };
 }
 
 export function buildSearchText(title: string): string {

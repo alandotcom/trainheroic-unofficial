@@ -205,8 +205,9 @@ Environment-specific facts that defy reasonable assumptions:
   coerce to weight on a weight lift, rendering as pounds — put % or RPE in the
   `instruction` (the builder does this from `rpe`). You _can_ add weight (`1`) to a
   no-secondary-param lift (weighted Pull-Ups). Check units with `$TH exercise resolve`
-  (`param_1_unit`/`param_2_unit`); the builder prints a warning when a sent type will be
-  overridden. "Max"/"AMRAP" reps work as free text in the rep slots.
+  (the `units` array, ordered by entry slot `[param 1, param 2]`); the builder prints a
+  warning when a sent type will be overridden. "Max"/"AMRAP" reps work as free text in the
+  rep slots.
 - **`saveWorkoutSetExercises` returns HTTP 500** unless every field is present: all ten
   `param_1_data_N`/`param_2_data_N` slots (empty string for unused), `set_num`, `key`,
   `setKey`, `eType`, `tags`, `use_count`. The builder fills these — prefer it over raw calls.

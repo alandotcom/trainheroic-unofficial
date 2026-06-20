@@ -11,9 +11,9 @@ import {
   exerciseResponseSchema,
   type ExerciseRow,
   type ExerciseView,
+  presentExercise,
   rankSearch,
   type ResolveResult,
-  unitLabel,
   unwrapEnvelope,
   withUnits,
 } from "@trainheroic-unofficial/js";
@@ -213,10 +213,7 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
       .bind(org, id)
       .first<{ raw: string }>();
     if (!row) return null;
-    const full = JSON.parse(row.raw) as Record<string, unknown>;
-    full.param_1_unit = unitLabel(full.param_1_type);
-    full.param_2_unit = unitLabel(full.param_2_type);
-    return full;
+    return presentExercise(JSON.parse(row.raw) as Record<string, unknown>);
   }
 
   async search(query: string, limit = 20): Promise<ExerciseView[]> {
