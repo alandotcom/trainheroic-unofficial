@@ -1,5 +1,5 @@
 ---
-name: trainheroic-api
+name: trainheroic-unofficial
 description: Call the TrainHeroic coach/athlete REST API to manage athletes, teams, programs, sessions, exercises, and analytics. Use when the user wants to authenticate against TrainHeroic, automate coaching tasks, build workouts or session templates, create teams/athletes/custom exercises, resolve exercise IDs, or pull training, readiness, and analytics data.
 metadata:
   author: alandotcom
@@ -17,6 +17,36 @@ SDK: a spec-driven workout builder, an on-disk exercise cache, and gated messagi
 
 ## Setup
 
+### CLI
+
+Before making API calls, verify the CLI is available:
+
+```bash
+which trainheroic
+```
+
+If not found, install it (no credentials required):
+
+```bash
+npm install -g @trainheroic-unofficial/cli
+trainheroic install-skill   # also refreshes skill files in ~/.claude/skills/
+```
+
+To update to the latest version:
+
+```bash
+npm update -g @trainheroic-unofficial/cli
+trainheroic install-skill   # pick up any updated skill files
+```
+
+Set `TH` to the binary name for the commands below:
+
+```bash
+TH="trainheroic"
+```
+
+### Credentials
+
 Credentials come from the environment (if unset, ask the user — do not guess):
 
 ```bash
@@ -27,13 +57,6 @@ export TRAINHEROIC_PASSWORD="..."
 The CLI logs in, caches the session at `~/.trainheroic/session.json` (mode 0600),
 reuses it across invocations, and re-authenticates automatically on a 401/403. The
 exercise library is cached at `~/.trainheroic/library.json`.
-
-Point `TH` at the CLI — the installed binary, or the built bundle in this repo:
-
-```bash
-TH="trainheroic"                                   # if installed (npm i -g @trainheroic-unofficial/cli)
-TH="node $PWD/packages/cli/dist/cli.mjs"            # from this repo, after: pnpm --filter @trainheroic-unofficial/cli build
-```
 
 Start a session with `$TH whoami`: it confirms auth and returns the coach's `id`,
 `org_id`, and roles that later calls reference. Run `$TH help` for the full command list.
@@ -62,15 +85,15 @@ response shape, or an area not covered here.
 
 ## What you can do
 
-| Area | How |
-|------|-----|
-| Athletes | `$TH athletes`; invite/archive/restore via `$TH request ...` |
-| Teams | `$TH teams`, `$TH team <id>`, `$TH team-codes <id>`; create via `$TH request POST /1.0/coach/team/createWithTitleAndCode` |
-| Programs | `$TH programs`, `$TH program <id>` |
-| Exercises | `$TH exercise resolve\|search\|get\|sync\|create\|forget\|stats` (below) |
-| Sessions / workouts | `$TH workout build\|read\|publish\|remove` (below) |
-| Messaging | `$TH message list\|read\|draft\|send\|delete` (below) |
-| Analytics | `$TH analytics`, then `$TH request POST /v5/analytics/*` |
+| Area                | How                                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Athletes            | `$TH athletes`; invite/archive/restore via `$TH request ...`                                                              |
+| Teams               | `$TH teams`, `$TH team <id>`, `$TH team-codes <id>`; create via `$TH request POST /1.0/coach/team/createWithTitleAndCode` |
+| Programs            | `$TH programs`, `$TH program <id>`                                                                                        |
+| Exercises           | `$TH exercise resolve\|search\|get\|sync\|create\|forget\|stats` (below)                                                  |
+| Sessions / workouts | `$TH workout build\|read\|publish\|remove` (below)                                                                        |
+| Messaging           | `$TH message list\|read\|draft\|send\|delete` (below)                                                                     |
+| Analytics           | `$TH analytics`, then `$TH request POST /v5/analytics/*`                                                                  |
 
 ## Resolving exercises
 
@@ -177,10 +200,10 @@ Environment-specific facts that defy reasonable assumptions:
   immediately, so gate sends behind explicit user confirmation (`--yes`).
 - **Units are fixed per exercise — you can't set them at prescribe time.** On save the API
   discards the `param_1_type`/`param_2_type` you send and restores the exercise's library
-  defaults (the *values* are kept). So the stock `Run` (miles) can't be made metric; a
-  "200 m run" on it shows as 200 *miles*. And `param_2_type` `2` (% of max) and `14` (RPE)
+  defaults (the _values_ are kept). So the stock `Run` (miles) can't be made metric; a
+  "200 m run" on it shows as 200 _miles_. And `param_2_type` `2` (% of max) and `14` (RPE)
   coerce to weight on a weight lift, rendering as pounds — put % or RPE in the
-  `instruction` (the builder does this from `rpe`). You *can* add weight (`1`) to a
+  `instruction` (the builder does this from `rpe`). You _can_ add weight (`1`) to a
   no-secondary-param lift (weighted Pull-Ups). Check units with `$TH exercise resolve`
   (`param_1_unit`/`param_2_unit`); the builder prints a warning when a sent type will be
   overridden. "Max"/"AMRAP" reps work as free text in the rep slots.
@@ -188,7 +211,7 @@ Environment-specific facts that defy reasonable assumptions:
   `param_1_data_N`/`param_2_data_N` slots (empty string for unused), `set_num`, `key`,
   `setKey`, `eType`, `tags`, `use_count`. The builder fills these — prefer it over raw calls.
 - **`GET /1.0/coach/programs/edit/{cal}/{y}/{m}/{d}` returns every session in that date's
-  *month*** — not just the day, and not the whole calendar. Match yours by the `id`
+  _month_** — not just the day, and not the whole calendar. Match yours by the `id`
   returned at create time, not `programWorkouts[0]`; to read a whole program, walk month by
   month.
 - **A created session exposes two IDs**: `workout_id` (for adding blocks) and `id` (the

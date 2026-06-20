@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { readFile } from "node:fs/promises";
+import { cp, mkdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import process from "node:process";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import type { ZodType } from "zod";
@@ -27,6 +28,9 @@ import { loadSession, saveSession } from "./session-cache";
 const HELP = `trainheroic — command-line tool for the TrainHeroic coaching API
 
 Credentials come from TRAINHEROIC_EMAIL and TRAINHEROIC_PASSWORD. Output is JSON.
+
+Setup:
+  install-skill   copy the Claude Code skill to ~/.claude/skills/trainheroic-unofficial/
 
 Reads:
   whoami | head-coach | athletes | programs | teams | notifications | analytics
@@ -369,6 +373,16 @@ async function cmdMessage(client: TrainHeroicClient, rest: string[]): Promise<vo
   }
 }
 
+async function cmdInstallSkill(): Promise<void> {
+  const home = process.env.HOME ?? process.env.USERPROFILE;
+  if (!home) fail("cannot determine home directory.");
+  const skillSrc = join(import.meta.dirname, "../skill/trainheroic-unofficial");
+  const skillDest = join(home, ".claude/skills/trainheroic-unofficial");
+  await mkdir(join(home, ".claude/skills"), { recursive: true });
+  await cp(skillSrc, skillDest, { recursive: true, force: true });
+  out({ installed: skillDest });
+}
+
 async function dispatch(client: TrainHeroicClient, group: string, rest: string[]): Promise<void> {
   switch (group) {
     case "whoami":
@@ -418,6 +432,11 @@ async function main(): Promise<void> {
   const [group, ...rest] = process.argv.slice(2);
   if (group === undefined || group === "help" || group === "--help" || group === "-h") {
     process.stdout.write(HELP);
+    return;
+  }
+
+  if (group === "install-skill") {
+    await cmdInstallSkill();
     return;
   }
 

@@ -15,7 +15,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "files": ["dist"],
+  "files": ["dist", "skill"],
   "scripts": {
     "start": "tsx src/cli.ts",
     "build": "tsdown",
