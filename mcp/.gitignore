@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# MCPB build output (the bundled server). The manifest and icon are committed.
+packages/local/mcpb/server/
 .wrangler/
 .dev.vars
 .dev.vars.*

@@ -23,6 +23,11 @@ export a `registerXxxTools(server, ctx)` function.
   `errorResult` for an in-band failure the model can self-correct on, `apiCall` for a
   straight TrainHeroic request, and `attempt` to wrap a handler body so a thrown error
   becomes an error result.
+- `jsonResult` and `apiCall` are size-bounded (`boundedSerialize` + `resultBudget`): an
+  oversized result is trimmed and labeled with a `__truncated` marker so it cannot exceed the
+  host's tool-result cap. Pass a `hint` (the optional last arg to `apiCall`, or `{ hint }` to
+  `jsonResult`) telling the model how to narrow a large result. `DEFAULT_RESULT_BUDGET` is
+  overridable via `TH_MCP_RESULT_BUDGET`.
 - Annotate honestly with the `READ` / `SYNC` / `DESTRUCTIVE` presets. These are advisory
   hints to the client and are not the enforcement mechanism.
 - Gate every destructive or athlete-facing action with `confirmGate` from `src/confirm.ts`.

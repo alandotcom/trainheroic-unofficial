@@ -45,8 +45,13 @@ Reads are marked read-only. Athlete-facing or destructive tools (`message_send`,
 `message_delete`, `workout_publish`, `session_remove`, and non-GET `th_request`) are gated by
 MCP elicitation and also accept `confirm: true` for clients without elicitation support.
 
-**Coach reads:** `whoami`, `head_coach`, `list_athletes`, `list_teams`, `get_team`,
-`list_team_codes`, `list_programs`, `get_program`, `notifications`, `analytics_categories`.
+Results are size-bounded to stay under the host's tool-result cap: an oversized result is
+trimmed and labeled with a `__truncated` marker. Raise the budget for a local run with
+`TH_MCP_RESULT_BUDGET`.
+
+**Coach reads:** `whoami`, `head_coach`, `list_athletes` (optional `q` / `limit`),
+`list_teams`, `get_team`, `list_team_codes`, `list_programs`, `get_program`, `notifications`,
+`analytics_categories`.
 
 **Escape hatch:** `th_request` (any endpoint; GET is ungated, POST/PUT/DELETE require
 confirmation like the dedicated destructive tools).
@@ -98,6 +103,11 @@ development you can point it at the source through `tsx`:
 After `pnpm --filter @trainheroic-unofficial/coach-mcp build`, you can instead run the built
 `trainheroic-coach-mcp` binary (`packages/local/dist/server.mjs`). The client launches the
 process and speaks MCP over stdio; the server calls the live TrainHeroic API directly.
+
+Or install the prebuilt Claude Desktop extension: download `trainheroic-coach-mcp.mcpb` from the
+[Releases page](https://github.com/alandotcom/trainheroic-skill/releases), drag it onto Desktop,
+and enter your credentials. See
+[packages/local/README.md](packages/local/README.md#install-as-a-claude-desktop-extension-mcpb).
 
 To poke at the tools by hand, run [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector)
 against the stdio server. It spawns the server, then opens a web UI for listing and calling
@@ -176,6 +186,8 @@ short: create the KV namespace and D1 database, paste their ids into
   and `Content-Security-Policy: frame-ancestors 'none'` with `X-Frame-Options: DENY`.
 - Credentials live only in the encrypted grant `props`, never in logs, `userId`, or `metadata`.
   Set `ALLOWED_EMAILS` to restrict which TrainHeroic accounts may connect.
+- Per-IP edge rate limiting (Cloudflare's native binding, configured in `wrangler.jsonc` under
+  `ratelimits`): tight on the login surface, looser on `/mcp`. Best-effort, not an exact quota.
 
 ## Limitations
 

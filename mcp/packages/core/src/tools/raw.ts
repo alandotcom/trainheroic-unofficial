@@ -41,7 +41,13 @@ export function registerRawTools(server: McpServer, ctx: ToolContext): void {
       const options: RequestOptions = {};
       if (body !== undefined) options.body = body;
       if (base !== undefined) options.base = base;
-      return apiCall(ctx, method, path, options);
+      return apiCall(
+        ctx,
+        method,
+        path,
+        options,
+        "Large or unfiltered response. Add query params to narrow it, or use a dedicated tool for this endpoint if one exists.",
+      );
     },
   );
 }

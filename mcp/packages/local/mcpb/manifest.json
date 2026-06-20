@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "trainheroic-coach-mcp",
+  "display_name": "TrainHeroic Coach (unofficial)",
+  "version": "0.1.0",
+  "description": "Manage a TrainHeroic coaching account from Claude: athletes, teams, programs, workouts, exercises, and messaging.",
+  "long_description": "An unofficial local MCP server for TrainHeroic coaches. It runs entirely on your machine: your TrainHeroic credentials are stored in the OS keychain and sent only to TrainHeroic, never to the connecting app or any third-party host. Tools cover coach reads (athletes, teams, programs, analytics), exercise resolve/search/create, the workout draft/publish lifecycle, and live messaging. Athlete-facing and destructive actions (publishing a session, sending or deleting a message, removing a session) require confirmation.",
+  "author": {
+    "name": "Alan Cohen",
+    "url": "https://github.com/alandotcom/trainheroic-skill"
+  },
+  "homepage": "https://github.com/alandotcom/trainheroic-skill",
+  "documentation": "https://github.com/alandotcom/trainheroic-skill/blob/main/mcp/packages/local/README.md",
+  "icon": "icon.png",
+  "keywords": ["trainheroic", "coaching", "fitness", "strength", "mcp"],
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.mjs"],
+      "env": {
+        "TRAINHEROIC_EMAIL": "${user_config.email}",
+        "TRAINHEROIC_PASSWORD": "${user_config.password}"
+      }
+    }
+  },
+  "user_config": {
+    "email": {
+      "type": "string",
+      "title": "TrainHeroic email",
+      "description": "The email for your TrainHeroic coach account. Sent only to TrainHeroic.",
+      "required": true
+    },
+    "password": {
+      "type": "string",
+      "title": "TrainHeroic password",
+      "description": "Your TrainHeroic password. Stored in your OS keychain and sent only to TrainHeroic, never to the connecting app.",
+      "required": true,
+      "sensitive": true
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=1.0.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=20"
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { apiCall, idParam, READ } from "../context";
+import { apiCall, attempt, idParam, jsonResult, READ } from "../context";
 import type { ToolContext } from "../context";
 
 function enc(value: string | number): string {
@@ -26,12 +26,6 @@ const SIMPLE_GETS: ReadonlyArray<{
     title: "Head coach / org",
     description: "Org, license, and trial status for the head coach account.",
     path: "/v5/headCoach",
-  },
-  {
-    name: "list_athletes",
-    title: "List athletes",
-    description: "All athletes visible to this coach.",
-    path: "/v5/athletes",
   },
   {
     name: "list_programs",
@@ -63,6 +57,47 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
       () => apiCall(ctx, "GET", t.path),
     );
   }
+
+  server.registerTool(
+    "list_athletes",
+    {
+      title: "List athletes",
+      description:
+        "Athletes visible to this coach. Optional q (case-insensitive substring filter over " +
+        "each athlete record) and limit, applied client-side, to keep large rosters small.",
+      inputSchema: {
+        q: z.string().optional(),
+        limit: z.number().int().positive().max(500).optional(),
+      },
+      annotations: READ,
+    },
+    ({ q, limit }) =>
+      attempt(async () => {
+        const res = await ctx.client.request("GET", "/v5/athletes");
+        if (!res.ok) {
+          const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+          throw new Error(`TrainHeroic API error (HTTP ${res.status}): ${detail}`);
+        }
+        if (!Array.isArray(res.data)) return jsonResult(res.data);
+        let rows = res.data as unknown[];
+        if (q !== undefined) {
+          const needle = q.toLowerCase();
+          rows = rows.filter((row) => JSON.stringify(row).toLowerCase().includes(needle));
+        }
+        const total = rows.length;
+        if (limit !== undefined && rows.length > limit) {
+          return jsonResult({
+            items: rows.slice(0, limit),
+            returned: limit,
+            total,
+            note: "Limited client-side. Raise limit or narrow with q for the rest.",
+          });
+        }
+        return jsonResult(rows, {
+          hint: "Filter with q (name/email substring) or cap with limit to shrink this list.",
+        });
+      }),
+  );
 
   server.registerTool(
     "list_teams",
@@ -117,6 +152,13 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
       inputSchema: { programId: idParam },
       annotations: READ,
     },
-    ({ programId }) => apiCall(ctx, "GET", `/3.0/coach/program/${enc(programId)}`),
+    ({ programId }) =>
+      apiCall(
+        ctx,
+        "GET",
+        `/3.0/coach/program/${enc(programId)}`,
+        undefined,
+        "This is a large, deep object. If it is truncated, fetch a narrower view (a specific session) instead.",
+      ),
   );
 }

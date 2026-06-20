@@ -45,6 +45,28 @@ development you can point it at the source through `tsx`:
 After `pnpm build`, the package also exposes a `trainheroic-coach-mcp` binary
 (`dist/server.mjs`) you can run with `node` or via the installed bin instead.
 
+## Install as a Claude Desktop extension (MCPB)
+
+Download the latest `trainheroic-coach-mcp.mcpb` from the
+[Releases page](https://github.com/alandotcom/trainheroic-skill/releases), drag it onto Claude
+Desktop, and enter your TrainHeroic email and password. Credentials are stored in the OS keychain
+and sent only to TrainHeroic. No toolchain needed; Desktop supplies the Node runtime.
+
+### Cut a release (maintainers)
+
+Push a `coach-mcp-v*` tag and the `Release Coach MCPB` workflow builds, signs, and attaches the
+`.mcpb` to the GitHub Release. Set the `MCPB_CERT` / `MCPB_KEY` repo secrets to sign with a real
+certificate; otherwise it self-signs. To build one locally:
+
+```bash
+pnpm build:mcpb     # -> dist/trainheroic-coach-mcp.mcpb
+pnpm mcpb:validate  # validate the manifest
+pnpm mcpb:sign      # self-sign
+```
+
+Source lives in `mcpb/` (`manifest.json`, `icon.png`); the build writes `mcpb/server/index.mjs`
+and the packed `dist/*.mcpb`.
+
 ## Debug it
 
 [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) is an interactive web UI
@@ -77,6 +99,7 @@ TRAINHEROIC_EMAIL="coach@example.com" TRAINHEROIC_PASSWORD="..." \
 pnpm start       # tsx src/server.ts (needs the two env vars)
 pnpm inspect     # MCP Inspector against the source over stdio
 pnpm build       # tsdown -> dist/server.mjs
+pnpm build:mcpb  # bundle + pack the Desktop extension -> dist/trainheroic-coach-mcp.mcpb
 pnpm typecheck
 pnpm test
 ```

@@ -14,7 +14,8 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
 
 ## Where things live
 
-- `src/index.ts`: the OAuth provider wiring and the scheduled (cron) purge.
+- `src/index.ts`: the OAuth provider wiring, the per-IP edge rate limiting that runs before
+  `provider.fetch`, and the scheduled (cron) purge.
 - `src/agent.ts`: the `McpAgent` Durable Object. `init()` builds the `ToolContext` and
   registers the core tools plus `registerSyncTools`. One instance per client session; it
   throws if the grant props are missing.
@@ -38,6 +39,11 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
 - Migrations are append-only. Add a new numbered file; do not edit a migration that has
   already been applied. After changing bindings, run `pnpm cf-typegen`.
 - The `wrangler.jsonc` KV and D1 ids are placeholders until a real deployment fills them.
+- Rate limiting lives at the edge in `src/index.ts` (keyed by `CF-Connecting-IP`), backed by
+  two `ratelimits` bindings in `wrangler.jsonc` (`LOGIN_RATE_LIMITER`, `MCP_RATE_LIMITER`).
+  It is best-effort and per-colo. Keep it out of `core` so the shared tools stay
+  transport-agnostic; per-identity limiting would have to live in the DO. Re-run
+  `pnpm cf-typegen` after editing the block.
 - Tools that are not storage-specific belong in `core`, so the local server gets them too.
   Only add a tool here when it genuinely needs D1 or the Worker environment.
 
