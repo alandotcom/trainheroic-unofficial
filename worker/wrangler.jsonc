@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "trainheroic-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "MCP_OBJECT", "class_name": "TrainHeroicMCP" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["TrainHeroicMCP"] }
+  ],
+  "kv_namespaces": [
+    // Create with: wrangler kv namespace create OAUTH_KV  -> paste the id here.
+    { "binding": "OAUTH_KV", "id": "PLACEHOLDER_OAUTH_KV_ID" }
+  ],
+  "d1_databases": [
+    // Create with: wrangler d1 create trainheroic  -> paste the database_id here.
+    {
+      "binding": "TH_DB",
+      "database_name": "trainheroic",
+      "database_id": "PLACEHOLDER_TH_DB_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": {
+    // Daily KV hygiene (purgeExpiredData) + optional periodic sync.
+    "crons": ["0 4 * * *"]
+  },
+  "vars": {
+    // Non-secret defaults. Secrets (CRED_ENC_KEY, COOKIE_ENCRYPTION_KEY, ALLOWED_EMAILS)
+    // go in .dev.vars locally and `wrangler secret put` in production.
+  }
+}
