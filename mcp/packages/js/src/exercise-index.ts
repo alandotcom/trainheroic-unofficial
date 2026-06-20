@@ -1,4 +1,10 @@
-import type { ExerciseRow, ExerciseView, ResolveResult } from "@trainheroic-unofficial/dto";
+import {
+  exerciseLibraryResponseSchema,
+  exerciseResponseSchema,
+  type ExerciseRow,
+  type ExerciseView,
+  type ResolveResult,
+} from "@trainheroic-unofficial/dto";
 import type { TrainHeroicClient } from "./client";
 import {
   asExerciseList,
@@ -11,6 +17,7 @@ import {
   withUnits,
 } from "./exercise-util";
 import { type LibraryCache, MemoryLibraryCache } from "./library-cache";
+import { checkResponse } from "./response-check";
 
 const LIBRARY_PATH = "/v5/exerciseLibrary/all";
 const CREATE_PATH = "/2.0/coach/exercise/create";
@@ -119,6 +126,7 @@ export class ExerciseLibrary implements ExerciseIndex {
     if (!res.ok) throw new Error(`Exercise library fetch failed (HTTP ${res.status}).`);
     const list = asExerciseList(res.data);
     if (list.length === 0) throw new Error("Exercise library returned no rows; keeping the cache.");
+    checkResponse(exerciseLibraryResponseSchema, list, "exercise library");
     this.#hydrate(list, Date.now());
     await this.#persist();
     return { synced: this.#byId.size };
@@ -187,6 +195,7 @@ export class ExerciseLibrary implements ExerciseIndex {
     if (!res.ok) throw new Error(`Exercise create failed (HTTP ${res.status}).`);
     const ex = unwrapEnvelope(res.data);
     if (ex && typeof ex === "object") {
+      checkResponse(exerciseResponseSchema, ex, "exercise create");
       const s = toStored(ex as Record<string, unknown>);
       if (s) {
         this.#byId.set(s.id, s);
