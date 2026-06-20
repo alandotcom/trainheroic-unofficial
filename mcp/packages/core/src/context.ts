@@ -1,10 +1,10 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
+import { idSchema } from "@trainheroic-unofficial/dto";
 import type { ExerciseIndex } from "@trainheroic-unofficial/js";
 import type { RequestOptions, TrainHeroicClient } from "@trainheroic-unofficial/js";
 
 /** A tool argument that accepts a numeric id as a number or string. */
-export const idParam = z.union([z.string(), z.number()]);
+export const idParam = idSchema;
 
 export function toId(value: string | number): number {
   return typeof value === "number" ? value : Number(value);

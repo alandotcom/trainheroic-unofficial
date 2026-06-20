@@ -3,7 +3,7 @@
 // HTTP 500), keeps RPE out of structured params (the API coerces it to weight), and
 // encodes Red-Zone leaderboards.
 
-import type { BlockSpec, ExerciseSpec } from "@trainheroic-unofficial/dto";
+import type { Advisory, BlockSpec, ExerciseSpec } from "@trainheroic-unofficial/dto";
 import {
   PARAM_NONE,
   PARAM_PCT_MAX,
@@ -215,8 +215,6 @@ export function buildBlockPayload(
     };
   });
 }
-
-export type Advisory = { notes: string[]; warnings: string[] };
 
 function unitOr(t: number | null): string {
   return unitLabel(t) ?? "?";

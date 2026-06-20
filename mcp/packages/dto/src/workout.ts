@@ -43,3 +43,37 @@ export const workoutSpecSchema = z.object({
   instruction: z.string().optional(),
 });
 export type WorkoutSpec = z.infer<typeof workoutSpecSchema>;
+
+/** A calendar date as the workout API expects it: [year, month, day]. */
+export type WorkoutDate = readonly [number, number, number];
+
+/** Unit advisories surfaced when building: informational notes and override warnings. */
+export type Advisory = { notes: string[]; warnings: string[] };
+
+/** A single exercise as read back from a built session. */
+export type ReadExercise = {
+  order: number;
+  title: string;
+  reps: string[];
+  primaryUnit: string | null;
+  load: string[];
+  loadUnit: string | null;
+  instruction: string;
+};
+
+/** A block as read back from a built session. */
+export type ReadBlock = {
+  order: number;
+  title: string;
+  leaderboard: string | null;
+  exercises: ReadExercise[];
+};
+
+/** A whole session read back from the calendar. */
+export type ReadResult = {
+  pwId: number;
+  date: string;
+  published: unknown;
+  instruction: string;
+  blocks: ReadBlock[];
+};

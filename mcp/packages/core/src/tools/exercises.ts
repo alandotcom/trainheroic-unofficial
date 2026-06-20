@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { exerciseCreateSchema } from "@trainheroic-unofficial/dto";
 import { attempt, errorResult, idParam, jsonResult, READ, SYNC, toId } from "../context";
 import type { ToolContext } from "../context";
 
@@ -73,10 +74,11 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
       description:
         "Create a custom exercise (POST /2.0/coach/exercise/create) and write it through to the " +
         'mirror. Body example: {"title":"Sandbag Clean","param_1_type":3,"param_2_type":1}.',
-      inputSchema: { exercise: z.record(z.string(), z.unknown()) },
+      inputSchema: { exercise: exerciseCreateSchema },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
-    ({ exercise }) => attempt(async () => jsonResult(await index.create(exercise))),
+    ({ exercise }) =>
+      attempt(async () => jsonResult(await index.create(exercise as Record<string, unknown>))),
   );
 
   server.registerTool(
