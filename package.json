@@ -14,14 +14,21 @@
     "lint": "oxlint --deny-warnings",
     "fmt": "oxfmt packages",
     "fmt:check": "oxfmt --check packages",
-    "check": "pnpm run fmt:check && pnpm run lint && pnpm run typecheck && pnpm run test"
+    "check": "pnpm run fmt:check && pnpm run lint && pnpm run typecheck && pnpm run test",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm run build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "oxfmt": "^0.55.0",
     "oxlint": "^1.70.0",
     "typescript": "^6.0.3"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "workerd"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
   }
 }
