@@ -1,105 +1,56 @@
 # @trainheroic-unofficial/coach-mcp
 
-A local, single-user MCP server for a TrainHeroic coach. It speaks MCP over stdio, takes its
-credentials from the environment, and caches the exercise library on disk. There is no
-OAuth and no database, so it needs nothing beyond Node.
+Local single-user MCP server for a TrainHeroic coach. Runs on your machine over stdio; credentials come from the environment.
 
-Part of the [trainheroic-unofficial](../../README.md) workspace. For the hosted,
-multi-tenant version, see the `cloudflare` package.
+For the hosted version (no install, OAuth login), see the [root README](../../README.md).
 
-## What it does
+---
 
-On launch it reads `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD`, builds a client and a
-file-backed exercise library, registers the shared tool set from
-`@trainheroic-unofficial/core`, and connects over stdio. An MCP client launches the process
-and talks to it; the server calls the live TrainHeroic API directly. The tool surface is the
-shared core set (coach reads, exercises, the workout lifecycle, and messaging). The
-D1-backed warehouse sync tools are hosted-only and are not present here.
+## Install
 
-The exercise library is cached at `~/.trainheroic/library.json`, overridable with
-`TRAINHEROIC_CACHE_FILE`.
+### Claude Desktop extension (easiest)
 
-## Run it
+Download `trainheroic-coach-mcp.mcpb` from the [Releases page](https://github.com/alandotcom/trainheroic-skill/releases), drag it onto Claude Desktop, and enter your TrainHeroic email and password. Credentials are stored in the OS keychain. No Node toolchain needed.
 
-From a checkout (development):
+### Claude Code
 
 ```bash
-TRAINHEROIC_EMAIL="coach@example.com" TRAINHEROIC_PASSWORD="..." pnpm start
+claude mcp add trainheroic \
+  -e TRAINHEROIC_EMAIL=coach@example.com \
+  -e TRAINHEROIC_PASSWORD=yourpassword \
+  -- npx -y @trainheroic-unofficial/coach-mcp
 ```
 
-Register it with an MCP client such as Claude Desktop by command, args, and env. During
-development you can point it at the source through `tsx`:
+### Claude Desktop / `.mcp.json` / other stdio clients
 
 ```jsonc
 {
   "mcpServers": {
     "trainheroic": {
       "command": "npx",
-      "args": ["tsx", "/abs/path/to/trainheroic-2/packages/coach-mcp/src/server.ts"],
-      "env": { "TRAINHEROIC_EMAIL": "coach@example.com", "TRAINHEROIC_PASSWORD": "..." },
-    },
-  },
+      "args": ["-y", "@trainheroic-unofficial/coach-mcp"],
+      "env": {
+        "TRAINHEROIC_EMAIL": "coach@example.com",
+        "TRAINHEROIC_PASSWORD": "yourpassword"
+      }
+    }
+  }
 }
 ```
 
-After `pnpm build`, the package also exposes a `trainheroic-coach-mcp` binary
-(`dist/server.mjs`) you can run with `node` or via the installed bin instead.
-
-## Install as a Claude Desktop extension (MCPB)
-
-Download the latest `trainheroic-coach-mcp.mcpb` from the
-[Releases page](https://github.com/alandotcom/trainheroic-skill/releases), drag it onto Claude
-Desktop, and enter your TrainHeroic email and password. Credentials are stored in the OS keychain
-and sent only to TrainHeroic. No toolchain needed; Desktop supplies the Node runtime.
-
-### Cut a release (maintainers)
-
-Push a `coach-mcp-v*` tag and the `Release Coach MCPB` workflow builds, signs, and attaches the
-`.mcpb` to the GitHub Release. Set the `MCPB_CERT` / `MCPB_KEY` repo secrets to sign with a real
-certificate; otherwise it self-signs. To build one locally:
-
-```bash
-pnpm build:mcpb     # -> dist/trainheroic-coach-mcp.mcpb
-pnpm mcpb:validate  # validate the manifest
-pnpm mcpb:sign      # self-sign
-```
-
-Source lives in `mcpb/` (`manifest.json`, `icon.png`); the build writes `mcpb/server/index.mjs`
-and the packed `dist/*.mcpb`.
-
-## Debug it
-
-[MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) is an interactive web UI
-for listing this server's tools, inspecting their schemas, and calling them by hand. `pnpm
-inspect` runs it against the source through `tsx`:
-
-```bash
-TRAINHEROIC_EMAIL="coach@example.com" TRAINHEROIC_PASSWORD="..." pnpm inspect
-```
-
-The script forwards those two variables to the spawned server with the Inspector's `-e` flag
-(the spawned process does not inherit your shell's custom env, so they must be passed
-explicitly). It prints a `http://localhost:6274/?MCP_PROXY_AUTH_TOKEN=...` URL with a session
-token pre-filled; open it, click **Connect**, then use the **Tools** tab. You can also leave
-the credentials out of the command and type them into the Inspector's environment fields
-before connecting.
-
-For a non-interactive smoke test, the Inspector's CLI mode lists the tools without the UI:
-
-```bash
-TRAINHEROIC_EMAIL="coach@example.com" TRAINHEROIC_PASSWORD="..." \
-  npx @modelcontextprotocol/inspector --cli \
-  -e TRAINHEROIC_EMAIL="$TRAINHEROIC_EMAIL" -e TRAINHEROIC_PASSWORD="$TRAINHEROIC_PASSWORD" \
-  tsx src/server.ts --method tools/list
-```
+---
 
 ## Develop
 
 ```bash
-pnpm start       # tsx src/server.ts (needs the two env vars)
-pnpm inspect     # MCP Inspector against the source over stdio
-pnpm build       # tsdown -> dist/server.mjs
-pnpm build:mcpb  # bundle + pack the Desktop extension -> dist/trainheroic-coach-mcp.mcpb
+pnpm start       # run from source (needs TRAINHEROIC_EMAIL and TRAINHEROIC_PASSWORD)
+pnpm inspect     # MCP Inspector UI against the source server
+pnpm build       # tsdown → dist/server.mjs
+pnpm build:mcpb  # bundle + pack the Desktop extension → dist/trainheroic-coach-mcp.mcpb
 pnpm typecheck
 pnpm test
 ```
+
+### Cut a release (maintainers)
+
+Push a `coach-mcp-v*` tag. The `Release Coach MCPB` GitHub Actions workflow builds, signs, and attaches the `.mcpb` to the Release. Set `MCPB_CERT` / `MCPB_KEY` repo secrets to sign with a real certificate; omitting them produces a self-signed build.

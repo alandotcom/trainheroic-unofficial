@@ -1,10 +1,19 @@
 {
   "name": "@trainheroic-unofficial/coach-mcp",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alandotcom/trainheroic-skill.git",
+    "directory": "packages/coach-mcp"
+  },
   "description": "Local single-user MCP server for a TrainHeroic coach. No database, no Cloudflare deps.",
   "type": "module",
   "bin": {
     "trainheroic-coach-mcp": "./dist/server.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": ["dist"],
   "scripts": {
