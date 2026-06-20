@@ -55,6 +55,32 @@ describe("TrainHeroicClient", () => {
     expect(client.sessionId).toBe("s1");
   });
 
+  it("shares one login across concurrent cold requests", async () => {
+    let logins = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) {
+          logins += 1;
+          return json({ id: 1, session_id: "sess" });
+        }
+        return json({ ok: true });
+      }),
+    );
+    const client = new TrainHeroicClient("a@b.com", "pw");
+    const results = await Promise.all([
+      client.request<{ ok: boolean }>("GET", "/a"),
+      client.request<{ ok: boolean }>("GET", "/b"),
+      client.request<{ ok: boolean }>("GET", "/c"),
+    ]);
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect(logins).toBe(1);
+
+    // A later request reuses the cached session — no second login.
+    await client.request("GET", "/d");
+    expect(logins).toBe(1);
+  });
+
   it("targets the apis host when base is 'apis'", async () => {
     const urls: string[] = [];
     vi.stubGlobal(

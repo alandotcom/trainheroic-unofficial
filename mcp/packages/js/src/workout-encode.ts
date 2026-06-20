@@ -5,6 +5,7 @@
 
 import type { Advisory, BlockSpec, ExerciseSpec } from "@trainheroic-unofficial/dto";
 import {
+  type ExerciseIndex,
   PARAM_NONE,
   PARAM_PCT_MAX,
   PARAM_REPS,
@@ -231,6 +232,14 @@ export function unitAdvisory(
   const u = unitOr;
   const label = `${blockTitle} / ${ex.title ?? ex.id}`;
 
+  // An explicit `sets` is ignored when `reps` is an array (array length wins); surface
+  // it rather than silently building a different number of sets than asked for.
+  if (Array.isArray(ex.reps) && ex.sets !== undefined && ex.reps.length !== ex.sets) {
+    warnings.push(
+      `${label}: reps array has ${ex.reps.length} entr${ex.reps.length === 1 ? "y" : "ies"}; sets:${ex.sets} is ignored — building ${ex.reps.length} set(s).`,
+    );
+  }
+
   const sentP1 = ex.param_1_type;
   if (sentP1 !== undefined && sentP1 !== null && Math.trunc(Number(sentP1)) !== defaults.param1) {
     const sp1 = Math.trunc(Number(sentP1));
@@ -259,5 +268,35 @@ export function unitAdvisory(
       }
     }
   }
+  return { notes, warnings };
+}
+
+/**
+ * Run unit advisories across a whole block list against an exercise index. Shared by the
+ * MCP workout_build tool and the CLI so both surface the same notes/warnings. Ensures the
+ * index is loaded first, otherwise `defaults` returns null on a cold index and every
+ * advisory is silently dropped.
+ */
+export async function collectAdvisories(
+  blocks: readonly BlockSpec[],
+  index: ExerciseIndex,
+): Promise<Advisory> {
+  await index.ensureFresh();
+  const pairs = blocks.flatMap((b) => b.exercises.map((ex) => ({ block: b, ex })));
+  const defaults = await Promise.all(
+    pairs.map((p) => {
+      const id = Number(p.ex.id);
+      return Number.isFinite(id) ? index.defaults(id) : Promise.resolve(null);
+    }),
+  );
+  const notes: string[] = [];
+  const warnings: string[] = [];
+  pairs.forEach((p, i) => {
+    const def = defaults[i];
+    if (!def) return;
+    const advisory = unitAdvisory(p.block.title, p.ex, def);
+    notes.push(...advisory.notes);
+    warnings.push(...advisory.warnings);
+  });
   return { notes, warnings };
 }

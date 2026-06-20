@@ -29,8 +29,11 @@ pnpm exec wrangler secret put COOKIE_ENCRYPTION_KEY   # e.g. output of: openssl 
 pnpm exec wrangler secret put ALLOWED_EMAILS          # optional: comma-separated TrainHeroic emails
 ```
 
-Leave `ALLOWED_EMAILS` unset to allow any valid TrainHeroic login (private deployment).
-No TrainHeroic credentials are stored as secrets; each user enters their own at login.
+`ALLOWED_EMAILS` is a comma-separated allowlist of TrainHeroic emails permitted to authorize.
+Leaving it unset means **open registration**: any valid TrainHeroic coach can connect. The
+worker logs a warning on each such login so an unintentionally-open deployment is visible; set
+`ALLOWED_EMAILS` to lock it down. No TrainHeroic credentials are stored as secrets; each user
+enters their own at login.
 
 ## 3. Apply migrations to the remote D1
 

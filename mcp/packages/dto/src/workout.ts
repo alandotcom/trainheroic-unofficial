@@ -47,6 +47,19 @@ export type WorkoutSpec = z.infer<typeof workoutSpecSchema>;
 /** A calendar date as the workout API expects it: [year, month, day]. */
 export type WorkoutDate = readonly [number, number, number];
 
+/**
+ * Parse a `YYYY-M-D` string into the `WorkoutDate` tuple. The single home for this
+ * conversion, shared by the MCP tools and the CLI so they cannot drift on what counts
+ * as a valid date. Each part must be an integer.
+ */
+export function parseWorkoutDate(s: string): WorkoutDate {
+  const parts = s.split("-").map((p) => Number(p));
+  if (parts.length !== 3 || parts.some((n) => !Number.isInteger(n))) {
+    throw new Error(`date must be YYYY-M-D, got "${s}".`);
+  }
+  return [parts[0] as number, parts[1] as number, parts[2] as number];
+}
+
 /** Unit advisories surfaced when building: informational notes and override warnings. */
 export type Advisory = { notes: string[]; warnings: string[] };
 

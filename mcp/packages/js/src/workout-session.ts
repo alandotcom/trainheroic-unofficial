@@ -138,7 +138,9 @@ export async function readSession(
     `/1.0/coach/programs/edit/${programId}/${y}/${m}/${d}`,
   );
   checkResponse(programsEditResponseSchema, data, "programs edit");
-  const pw = (data.programWorkouts ?? []).find((p) => p.id === pwId);
+  // Coerce: the API may return id as a number or a numeric string (the drift the dto
+  // shapes exist to absorb), so a strict === would miss the match on stringified ids.
+  const pw = (data.programWorkouts ?? []).find((p) => coerceInt(p.id) === pwId);
   if (!pw) throw new Error(`programWorkout ${pwId} not found on ${y}-${m}-${d}.`);
 
   const setsObj = (pw.sets ?? {}) as Record<string, Record<string, unknown>>;

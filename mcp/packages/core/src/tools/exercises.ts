@@ -4,7 +4,11 @@ import { exerciseCreateSchema } from "@trainheroic-unofficial/dto";
 import { attempt, errorResult, idParam, jsonResult, READ, SYNC, toId } from "../context";
 import type { ToolContext } from "../context";
 
-/** Exercise library tools backed by the D1 reference-zone mirror. */
+/**
+ * Exercise library tools over the ExerciseIndex — a D1 mirror on the hosted server, an
+ * on-disk/in-memory cache locally. The descriptions stay at the interface level so they
+ * read correctly on both backends.
+ */
 export function registerExerciseTools(server: McpServer, ctx: ToolContext): void {
   const index = ctx.index;
 
@@ -55,7 +59,7 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
     "exercise_sync",
     {
       title: "Sync exercise library",
-      description: "Refresh the local exercise mirror from TrainHeroic (prune-to-match).",
+      description: "Refresh the cached exercise index from TrainHeroic.",
       inputSchema: { force: z.boolean().optional() },
       annotations: SYNC,
     },
@@ -100,8 +104,8 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
   server.registerTool(
     "store_stats",
     {
-      title: "Local store stats",
-      description: "Row counts and sync watermarks for the local D1 index.",
+      title: "Exercise index stats",
+      description: "Row counts and sync state for the cached exercise index.",
       inputSchema: {},
       annotations: READ,
     },

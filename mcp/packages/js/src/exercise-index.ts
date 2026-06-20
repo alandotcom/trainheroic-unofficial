@@ -109,11 +109,7 @@ export class ExerciseLibrary implements ExerciseIndex {
     });
   }
 
-  async ensureFresh(force = false): Promise<void> {
-    if (force) {
-      await this.refresh();
-      return;
-    }
+  async ensureFresh(): Promise<void> {
     if (!this.#loaded) {
       await this.#ensureLoaded();
     } else if (Date.now() - this.#fetchedAt > TTL_MS) {

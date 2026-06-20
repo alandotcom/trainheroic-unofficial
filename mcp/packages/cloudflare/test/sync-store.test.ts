@@ -208,4 +208,14 @@ describe("MessagingStore", () => {
     expect(again.new).toBe(0);
     expect((await store.history(700)) as unknown[]).toHaveLength(2);
   });
+
+  it("full=true re-reads from the beginning past an existing cursor", async () => {
+    stubMessaging();
+    const store = new MessagingStore(env.TH_DB, client(), 7);
+    // First sync establishes a cursor for stream 700.
+    await store.syncAll();
+    const again = await store.syncStream({ id: 700, title: "Team", teamId: 10 }, "team", true);
+    // full ignores the cursor (lastCommentId=""), so the top-level comment is read again.
+    expect(again.new).toBe(1);
+  });
 });

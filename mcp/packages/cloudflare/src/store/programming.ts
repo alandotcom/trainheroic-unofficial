@@ -1,9 +1,18 @@
 import { OrgScopedStore } from "./base";
-import { cursorUpsertStmt, runGroups } from "./d1";
-import { coerceInt, coerceNum, isRecord } from "@trainheroic-unofficial/js";
+import { cursorUpsertStmt, mapPool, runGroups } from "./d1";
+import {
+  checkResponse,
+  coerceInt,
+  coerceNum,
+  isRecord,
+  programsEditResponseSchema,
+} from "@trainheroic-unofficial/js";
 
 const MONTHS_BACK = 18;
 const MONTHS_FWD = 6;
+// Bound the upstream fan-out per calendar so a month window doesn't burst the host (or the
+// Worker subrequest budget) with ~25 simultaneous fetches.
+const FETCH_CONCURRENCY = 5;
 
 function monthWindow(back = MONTHS_BACK, fwd = MONTHS_FWD): Array<[number, number]> {
   const now = new Date();
@@ -20,12 +29,24 @@ function pad(n: number, width: number): string {
   return String(n).padStart(width, "0");
 }
 
+/**
+ * A prescribed slot value: a number when numeric, otherwise the raw string. Free-text
+ * prescriptions (e.g. "AMRAP", "8-12", "max") must survive — coercing them to null would
+ * silently drop the prescription. SQLite's REAL affinity stores non-numeric text as text.
+ */
+function prescribedValue(value: unknown): number | string | null {
+  if (value === undefined || value === null || value === "") return null;
+  return coerceNum(value) ?? String(value);
+}
+
 export type CalendarSyncResult = {
   program: number;
   title: string;
   sessions: number;
   blocks: number;
   prescribed_sets: number;
+  /** Month windows whose fetch failed — the sync is incomplete when this is nonzero. */
+  windows_failed?: number;
   error?: string;
 };
 
@@ -59,29 +80,34 @@ export class ProgrammingStore extends OrgScopedStore {
     return cals;
   }
 
-  async #fetchCalendar(calId: number): Promise<Array<Record<string, unknown>>> {
-    const results = await Promise.all(
-      monthWindow().map(([y, m]) =>
-        this.client.request<{ programWorkouts?: Array<Record<string, unknown>> }>(
-          "GET",
-          `/1.0/coach/programs/edit/${calId}/${y}/${m}/1`,
-        ),
+  async #fetchCalendar(
+    calId: number,
+  ): Promise<{ workouts: Array<Record<string, unknown>>; windowsFailed: number }> {
+    const results = await mapPool(monthWindow(), FETCH_CONCURRENCY, ([y, m]) =>
+      this.client.request<{ programWorkouts?: Array<Record<string, unknown>> }>(
+        "GET",
+        `/1.0/coach/programs/edit/${calId}/${y}/${m}/1`,
       ),
     );
     const byId = new Map<number, Record<string, unknown>>();
+    let windowsFailed = 0;
     for (const res of results) {
-      if (!res.ok) continue;
+      if (!res.ok) {
+        windowsFailed += 1;
+        continue;
+      }
+      checkResponse(programsEditResponseSchema, res.data, "programs edit (sync)");
       for (const pw of res.data.programWorkouts ?? []) {
         const id = coerceInt(pw.id);
         if (id !== null) byId.set(id, pw);
       }
     }
-    return [...byId.values()];
+    return { workouts: [...byId.values()], windowsFailed };
   }
 
   async syncCalendar(calId: number, title = ""): Promise<CalendarSyncResult> {
     const org = await this.org();
-    const pws = await this.#fetchCalendar(calId);
+    const { workouts: pws, windowsFailed } = await this.#fetchCalendar(calId);
 
     // Each session is one atomic group (its delete-then-reinsert must not split
     // across batches), so a mid-sync failure can never half-apply a session.
@@ -118,7 +144,15 @@ export class ProgrammingStore extends OrgScopedStore {
     ]);
 
     await runGroups(this.db, groups);
-    return { program: calId, title, sessions, blocks, prescribed_sets: sets };
+    const result: CalendarSyncResult = {
+      program: calId,
+      title,
+      sessions,
+      blocks,
+      prescribed_sets: sets,
+    };
+    if (windowsFailed > 0) result.windows_failed = windowsFailed;
+    return result;
   }
 
   #sessionGroup(
@@ -176,7 +210,9 @@ export class ProgrammingStore extends OrgScopedStore {
         this.db
           .prepare(
             "INSERT INTO block (org_id, id, program_session_id, ord, type, title, instruction, raw, source) " +
-              "VALUES (?,?,?,?,?,?,?,?,'api')",
+              "VALUES (?,?,?,?,?,?,?,?,'api') ON CONFLICT(org_id, id) DO UPDATE SET " +
+              "program_session_id=excluded.program_session_id, ord=excluded.ord, type=excluded.type, " +
+              "title=excluded.title, instruction=excluded.instruction, raw=excluded.raw",
           )
           .bind(
             org,
@@ -218,7 +254,7 @@ export class ProgrammingStore extends OrgScopedStore {
             "INSERT INTO prescribed_set (org_id, block_id, exercise_id, set_index, " +
               "param_1_type, param_1_value, param_2_type, param_2_value, source) VALUES (?,?,?,?,?,?,?,?,'api')",
           )
-          .bind(org, bid, exId, i, p1t, coerceNum(v1), p2t, coerceNum(v2)),
+          .bind(org, bid, exId, i, p1t, prescribedValue(v1), p2t, prescribedValue(v2)),
       );
       count += 1;
     }
@@ -228,8 +264,10 @@ export class ProgrammingStore extends OrgScopedStore {
   async syncAll(): Promise<CalendarSyncResult[]> {
     const cals = [...(await this.listCalendars()).entries()];
     const out: CalendarSyncResult[] = [];
-    // Sequential, and each calendar is isolated: one failure (subrequest cap, HTTP
-    // error) is recorded in the result instead of aborting the whole run.
+    // Sequential: a per-calendar HTTP error is recorded in that calendar's result instead
+    // of aborting the whole run. Note the Worker subrequest cap is per-invocation, not
+    // per-calendar, so once it is hit every remaining calendar fails too — a partial run is
+    // expected for very large accounts, and each failed window is reported via windows_failed.
     for (const [id, title] of cals) {
       try {
         out.push(await this.syncCalendar(id, title));
@@ -266,18 +304,25 @@ export class ProgrammingStore extends OrgScopedStore {
       )
       .bind(org, sessionId)
       .all<{ id: number; ord: number; type: number; title: string; instruction: string }>();
-    const withSets = await Promise.all(
-      blocksRes.results.map(async (b) => {
-        const sets = await this.db
-          .prepare(
-            "SELECT exercise_id, set_index, param_1_type, param_1_value, param_2_type, param_2_value " +
-              "FROM prescribed_set WHERE org_id=? AND block_id=? ORDER BY set_index",
-          )
-          .bind(org, b.id)
-          .all();
-        return { ...b, sets: sets.results };
-      }),
-    );
-    return { sessionId, blocks: withSets };
+
+    // One query for every set in the session (via the block subquery), grouped by block
+    // in memory — instead of one query per block.
+    const setsRes = await this.db
+      .prepare(
+        "SELECT block_id, exercise_id, set_index, param_1_type, param_1_value, param_2_type, param_2_value " +
+          "FROM prescribed_set WHERE org_id=? AND block_id IN " +
+          "(SELECT id FROM block WHERE org_id=? AND program_session_id=?) ORDER BY block_id, set_index",
+      )
+      .bind(org, org, sessionId)
+      .all<{ block_id: number } & Record<string, unknown>>();
+
+    const byBlock = new Map<number, Record<string, unknown>[]>();
+    for (const { block_id, ...set } of setsRes.results) {
+      const bucket = byBlock.get(block_id) ?? [];
+      bucket.push(set);
+      byBlock.set(block_id, bucket);
+    }
+    const blocks = blocksRes.results.map((b) => ({ ...b, sets: byBlock.get(b.id) ?? [] }));
+    return { sessionId, blocks };
   }
 }

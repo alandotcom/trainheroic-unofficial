@@ -17,7 +17,8 @@ function registerReads(server: McpServer, ctx: ToolContext): void {
     "messaging_conversations",
     {
       title: "List conversations (live)",
-      description: "Live list of chat streams (id, kind, title). Use the id to read/draft/send.",
+      description:
+        "List chat streams (id, kind, title) live from the API; no setup needed. Use the id to read/draft/send.",
       inputSchema: {},
       annotations: READ,
     },
@@ -40,7 +41,8 @@ function registerReads(server: McpServer, ctx: ToolContext): void {
     "messaging_read",
     {
       title: "Read messages (live)",
-      description: "Recent messages in a stream, straight from the API.",
+      description:
+        "Recent comments in a stream, live from the API (the stream is fetched whole, then trimmed to `limit`).",
       inputSchema: { streamId: idParam, limit: z.number().int().positive().max(200).optional() },
       annotations: READ,
     },

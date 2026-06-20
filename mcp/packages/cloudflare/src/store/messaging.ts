@@ -48,9 +48,9 @@ export class MessagingStore extends OrgScopedStore {
     c: Record<string, unknown>,
     parentId: number | null,
     stmts: D1PreparedStatement[],
-  ): number {
+  ): void {
     const cid = coerceInt(c.id);
-    if (cid === null) return 0;
+    if (cid === null) return;
     stmts.push(
       this.db
         .prepare(
@@ -75,12 +75,10 @@ export class MessagingStore extends OrgScopedStore {
           JSON.stringify(c),
         ),
     );
-    let high = cid;
     const replies = Array.isArray(c.replies) ? c.replies.filter(isRecord) : [];
     for (const reply of replies) {
-      high = Math.max(high, this.#commentStatements(org, streamId, reply, cid, stmts));
+      this.#commentStatements(org, streamId, reply, cid, stmts);
     }
-    return high;
   }
 
   async #cursor(org: number, sid: number): Promise<string> {
@@ -110,14 +108,26 @@ export class MessagingStore extends OrgScopedStore {
     );
     if (!res.ok || !Array.isArray(res.data)) {
       await runBatches(this.db, stmts);
-      return { stream: sid, title, kind, new: 0, error: `HTTP ${res.status}` };
+      const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data ?? "");
+      return {
+        stream: sid,
+        title,
+        kind,
+        new: 0,
+        error: `HTTP ${res.status}: ${detail.slice(0, 200)}`,
+      };
     }
 
+    // Advance the cursor on top-level comment id only — that is what lastCommentId
+    // paginates on. Replies are still stored, but a reply added to an already-synced
+    // comment won't re-surface it, so refreshing reactions/replies needs full=true.
     let high = coerceInt(cursor) ?? 0;
     let count = 0;
     for (const c of res.data) {
       if (!isRecord(c)) continue;
-      high = Math.max(high, this.#commentStatements(org, sid, c, null, stmts));
+      const cid = coerceInt(c.id);
+      if (cid !== null) high = Math.max(high, cid);
+      this.#commentStatements(org, sid, c, null, stmts);
       count += 1;
     }
     if (high > 0) {
@@ -144,14 +154,6 @@ export class MessagingStore extends OrgScopedStore {
       }
     }
     return out;
-  }
-
-  /** Write-through one comment after a send, so the store reflects it without a re-sync. */
-  async recordComment(streamId: number, comment: Record<string, unknown>): Promise<void> {
-    const org = await this.org();
-    const stmts: D1PreparedStatement[] = [];
-    this.#commentStatements(org, streamId, comment, null, stmts);
-    if (stmts.length > 0) await runBatches(this.db, stmts);
   }
 
   async streams(): Promise<unknown[]> {

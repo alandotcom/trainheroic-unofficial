@@ -149,7 +149,7 @@ export function chunk<T>(items: readonly T[], size: number): T[][] {
  * D1-backed mirror (hosted, multi-tenant) or an in-memory cache (local, single-user).
  */
 export interface ExerciseIndex {
-  ensureFresh(force?: boolean): Promise<void>;
+  ensureFresh(): Promise<void>;
   refresh(): Promise<Record<string, unknown>>;
   resolve(name: string): Promise<ResolveResult>;
   search(query: string, limit?: number): Promise<ExerciseView[]>;

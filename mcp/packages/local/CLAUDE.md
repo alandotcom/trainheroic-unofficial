@@ -32,6 +32,7 @@ context and registers what `core` provides.
 
 ```bash
 pnpm start       # tsx src/server.ts (needs the two env vars)
+pnpm inspect     # MCP Inspector over stdio (forwards the two env vars via -e)
 pnpm build       # tsdown -> dist/server.mjs (the trainheroic-coach-mcp bin)
 pnpm typecheck
 pnpm test

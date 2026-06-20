@@ -36,19 +36,46 @@ development you can point it at the source through `tsx`:
     "trainheroic": {
       "command": "npx",
       "args": ["tsx", "/abs/path/to/mcp/packages/local/src/server.ts"],
-      "env": { "TRAINHEROIC_EMAIL": "coach@example.com", "TRAINHEROIC_PASSWORD": "..." }
-    }
-  }
+      "env": { "TRAINHEROIC_EMAIL": "coach@example.com", "TRAINHEROIC_PASSWORD": "..." },
+    },
+  },
 }
 ```
 
 After `pnpm build`, the package also exposes a `trainheroic-coach-mcp` binary
 (`dist/server.mjs`) you can run with `node` or via the installed bin instead.
 
+## Debug it
+
+[MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) is an interactive web UI
+for listing this server's tools, inspecting their schemas, and calling them by hand. `pnpm
+inspect` runs it against the source through `tsx`:
+
+```bash
+TRAINHEROIC_EMAIL="coach@example.com" TRAINHEROIC_PASSWORD="..." pnpm inspect
+```
+
+The script forwards those two variables to the spawned server with the Inspector's `-e` flag
+(the spawned process does not inherit your shell's custom env, so they must be passed
+explicitly). It prints a `http://localhost:6274/?MCP_PROXY_AUTH_TOKEN=...` URL with a session
+token pre-filled; open it, click **Connect**, then use the **Tools** tab. You can also leave
+the credentials out of the command and type them into the Inspector's environment fields
+before connecting.
+
+For a non-interactive smoke test, the Inspector's CLI mode lists the tools without the UI:
+
+```bash
+TRAINHEROIC_EMAIL="coach@example.com" TRAINHEROIC_PASSWORD="..." \
+  npx @modelcontextprotocol/inspector --cli \
+  -e TRAINHEROIC_EMAIL="$TRAINHEROIC_EMAIL" -e TRAINHEROIC_PASSWORD="$TRAINHEROIC_PASSWORD" \
+  tsx src/server.ts --method tools/list
+```
+
 ## Develop
 
 ```bash
-pnpm start       # tsx src/server.ts
+pnpm start       # tsx src/server.ts (needs the two env vars)
+pnpm inspect     # MCP Inspector against the source over stdio
 pnpm build       # tsdown -> dist/server.mjs
 pnpm typecheck
 pnpm test

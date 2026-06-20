@@ -60,9 +60,12 @@ confirmation like the dedicated destructive tools).
 **Live messaging:** `messaging_conversations`, `messaging_read`, `message_draft` (preview
 only), `message_send` (gated), `message_delete` (gated).
 
-**Warehouse syncs and stored reads (hosted only):** `programming_sync`, `programming_get`,
-`programming_session`, `messaging_sync`, `messaging_streams`, `messaging_history`. These are
-backed by D1 and live in the `cloudflare` package; the local server does not have them.
+**History warehouse (hosted only):** `programming_sync` + `programming_stored`, and
+`messaging_sync` + `messaging_stored`. Each zone has one verb to populate a D1 time-series
+(prescribed history; conversation history) the live API cannot return in one call, and one
+query tool to read it. They live in the `cloudflare` package; the local server does not have
+them, and current data is read live via `get_program` / `messaging_conversations` /
+`messaging_read`.
 
 ## Local single-user server (no Cloudflare, no database)
 
@@ -96,6 +99,19 @@ After `pnpm --filter @trainheroic-unofficial/coach-mcp build`, you can instead r
 `trainheroic-coach-mcp` binary (`packages/local/dist/server.mjs`). The client launches the
 process and speaks MCP over stdio; the server calls the live TrainHeroic API directly.
 
+To poke at the tools by hand, run [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector)
+against the stdio server. It spawns the server, then opens a web UI for listing and calling
+tools:
+
+```bash
+TRAINHEROIC_EMAIL="coach@example.com" TRAINHEROIC_PASSWORD="..." \
+  pnpm --filter @trainheroic-unofficial/coach-mcp inspect
+```
+
+The Inspector prints a `http://localhost:6274/?MCP_PROXY_AUTH_TOKEN=...` URL; open it and
+click Connect. See [packages/local/README.md](packages/local/README.md) for the CLI (no-UI)
+variant.
+
 ## Hosted worker: local development
 
 The worker's dev, deploy, type-generation, and migration scripts live in
@@ -112,8 +128,19 @@ pnpm dev                             # wrangler dev (local workerd) on http://lo
 ```
 
 `wrangler dev` runs the full hosted server in local workerd and Miniflare (local KV/D1/DO, no
-Cloudflare account needed). Connect MCP Inspector or the Cloudflare AI Playground to
-`http://localhost:8787/mcp`, complete the TrainHeroic login, and call a read tool.
+Cloudflare account needed).
+
+With `pnpm dev` running, point [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector)
+(or the Cloudflare AI Playground) at it. From a second terminal in `packages/cloudflare`:
+
+```bash
+pnpm inspect    # opens the Inspector UI; no command, since it connects to a URL
+```
+
+In the UI, choose the **Streamable HTTP** transport, enter `http://localhost:8787/mcp`, and
+Connect. Unlike the stdio server, the worker is OAuth-protected: the Inspector registers
+dynamically and runs the authorization-code flow, which lands you on the worker's `/authorize`
+page to enter your TrainHeroic email and password. After that, call a read tool.
 
 ### Checks
 
