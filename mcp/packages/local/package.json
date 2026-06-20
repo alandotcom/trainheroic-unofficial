@@ -1,0 +1,29 @@
+{
+  "name": "@trainheroic-unofficial/coach-mcp",
+  "version": "0.1.0",
+  "description": "Local single-user MCP server for a TrainHeroic coach. No database, no Cloudflare deps.",
+  "type": "module",
+  "bin": {
+    "trainheroic-coach-mcp": "./dist/server.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@trainheroic-unofficial/core": "workspace:*",
+    "@trainheroic-unofficial/js": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "tsdown": "^0.22.3",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

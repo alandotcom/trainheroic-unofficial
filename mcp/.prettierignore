@@ -1,0 +1,5 @@
+*.json
+*.jsonc
+**/dist
+**/.wrangler
+**/worker-configuration.d.ts
