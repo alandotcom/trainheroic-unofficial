@@ -2,7 +2,16 @@
   "$schema": "https://unpkg.com/@changesets/config@3.1.4/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [],
+  "fixed": [
+    [
+      "@trainheroic-unofficial/dto",
+      "@trainheroic-unofficial/js",
+      "@trainheroic-unofficial/core",
+      "@trainheroic-unofficial/cli",
+      "@trainheroic-unofficial/coach-mcp",
+      "@trainheroic-unofficial/cloudflare"
+    ]
+  ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
