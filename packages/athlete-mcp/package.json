@@ -1,16 +1,16 @@
 {
-  "name": "@trainheroic-unofficial/coach-mcp",
+  "name": "@trainheroic-unofficial/athlete-mcp",
   "version": "0.4.0",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/alandotcom/trainheroic-unofficial.git",
-    "directory": "packages/coach-mcp"
+    "directory": "packages/athlete-mcp"
   },
-  "description": "Local single-user MCP server for a TrainHeroic coach. No database, no Cloudflare deps.",
+  "description": "Local single-user MCP server for a TrainHeroic athlete. No database, no Cloudflare deps.",
   "type": "module",
   "bin": {
-    "trainheroic-coach-mcp": "./dist/server.mjs"
+    "trainheroic-athlete-mcp": "./dist/server.mjs"
   },
   "publishConfig": {
     "access": "public"

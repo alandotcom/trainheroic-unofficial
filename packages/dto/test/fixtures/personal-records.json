@@ -1,0 +1,38 @@
+[
+  {
+    "id": 143311750,
+    "savedWorkoutSetExerciseId": 807708856,
+    "setNumber": 4,
+    "reps": 6,
+    "weight": 195,
+    "scaledWeight": 6.94,
+    "units": "lb",
+    "isMetric": false,
+    "filters": {
+      "reps": 6,
+      "gender": "male",
+      "age": "all",
+      "confidence": "confidence-score",
+      "organization": "DEUCE Gym",
+      "sortColumn": "raw"
+    }
+  },
+  {
+    "id": 143311751,
+    "savedWorkoutSetExerciseId": 819682849,
+    "setNumber": 1,
+    "reps": 5,
+    "weight": 185,
+    "scaledWeight": 6.58,
+    "units": "lb",
+    "isMetric": false,
+    "filters": {
+      "reps": 5,
+      "gender": "male",
+      "age": "all",
+      "confidence": "confidence-score",
+      "organization": "DEUCE Gym",
+      "sortColumn": "raw"
+    }
+  }
+]

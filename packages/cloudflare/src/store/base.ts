@@ -1,4 +1,5 @@
 import type { TrainHeroicClient } from "@trainheroic-unofficial/js";
+import { resolveAthleteUserId } from "@trainheroic-unofficial/js";
 import { resolveOrgId } from "./d1";
 
 /**
@@ -26,5 +27,33 @@ export abstract class OrgScopedStore {
       throw new Error("Refusing to scope a query to a non-positive org id.");
     }
     return this.#orgId;
+  }
+}
+
+/**
+ * Base for the athlete warehouse stores. Athletes have no org, so the tenant key is the
+ * athlete's own numeric user id (from /user/simple), resolved lazily and cached. Mirrors
+ * OrgScopedStore so the same fail-closed discipline applies: a failed resolve never caches a
+ * bogus tenant key (two athletes must never collapse onto one partition).
+ */
+export abstract class AthleteScopedStore {
+  protected readonly db: D1Database;
+  protected readonly client: TrainHeroicClient;
+  #userId: number | null;
+
+  constructor(db: D1Database, client: TrainHeroicClient, userId: number | null = null) {
+    this.db = db;
+    this.client = client;
+    this.#userId = userId;
+  }
+
+  protected async user(): Promise<number> {
+    if (this.#userId === null) {
+      this.#userId = await resolveAthleteUserId(this.client);
+    }
+    if (this.#userId <= 0) {
+      throw new Error("Refusing to scope a query to a non-positive athlete user id.");
+    }
+    return this.#userId;
   }
 }

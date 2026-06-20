@@ -1,5 +1,9 @@
 import { coerceInt } from "@trainheroic-unofficial/js";
 
+// The bounded-concurrency fan-out helper lives in the SDK (one canonical copy, shared with the
+// CLI export); re-exported here so the warehouse stores keep importing it from `./d1`.
+export { mapPool } from "@trainheroic-unofficial/js";
+
 export type CursorUpsert = { cursor?: string | null; generation?: number | null };
 
 /** Build a sync_state upsert. One home for the table's write shape (cursor + generation). */
@@ -17,6 +21,23 @@ export function cursorUpsertStmt(
         "cursor=excluded.cursor, synced_at=excluded.synced_at, generation=excluded.generation",
     )
     .bind(org, resource, scopeId, opts.cursor ?? null, Date.now(), opts.generation ?? null);
+}
+
+/** Build an athlete_sync_state upsert (the athlete-warehouse watermark, keyed by user_id). */
+export function athleteCursorUpsertStmt(
+  db: D1Database,
+  userId: number,
+  resource: string,
+  scopeId: number,
+  cursor: string | null = null,
+): D1PreparedStatement {
+  return db
+    .prepare(
+      "INSERT INTO athlete_sync_state (user_id, resource, scope_id, cursor, synced_at) " +
+        "VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, resource, scope_id) DO UPDATE SET " +
+        "cursor=excluded.cursor, synced_at=excluded.synced_at",
+    )
+    .bind(userId, resource, scopeId, cursor, Date.now());
 }
 
 /**
@@ -81,28 +102,4 @@ export async function resolveOrgId(
     throw new Error("Could not resolve TrainHeroic org_id from /user/simple.");
   }
   return org;
-}
-
-/**
- * Map over items with a bounded number of concurrent workers. Used to fan out upstream
- * fetches without bursting the host (or the Worker subrequest budget) all at once.
- */
-export async function mapPool<T, R>(
-  items: readonly T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const out: R[] = Array.from({ length: items.length });
-  let next = 0;
-  const worker = async (): Promise<void> => {
-    while (next < items.length) {
-      const i = next;
-      next += 1;
-      const item = items[i] as T;
-      out[i] = await fn(item, i);
-    }
-  };
-  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
-  await Promise.all(workers);
-  return out;
 }

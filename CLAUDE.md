@@ -9,8 +9,10 @@ package file for whatever you are touching.
 ## What this repo is
 
 An unofficial TypeScript toolkit for the undocumented TrainHeroic coaching API. One shared
-tool layer runs in three shapes: a remote multi-tenant MCP server on Cloudflare Workers, a
-local single-user stdio MCP server, and a CLI.
+tool layer runs in several shapes: a remote multi-tenant MCP server on Cloudflare Workers,
+two local single-user stdio MCP servers (one for a coach, one for an athlete), and a CLI.
+The API has two roles — a coach manages a roster; an athlete trains their own program. A
+coach account also carries athlete scope, so it can reach its own training data too.
 
 All code lives in a single pnpm workspace at the repo root.
 
@@ -48,8 +50,8 @@ pnpm release            # pnpm build, then `changeset publish`
 rewritten to real versions in the published manifests and an npm 2FA OTP prompt works
 interactively. It only publishes packages whose version isn't already on the registry, so
 re-running is safe. The private `cloudflare` worker is excluded automatically (it is
-`private: true`); the five publishable packages are `dto`, `js`, `core`, `cli`, and
-`coach-mcp`.
+`private: true`); the six publishable packages are `dto`, `js`, `core`, `cli`, `coach-mcp`,
+and `athlete-mcp`.
 
 `dev`, `start`, `deploy`, `cf-typegen`, and the D1 migration scripts do not exist at the
 workspace root. They are per-package, so run them with a filter or from inside the package
@@ -94,18 +96,26 @@ The dependency graph runs one direction; nothing lower depends on anything highe
   helpers sit behind a separate `./node` export. Keep that split intact, because a `node:*`
   import in the `.` entry breaks the Worker build.
 - **`core`** (`@trainheroic-unofficial/core`): the shared MCP tool layer. Each tool is a
-  `registerXxxTools(server, ctx)` function taking a `ToolContext` (`{ client, index }`). Tools
-  are defined once here and reused by both servers.
-- **`coach-mcp`** (`@trainheroic-unofficial/coach-mcp`): the stdio MCP server. It builds a
+  `registerXxxTools(server, ctx)` function. The coach tools take a `ToolContext`
+  (`{ client, index }`); the athlete tools (`registerAthleteTrainingTools`) take only
+  `{ client }` (athletes have no exercise-library index). Tools are defined once here and
+  reused by every server. Note `registerAthleteTools` is the coach's *roster* view
+  (`list_athletes`), distinct from `registerAthleteTrainingTools` (the athlete's own training).
+- **`coach-mcp`** (`@trainheroic-unofficial/coach-mcp`): the coach stdio MCP server. It builds a
   `ToolContext` from env credentials and a JSON-file `ExerciseLibrary`, registers the core
-  tools, and connects over stdio. No OAuth, no database. Entry: `src/server.ts`.
+  coach tools, and connects over stdio. No OAuth, no database. Entry: `src/server.ts`.
+- **`athlete-mcp`** (`@trainheroic-unofficial/athlete-mcp`): the athlete stdio MCP server.
+  It builds `{ client }` from env credentials, registers `registerAthleteTrainingTools`
+  (no index, no warehouse — local has no D1), and connects over stdio. Entry: `src/server.ts`.
 - **`cloudflare`** (`@trainheroic-unofficial/cloudflare`): the hosted Worker. OAuth 2.1 via
   `@cloudflare/workers-oauth-provider` and the Agents SDK `McpAgent` (one Durable Object per
-  session). It builds a `ToolContext` with a D1-backed `ExerciseStore`, registers the same
-  core tools, and adds its own D1-only warehouse sync tools. Entry: `src/index.ts`, agent in
-  `src/agent.ts`.
+  session). Tool registration is **role-aware** (`src/agent.ts`): every account gets the
+  athlete surface (live tools + the D1 athlete warehouse); a coach account also gets the
+  coaching surface (the core coach tools + a D1-backed `ExerciseStore` + the coach warehouse).
+  Entry: `src/index.ts`.
 - **`cli`** (`@trainheroic-unofficial/cli`): an argv-driven tool over the `js` SDK directly, no
-  MCP. It caches the session under `~/.trainheroic/`.
+  MCP. It caches the session under `~/.trainheroic/`. Has an `athlete` command group and an
+  `athlete export` that dumps historicals to JSON (the local counterpart to the hosted warehouse).
 
 The central seam is the `ExerciseIndex` interface (in `js`). Local implements it in memory
 (`ExerciseLibrary`); hosted implements it over D1 (`cloudflare/src/store/exercises.ts`).

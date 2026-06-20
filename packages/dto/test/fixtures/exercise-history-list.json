@@ -1,0 +1,80 @@
+[
+  {
+    "id": 1659830,
+    "userId": 44340,
+    "title": "1 1/4 BARBELL BACK SQUAT",
+    "logo": "https://static.trainheroic.com/logos/logo5554e2bec5d1c_thumb.png",
+    "hasVideo": false,
+    "videoUrl": "",
+    "isCircuit": false,
+    "instructions": "",
+    "prescription": "Reps",
+    "param1Type": 3,
+    "param2Type": null
+  },
+  {
+    "id": 2734437,
+    "userId": 44340,
+    "title": "1 1/4 BENCH PRESS",
+    "logo": "https://static.trainheroic.com/logos/logo5554e2bec5d1c_thumb.png",
+    "hasVideo": false,
+    "videoUrl": "",
+    "isCircuit": false,
+    "instructions": "",
+    "prescription": "Reps @ Weight (lb)",
+    "param1Type": 3,
+    "param2Type": 1
+  },
+  {
+    "id": 4738760,
+    "userId": 1686307,
+    "title": "1 1/4 Barbell Strict Press",
+    "logo": "https://static.trainheroic.com/logos/logo5554e2bec5d1c_thumb.png",
+    "hasVideo": true,
+    "videoUrl": "https://www.youtube.com/watch?v=nHp24Qqz_Vk",
+    "isCircuit": false,
+    "instructions": "",
+    "prescription": "Reps @ Weight (lb)",
+    "param1Type": 3,
+    "param2Type": 1
+  },
+  {
+    "id": 1677442,
+    "userId": 44340,
+    "title": "1 1/4 DB Bench Press",
+    "logo": "https://static.trainheroic.com/logos/logo5554e2bec5d1c_thumb.png",
+    "hasVideo": false,
+    "videoUrl": "",
+    "isCircuit": false,
+    "instructions": "",
+    "prescription": "Reps @ Weight (lb)",
+    "param1Type": 3,
+    "param2Type": 1
+  },
+  {
+    "id": 9129,
+    "userId": 555777,
+    "title": "1 1/4 Front Squat",
+    "logo": "https://static.trainheroic.com/th-logos/120x120.png",
+    "hasVideo": true,
+    "videoUrl": "https://youtube.com/watch?v=2Rlb3e8ekqw",
+    "isCircuit": false,
+    "instructions": "Full Front Squat\nRaise to just above parallel\nSquat back down to a full Front Squat\nExplode Upward\nLead upward with your elbows first",
+    "prescription": "Reps @ Weight (lb)",
+    "param1Type": 3,
+    "param2Type": 1
+  },
+  {
+    "id": 5703312,
+    "userId": 44340,
+    "title": "1 1/4 Goblet Squat",
+    "logo": "https://static.trainheroic.com/logos/logo5554e2bec5d1c_thumb.png",
+    "hasVideo": false,
+    "videoUrl": "",
+    "isCircuit": false,
+    "instructions": "",
+    "prescription": "Weight (lb) x Reps",
+    "param1Type": 1,
+    "param2Type": 3
+  }
+]
