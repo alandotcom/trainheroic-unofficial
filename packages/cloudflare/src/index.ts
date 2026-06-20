@@ -1,9 +1,18 @@
+import * as Sentry from "@sentry/cloudflare";
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { authHandler } from "./auth/handler";
-import { TrainHeroicMCP } from "./agent";
+import { TrainHeroicMCP as TrainHeroicMCPBase } from "./agent";
+import { sentryOptions } from "./sentry";
 
-// Durable Object export (referenced by the wrangler migration + binding).
-export { TrainHeroicMCP };
+// Durable Object export (referenced by the wrangler migration + binding). Wrapped with Sentry
+// so errors thrown inside the DO — init, transport, tool dispatch — are reported with the
+// session's user email attached. The wrapper is a Proxy over the class; the wrangler binding
+// (class_name "TrainHeroicMCP") resolves to this exported name, and the static `serve` below
+// passes through the Proxy untouched.
+export const TrainHeroicMCP = Sentry.instrumentDurableObjectWithSentry(
+  sentryOptions,
+  TrainHeroicMCPBase,
+);
 
 const provider = new OAuthProvider({
   apiRoute: "/mcp",
@@ -41,7 +50,7 @@ function tooManyRequests(): Response {
   );
 }
 
-export default {
+const handler = {
   fetch: async (request: Request, env: Env, ctx: ExecutionContext): Promise<Response> => {
     if (await isRateLimited(request, env)) return tooManyRequests();
     return provider.fetch(request, env, ctx);
@@ -59,3 +68,9 @@ export default {
     }
   },
 } satisfies ExportedHandler<Env>;
+
+// Report errors from the top-level fetch and scheduled handlers (rate limiting, the OAuth
+// flow, the cron purge). Errors inside the MCP Durable Object are reported separately by the
+// instrumented export above. The user email is not known at this layer (it lives encrypted in
+// the OAuth grant), so these events carry the error without it.
+export default Sentry.withSentry(sentryOptions, handler);

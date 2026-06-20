@@ -21,6 +21,12 @@ declare global {
   interface Env {
     COOKIE_ENCRYPTION_KEY: string;
     ALLOWED_EMAILS?: string;
+    // Sentry DSN. A secret (`wrangler secret put SENTRY_DSN`, or `.dev.vars` locally), never a
+    // committed var; absent locally, which leaves Sentry disabled and every call a no-op.
+    SENTRY_DSN?: string;
+    // Release id, injected as a plaintext var by `scripts/deploy.sh` (`--var SENTRY_RELEASE:...`)
+    // so events match the source maps uploaded under the same release. Unset outside deploys.
+    SENTRY_RELEASE?: string;
     OAUTH_PROVIDER: OAuthHelpers;
   }
 }
