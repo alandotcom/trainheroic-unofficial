@@ -1,0 +1,171 @@
+{
+  "liftPRs": [
+    {
+      "weight": 185,
+      "savedWorkoutSetExerciseId": 819682849,
+      "setNumber": 1,
+      "dateCompleted": "2021-11-06",
+      "reps": 5,
+      "units": " lb",
+      "isMetric": false,
+      "description": "5 Rep Max"
+    },
+    {
+      "weight": 195,
+      "savedWorkoutSetExerciseId": 807708856,
+      "setNumber": 4,
+      "dateCompleted": "2021-10-25",
+      "reps": 6,
+      "units": " lb",
+      "isMetric": false,
+      "description": "6 Rep Max"
+    }
+  ],
+  "singleParamPRs": [],
+  "history": [
+    {
+      "dateCompleted": "2021-11-06",
+      "notes": null,
+      "isLift": true,
+      "param1Type": 3,
+      "param2Type": 1,
+      "savedWorkoutSetExerciseId": 819682849,
+      "teamId": 1607915,
+      "programWorkoutId": 32316778,
+      "abr": "4 x 5 @ 185 lb",
+      "bestEstimated1RM": 212.64,
+      "repMaxes": [
+        {
+          "reps": 5,
+          "weight": 185
+        }
+      ],
+      "sets": [
+        {
+          "setNumber": 1,
+          "formattedValue": "5 @ 185 lb",
+          "rawValue1": 5,
+          "rawValue2": 185,
+          "savedWorkoutSetExerciseId": 819682849
+        },
+        {
+          "setNumber": 2,
+          "formattedValue": "5 @ 185 lb",
+          "rawValue1": 5,
+          "rawValue2": 185,
+          "savedWorkoutSetExerciseId": 819682849
+        },
+        {
+          "setNumber": 3,
+          "formattedValue": "5 @ 185 lb",
+          "rawValue1": 5,
+          "rawValue2": 185,
+          "savedWorkoutSetExerciseId": 819682849
+        },
+        {
+          "setNumber": 4,
+          "formattedValue": "5 @ 185 lb",
+          "rawValue1": 5,
+          "rawValue2": 185,
+          "savedWorkoutSetExerciseId": 819682849
+        }
+      ]
+    },
+    {
+      "dateCompleted": "2021-10-25",
+      "notes": null,
+      "isLift": true,
+      "param1Type": 3,
+      "param2Type": 1,
+      "savedWorkoutSetExerciseId": 807708856,
+      "teamId": 1607915,
+      "programWorkoutId": 31824127,
+      "abr": "4 x 6 @ 155, 175, 185, 195 lb",
+      "bestEstimated1RM": 229.41,
+      "repMaxes": [
+        {
+          "reps": 6,
+          "weight": 195
+        }
+      ],
+      "sets": [
+        {
+          "setNumber": 1,
+          "formattedValue": "6 @ 155 lb",
+          "rawValue1": 6,
+          "rawValue2": 155,
+          "savedWorkoutSetExerciseId": 807708856
+        },
+        {
+          "setNumber": 2,
+          "formattedValue": "6 @ 175 lb",
+          "rawValue1": 6,
+          "rawValue2": 175,
+          "savedWorkoutSetExerciseId": 807708856
+        },
+        {
+          "setNumber": 3,
+          "formattedValue": "6 @ 185 lb",
+          "rawValue1": 6,
+          "rawValue2": 185,
+          "savedWorkoutSetExerciseId": 807708856
+        },
+        {
+          "setNumber": 4,
+          "formattedValue": "6 @ 195 lb",
+          "rawValue1": 6,
+          "rawValue2": 195,
+          "savedWorkoutSetExerciseId": 807708856
+        }
+      ]
+    },
+    {
+      "dateCompleted": "2021-10-12",
+      "notes": "185",
+      "isLift": true,
+      "param1Type": 3,
+      "param2Type": 1,
+      "savedWorkoutSetExerciseId": 802830869,
+      "teamId": 1607915,
+      "programWorkoutId": 31558927,
+      "abr": "4 x 6 @ 185 lb",
+      "bestEstimated1RM": 217.65,
+      "repMaxes": [
+        {
+          "reps": 6,
+          "weight": 185
+        }
+      ],
+      "sets": [
+        {
+          "setNumber": 1,
+          "formattedValue": "6 @ 185 lb",
+          "rawValue1": 6,
+          "rawValue2": 185,
+          "savedWorkoutSetExerciseId": 802830869
+        },
+        {
+          "setNumber": 2,
+          "formattedValue": "6 @ 185 lb",
+          "rawValue1": 6,
+          "rawValue2": 185,
+          "savedWorkoutSetExerciseId": 802830869
+        },
+        {
+          "setNumber": 3,
+          "formattedValue": "6 @ 185 lb",
+          "rawValue1": 6,
+          "rawValue2": 185,
+          "savedWorkoutSetExerciseId": 802830869
+        },
+        {
+          "setNumber": 4,
+          "formattedValue": "6 @ 185 lb",
+          "rawValue1": 6,
+          "rawValue2": 185,
+          "savedWorkoutSetExerciseId": 802830869
+        }
+      ]
+    }
+  ]
+}

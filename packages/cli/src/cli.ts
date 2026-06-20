@@ -1,10 +1,15 @@
 #!/usr/bin/env node
-import { cp, mkdir, readFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import type { ZodType } from "zod";
-import { exerciseCreateSchema, workoutSpecSchema } from "@trainheroic-unofficial/dto";
+import {
+  exerciseCreateSchema,
+  logSetArgsSchema,
+  workoutSpecSchema,
+} from "@trainheroic-unofficial/dto";
 import {
   type ApiBase,
   buildSession,
@@ -13,11 +18,27 @@ import {
   collectAdvisories,
   deleteComment,
   ExerciseLibrary,
+  fetchAthletePrefs,
+  fetchAthleteProfileSummary,
+  fetchAthleteUser,
+  fetchAthleteWorkouts,
+  fetchExerciseHistoryDetail,
+  fetchExerciseHistoryList,
+  fetchExerciseStats,
+  fetchLeaderboard,
+  fetchPersonalRecords,
   fetchStreams,
+  fetchWorkingMaxes,
+  logAthleteSet,
+  mapPool,
+  presentAthleteWorkouts,
+  presentExerciseHistory,
   publishSession,
   readLive,
   readSession,
   removeSession,
+  resolveAthleteUserId,
+  searchExerciseHistory,
   sendComment,
   TrainHeroicClient,
 } from "@trainheroic-unofficial/js";
@@ -30,7 +51,7 @@ const HELP = `trainheroic — command-line tool for the TrainHeroic coaching API
 Credentials come from TRAINHEROIC_EMAIL and TRAINHEROIC_PASSWORD. Output is JSON.
 
 Setup:
-  install-skill   copy the Claude Code skill to ~/.claude/skills/trainheroic-unofficial/
+  install-skill   copy the Claude Code skills to ~/.claude/skills/
 
 Reads:
   whoami | head-coach | athletes | programs | teams | notifications | analytics
@@ -58,6 +79,17 @@ Messaging:
   message draft <streamId> <text> [--reply-to <id>]
   message send <streamId> <text> [--reply-to <id>] --yes
   message delete <streamId> <commentId> --yes
+
+Athlete (the logged-in user's own training; a coach account works too):
+  athlete whoami | profile [--metric] | prefs | working-maxes
+  athlete workouts --start Y-M-D --end Y-M-D [--raw]
+  athlete exercises [--q <text>] [--limit N]
+  athlete history <exerciseId> [--raw]
+  athlete prs <exerciseId>
+  athlete stats <exerciseId> --date Y-M-D
+  athlete leaderboard <workoutId> [--page N] [--page-size N] [--gender N]
+  athlete export [--out dir] [--start Y-M-D] [--end Y-M-D] [--full]
+  athlete log-set --date Y-M-D --set <id> <resultsJson>|--file f --yes   (writes to your live log)
 `;
 
 function out(value: unknown): void {
@@ -373,14 +405,226 @@ async function cmdMessage(client: TrainHeroicClient, rest: string[]): Promise<vo
   }
 }
 
+function isoDate(value: string, label: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) fail(`${label} must be YYYY-MM-DD, got "${value}".`);
+  return value;
+}
+
+function logErr(msg: string): void {
+  process.stderr.write(`${msg}\n`);
+}
+
+async function cmdAthleteExport(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values } = parse(a, {
+    out: { type: "string" },
+    start: { type: "string" },
+    end: { type: "string" },
+    full: { type: "boolean" },
+  });
+  const dir =
+    (values.out as string | undefined) ?? join(homedir(), ".trainheroic", "athlete-export");
+  const today = new Date();
+  const past = new Date();
+  past.setFullYear(past.getFullYear() - 2);
+  const start =
+    values.start !== undefined
+      ? isoDate(values.start as string, "--start")
+      : past.toISOString().slice(0, 10);
+  const end =
+    values.end !== undefined
+      ? isoDate(values.end as string, "--end")
+      : today.toISOString().slice(0, 10);
+
+  await mkdir(dir, { recursive: true });
+  const userId = await resolveAthleteUserId(client);
+
+  logErr(`exporting to ${dir} (user ${userId})`);
+  const [summary, user, prefs, workouts, exercises, workingMaxes] = await Promise.all([
+    fetchAthleteProfileSummary(client, userId),
+    fetchAthleteUser(client, userId),
+    fetchAthletePrefs(client),
+    fetchAthleteWorkouts(client, start, end),
+    fetchExerciseHistoryList(client),
+    fetchWorkingMaxes(client),
+  ]);
+  await writeFile(join(dir, "profile.json"), JSON.stringify({ summary, user, prefs }, null, 2));
+  await writeFile(
+    join(dir, "workouts.json"),
+    JSON.stringify(presentAthleteWorkouts(workouts), null, 2),
+  );
+  await writeFile(join(dir, "exercises.json"), JSON.stringify(exercises, null, 2));
+  await writeFile(join(dir, "working-maxes.json"), JSON.stringify(workingMaxes, null, 2));
+
+  let histories = 0;
+  if (values.full === true) {
+    await mkdir(join(dir, "history"), { recursive: true });
+    logErr(`fetching per-exercise history for ${exercises.length} exercises (--full)...`);
+    await mapPool(exercises, 5, async (ex) => {
+      const id = Number(ex.id);
+      const detail = await fetchExerciseHistoryDetail(client, id, userId).catch(() => null);
+      if (detail) {
+        await writeFile(
+          join(dir, "history", `${id}.json`),
+          JSON.stringify(presentExerciseHistory(detail), null, 2),
+        );
+        histories += 1;
+      }
+    });
+  }
+
+  out({
+    exported: dir,
+    range: { start, end },
+    workouts: workouts.length,
+    exercises: exercises.length,
+    workingMaxes: workingMaxes.length,
+    histories: values.full === true ? histories : "skipped (use --full)",
+  });
+}
+
+const LOG_SET_USAGE = "athlete log-set --date Y-M-D --set <id> <resultsJson> --yes";
+
+async function cmdAthleteLogSet(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values, positionals } = parse(a, {
+    date: { type: "string" },
+    set: { type: "string" },
+    file: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const date = isoDate(need(values.date as string | undefined, LOG_SET_USAGE), "--date");
+  const savedWorkoutSetId = toInt(need(values.set as string | undefined, LOG_SET_USAGE), "--set");
+  const results = await jsonInput(positionals[0], values.file as string | undefined);
+  const args = validate(logSetArgsSchema, { date, savedWorkoutSetId, results }, "log-set args");
+  if (values.yes !== true)
+    fail(`logging to set ${savedWorkoutSetId} writes to your coach-visible log; add --yes.`);
+  const mapped = args.results.map((r) => ({
+    savedWorkoutSetExerciseId: toInt(
+      String(r.savedWorkoutSetExerciseId),
+      "savedWorkoutSetExerciseId",
+    ),
+    sets: r.sets.map((s) => {
+      const slot: { param1?: number | string; param2?: number | string } = {};
+      if (s.param1 !== undefined) slot.param1 = s.param1;
+      if (s.param2 !== undefined) slot.param2 = s.param2;
+      return slot;
+    }),
+  }));
+  return out(await logAthleteSet(client, { date: args.date, savedWorkoutSetId, results: mapped }));
+}
+
+async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<void> {
+  const [sub, ...a] = rest;
+  switch (sub) {
+    case "whoami":
+      return out(await get(client, "/user/simple"));
+    case "profile": {
+      const { values } = parse(a, { metric: { type: "boolean" } });
+      const userId = await resolveAthleteUserId(client);
+      const [summary, user] = await Promise.all([
+        fetchAthleteProfileSummary(client, userId, values.metric === true),
+        fetchAthleteUser(client, userId),
+      ]);
+      return out({ summary, user });
+    }
+    case "prefs":
+      return out(await fetchAthletePrefs(client));
+    case "workouts": {
+      const { values } = parse(a, {
+        start: { type: "string" },
+        end: { type: "string" },
+        raw: { type: "boolean" },
+      });
+      const start = isoDate(
+        need(values.start as string | undefined, "athlete workouts --start Y-M-D --end Y-M-D"),
+        "--start",
+      );
+      const end = isoDate(
+        need(values.end as string | undefined, "athlete workouts --start Y-M-D --end Y-M-D"),
+        "--end",
+      );
+      const workouts = await fetchAthleteWorkouts(client, start, end);
+      return out(values.raw === true ? workouts : presentAthleteWorkouts(workouts));
+    }
+    case "exercises": {
+      const { values } = parse(a, { q: { type: "string" }, limit: { type: "string" } });
+      const limit = values.limit !== undefined ? toInt(values.limit as string, "--limit") : 20;
+      const q = values.q as string | undefined;
+      return out(
+        q !== undefined
+          ? await searchExerciseHistory(client, q, limit)
+          : await fetchExerciseHistoryList(client),
+      );
+    }
+    case "history": {
+      const { values, positionals } = parse(a, { raw: { type: "boolean" } });
+      const id = toInt(need(positionals[0], "athlete history <exerciseId>"), "exerciseId");
+      const userId = await resolveAthleteUserId(client);
+      const detail = await fetchExerciseHistoryDetail(client, id, userId);
+      return out(values.raw === true ? detail : presentExerciseHistory(detail));
+    }
+    case "prs":
+      return out(
+        await fetchPersonalRecords(
+          client,
+          toInt(need(a[0], "athlete prs <exerciseId>"), "exerciseId"),
+        ),
+      );
+    case "stats": {
+      const { values, positionals } = parse(a, { date: { type: "string" } });
+      const id = toInt(
+        need(positionals[0], "athlete stats <exerciseId> --date Y-M-D"),
+        "exerciseId",
+      );
+      const date = isoDate(
+        need(values.date as string | undefined, "athlete stats <exerciseId> --date Y-M-D"),
+        "--date",
+      );
+      const userId = await resolveAthleteUserId(client);
+      return out(await fetchExerciseStats(client, id, userId, date));
+    }
+    case "working-maxes":
+      return out(await fetchWorkingMaxes(client));
+    case "leaderboard": {
+      const { values, positionals } = parse(a, {
+        page: { type: "string" },
+        "page-size": { type: "string" },
+        gender: { type: "string" },
+      });
+      const workoutId = toInt(need(positionals[0], "athlete leaderboard <workoutId>"), "workoutId");
+      const opts: { page?: number; pageSize?: number; gender?: number } = {};
+      if (values.page !== undefined) opts.page = toInt(values.page as string, "--page");
+      if (values["page-size"] !== undefined)
+        opts.pageSize = toInt(values["page-size"] as string, "--page-size");
+      if (values.gender !== undefined) opts.gender = toInt(values.gender as string, "--gender");
+      return out(await fetchLeaderboard(client, workoutId, opts));
+    }
+    case "export":
+      return cmdAthleteExport(client, a);
+    case "log-set":
+      return cmdAthleteLogSet(client, a);
+    default:
+      return fail(
+        "usage: trainheroic athlete <whoami|profile|prefs|workouts|exercises|history|prs|stats|working-maxes|leaderboard|export|log-set>",
+      );
+  }
+}
+
 async function cmdInstallSkill(): Promise<void> {
   const home = process.env.HOME ?? process.env.USERPROFILE;
   if (!home) fail("cannot determine home directory.");
-  const skillSrc = join(import.meta.dirname, "../skill/trainheroic-unofficial");
-  const skillDest = join(home, ".claude/skills/trainheroic-unofficial");
-  await mkdir(join(home, ".claude/skills"), { recursive: true });
-  await cp(skillSrc, skillDest, { recursive: true, force: true });
-  out({ installed: skillDest });
+  const skillRoot = join(import.meta.dirname, "../skill");
+  const skillsDir = join(home, ".claude/skills");
+  await mkdir(skillsDir, { recursive: true });
+  // Install every skill the package ships (coach + athlete).
+  const entries = await readdir(skillRoot, { withFileTypes: true });
+  const installed: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const dest = join(skillsDir, entry.name);
+    await cp(join(skillRoot, entry.name), dest, { recursive: true, force: true });
+    installed.push(dest);
+  }
+  out({ installed });
 }
 
 async function dispatch(client: TrainHeroicClient, group: string, rest: string[]): Promise<void> {
@@ -423,6 +667,8 @@ async function dispatch(client: TrainHeroicClient, group: string, rest: string[]
       return cmdWorkout(client, rest);
     case "message":
       return cmdMessage(client, rest);
+    case "athlete":
+      return cmdAthlete(client, rest);
     default:
       return fail(`unknown command "${group}". Run 'trainheroic help'.`);
   }

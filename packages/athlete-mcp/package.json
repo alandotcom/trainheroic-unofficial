@@ -1,0 +1,41 @@
+{
+  "name": "@trainheroic-unofficial/athlete-mcp",
+  "version": "0.3.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alandotcom/trainheroic-unofficial.git",
+    "directory": "packages/athlete-mcp"
+  },
+  "description": "Local single-user MCP server for a TrainHeroic athlete. No database, no Cloudflare deps.",
+  "type": "module",
+  "bin": {
+    "trainheroic-athlete-mcp": "./dist/server.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "inspect": "npx @modelcontextprotocol/inspector -e TRAINHEROIC_EMAIL=\"$TRAINHEROIC_EMAIL\" -e TRAINHEROIC_PASSWORD=\"$TRAINHEROIC_PASSWORD\" tsx src/server.ts",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@trainheroic-unofficial/core": "workspace:*",
+    "@trainheroic-unofficial/js": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "tsdown": "^0.22.3",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

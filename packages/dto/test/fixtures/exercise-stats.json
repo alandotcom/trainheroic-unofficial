@@ -1,0 +1,27 @@
+{
+  "isLift": false,
+  "lastPerformance": {
+    "text": "4 x 5 @ 185 lb",
+    "dateCompleted": "2021-11-06",
+    "notes": "",
+    "savedWorkoutSetExercise": {
+      "id": 819682849,
+      "dateCompleted": "2021-11-06",
+      "param1Type": 3,
+      "param2Type": 1,
+      "param1Data1": "5",
+      "param2Data1": "185",
+      "param1Made": 1,
+      "param1Data2": "5",
+      "param2Data2": "185",
+      "param2Made": 1,
+      "param1Data3": "5",
+      "param2Data3": "185",
+      "param3Made": 1,
+      "param1Data4": "5",
+      "param2Data4": "185",
+      "param4Made": 1
+    }
+  },
+  "personalRecord": null
+}
