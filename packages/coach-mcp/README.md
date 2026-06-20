@@ -31,10 +31,10 @@ claude mcp add trainheroic \
       "args": ["-y", "@trainheroic-unofficial/coach-mcp"],
       "env": {
         "TRAINHEROIC_EMAIL": "coach@example.com",
-        "TRAINHEROIC_PASSWORD": "yourpassword"
-      }
-    }
-  }
+        "TRAINHEROIC_PASSWORD": "yourpassword",
+      },
+    },
+  },
 }
 ```
 
