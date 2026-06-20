@@ -19,9 +19,7 @@ own package and its own README:
 
 The servers share their tool implementations (`packages/core`), the TrainHeroic client and
 workout encoder (`packages/js`), and the shapes (`packages/dto`). What differs between them is
-the transport, the auth, and the exercise/warehouse storage backend. See `../docs/` for the
-architecture and build plan, and `../docs/mcp-spec-grounding.md` for the MCP `2025-11-25`
-compliance notes.
+the transport, the auth, and the exercise/warehouse storage backend.
 
 ## How auth works (hosted)
 

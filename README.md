@@ -26,8 +26,6 @@ mcp/                       pnpm workspace (the active project; Node >= 22, pnpm 
     cloudflare/            hosted multi-tenant Worker (OAuth + D1 + Durable Objects)
     cli/                   command-line tool over the SDK
   README.md                server-focused overview (auth model, tool catalog, dev, storage)
-docs/                      design plan + MCP spec-compliance notes
-skills/trainheroic-api/    legacy Python Agent Skill, superseded by the CLI
 ```
 
 Each package under `mcp/packages/` carries its own README and CLAUDE.md.
@@ -59,12 +57,6 @@ Credentials always come from `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD`. Tra
 issues no refresh token, so the client re-logs in with the stored credentials when the session
 expires. Local session and exercise-cache state is written under `~/.trainheroic/`, never in
 the repo.
-
-## Legacy skill
-
-`skills/trainheroic-api/` is the original Python [Agent Skill](https://agentskills.io/) for the
-same API. It still works, but new work goes to the TypeScript CLI. The repo keeps
-`.claude/skills/trainheroic-api` as a symlink to it so the skill stays active in this repo.
 
 ## Disclaimer
 

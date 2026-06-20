@@ -12,10 +12,7 @@ An unofficial TypeScript toolkit for the undocumented TrainHeroic coaching API. 
 tool layer runs in three shapes: a remote multi-tenant MCP server on Cloudflare Workers, a
 local single-user stdio MCP server, and a CLI.
 
-All active code lives in the `mcp/` pnpm workspace. The top-level `skills/trainheroic-api/`
-is the legacy Python skill that the CLI (`@trainheroic-unofficial/cli`) supersedes; treat it
-as deprecated unless a task is explicitly about it. `docs/` holds the design plan and the MCP
-spec-compliance notes.
+All active code lives in the `mcp/` pnpm workspace.
 
 ## Commands
 
@@ -127,5 +124,4 @@ storage-specific (the D1 warehouse syncs are the current example).
 - TrainHeroic state (the session cache and the exercise library JSON) is written under
   `~/.trainheroic/`, never in the repo.
 - The READMEs differ in scope: `mcp/README.md` is the server-focused overview, each package
-  has its own README for detail, and the top-level `README.md` covers the workspace and the
-  legacy skill.
+  has its own README for detail, and the top-level `README.md` covers the workspace.
