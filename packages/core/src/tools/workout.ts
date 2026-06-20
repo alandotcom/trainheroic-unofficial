@@ -10,11 +10,11 @@ import {
   removeSession,
 } from "@trainheroic-unofficial/js";
 import { confirmGate, NOT_CONFIRMED } from "../confirm";
-import { attempt, errorResult, jsonResult } from "../context";
+import { apiCall, attempt, errorResult, jsonResult } from "../context";
 import type { ToolContext } from "../context";
 
-/** Workout building, read-back, publishing, and removal. */
-export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void {
+/** Build a draft, read it back, and publish it. */
+function registerBuild(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "workout_build",
     {
@@ -104,7 +104,10 @@ export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void 
         });
       }),
   );
+}
 
+/** Calendar lifecycle for an existing session: remove, unpublish, copy, save to library. */
+function registerLifecycle(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "session_remove",
     {
@@ -128,4 +131,72 @@ export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void 
         return jsonResult({ removed: pwId });
       }),
   );
+
+  server.registerTool(
+    "session_unpublish",
+    {
+      title: "Unpublish a session",
+      description:
+        "Unpublish a previously published session (POST .../programWorkout/unPublish/{pwId}). It " +
+        "is no longer athlete-facing. Requires confirmation (elicitation, or confirm:true).",
+      inputSchema: { pwId: z.number(), confirm: z.boolean().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+    },
+    ({ pwId, confirm }, extra) =>
+      attempt(async () => {
+        const ok = await confirmGate(
+          server,
+          extra.requestId,
+          `Unpublish session ${pwId}? Athletes will no longer see it.`,
+          confirm,
+        );
+        if (!ok) return errorResult(NOT_CONFIRMED);
+        return apiCall(ctx, "POST", `/2.0/coach/calendar/programWorkout/unPublish/${pwId}`);
+      }),
+  );
+
+  server.registerTool(
+    "session_copy",
+    {
+      title: "Copy a session to a date",
+      description:
+        "Copy/repeat a session to a target date on a program (POST .../copyProgramWorkout). " +
+        "toDate is YYYY-M-D. Creates a new session; review and publish it separately.",
+      inputSchema: { toProgramId: z.number(), pwId: z.number(), toDate: z.string() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    ({ toProgramId, pwId, toDate }) =>
+      attempt(async () => {
+        const [year, month, day] = parseWorkoutDate(toDate);
+        const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+        const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        return apiCall(ctx, "POST", "/2.0/coach/calendar/copyProgramWorkout", {
+          body: {
+            toProgramId,
+            pwId,
+            toDate: { date: iso, day, month, year, dayOfWeek, isToday: false },
+          },
+        });
+      }),
+  );
+
+  server.registerTool(
+    "session_save_as_template",
+    {
+      title: "Save a session to the library",
+      description:
+        "Save an existing session as a reusable template in the session library " +
+        "(POST .../programWorkout/saveWorkoutAsTemplate/{workoutId}). Pass the workout_id.",
+      inputSchema: { workoutId: z.number() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    ({ workoutId }) =>
+      apiCall(ctx, "POST", `/2.0/coach/calendar/programWorkout/saveWorkoutAsTemplate/${workoutId}`),
+  );
+}
+
+/** Workout building, read-back, publishing, and the session calendar lifecycle. */
+export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void {
+  registerBuild(server, ctx);
+  registerLifecycle(server, ctx);
 }

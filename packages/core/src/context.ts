@@ -121,7 +121,7 @@ function largestArrayValuedKey(obj: Record<string, unknown>): string | null {
  * with `__truncated`), then a last-resort hard character cap. Pure and side-effect free.
  */
 export function boundedSerialize(data: unknown, budget: number, hint?: string): string {
-  // A string body (e.g. a non-JSON th_request response) still needs a hard cap.
+  // A string body (e.g. a non-JSON API response) still needs a hard cap.
   if (typeof data === "string") return hardCap(data, budget, hint);
 
   // JSON.stringify(undefined) returns undefined, so coerce to a "null" sentinel.

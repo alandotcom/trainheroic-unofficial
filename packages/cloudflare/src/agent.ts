@@ -5,10 +5,12 @@ import { resolveOrgId } from "./store/d1";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
 import type { Props } from "./types";
 import type { ToolContext } from "@trainheroic-unofficial/core";
+import { registerAnalyticsTools } from "@trainheroic-unofficial/core";
+import { registerAthleteTools } from "@trainheroic-unofficial/core";
 import { registerExerciseTools } from "@trainheroic-unofficial/core";
 import { registerMessagingTools } from "@trainheroic-unofficial/core";
 import { registerReadTools } from "@trainheroic-unofficial/core";
-import { registerRawTools } from "@trainheroic-unofficial/core";
+import { registerTeamTools } from "@trainheroic-unofficial/core";
 import { registerSyncTools } from "./tools/sync";
 import { registerWorkoutTools } from "@trainheroic-unofficial/core";
 
@@ -41,7 +43,9 @@ export class TrainHeroicMCP extends McpAgent<Env, State, Props> {
     const ctx: ToolContext = { client, index: new ExerciseStore(this.env.TH_DB, client, orgId) };
 
     registerReadTools(this.server, ctx);
-    registerRawTools(this.server, ctx);
+    registerAthleteTools(this.server, ctx);
+    registerTeamTools(this.server, ctx);
+    registerAnalyticsTools(this.server, ctx);
     registerExerciseTools(this.server, ctx);
     registerWorkoutTools(this.server, ctx);
     registerMessagingTools(this.server, ctx);
