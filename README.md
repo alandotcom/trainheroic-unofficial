@@ -18,7 +18,7 @@ Connect to the shared hosted server. No install required. You sign in with your 
 
 **URL:** `https://trainheroic-mcp.alandotcom.workers.dev/mcp`
 
-**claude.ai** — add it in Settings → Integrations → Add integration, paste the URL above.
+**claude.ai** — go to [Settings → Connectors → Add custom connector](https://claude.ai/customize/connectors?modal=add-custom-connector) and paste the URL above.
 
 **Claude Code:**
 ```bash
