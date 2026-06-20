@@ -1,6 +1,12 @@
 {
   "name": "@trainheroic-unofficial/js",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alandotcom/trainheroic-skill.git",
+    "directory": "packages/js"
+  },
   "description": "Unofficial TypeScript SDK for the TrainHeroic coaching API.",
   "type": "module",
   "exports": {
@@ -8,6 +14,7 @@
     "./node": { "types": "./src/node.ts", "import": "./src/node.ts" }
   },
   "publishConfig": {
+    "access": "public",
     "exports": {
       ".": { "types": "./dist/index.d.mts", "import": "./dist/index.mjs" },
       "./node": { "types": "./dist/node.d.mts", "import": "./dist/node.mjs" }

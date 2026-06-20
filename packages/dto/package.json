@@ -1,12 +1,19 @@
 {
   "name": "@trainheroic-unofficial/dto",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alandotcom/trainheroic-skill.git",
+    "directory": "packages/dto"
+  },
   "description": "Domain DTOs and zod schemas for TrainHeroic — the single source of truth for shapes.",
   "type": "module",
   "exports": {
     ".": { "types": "./src/index.ts", "import": "./src/index.ts" }
   },
   "publishConfig": {
+    "access": "public",
     "exports": { ".": { "types": "./dist/index.d.mts", "import": "./dist/index.mjs" } }
   },
   "files": ["dist"],

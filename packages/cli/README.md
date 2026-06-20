@@ -1,9 +1,15 @@
 # @trainheroic-unofficial/cli
 
-A command-line tool for the TrainHeroic coaching API. It calls the SDK directly (no MCP
-layer), takes credentials from the environment, and prints JSON.
+A command-line tool for the TrainHeroic coaching API. Takes credentials from the environment, prints JSON.
 
 Part of the [trainheroic-unofficial](../../README.md) workspace.
+
+## Install
+
+```bash
+npm install -g @trainheroic-unofficial/cli
+# or: npx @trainheroic-unofficial/cli <command>
+```
 
 ## Usage
 
