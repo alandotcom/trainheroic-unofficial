@@ -1,0 +1,40 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "promise"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error",
+    "pedantic": "warn"
+  },
+  "env": {
+    "worker": true,
+    "node": true,
+    "es2024": true
+  },
+  "rules": {
+    "require-unicode-regexp": "off",
+    "max-classes-per-file": "off",
+    "unicorn/prefer-string-replace-all": "off",
+    "unicorn/prefer-code-point": "off",
+    "unicorn/no-array-sort": "off",
+    "unicorn/no-array-callback-reference": "off",
+    "unicorn/prefer-native-coercion-functions": "off",
+    "unicorn/prefer-type-error": "off",
+    "require-await": "off",
+    "no-await-in-loop": "off",
+    "max-lines-per-function": ["warn", { "max": 120 }]
+  },
+  "overrides": [
+    {
+      "files": ["**/test/**/*.ts"],
+      "rules": {
+        "max-lines-per-function": "off",
+        "max-lines": "off",
+        "unicorn/consistent-function-scoping": "off",
+        "unicorn/no-useless-undefined": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["**/worker-configuration.d.ts", "**/dist/**", "**/.wrangler/**", "node_modules"]
+}
