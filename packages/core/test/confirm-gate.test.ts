@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerRawTools } from "../src/tools/raw";
+import { registerAthleteTools } from "../src/tools/athletes";
 import type { ToolContext } from "../src/context";
 
 type Handler = (
@@ -10,7 +10,7 @@ type Handler = (
   isError?: boolean;
 }>;
 
-/** A fake McpServer that captures the registered tool handler and stubs elicitation. */
+/** A fake McpServer that captures registered tool handlers and stubs elicitation. */
 function harness(elicit: () => Promise<unknown>) {
   const handlers = new Map<string, Handler>();
   const server = {
@@ -30,41 +30,38 @@ function ctx(onRequest: () => void): ToolContext {
   return { client, index: {} } as unknown as ToolContext;
 }
 
-describe("th_request destructive gate is wired into the handler", () => {
-  it("blocks a POST when elicitation is declined and never calls the API", async () => {
+// athlete_archive is a representative gated mutation (PUT). It exercises the shared
+// confirmGate wiring that every destructive tool depends on.
+describe("the destructive gate is wired into the handler", () => {
+  it("blocks the PUT when elicitation is declined and never calls the API", async () => {
     let called = false;
     const { server, handlers } = harness(async () => ({ action: "decline" }));
-    registerRawTools(
+    registerAthleteTools(
       server,
       ctx(() => {
         called = true;
       }),
     );
-    const handler = handlers.get("th_request");
+    const handler = handlers.get("athlete_archive");
     expect(handler).toBeDefined();
-    const res = await handler!({ method: "POST", path: "/x" }, { requestId: "r1" });
+    const res = await handler!({ athleteIds: [123] }, { requestId: "r1" });
     expect(res.isError).toBe(true);
     expect(called).toBe(false);
   });
 
-  it("does not gate a GET and lets it through", async () => {
+  it("calls the API once elicitation is accepted", async () => {
     let called = false;
-    let elicited = false;
-    const { server, handlers } = harness(async () => {
-      elicited = true;
-      return { action: "accept", content: { confirm: true } };
-    });
-    registerRawTools(
+    const { server, handlers } = harness(async () => ({
+      action: "accept",
+      content: { confirm: true },
+    }));
+    registerAthleteTools(
       server,
       ctx(() => {
         called = true;
       }),
     );
-    const res = await handlers.get("th_request")!(
-      { method: "GET", path: "/x" },
-      { requestId: "r1" },
-    );
-    expect(elicited).toBe(false);
+    const res = await handlers.get("athlete_archive")!({ athleteIds: [123] }, { requestId: "r1" });
     expect(called).toBe(true);
     expect(res.isError).toBeUndefined();
   });

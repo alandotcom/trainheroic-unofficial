@@ -43,13 +43,13 @@ const SIMPLE_GETS: ReadonlyArray<{
     name: "analytics_categories",
     title: "Analytics categories",
     description:
-      "Lists available analytics types. Pull the data via th_request POST /v5/analytics/*.",
+      "Lists available analytics types. Pull a report with analytics_query (pick the matching metric).",
     path: "/v5/analytics",
   },
 ];
 
-/** Read-only coach/athlete queries. Exercise lookups live in the exercise store tools. */
-export function registerReadTools(server: McpServer, ctx: ToolContext): void {
+/** Roster-level reads: the fixed GETs plus the filterable athlete and team lists. */
+function registerRosterReads(server: McpServer, ctx: ToolContext): void {
   for (const t of SIMPLE_GETS) {
     server.registerTool(
       t.name,
@@ -120,7 +120,10 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
       return apiCall(ctx, "GET", `/1.0/coach/teams${query ? `?${query}` : ""}`);
     },
   );
+}
 
+/** Reads scoped to a single entity (team, program, athlete) plus the activity feed. */
+function registerEntityReads(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "get_team",
     {
@@ -161,4 +164,10 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
         "This is a large, deep object. If it is truncated, fetch a narrower view (a specific session) instead.",
       ),
   );
+}
+
+/** Read-only coach/athlete queries. Exercise lookups live in the exercise store tools. */
+export function registerReadTools(server: McpServer, ctx: ToolContext): void {
+  registerRosterReads(server, ctx);
+  registerEntityReads(server, ctx);
 }

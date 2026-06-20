@@ -130,10 +130,12 @@ storage-specific (the D1 warehouse syncs are the current example).
   `errorResult`, `apiCall`, and `attempt` (which converts a thrown error into an `isError`
   result the model can self-correct on). The annotation presets are `READ`, `SYNC`, and
   `DESTRUCTIVE`.
-- Destructive or athlete-facing tools (message send and delete, workout publish, session
-  remove, and non-GET `th_request`) gate through `confirmGate` (`core/src/confirm.ts`). It
-  prefers MCP elicitation and falls back to an explicit `confirm: true` argument, and it fails
-  closed. The `destructiveHint` annotation is advisory; the gate is the enforcement.
+- Destructive or athlete-facing tools (message send and delete, workout publish and unpublish,
+  session remove, athlete archive, team and join-code delete) gate through `confirmGate`
+  (`core/src/confirm.ts`). It prefers MCP elicitation and falls back to an explicit
+  `confirm: true` argument, and it fails closed. The `destructiveHint` annotation is advisory;
+  the gate is the enforcement. There is no raw-request tool — every endpoint is a typed tool,
+  and additive writes (create/rename/invite/restore/copy) are ungated, matching `exercise_create`.
 
 ## Conventions
 

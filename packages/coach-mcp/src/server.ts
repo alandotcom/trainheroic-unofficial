@@ -2,10 +2,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import process from "node:process";
 import type { ToolContext } from "@trainheroic-unofficial/core";
+import { registerAnalyticsTools } from "@trainheroic-unofficial/core";
+import { registerAthleteTools } from "@trainheroic-unofficial/core";
 import { registerExerciseTools } from "@trainheroic-unofficial/core";
 import { registerMessagingTools } from "@trainheroic-unofficial/core";
-import { registerRawTools } from "@trainheroic-unofficial/core";
 import { registerReadTools } from "@trainheroic-unofficial/core";
+import { registerTeamTools } from "@trainheroic-unofficial/core";
 import { registerWorkoutTools } from "@trainheroic-unofficial/core";
 import { ExerciseLibrary, TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
@@ -29,7 +31,9 @@ async function main(): Promise<void> {
 
   const server = new McpServer({ name: "trainheroic-local", version: "0.2.0" });
   registerReadTools(server, ctx);
-  registerRawTools(server, ctx);
+  registerAthleteTools(server, ctx);
+  registerTeamTools(server, ctx);
+  registerAnalyticsTools(server, ctx);
   registerExerciseTools(server, ctx);
   registerWorkoutTools(server, ctx);
   registerMessagingTools(server, ctx);
