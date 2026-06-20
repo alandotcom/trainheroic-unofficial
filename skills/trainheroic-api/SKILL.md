@@ -143,9 +143,12 @@ python3 "$SKILL/scripts/build_workout.py" --program 4980851 --date 2026-6-22 --r
 
 Two exercises in one block become a superset. Add `"leaderboard": "rounds"` (or
 `reps`/`time`/`calories`/`meters`/… or `{"unit":"time","lowest_wins":true}`) to a
-block to make it a scored Red Zone leaderboard (trophy + "FOR <UNIT>"). `--replace`
-deletes any existing session on that date first (idempotent re-runs); `--no-publish`
-leaves a draft; `--read --pw <id>` prints a built session back to verify it.
+block to make it a scored Red Zone leaderboard (trophy + "FOR <UNIT>"). A top-level
+`"instruction"` sets the session's Coach Instructions (the day-note above the
+blocks; `PUT /3.0/coach/workout/{id}`, applied after the blocks save and without
+publishing). `--replace` deletes any existing session on that date first (idempotent
+re-runs); `--no-publish` leaves a draft; `--read --pw <id>` prints a built session
+back to verify it (the session note shows under "Coach Instructions").
 
 For an **AMRAP**, score by `rounds`/`reps` and program multiple sets (one per
 expected round — assume a fit athlete's count); for **"for time"**, score by `time`.

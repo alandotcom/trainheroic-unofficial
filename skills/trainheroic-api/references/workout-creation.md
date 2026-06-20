@@ -135,6 +135,25 @@ POST /2.0/coach/calendar/programWorkout/publish
 [ 142002657 ]   // array of programWorkout IDs
 ```
 
+## (Optional) Session note — Coach Instructions
+
+The session-level note (the day-note shown at the top of a session — greeting +
+writeup) is set with a PUT to the programWorkout, not on a block. Use the same
+`workout_id` from step 2:
+
+```
+PUT /3.0/coach/workout/{workout_id}
+{ ...the full programWorkout object..., "instruction": "Welcome to Week 12..." }
+```
+
+Build the body from the session object you already have (the create response, or a
+day's entry from `/1.0/coach/programs/edit`), set `instruction`, and replace
+`sets`/`setKeys` with a flat **list** of block ids sorted by `order` — the edit-GET
+returns `sets` as a dict keyed by block id, so convert it. This does **not** publish:
+`published` is echoed back as sent, so set the note **before** step 5 if the session
+should stay a draft. `build_workout.py` does all of this when the spec has a
+top-level `"instruction"`.
+
 ## Reading a session back (verified)
 
 To confirm what was built on a team calendar date:
@@ -264,6 +283,8 @@ athlete's round count (e.g. ~5–6 rounds for a ~10–12 min triplet) and confir
 
 ## Editing and managing sessions
 
+- Set the session note (Coach Instructions): `PUT /3.0/coach/workout/{workoutId}`
+  with the programWorkout object + `instruction` (does not change publish state).
 - Unpublish: `POST /2.0/coach/calendar/programWorkout/unPublish/{programWorkoutId}`
 - Delete: `POST /2.0/coach/calendar/removeProgramWorkout` `{ "programId", "pwId" }`
 - Copy/repeat to a date: `POST /2.0/coach/calendar/copyProgramWorkout`

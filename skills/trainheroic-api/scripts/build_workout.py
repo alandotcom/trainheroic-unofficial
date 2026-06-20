@@ -18,6 +18,10 @@ an actual prescribed load.
 Spec format (JSON)
 ------------------
 {
+  "instruction": "Welcome to Week 12...\n\nFind a 1RM Strict Press...",
+                                   // optional session note ("Coach Instructions") —
+                                   //   the day-note shown above the blocks; set after
+                                   //   the blocks exist and does NOT change publish state
   "blocks": [
     {
       "title": "Primary Press",
@@ -41,6 +45,10 @@ Spec format (JSON)
 }
 
 Two exercises in one block render as a superset (A1, A2) automatically.
+
+A top-level `instruction` sets the session's Coach Instructions — the day-note
+(greeting + writeup) shown at the top of the session. It is applied with a final
+`PUT /3.0/coach/workout/{workout_id}` once the blocks exist; it does not publish.
 
 Usage
 -----
@@ -254,7 +262,39 @@ def delete_sessions_on_date(program_id, y, m, d):
         print(f"  replaced: deleted existing session pw={p['id']}")
 
 
-def build(program_id, blocks, date=None, timeline_day=None, publish=True):
+def _ordered_block_ids(sets):
+    """Flatten a programWorkout's `sets` into an ordered list of block ids.
+
+    Both the create response and `/1.0/coach/programs/edit` return `sets` as a dict
+    keyed by block id (each value a block object with an `order`); the session PUT
+    wants `sets`/`setKeys` as a flat list of block ids sorted by block order. A list
+    is returned unchanged.
+    """
+    if isinstance(sets, dict):
+        return [int(bid) for bid, blk in sorted(sets.items(), key=lambda kv: kv[1].get("order", 0))]
+    return list(sets or [])
+
+
+def set_session_instruction(workout_id, pw, instruction, block_ids=None):
+    """Set a session's Coach Instructions (the day-note at the top of the session).
+
+    `pw` is the programWorkout object — the create-time response, or a day's entry
+    from `/1.0/coach/programs/edit`. `PUT /3.0/coach/workout/{workout_id}` wants the
+    whole object back with `instruction` set and `sets`/`setKeys` as a flat list of
+    block ids (the GETs return `sets` as a dict). This does NOT change publish state:
+    `published` is sent exactly as it is on `pw`, so set the instruction before
+    publishing if the session should stay a draft.
+    """
+    ids = block_ids if block_ids is not None else _ordered_block_ids(pw.get("sets"))
+    body = dict(pw)
+    body["instruction"] = instruction
+    body["sets"] = ids
+    body["setKeys"] = ids
+    status, r = th.request("PUT", f"/3.0/coach/workout/{workout_id}", body)
+    _require_ok("set session instruction", status, r)
+
+
+def build(program_id, blocks, date=None, timeline_day=None, publish=True, instruction=None):
     notes, warnings = unit_advisories(blocks)
     for n in notes:
         print(f"  note: {n}", file=sys.stderr)
@@ -295,6 +335,12 @@ def build(program_id, blocks, date=None, timeline_day=None, publish=True):
         status, r = th.request("POST", "/2.0/coach/calendar/saveWorkoutSetExercises", ex_payload)
         _require_ok(f"saveWorkoutSetExercises (block '{b['title']}')", status, r)
 
+    # Session note (Coach Instructions). Set before publish so it leaves the
+    # draft/published state untouched — the PUT echoes `published` back as-is.
+    if instruction:
+        ordered_block_ids = [by_order[o] for o in sorted(by_order)]
+        set_session_instruction(workout_id, sess, instruction, ordered_block_ids)
+
     if publish:
         status, r = th.request("POST", "/2.0/coach/calendar/programWorkout/publish", [pw_id])
         _require_ok("publish", status, r)
@@ -310,6 +356,10 @@ def read_session(program_id, y, m, d, pw_id):
         print(f"programWorkout {pw_id} not found on {y}-{m}-{d}", file=sys.stderr)
         sys.exit(1)
     print(f"Session pw={pw_id}  date={pw.get('year')}-{pw.get('month')}-{pw.get('day')}  published={pw.get('published')}")
+    if pw.get("instruction"):
+        print("  Coach Instructions:")
+        for line in pw["instruction"].splitlines() or [""]:
+            print(f"    {line}")
     for b in sorted(pw["sets"].values(), key=lambda s: s["order"]):
         rz = b.get("redzone_type")
         lb = ""
@@ -360,12 +410,14 @@ def main():
     raw = sys.stdin.read() if args.spec == "-" else open(args.spec).read()
     spec = json.loads(raw)
     blocks = spec["blocks"] if isinstance(spec, dict) else spec
+    instruction = spec.get("instruction") if isinstance(spec, dict) else None
 
     if args.replace and args.date:
         delete_sessions_on_date(args.program, *args.date)
 
     pw_id, workout_id = build(args.program, blocks, date=args.date,
-                              timeline_day=args.timeline_day, publish=args.publish)
+                              timeline_day=args.timeline_day, publish=args.publish,
+                              instruction=instruction)
     print(f"Built session: pw={pw_id} workout_id={workout_id} published={args.publish}")
     if args.date:
         read_session(args.program, *args.date, pw_id)
