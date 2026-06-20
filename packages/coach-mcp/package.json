@@ -20,9 +20,7 @@
     "start": "tsx src/server.ts",
     "inspect": "npx @modelcontextprotocol/inspector -e TRAINHEROIC_EMAIL=\"$TRAINHEROIC_EMAIL\" -e TRAINHEROIC_PASSWORD=\"$TRAINHEROIC_PASSWORD\" tsx src/server.ts",
     "build": "tsdown",
-    "build:mcpb": "tsdown --config tsdown.mcpb.config.ts && mcpb pack ./mcpb ./dist/trainheroic-coach-mcp.mcpb",
-    "mcpb:validate": "mcpb validate ./mcpb/manifest.json",
-    "mcpb:sign": "mcpb sign --self-signed ./dist/trainheroic-coach-mcp.mcpb",
+
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
@@ -33,8 +31,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@anthropic-ai/mcpb": "^2.1.2",
-    "@types/node": "^26.0.0",
+"@types/node": "^26.0.0",
     "tsdown": "^0.22.3",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
