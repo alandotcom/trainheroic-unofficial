@@ -9,8 +9,8 @@ conventions, read [../../../CLAUDE.md](../../../CLAUDE.md) first.
 
 A shell-facing front end over the `js` SDK. It parses argv with `node:util` `parseArgs`,
 dispatches to a command handler, calls the SDK, and prints JSON. There is no MCP layer here;
-this is the scripting path, and it supersedes the old Python skill. It depends on `js` for
-behavior and `dto` for the input schemas it validates against.
+this is the scripting path. It depends on `js` for behavior and `dto` for the input schemas
+it validates against.
 
 `src/cli.ts` holds the help text, the dispatch, and the handlers. `src/parse.ts` has small
 input helpers (date parsing, the inline-JSON-versus-path heuristic). `src/session-cache.ts`
