@@ -4,7 +4,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/alandotcom/trainheroic-skill.git",
+    "url": "https://github.com/alandotcom/trainheroic-unofficial.git",
     "directory": "packages/core"
   },
   "description": "Shared MCP tool layer for TrainHeroic, used by the local and Cloudflare servers.",
