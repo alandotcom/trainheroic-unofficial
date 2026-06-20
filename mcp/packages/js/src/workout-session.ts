@@ -1,15 +1,18 @@
 // Imperative workout flow: create -> add blocks -> add exercises -> (set note) -> publish,
 // plus read-back and removal.
 
-import type {
-  BlockSpec,
-  ReadBlock,
-  ReadExercise,
-  ReadResult,
-  WorkoutDate,
+import {
+  type BlockSpec,
+  programsEditResponseSchema,
+  type ReadBlock,
+  type ReadExercise,
+  type ReadResult,
+  sessionCreateResponseSchema,
+  type WorkoutDate,
 } from "@trainheroic-unofficial/dto";
 import type { TrainHeroicClient } from "./client";
 import { coerceInt, unitLabel } from "./exercise-util";
+import { checkResponse } from "./response-check";
 import { buildBlockPayload, LEADERBOARD_LABEL, makeExercise } from "./workout-encode";
 
 export type BuildOptions = {
@@ -50,6 +53,7 @@ export async function buildSession(
   opts: BuildOptions,
 ): Promise<{ pwId: number; workoutId: number }> {
   const sess = await req<Record<string, unknown>>(client, "POST", createPath(opts), {});
+  checkResponse(sessionCreateResponseSchema, sess, "session create");
   const workoutId = Number(sess.workout_id);
   const pwId = Number(sess.id);
 
@@ -133,6 +137,7 @@ export async function readSession(
     "GET",
     `/1.0/coach/programs/edit/${programId}/${y}/${m}/${d}`,
   );
+  checkResponse(programsEditResponseSchema, data, "programs edit");
   const pw = (data.programWorkouts ?? []).find((p) => p.id === pwId);
   if (!pw) throw new Error(`programWorkout ${pwId} not found on ${y}-${m}-${d}.`);
 

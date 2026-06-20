@@ -3,9 +3,12 @@ import { cursorUpsertStmt } from "./d1";
 import {
   asExerciseList,
   buildSearchText,
+  checkResponse,
   chunk,
   coerceInt,
   type ExerciseIndex,
+  exerciseLibraryResponseSchema,
+  exerciseResponseSchema,
   type ExerciseRow,
   type ExerciseView,
   rankSearch,
@@ -102,6 +105,7 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
     if (list.length === 0) {
       throw new Error("Exercise library returned no rows; refusing to wipe the mirror.");
     }
+    checkResponse(exerciseLibraryResponseSchema, list, "exercise library");
 
     const generation = Number((await this.#meta(org, "sync_generation")) ?? "0") + 1;
     await this.db.batch(chunk(list, UPSERT_CHUNK).map((c) => this.#upsertStmt(org, c, generation)));
@@ -253,7 +257,10 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
     const res = await this.client.request("POST", CREATE_PATH, { body });
     if (!res.ok) throw new Error(`Exercise create failed (HTTP ${res.status}).`);
     const ex = unwrapEnvelope(res.data);
-    if (ex && typeof ex === "object") await this.recordUpsert(ex as Record<string, unknown>);
+    if (ex && typeof ex === "object") {
+      checkResponse(exerciseResponseSchema, ex, "exercise create");
+      await this.recordUpsert(ex as Record<string, unknown>);
+    }
     return ex as Record<string, unknown>;
   }
 

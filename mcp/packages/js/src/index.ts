@@ -1,6 +1,7 @@
 export * from "@trainheroic-unofficial/dto";
 export * from "./auth";
 export * from "./client";
+export * from "./response-check";
 export * from "./exercise-util";
 export * from "./workout-encode";
 export * from "./workout-session";
