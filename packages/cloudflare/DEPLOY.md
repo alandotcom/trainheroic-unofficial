@@ -27,7 +27,12 @@ Then regenerate types: `pnpm cf-typegen`.
 ```bash
 pnpm exec wrangler secret put COOKIE_ENCRYPTION_KEY   # e.g. output of: openssl rand -hex 32
 pnpm exec wrangler secret put ALLOWED_EMAILS          # optional: comma-separated TrainHeroic emails
+pnpm exec wrangler secret put SENTRY_DSN              # optional: enables Sentry error reporting
 ```
+
+`SENTRY_DSN` is the Sentry project DSN. It is a **secret, never a committed var**, so it stays
+out of the repo. Leave it unset to run with Sentry disabled (every Sentry call is a no-op);
+set it to turn on error reporting. Locally, put it in `.dev.vars` (gitignored) instead.
 
 `ALLOWED_EMAILS` is a comma-separated allowlist of TrainHeroic emails permitted to authorize.
 Leaving it unset means **open registration**: any valid TrainHeroic coach can connect. The
@@ -44,7 +49,21 @@ pnpm db:migrate        # wrangler d1 migrations apply trainheroic --remote
 ## 4. Deploy
 
 ```bash
-pnpm deploy            # wrangler deploy
+pnpm deploy            # from the repo root, or `pnpm deploy` in this package
+```
+
+`deploy` runs `scripts/deploy.sh`: it builds and ships the Worker (`wrangler deploy`, which
+emits source maps because `upload_source_maps` is on) and tags the release with the short git
+sha. If `SENTRY_AUTH_TOKEN` is set, it then uploads the source maps to Sentry under that
+release so stack traces resolve to the original TypeScript; without the token it deploys and
+skips that step. `pnpm deploy:plain` is the bare `wrangler deploy` escape hatch.
+
+The token is read from `.env` at the repo root automatically (gitignored); set
+`SENTRY_AUTH_TOKEN` there, or pass it inline. Use an organization auth token (`org:ci` scope)
+from <https://sentry.io/settings/auth-tokens/>.
+
+```bash
+SENTRY_AUTH_TOKEN=sntrys_… pnpm deploy   # or just `pnpm deploy` once it is in .env
 ```
 
 The daily KV-hygiene cron (`triggers.crons`) is deployed with the Worker and calls
@@ -97,3 +116,12 @@ needs the `mcp-remote` bridge with `--transport http-only`:
 - **Rotating `COOKIE_ENCRYPTION_KEY`.** Rotating it invalidates in-flight `/authorize`
   sessions (signed `oauth_req` + CSRF). Existing OAuth grants/tokens are unaffected
   (they are keyed by the library's own KV state).
+- **Error monitoring (Sentry).** Configured in `src/sentry.ts` and gated on the `SENTRY_DSN`
+  secret. `withSentry` reports errors from the top-level fetch and cron handlers;
+  `instrumentDurableObjectWithSentry` reports errors from inside the MCP Durable Object, tagged
+  with the signed-in user's email. By design the only data sent is the error and that email:
+  `sendDefaultPii` is off (no IPs/cookies/auth headers), request bodies are never captured
+  (so the login POST password cannot leak), and performance tracing is off. Readable stack
+  traces come from source map upload, which `pnpm deploy` does automatically when
+  `SENTRY_AUTH_TOKEN` is set (see step 4). The Sentry org/project default to
+  `alan-zy`/`trainheroic-mcp` and are overridable via `SENTRY_ORG`/`SENTRY_PROJECT`.

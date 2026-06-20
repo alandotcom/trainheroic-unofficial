@@ -1,5 +1,7 @@
+import * as Sentry from "@sentry/cloudflare";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { McpAgent } from "agents/mcp";
+import type { Connection } from "agents";
 import { ExerciseStore } from "./store/exercises";
 import { resolveOrgId } from "./store/d1";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
@@ -77,11 +79,30 @@ export class TrainHeroicMCP extends McpAgent<Env, State, Props> {
     const props = this.props;
     if (!props) throw new Error("Missing authentication context");
 
+    // Tag Sentry events from this session with the user's email (the only user datum we keep).
+    // init() runs inside the DO's request scope; onError below re-sets it for the separate
+    // per-message scopes that init() does not reach.
+    Sentry.setUser({ email: props.email });
+
     const client = new TrainHeroicClient(props.email, props.password);
 
     await registerAthleteSurface(this.server, this.env, client);
     if (props.role === "coach") {
       await registerCoachSurface(this.server, this.env, client);
     }
+  }
+
+  /**
+   * The agents runtime funnels websocket, request, and server errors through onError. Each
+   * per-message DO invocation runs in its own Sentry isolation scope, so the email set in
+   * init() does not carry to it; setting it here — inside that scope, just before the Sentry
+   * DO wrapper captures the rethrown error — keeps the email attached to every reported error.
+   * We only enrich the scope, then defer to the base handler, which logs and rethrows.
+   */
+  override onError(connectionOrError: unknown, error?: unknown): void | Promise<void> {
+    if (this.props?.email) Sentry.setUser({ email: this.props.email });
+    return error !== undefined
+      ? super.onError(connectionOrError as Connection, error)
+      : super.onError(connectionOrError);
   }
 }
