@@ -222,6 +222,9 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
         | undefined;
       if (!Array.isArray(blocks))
         fail("spec must be a blocks array, or an object with a blocks array.");
+      const instruction = Array.isArray(parsed)
+        ? undefined
+        : (parsed as { instruction?: unknown }).instruction;
       const publish = values.publish === true;
       if (publish && values.yes !== true)
         fail("publishing is athlete-facing; add --yes to build and publish.");
@@ -230,6 +233,7 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
       if (values["timeline-day"] !== undefined) {
         opts.timelineDay = toInt(values["timeline-day"] as string, "--timeline-day");
       }
+      if (typeof instruction === "string") opts.instruction = instruction;
       const advice = await advisories(library(client), blocks);
       const built = await buildSession(client, opts);
       const readback = opts.date

@@ -359,6 +359,7 @@ Deletes a custom exercise. No request body needed. Only works on exercises where
 | POST | `/2.0/coach/calendar/saveProgramWorkoutSets` | **Add block to session** |
 | POST | `/2.0/coach/calendar/saveWorkoutSetExercises` | **Add exercise to block** (with prescription) |
 | POST | `/2.0/coach/calendar/programWorkout/publish` | **Publish session** |
+| PUT | `/3.0/coach/workout/{workoutId}` | **Set session note** (Coach Instructions) / update programWorkout |
 | GET | `/2.0/coach/calendar/summary/{calendarId}/{year}/{month}/{day}` | Calendar summary for date |
 | GET | `/1.0/coach/programs/edit/{calendarId}/{year}/{month}/{day}` | Calendar edit view for date |
 
@@ -500,14 +501,14 @@ This creates A1: Back Squat, A2: Front Squat displayed as a superset.
 >   `Run` (id 82) is `10` (miles); sending `6` (meters) is ignored and `200` shows as
 >   *200 miles*. To program meters, pick a meters-native exercise (`Sprint` 127,
 >   `Rowing` 101, `Shuttle Sprint` 42523) or a custom exercise — there is no metric
->   "Run". `library_cache.py resolve` now prints `param_1_unit`/`param_2_unit`; check it.
+>   "Run". `$TH exercise resolve` now prints `param_1_unit`/`param_2_unit`; check it.
 > - **`param_2_type` (secondary) is forced to the default too, with one exception:**
 >   if the exercise has no secondary param (default `0`/none) you may add weight
 >   (`1`) — this is how weighted Pull-Ups/Dips work. You cannot swap an exercise's
 >   existing secondary unit, and **`2` (% of max) and `14` (RPE) never stick on a
 >   weight-default lift — both coerce to weight, so the numbers render as pounds.**
 >   Put % or RPE in the `instruction` text instead.
-> - `build_workout.py` reads the local exercise cache and prints a `WARNING` when a
+> - the workout builder reads the local exercise cache and prints a `WARNING` when a
 >   sent param type will be overridden.
 
 **Common param type combos (from 2067 exercises):**
@@ -535,6 +536,53 @@ This creates A1: Back Squat, A2: Front Squat displayed as a superset.
 POST /2.0/coach/calendar/programWorkout/publish
 Body: [142002657]   // array of programWorkout IDs
 ```
+
+#### (Optional) Set the session note — Coach Instructions
+
+The **session-level** instruction (the day-note shown at the top of a session: a
+greeting + workout writeup) is **not** the same as a block's `instruction`. It is
+set with a PUT to the programWorkout, using the same `workout_id` returned at
+create time:
+
+```
+PUT /3.0/coach/workout/{workout_id}
+Body: <the full programWorkout object, with `instruction` set>
+```
+
+Build the body from the session object you already have — the create-time response,
+or a day's entry from `GET /1.0/coach/programs/edit/{cal}/{y}/{m}/{d}` — then set
+`instruction` and replace `sets`/`setKeys`:
+
+```json
+{
+  "id": 151122476,                              // programWorkout id
+  "workout_id": 149544173,
+  "program_id": 2039741,
+  "date": "2026-06-22", "day": 22, "month": 6, "year": 2026,
+  "title": "2026-6-22", "type": 4, "session": 0, "timeline_day": 0,
+  "published": null, "program_type": 0,
+  "logo": "...", "team_logo": null, "program_title": "...", "team_title": "...",
+  "deleted": null, "group_team_subscription_id": null, "date_rescheduled": null,
+  "sets": [715883274, 715883275, 715883276],    // block ids as a LIST (see caveat)
+  "setKeys": [715883274, 715883275, 715883276],
+  "instruction": "Welcome to Week 12...\n\n----\n\nFind a 1RM Strict Press..."
+}
+```
+
+Returns `200`. Notes (verified):
+- **`sets`/`setKeys` must be a flat list of block ids**, sorted by each block's
+  `order`. The edit-GET returns `sets` as a **dict keyed by block id** — convert it.
+- **Setting `instruction` does not publish.** `published` is echoed back exactly as
+  sent (e.g. `null` for a draft), so send the session's current state and set the
+  note *before* publishing if it should stay a draft.
+- Also carries `title`/`type`/`published` — this is the general programWorkout
+  update, not an instruction-only endpoint.
+- Dead ends: `POST /2.0/coach/calendar/saveProgramWorkout` is a 404, and passing
+  `instruction` in the `createWorkoutForDay` body is ignored — this PUT is the path.
+
+the workout builder does this automatically: add a top-level `"instruction"` to the
+spec and it PUTs after the blocks are saved (before publish). Read it back with
+`--read` — the session note prints under "Coach Instructions".
 
 ---
 
@@ -632,7 +680,7 @@ Creates a reusable session template in the library.
 
 Chat between a coach and athletes/teams. A **stream** is a conversation; a
 **comment** is a message in it. Verified against a live
-account (see `messaging_sync.py` / `message_send.py`).
+account (see `$TH message`).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|

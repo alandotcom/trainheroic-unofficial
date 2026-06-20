@@ -92,6 +92,49 @@ describe("buildSession", () => {
 
     expect(publishBody).toEqual([20]);
   });
+
+  it("sets the session note via PUT before publish, without changing publish state", async () => {
+    let putUrl = "";
+    let putBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+        if (url.includes("/createWorkoutForDay/"))
+          return json({ workout_id: 10, id: 20, program_id: 5, published: null });
+        if (url.includes("/saveProgramWorkoutSets")) {
+          return json([
+            { order: 1, id: 101 },
+            { order: 2, id: 102 },
+          ]);
+        }
+        if (url.includes("/saveWorkoutSetExercises")) return json({ success: 1 });
+        if (url.includes("/3.0/coach/workout/")) {
+          putUrl = url;
+          putBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return json({ success: 1 });
+        }
+        return json({});
+      }),
+    );
+
+    await buildSession(new TrainHeroicClient("a@b.com", "pw"), {
+      programId: 5,
+      date: [2026, 6, 22],
+      publish: false,
+      instruction: "Welcome to Week 12",
+      blocks: [
+        { title: "A", exercises: [{ id: 1, reps: [5] }] },
+        { title: "B", exercises: [{ id: 2, reps: [3] }] },
+      ],
+    });
+
+    expect(putUrl).toContain("/3.0/coach/workout/10");
+    expect(putBody?.instruction).toBe("Welcome to Week 12");
+    expect(putBody?.sets).toEqual([101, 102]);
+    expect(putBody?.setKeys).toEqual([101, 102]);
+    expect(putBody?.published).toBe(null);
+  });
 });
 
 describe("readSession", () => {

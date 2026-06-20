@@ -6,9 +6,9 @@ step (step 4) is the one that returns HTTP 500 when fields are missing, so follo
 its field list exactly.
 
 All calls use the coach base (`https://api.trainheroic.com`) with the
-`session-token` header. With the client: `th_client.py post <path> '<json>'`.
+`session-token` header. With the client: `$TH request POST <path> '<json>'`.
 
-> **Prefer the builder.** `scripts/build_workout.py` runs this whole sequence
+> **Prefer the builder.** the workout builder runs this whole sequence
 > from a JSON spec and already fills the 500-prone fields and handles RPE
 > correctly. Reach for the manual steps below only when debugging or doing
 > something the builder does not cover.
@@ -135,6 +135,25 @@ POST /2.0/coach/calendar/programWorkout/publish
 [ 142002657 ]   // array of programWorkout IDs
 ```
 
+## (Optional) Session note — Coach Instructions
+
+The session-level note (the day-note shown at the top of a session — greeting +
+writeup) is set with a PUT to the programWorkout, not on a block. Use the same
+`workout_id` from step 2:
+
+```
+PUT /3.0/coach/workout/{workout_id}
+{ ...the full programWorkout object..., "instruction": "Welcome to Week 12..." }
+```
+
+Build the body from the session object you already have (the create response, or a
+day's entry from `/1.0/coach/programs/edit`), set `instruction`, and replace
+`sets`/`setKeys` with a flat **list** of block ids sorted by `order` — the edit-GET
+returns `sets` as a dict keyed by block id, so convert it. This does **not** publish:
+`published` is echoed back as sent, so set the note **before** step 5 if the session
+should stay a draft. the workout builder does all of this when the spec has a
+top-level `"instruction"`.
+
 ## Reading a session back (verified)
 
 To confirm what was built on a team calendar date:
@@ -192,8 +211,8 @@ sent under the wrong assumed unit silently renders under the exercise's real uni
   (`1`) to an exercise that has no secondary param (default `0`/none) — that is how
   weighted Pull-Ups/Dips work. `2` (% of max) and `14` (RPE) do **not** stick on a
   weight-default lift; both coerce to weight and render as pounds.
-- Check an exercise's real units first: `library_cache.py resolve "<name>"` prints
-  `param_1_unit`/`param_2_unit`. `build_workout.py` also prints a `WARNING` when a
+- Check an exercise's real units first: `$TH exercise resolve "<name>"` prints
+  `param_1_unit`/`param_2_unit`. the workout builder also prints a `WARNING` when a
   sent param type will be overridden, and its read-back labels the stored units.
 
 ## Prescription patterns
@@ -252,7 +271,7 @@ param is locked to another unit):
 `4` Time, `5` Yards, `6` Meters, `7` Feet, `8` Calories, `10` Miles, `12` Inches,
 `15` Watts, `17` Velocity, `18` Seconds.
 
-In `build_workout.py` add `"leaderboard"` to a block: a unit string (`"rounds"`,
+In the workout builder add `"leaderboard"` to a block: a unit string (`"rounds"`,
 `"time"`, `"calories"`, ...) or `{"unit": "time", "lowest_wins": true,
 "instruction": "..."}`. Time/Seconds default to lowest-wins.
 
@@ -264,6 +283,8 @@ athlete's round count (e.g. ~5–6 rounds for a ~10–12 min triplet) and confir
 
 ## Editing and managing sessions
 
+- Set the session note (Coach Instructions): `PUT /3.0/coach/workout/{workoutId}`
+  with the programWorkout object + `instruction` (does not change publish state).
 - Unpublish: `POST /2.0/coach/calendar/programWorkout/unPublish/{programWorkoutId}`
 - Delete: `POST /2.0/coach/calendar/removeProgramWorkout` `{ "programId", "pwId" }`
 - Copy/repeat to a date: `POST /2.0/coach/calendar/copyProgramWorkout`

@@ -85,16 +85,18 @@ export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void 
       description:
         "Build an UNPUBLISHED session from a spec (program -> session -> blocks -> exercises). " +
         "Two exercises in one block become a superset. Add a block 'leaderboard' for a Red-Zone " +
-        "score. Returns the draft ids, a read-back, and unit advisories. Review, then workout_publish.",
+        "score, or a top-level 'instruction' for the session note (Coach Instructions). Returns " +
+        "the draft ids, a read-back, and unit advisories. Review, then workout_publish.",
       inputSchema: {
         programId: z.number(),
         date: z.string().optional(),
         timelineDay: z.number().optional(),
         blocks: z.array(blockSpec),
+        instruction: z.string().optional(),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
-    ({ programId, date, timelineDay, blocks }) =>
+    ({ programId, date, timelineDay, blocks, instruction }) =>
       attempt(async () => {
         if (date === undefined && timelineDay === undefined) {
           return errorResult("Provide either date (YYYY-M-D) or timelineDay.");
@@ -103,6 +105,7 @@ export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void 
         const opts: BuildOptions = { programId, blocks: typed, publish: false };
         if (date !== undefined) opts.date = parseDate(date);
         if (timelineDay !== undefined) opts.timelineDay = timelineDay;
+        if (instruction !== undefined) opts.instruction = instruction;
 
         const advisories = await collectAdvisories(typed, ctx.index);
         const built = await buildSession(ctx.client, opts);
