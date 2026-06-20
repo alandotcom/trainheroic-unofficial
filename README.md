@@ -1,73 +1,70 @@
-# trainheroic-skill
+# trainheroic-unofficial
 
-[![skills.sh](https://skills.sh/b/alandotcom/trainheroic-skill)](https://skills.sh/alandotcom/trainheroic-skill)
+An unofficial TypeScript toolkit for the [TrainHeroic](https://www.trainheroic.com/)
+coach/athlete REST API. The API is undocumented, so shapes are reverse-engineered and may
+change. One shared tool layer ships in three shapes:
 
-An [Agent Skill](https://agentskills.io/) for the TrainHeroic
-coach/athlete REST API. It authenticates, caches the session, resolves exercise
-IDs locally, builds and publishes workouts from a JSON spec, and ships a full
-endpoint reference.
+- **Remote MCP server** on Cloudflare Workers — multi-tenant, OAuth 2.1, D1-backed. Each
+  coach logs in and connects an MCP client (Claude and others).
+- **Local MCP server** over stdio — single user, no database, credentials from the
+  environment. Launch it from an MCP client such as Claude Desktop.
+- **CLI** — `trainheroic <command>` for scripting the same operations from a shell.
 
-## Skill: `trainheroic-api`
-
-Call the TrainHeroic coaching API to manage athletes, teams, programs, sessions,
-exercises, and analytics.
-
-**Use when:**
-
-- Authenticating against TrainHeroic or automating coaching tasks
-- Building workouts or session templates, or publishing to a team calendar
-- Creating teams, athletes, or custom exercises
-- Resolving exercise names to IDs
-- Pulling readiness, 1RM, training-summary, compliance, or other analytics
+It authenticates, caches the session, resolves exercise names to IDs, builds and publishes
+workouts from a JSON spec, manages athletes/teams/programs, reads analytics, and handles
+messaging.
 
 ## Layout
 
 ```
-skills/
-  trainheroic-api/
-    SKILL.md                 # entry point: auth, scripts, gotchas
-    scripts/
-      th_client.py           # authenticated client (login, session cache, requests)
-      build_workout.py       # build a session from a JSON spec (whole flow)
-      library_cache.py       # local SQLite store: exercise mirror (name -> id) + sync scaffolding
-    references/
-      api-reference.md        # full endpoint catalog + request/response shapes
-      workout-creation.md     # the multi-step workout build, with verified gotchas
-      data-warehouse.md       # the local SQLite store: zones, cursors, conventions
-skills.sh.json               # skills.sh repo-page grouping
+mcp/                       pnpm workspace (the active project; Node >= 22, pnpm 10)
+  packages/
+    dto/                   zod schemas / DTOs — the single source of truth for shapes
+    js/                    runtime-agnostic SDK (client, auth, workout encoder, exercises)
+    core/                  shared MCP tool layer used by both servers
+    local/                 local single-user stdio MCP server (no DB, no Cloudflare)
+    cloudflare/            hosted multi-tenant Worker (OAuth + D1 + Durable Objects)
+    cli/                   command-line tool over the SDK
+  README.md                server-focused docs (auth model, tool catalog, dev, storage)
+docs/                      design plan + MCP spec-compliance notes
+skills/trainheroic-api/    legacy Python Agent Skill, superseded by the CLI
 ```
 
-## Install
+## Getting started
 
-Browse and install from the skills.sh page linked above, or copy the skill into a
-project manually:
+The toolkit lives in `mcp/`. See [`mcp/README.md`](mcp/README.md) for the full picture:
+the two-layer auth model, the tool catalog, local development, storage, and security
+notes. Deployment of the hosted Worker is in
+[`mcp/packages/cloudflare/DEPLOY.md`](mcp/packages/cloudflare/DEPLOY.md).
 
 ```bash
-cp -R skills/trainheroic-api /path/to/project/.claude/skills/
+cd mcp
+pnpm install
+
+# Local single-user MCP server over stdio:
+TRAINHEROIC_EMAIL="coach@example.com" TRAINHEROIC_PASSWORD="..." \
+  pnpm --filter @trainheroic-unofficial/coach-mcp start
+
+# CLI:
+TRAINHEROIC_EMAIL="coach@example.com" TRAINHEROIC_PASSWORD="..." \
+  pnpm --filter @trainheroic-unofficial/cli start whoami
+
+# Hosted Worker, local dev (workerd + Miniflare; no Cloudflare account needed):
+cd packages/cloudflare && pnpm db:migrate:local && pnpm dev   # http://localhost:8787/mcp
 ```
 
-(This repo keeps `.claude/skills/trainheroic-api` as a symlink to `skills/trainheroic-api`
-so the skill is active when working in this repo with Claude Code.)
+Credentials always come from `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD`. TrainHeroic
+issues no refresh token, so the client re-logs in with the stored credentials when the
+~1-2h session expires. Local session and exercise-cache state is written under
+`~/.trainheroic/`, never in the repo.
 
-## Auth
+## Legacy skill
 
-Credentials come from the environment; the client caches the session at
-`~/.trainheroic/session.json` (outside the repo) and re-authenticates on expiry.
+`skills/trainheroic-api/` is the original Python [Agent Skill](https://agentskills.io/) for
+the same API. It still works, but new work goes to the TypeScript CLI. The repo keeps
+`.claude/skills/trainheroic-api` as a symlink to it so the skill stays active in this repo.
 
-```bash
-export TRAINHEROIC_EMAIL="coach@example.com"
-export TRAINHEROIC_PASSWORD="..."
-```
+## Disclaimer
 
-## Quick start
-
-```bash
-SKILL=skills/trainheroic-api
-
-python3 $SKILL/scripts/th_client.py whoami
-python3 $SKILL/scripts/library_cache.py resolve "Back Squat"
-python3 $SKILL/scripts/build_workout.py --program <calendarId> --date 2026-6-22 --replace day.json
-```
-
-See `skills/trainheroic-api/SKILL.md` for full usage and the `references/` for the
-API surface.
+Unofficial and not affiliated with or endorsed by TrainHeroic. Use against your own
+account, at your own risk.

@@ -1,5 +1,7 @@
 // Pure helpers for the exercise store. No I/O, so they are unit-testable directly.
 
+import type { ExerciseRow, ExerciseView, ResolveResult } from "@trainheroic-unofficial/dto";
+
 /**
  * Display labels for TrainHeroic parameter types. The unit is FIXED PER EXERCISE
  * (the API forces param_1_type/param_2_type back to the library default on save), so
@@ -54,21 +56,6 @@ export function unitLabel(paramType: unknown): string | null {
   if (t === null) return null;
   return PARAM_UNIT[t] ?? null;
 }
-
-export type ExerciseRow = {
-  id: number;
-  title: string;
-  param_1_type: number | null;
-  param_2_type: number | null;
-  can_edit: number;
-  user_id: number | null;
-  use_count: number;
-};
-
-export type ExerciseView = ExerciseRow & {
-  param_1_unit: string | null;
-  param_2_unit: string | null;
-};
 
 /** Annotate a row with human-readable units for display. */
 export function withUnits(row: ExerciseRow): ExerciseView {
@@ -156,8 +143,6 @@ export function chunk<T>(items: readonly T[], size: number): T[][] {
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
 }
-
-export type ResolveResult = { match: ExerciseView | null; candidates: ExerciseView[] };
 
 /**
  * The exercise-library surface the tools depend on, so the tools work over either a

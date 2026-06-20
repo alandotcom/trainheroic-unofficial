@@ -1,12 +1,16 @@
 // Imperative workout flow: create -> add blocks -> add exercises -> (set note) -> publish,
 // plus read-back and removal.
 
-import type { BlockSpec } from "@trainheroic-unofficial/dto";
+import type {
+  BlockSpec,
+  ReadBlock,
+  ReadExercise,
+  ReadResult,
+  WorkoutDate,
+} from "@trainheroic-unofficial/dto";
 import type { TrainHeroicClient } from "./client";
 import { coerceInt, unitLabel } from "./exercise-util";
 import { buildBlockPayload, LEADERBOARD_LABEL, makeExercise } from "./workout-encode";
-
-export type WorkoutDate = readonly [number, number, number];
 
 export type BuildOptions = {
   programId: number;
@@ -116,31 +120,6 @@ export async function publishSession(client: TrainHeroicClient, pwId: number): P
 function str(value: unknown): string {
   return value === undefined || value === null ? "" : String(value);
 }
-
-export type ReadExercise = {
-  order: number;
-  title: string;
-  reps: string[];
-  primaryUnit: string | null;
-  load: string[];
-  loadUnit: string | null;
-  instruction: string;
-};
-
-export type ReadBlock = {
-  order: number;
-  title: string;
-  leaderboard: string | null;
-  exercises: ReadExercise[];
-};
-
-export type ReadResult = {
-  pwId: number;
-  date: string;
-  published: unknown;
-  instruction: string;
-  blocks: ReadBlock[];
-};
 
 export async function readSession(
   client: TrainHeroicClient,

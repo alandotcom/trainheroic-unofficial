@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { commentDraftSchema } from "@trainheroic-unofficial/dto";
 import {
   buildCommentPayload,
   deleteComment,
@@ -52,7 +53,7 @@ function registerReads(server: McpServer, ctx: ToolContext): void {
     {
       title: "Draft a message (preview only)",
       description: "Preview the exact payload and target WITHOUT sending. Always safe.",
-      inputSchema: { streamId: idParam, text: z.string().min(1), replyTo: idParam.optional() },
+      inputSchema: commentDraftSchema.shape,
       annotations: READ,
     },
     ({ streamId, text, replyTo }) =>
@@ -76,12 +77,7 @@ function registerWrites(server: McpServer, ctx: ToolContext): void {
       description:
         "Send a chat message — ATHLETE-FACING and immediate (no draft state on the server). " +
         "Requires confirmation (elicitation, or confirm:true). Prefer message_draft first.",
-      inputSchema: {
-        streamId: idParam,
-        text: z.string().min(1),
-        replyTo: idParam.optional(),
-        confirm: z.boolean().optional(),
-      },
+      inputSchema: { ...commentDraftSchema.shape, confirm: z.boolean().optional() },
       annotations: DESTRUCTIVE,
     },
     ({ streamId, text, replyTo, confirm }, extra) =>

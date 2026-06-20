@@ -2,7 +2,8 @@
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 import { parseArgs, type ParseArgsConfig } from "node:util";
-import { workoutSpecSchema } from "@trainheroic-unofficial/dto";
+import type { ZodType } from "zod";
+import { exerciseCreateSchema, workoutSpecSchema } from "@trainheroic-unofficial/dto";
 import {
   type ApiBase,
   type BlockSpec,
@@ -74,6 +75,18 @@ function toInt(value: string, label: string): number {
   const n = Number(value);
   if (!Number.isFinite(n)) fail(`${label} must be a number, got "${value}".`);
   return n;
+}
+
+/** Validate input against a dto schema, failing with a readable message on mismatch. */
+function validate<T>(schema: ZodType<T>, value: unknown, label: string): T {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+      .join("; ");
+    fail(`invalid ${label} — ${issues}`);
+  }
+  return result.data;
 }
 
 function parse(args: string[], options: ParseArgsConfig["options"]): ReturnType<typeof parseArgs> {
@@ -182,7 +195,8 @@ async function cmdExercise(client: TrainHeroicClient, rest: string[]): Promise<v
     case "create": {
       const { values, positionals } = parse(a, { file: { type: "string" } });
       const body = await jsonInput(positionals[0], values.file as string | undefined);
-      return out(await lib.create(body as Record<string, unknown>));
+      const exercise = validate(exerciseCreateSchema, body, "exercise");
+      return out(await lib.create(exercise as Record<string, unknown>));
     }
     case "forget": {
       const { values, positionals } = parse(a, { yes: { type: "boolean" } });
@@ -219,16 +233,11 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
       }
       const parsed = await jsonInput(positionals[0], values.file as string | undefined);
       // Accept a bare blocks array or a {blocks, instruction} object; validate strictly.
-      const validated = workoutSpecSchema.safeParse(
+      const spec = validate(
+        workoutSpecSchema,
         Array.isArray(parsed) ? { blocks: parsed } : parsed,
+        "workout spec",
       );
-      if (!validated.success) {
-        const issues = validated.error.issues
-          .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
-          .join("; ");
-        fail(`invalid workout spec — ${issues}`);
-      }
-      const spec = validated.data;
       const publish = values.publish === true;
       if (publish && values.yes !== true)
         fail("publishing is athlete-facing; add --yes to build and publish.");

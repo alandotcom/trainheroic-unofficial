@@ -1,13 +1,11 @@
+import type { ExerciseRow, ExerciseView, ResolveResult } from "@trainheroic-unofficial/dto";
 import type { TrainHeroicClient } from "./client";
 import {
   asExerciseList,
   buildSearchText,
   coerceInt,
   type ExerciseIndex,
-  type ExerciseRow,
-  type ExerciseView,
   rankSearch,
-  type ResolveResult,
   unitLabel,
   unwrapEnvelope,
   withUnits,
