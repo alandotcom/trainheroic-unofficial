@@ -2,6 +2,7 @@
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 import { parseArgs, type ParseArgsConfig } from "node:util";
+import { workoutSpecSchema } from "@trainheroic-unofficial/dto";
 import {
   type ApiBase,
   type BlockSpec,
@@ -217,24 +218,27 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
         fail("provide --date YYYY-M-D or --timeline-day <n>.");
       }
       const parsed = await jsonInput(positionals[0], values.file as string | undefined);
-      const blocks = (Array.isArray(parsed) ? parsed : (parsed as { blocks?: unknown }).blocks) as
-        | BlockSpec[]
-        | undefined;
-      if (!Array.isArray(blocks))
-        fail("spec must be a blocks array, or an object with a blocks array.");
-      const instruction = Array.isArray(parsed)
-        ? undefined
-        : (parsed as { instruction?: unknown }).instruction;
+      // Accept a bare blocks array or a {blocks, instruction} object; validate strictly.
+      const validated = workoutSpecSchema.safeParse(
+        Array.isArray(parsed) ? { blocks: parsed } : parsed,
+      );
+      if (!validated.success) {
+        const issues = validated.error.issues
+          .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+          .join("; ");
+        fail(`invalid workout spec — ${issues}`);
+      }
+      const spec = validated.data;
       const publish = values.publish === true;
       if (publish && values.yes !== true)
         fail("publishing is athlete-facing; add --yes to build and publish.");
-      const opts: BuildOptions = { programId, blocks, publish };
+      const opts: BuildOptions = { programId, blocks: spec.blocks, publish };
       if (values.date !== undefined) opts.date = parseDate(values.date as string);
       if (values["timeline-day"] !== undefined) {
         opts.timelineDay = toInt(values["timeline-day"] as string, "--timeline-day");
       }
-      if (typeof instruction === "string") opts.instruction = instruction;
-      const advice = await advisories(library(client), blocks);
+      if (spec.instruction !== undefined) opts.instruction = spec.instruction;
+      const advice = await advisories(library(client), spec.blocks);
       const built = await buildSession(client, opts);
       const readback = opts.date
         ? await readSession(client, programId, opts.date, built.pwId)

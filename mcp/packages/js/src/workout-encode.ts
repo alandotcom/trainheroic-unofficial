@@ -3,6 +3,7 @@
 // HTTP 500), keeps RPE out of structured params (the API coerces it to weight), and
 // encodes Red-Zone leaderboards.
 
+import type { BlockSpec, ExerciseSpec } from "@trainheroic-unofficial/dto";
 import {
   PARAM_NONE,
   PARAM_PCT_MAX,
@@ -11,31 +12,6 @@ import {
   PARAM_WEIGHT,
   unitLabel,
 } from "./exercise-util";
-
-export type ExerciseSpec = {
-  id: number | string;
-  title?: string;
-  reps?: number | string | Array<number | string>;
-  sets?: number;
-  weight?: number | number[];
-  rpe?: number | string;
-  instr?: string;
-  param_1_type?: number;
-  param_2_type?: number;
-};
-
-export type LeaderboardSpec =
-  | string
-  | number
-  | { unit?: string | number; type?: string | number; lowest_wins?: boolean; instruction?: string };
-
-export type BlockSpec = {
-  title: string;
-  type?: number;
-  instruction?: string;
-  leaderboard?: LeaderboardSpec;
-  exercises: ExerciseSpec[];
-};
 
 // Red-Zone leaderboard unit -> redzone_type. Values from the coach app bundle.
 export const LEADERBOARD_TYPE: Readonly<Record<string, number>> = {

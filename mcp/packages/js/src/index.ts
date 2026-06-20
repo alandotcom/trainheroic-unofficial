@@ -1,3 +1,4 @@
+export * from "@trainheroic-unofficial/dto";
 export * from "./auth";
 export * from "./client";
 export * from "./exercise-util";

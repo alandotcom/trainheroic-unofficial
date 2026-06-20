@@ -1,49 +1,19 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { type BlockSpec, blockSpecSchema } from "@trainheroic-unofficial/dto";
 import type { ExerciseIndex } from "@trainheroic-unofficial/js";
-import { type BlockSpec, unitAdvisory } from "@trainheroic-unofficial/js";
 import {
   buildSession,
   type BuildOptions,
   publishSession,
   readSession,
   removeSession,
+  unitAdvisory,
   type WorkoutDate,
 } from "@trainheroic-unofficial/js";
 import { confirmGate, NOT_CONFIRMED } from "../confirm";
 import { attempt, errorResult, jsonResult } from "../context";
 import type { ToolContext } from "../context";
-
-const exerciseSpec = z.object({
-  id: z.union([z.number(), z.string()]),
-  title: z.string().optional(),
-  reps: z.union([z.number(), z.string(), z.array(z.union([z.number(), z.string()]))]).optional(),
-  sets: z.number().optional(),
-  weight: z.union([z.number(), z.array(z.number())]).optional(),
-  rpe: z.union([z.number(), z.string()]).optional(),
-  instr: z.string().optional(),
-  param_1_type: z.number().optional(),
-  param_2_type: z.number().optional(),
-});
-
-const leaderboardSpec = z.union([
-  z.string(),
-  z.number(),
-  z.object({
-    unit: z.union([z.string(), z.number()]).optional(),
-    type: z.union([z.string(), z.number()]).optional(),
-    lowest_wins: z.boolean().optional(),
-    instruction: z.string().optional(),
-  }),
-]);
-
-const blockSpec = z.object({
-  title: z.string(),
-  type: z.number().optional(),
-  instruction: z.string().optional(),
-  leaderboard: leaderboardSpec.optional(),
-  exercises: z.array(exerciseSpec),
-});
 
 function parseDate(s: string): WorkoutDate {
   const parts = s.split("-").map((p) => Number(p));
@@ -91,7 +61,7 @@ export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void 
         programId: z.number(),
         date: z.string().optional(),
         timelineDay: z.number().optional(),
-        blocks: z.array(blockSpec),
+        blocks: z.array(blockSpecSchema),
         instruction: z.string().optional(),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },

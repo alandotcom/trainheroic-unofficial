@@ -14,7 +14,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@trainheroic-unofficial/js": "workspace:*"
+    "@trainheroic-unofficial/dto": "workspace:*",
+    "@trainheroic-unofficial/js": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",
