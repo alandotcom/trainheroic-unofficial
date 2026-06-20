@@ -47,6 +47,7 @@ These scripts are package-local (not at the workspace root).
 
 ```bash
 pnpm dev                 # wrangler dev (local workerd + Miniflare)
+pnpm inspect             # MCP Inspector UI; connect it to http://localhost:8787/mcp (needs pnpm dev)
 pnpm deploy              # wrangler deploy
 pnpm cf-typegen          # wrangler types -> worker-configuration.d.ts
 pnpm db:migrate:local    # migrations against the local D1

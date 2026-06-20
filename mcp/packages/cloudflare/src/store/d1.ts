@@ -63,11 +63,46 @@ export async function runGroups(
   }
 }
 
-/** Lazily resolve the coach's org_id (the tenant key) via /user/simple. */
+/**
+ * Resolve the coach's org_id (the tenant key) via /user/simple. Throws when it cannot be
+ * determined — a failed lookup must never silently become a real-looking id (0), or two
+ * tenants would collapse onto one shared partition. The caller must not cache a thrown
+ * result, so a transient failure is retried on the next call.
+ */
 export async function resolveOrgId(
   request: (method: string, path: string) => Promise<{ ok: boolean; data: unknown }>,
 ): Promise<number> {
   const res = await request("GET", "/user/simple");
-  if (!res.ok || typeof res.data !== "object" || res.data === null) return 0;
-  return coerceInt((res.data as Record<string, unknown>).org_id) ?? 0;
+  if (!res.ok || typeof res.data !== "object" || res.data === null) {
+    throw new Error("Could not resolve TrainHeroic org: /user/simple did not return a profile.");
+  }
+  const org = coerceInt((res.data as Record<string, unknown>).org_id);
+  if (org === null || org <= 0) {
+    throw new Error("Could not resolve TrainHeroic org_id from /user/simple.");
+  }
+  return org;
+}
+
+/**
+ * Map over items with a bounded number of concurrent workers. Used to fan out upstream
+ * fetches without bursting the host (or the Worker subrequest budget) all at once.
+ */
+export async function mapPool<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = Array.from({ length: items.length });
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      const item = items[i] as T;
+      out[i] = await fn(item, i);
+    }
+  };
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(workers);
+  return out;
 }

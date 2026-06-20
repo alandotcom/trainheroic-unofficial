@@ -9,6 +9,7 @@
   "files": ["dist"],
   "scripts": {
     "start": "tsx src/server.ts",
+    "inspect": "npx @modelcontextprotocol/inspector -e TRAINHEROIC_EMAIL=\"$TRAINHEROIC_EMAIL\" -e TRAINHEROIC_PASSWORD=\"$TRAINHEROIC_PASSWORD\" tsx src/server.ts",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"

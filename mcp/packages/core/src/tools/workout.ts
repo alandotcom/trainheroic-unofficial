@@ -1,50 +1,17 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { type BlockSpec, blockSpecSchema } from "@trainheroic-unofficial/dto";
-import type { ExerciseIndex } from "@trainheroic-unofficial/js";
+import { type BlockSpec, blockSpecSchema, parseWorkoutDate } from "@trainheroic-unofficial/dto";
 import {
   buildSession,
   type BuildOptions,
+  collectAdvisories,
   publishSession,
   readSession,
   removeSession,
-  unitAdvisory,
-  type WorkoutDate,
 } from "@trainheroic-unofficial/js";
 import { confirmGate, NOT_CONFIRMED } from "../confirm";
 import { attempt, errorResult, jsonResult } from "../context";
 import type { ToolContext } from "../context";
-
-function parseDate(s: string): WorkoutDate {
-  const parts = s.split("-").map((p) => Number(p));
-  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) {
-    throw new Error(`Invalid date '${s}'; expected YYYY-M-D.`);
-  }
-  return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0] as const;
-}
-
-async function collectAdvisories(
-  blocks: BlockSpec[],
-  index: ExerciseIndex,
-): Promise<{ notes: string[]; warnings: string[] }> {
-  const pairs = blocks.flatMap((b) => b.exercises.map((ex) => ({ block: b, ex })));
-  const defaults = await Promise.all(
-    pairs.map((p) => {
-      const id = Number(p.ex.id);
-      return Number.isFinite(id) ? index.defaults(id) : Promise.resolve(null);
-    }),
-  );
-  const notes: string[] = [];
-  const warnings: string[] = [];
-  pairs.forEach((p, i) => {
-    const def = defaults[i];
-    if (!def) return;
-    const advisory = unitAdvisory(p.block.title, p.ex, def);
-    notes.push(...advisory.notes);
-    warnings.push(...advisory.warnings);
-  });
-  return { notes, warnings };
-}
 
 /** Workout building, read-back, publishing, and removal. */
 export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void {
@@ -73,7 +40,7 @@ export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void 
         }
         const typed = blocks as BlockSpec[];
         const opts: BuildOptions = { programId, blocks: typed, publish: false };
-        if (date !== undefined) opts.date = parseDate(date);
+        if (date !== undefined) opts.date = parseWorkoutDate(date);
         if (timelineDay !== undefined) opts.timelineDay = timelineDay;
         if (instruction !== undefined) opts.instruction = instruction;
 
@@ -102,7 +69,7 @@ export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void 
     },
     ({ programId, date, pwId }) =>
       attempt(async () =>
-        jsonResult(await readSession(ctx.client, programId, parseDate(date), pwId)),
+        jsonResult(await readSession(ctx.client, programId, parseWorkoutDate(date), pwId)),
       ),
   );
 
@@ -133,7 +100,7 @@ export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void 
         await publishSession(ctx.client, pwId);
         return jsonResult({
           published: pwId,
-          readback: await readSession(ctx.client, programId, parseDate(date), pwId),
+          readback: await readSession(ctx.client, programId, parseWorkoutDate(date), pwId),
         });
       }),
   );

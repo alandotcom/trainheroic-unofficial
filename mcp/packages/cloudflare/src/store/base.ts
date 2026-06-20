@@ -18,7 +18,12 @@ export abstract class OrgScopedStore {
 
   protected async org(): Promise<number> {
     if (this.#orgId === null) {
+      // resolveOrgId throws on an unresolvable org, so a failure leaves #orgId null
+      // (retried next call) rather than caching a bogus tenant key.
       this.#orgId = await resolveOrgId((method, path) => this.client.request(method, path));
+    }
+    if (this.#orgId <= 0) {
+      throw new Error("Refusing to scope a query to a non-positive org id.");
     }
     return this.#orgId;
   }

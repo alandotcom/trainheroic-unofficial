@@ -110,6 +110,30 @@ describe("ExerciseStore safety + write-through", () => {
     expect(await store.get(200)).not.toBeNull();
   });
 
+  it("does NOT prune when a full re-sync returns fewer than the floor", async () => {
+    const gen1 = Array.from({ length: 120 }, (_, i) => ({
+      id: i + 1,
+      title: `Ex ${i + 1}`,
+      param_1_type: 3,
+    }));
+    mockApi(gen1);
+    const store = newStore();
+    await store.refresh();
+
+    // A degraded response (30 rows, below PRUNE_FLOOR) must not wipe the other 90.
+    const partial = Array.from({ length: 30 }, (_, i) => ({
+      id: i + 1,
+      title: `Ex ${i + 1}`,
+      param_1_type: 3,
+    }));
+    mockApi(partial);
+    const result = await store.refresh();
+
+    expect(result.pruned).toBe(0);
+    // A row only present in the first (full) sync still resolves.
+    expect(await store.get(100)).not.toBeNull();
+  });
+
   it("write-through upserts and forgets a single exercise", async () => {
     mockApi([{ id: 1, title: "Back Squat", param_1_type: 3 }]);
     const store = newStore();

@@ -73,7 +73,9 @@ export class TrainHeroicClient {
     let res = await this.#send(method, url, session, options.body);
 
     if (res.status === 401 || res.status === 403) {
-      this.#sessionId = null;
+      // Invalidate only if no concurrent request already swapped in a fresh session;
+      // otherwise a late 401 responder would wipe a good token and re-trigger login.
+      if (this.#sessionId === session) this.#sessionId = null;
       session = await this.#ensureSession();
       res = await this.#send(method, url, session, options.body);
     }

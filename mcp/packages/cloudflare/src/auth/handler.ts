@@ -114,6 +114,13 @@ app.post("/authorize", async (c) => {
   const password = field("password");
 
   const allowed = allowlist(c);
+  if (allowed.length === 0) {
+    // Open-registration default: an unset/empty ALLOWED_EMAILS lets any TrainHeroic coach
+    // authorize this server. Log it loudly so a private deploy notices the door is open.
+    console.warn(
+      "ALLOWED_EMAILS is empty: open registration in effect — any TrainHeroic coach can authorize this server.",
+    );
+  }
   if (allowed.length > 0 && !allowed.includes(email.toLowerCase())) {
     return renderLogin(
       c,
@@ -153,8 +160,10 @@ app.post("/authorize", async (c) => {
     )
       .bind(session.thUserId, null, email, session.role, Date.now(), Date.now())
       .run();
-  } catch {
-    /* registry write is best-effort */
+  } catch (err) {
+    // Best-effort: never block login, but log so a persistently-failing registry write
+    // (e.g. schema drift) is diagnosable. No credentials here — thUserId only.
+    console.warn("account registry upsert failed (non-fatal)", { thUserId: session.thUserId, err });
   }
 
   deleteCookie(c, CSRF_COOKIE, { path: "/" });

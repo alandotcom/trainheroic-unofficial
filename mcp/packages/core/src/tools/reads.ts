@@ -112,7 +112,8 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
     "get_program",
     {
       title: "Get program detail",
-      description: "Full program structure (blocks, sessions) by program id.",
+      description:
+        "Full nested program structure (blocks + sessions) live from the API, by program id.",
       inputSchema: { programId: idParam },
       annotations: READ,
     },

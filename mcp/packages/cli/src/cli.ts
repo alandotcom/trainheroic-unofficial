@@ -6,10 +6,10 @@ import type { ZodType } from "zod";
 import { exerciseCreateSchema, workoutSpecSchema } from "@trainheroic-unofficial/dto";
 import {
   type ApiBase,
-  type BlockSpec,
   buildSession,
   type BuildOptions,
   buildCommentPayload,
+  collectAdvisories,
   deleteComment,
   ExerciseLibrary,
   fetchStreams,
@@ -19,7 +19,6 @@ import {
   removeSession,
   sendComment,
   TrainHeroicClient,
-  unitAdvisory,
 } from "@trainheroic-unofficial/js";
 import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
 import { looksLikeJson, parseDate } from "./parse";
@@ -130,25 +129,6 @@ function library(client: TrainHeroicClient): ExerciseLibrary {
   return new ExerciseLibrary(client, new JsonFileLibraryCache());
 }
 
-async function advisories(
-  lib: ExerciseLibrary,
-  blocks: BlockSpec[],
-): Promise<{ notes: string[]; warnings: string[] }> {
-  const notes: string[] = [];
-  const warnings: string[] = [];
-  for (const block of blocks) {
-    for (const ex of block.exercises) {
-      const id = Number(ex.id);
-      const def = Number.isFinite(id) ? await lib.defaults(id) : null;
-      if (!def) continue;
-      const a = unitAdvisory(block.title, ex, def);
-      notes.push(...a.notes);
-      warnings.push(...a.warnings);
-    }
-  }
-  return { notes, warnings };
-}
-
 async function cmdRequest(client: TrainHeroicClient, rest: string[]): Promise<void> {
   const { values, positionals } = parse(rest, {
     base: { type: "string" },
@@ -247,7 +227,7 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
         opts.timelineDay = toInt(values["timeline-day"] as string, "--timeline-day");
       }
       if (spec.instruction !== undefined) opts.instruction = spec.instruction;
-      const advice = await advisories(library(client), spec.blocks);
+      const advice = await collectAdvisories(spec.blocks, library(client));
       const built = await buildSession(client, opts);
       const readback = opts.date
         ? await readSession(client, programId, opts.date, built.pwId)
