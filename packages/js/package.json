@@ -4,7 +4,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/alandotcom/trainheroic-skill.git",
+    "url": "https://github.com/alandotcom/trainheroic-unofficial.git",
     "directory": "packages/js"
   },
   "description": "Unofficial TypeScript SDK for the TrainHeroic coaching API.",
