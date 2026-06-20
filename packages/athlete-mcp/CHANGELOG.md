@@ -1,4 +1,4 @@
-# @trainheroic-unofficial/js
+# @trainheroic-unofficial/athlete-mcp
 
 ## 0.4.0
 
@@ -21,10 +21,5 @@
 ### Patch Changes
 
 - Updated dependencies [92a422f]
-  - @trainheroic-unofficial/dto@0.4.0
-
-## 0.3.0
-
-### Patch Changes
-
-- @trainheroic-unofficial/dto@0.3.0
+  - @trainheroic-unofficial/core@0.4.0
+  - @trainheroic-unofficial/js@0.4.0
