@@ -135,9 +135,13 @@ replace: to rebuild a date, remove the old session first with
 
 Two exercises in one block become a superset. Add `"leaderboard": "rounds"` (or
 `reps`/`time`/`calories`/`meters`/… or `{"unit":"time","lowest_wins":true}`) to a block to
-make it a scored Red Zone leaderboard (trophy + "FOR <UNIT>"). For an **AMRAP**, score by
-`rounds`/`reps` and program multiple sets (one per expected round); for **"for time"**,
-score by `time`. Ask the coach when the scheme or score is ambiguous rather than guessing.
+make it a scored Red Zone leaderboard (trophy + "FOR <UNIT>"). A top-level `"instruction"`
+in the spec sets the session's Coach Instructions (the day-note above the blocks;
+`PUT /3.0/coach/workout/{id}`, applied after the blocks save and without publishing — a
+draft stays a draft). The read-back shows it under "Coach Instructions". For an **AMRAP**,
+score by `rounds`/`reps` and program multiple sets (one per expected round); for **"for
+time"**, score by `time`. Ask the coach when the scheme or score is ambiguous rather than
+guessing.
 
 Load `references/workout-creation.md` before building manually or for something the builder
 does not cover (drop sets, pyramids, %-of-max, the raw field list, or the parameter-type

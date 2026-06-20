@@ -1,5 +1,5 @@
-// Imperative workout flow: create -> add blocks -> add exercises -> publish, plus
-// read-back and removal. Mirrors build_workout.py's network sequence.
+// Imperative workout flow: create -> add blocks -> add exercises -> (set note) -> publish,
+// plus read-back and removal.
 
 import type { TrainHeroicClient } from "./client";
 import { coerceInt, unitLabel } from "./exercise-util";
@@ -18,6 +18,8 @@ export type BuildOptions = {
   date?: WorkoutDate;
   timelineDay?: number;
   publish?: boolean;
+  /** Optional session-level note ("Coach Instructions"), set after the blocks save. */
+  instruction?: string;
 };
 
 async function req<T = unknown>(
@@ -47,7 +49,7 @@ export async function buildSession(
   client: TrainHeroicClient,
   opts: BuildOptions,
 ): Promise<{ pwId: number; workoutId: number }> {
-  const sess = await req<{ workout_id: number; id: number }>(client, "POST", createPath(opts), {});
+  const sess = await req<Record<string, unknown>>(client, "POST", createPath(opts), {});
   const workoutId = Number(sess.workout_id);
   const pwId = Number(sess.id);
 
@@ -73,10 +75,34 @@ export async function buildSession(
     payloads.map((p) => req(client, "POST", "/2.0/coach/calendar/saveWorkoutSetExercises", p)),
   );
 
+  // Session note (Coach Instructions). Set before publish so it leaves the draft/published
+  // state untouched — the PUT echoes `published` back as sent.
+  if (opts.instruction !== undefined && opts.instruction !== "") {
+    const blockIds = [...byOrder.entries()].sort((a, b) => a[0] - b[0]).map(([, id]) => id);
+    await setSessionInstruction(client, workoutId, sess, opts.instruction, blockIds);
+  }
+
   if (opts.publish ?? false) {
     await req(client, "POST", "/2.0/coach/calendar/programWorkout/publish", [pwId]);
   }
   return { pwId, workoutId };
+}
+
+/**
+ * Set a session's Coach Instructions (the day-note at the top of a session). `pw` is the
+ * programWorkout object (the create-time response or a day's edit-GET entry). The PUT wants
+ * the whole object back with `instruction` set and `sets`/`setKeys` as a flat list of block
+ * ids. This does NOT change publish state: `published` is sent exactly as it is on `pw`.
+ */
+export async function setSessionInstruction(
+  client: TrainHeroicClient,
+  workoutId: number,
+  pw: Record<string, unknown>,
+  instruction: string,
+  blockIds: number[],
+): Promise<void> {
+  const body = { ...pw, instruction, sets: blockIds, setKeys: blockIds };
+  await req(client, "PUT", `/3.0/coach/workout/${workoutId}`, body);
 }
 
 export async function removeSession(
@@ -112,7 +138,13 @@ export type ReadBlock = {
   exercises: ReadExercise[];
 };
 
-export type ReadResult = { pwId: number; date: string; published: unknown; blocks: ReadBlock[] };
+export type ReadResult = {
+  pwId: number;
+  date: string;
+  published: unknown;
+  instruction: string;
+  blocks: ReadBlock[];
+};
 
 export async function readSession(
   client: TrainHeroicClient,
@@ -138,6 +170,7 @@ export async function readSession(
     pwId,
     date: `${str(pw.year)}-${str(pw.month)}-${str(pw.day)}`,
     published: pw.published,
+    instruction: str(pw.instruction),
     blocks,
   };
 }

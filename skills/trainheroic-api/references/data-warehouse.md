@@ -1,4 +1,12 @@
-# Local store (`library_cache.py`)
+# Warehouse store (design reference)
+
+> **Note.** This documents the warehouse *design* — the exercise mirror plus the
+> programming/messaging history zones, the prune-vs-accumulate rule, `source`
+> provenance, and the per-calendar month-window walk. That warehouse now lives in the
+> hosted MCP server (`@trainheroic-unofficial/cloudflare`, D1). The CLI and the local
+> server cache only the exercise library, to JSON at `~/.trainheroic/library.json`.
+> The SQLite / `library_cache.py` / `*_sync.py` names below are historical; the schema
+> and sync rules still apply to the hosted zones.
 
 `library_cache.py` manages a SQLite database at `~/.trainheroic/library.db`
 (mode 0600, outside any repo). It is both a read-through cache for exercise
