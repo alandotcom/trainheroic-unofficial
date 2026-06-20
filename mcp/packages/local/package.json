@@ -4,14 +4,14 @@
   "description": "Local single-user MCP server for a TrainHeroic coach. No database, no Cloudflare deps.",
   "type": "module",
   "bin": {
-    "trainheroic-coach-mcp": "./dist/server.js"
+    "trainheroic-coach-mcp": "./dist/server.mjs"
   },
   "files": ["dist"],
   "scripts": {
     "start": "tsx src/server.ts",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

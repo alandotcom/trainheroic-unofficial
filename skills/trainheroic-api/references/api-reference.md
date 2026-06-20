@@ -631,7 +631,7 @@ Creates a reusable session template in the library.
 ### Messaging
 
 Chat between a coach and athletes/teams. A **stream** is a conversation; a
-**comment** is a message in it. Reverse-engineered and verified against a live
+**comment** is a message in it. Verified against a live
 account (see `messaging_sync.py` / `message_send.py`).
 
 | Method | Endpoint | Description |

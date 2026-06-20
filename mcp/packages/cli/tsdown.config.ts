@@ -1,9 +1,9 @@
 import { defineConfig } from "tsdown";
 
-// Bundle the workspace packages (core, js) into the published server so installing it
-// pulls only the MCP SDK + zod at runtime, never the Cloudflare deps.
+// Bundle the workspace SDK into the published CLI so installing it pulls no other
+// @trainheroic-unofficial packages and never the Cloudflare deps.
 export default defineConfig({
-  entry: ["src/server.ts"],
+  entry: ["src/cli.ts"],
   format: ["esm"],
   platform: "node",
   dts: false,

@@ -111,7 +111,7 @@ for global. Columns: `cursor` (ISO date / high-water mark), `synced_at`,
 
 - **No API write path for performance history.** Logged sets, readiness, and
   working-max data are produced by the athlete mobile app; they are not creatable
-  or (as far as reverse-engineered) syncable through this coach API. That is why
+  or (as far as is known) syncable through this coach API. That is why
   there is no performance zone here.
 - **Units are per-athlete.** Weights live in each athlete's own unit (metric vs.
   imperial). Normalize before any cross-athlete analytics.
