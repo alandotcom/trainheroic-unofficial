@@ -1,14 +1,10 @@
 // Imperative workout flow: create -> add blocks -> add exercises -> (set note) -> publish,
 // plus read-back and removal.
 
+import type { BlockSpec } from "@trainheroic-unofficial/dto";
 import type { TrainHeroicClient } from "./client";
 import { coerceInt, unitLabel } from "./exercise-util";
-import {
-  type BlockSpec,
-  buildBlockPayload,
-  LEADERBOARD_LABEL,
-  makeExercise,
-} from "./workout-encode";
+import { buildBlockPayload, LEADERBOARD_LABEL, makeExercise } from "./workout-encode";
 
 export type WorkoutDate = readonly [number, number, number];
 
