@@ -11,7 +11,7 @@
     "url": "https://github.com/alandotcom/trainheroic-skill"
   },
   "homepage": "https://github.com/alandotcom/trainheroic-skill",
-  "documentation": "https://github.com/alandotcom/trainheroic-skill/blob/main/mcp/packages/local/README.md",
+  "documentation": "https://github.com/alandotcom/trainheroic-skill/blob/main/packages/coach-mcp/README.md",
   "icon": "icon.png",
   "keywords": ["trainheroic", "coaching", "fitness", "strength", "mcp"],
   "server": {

@@ -4,7 +4,7 @@ A local, single-user MCP server for a TrainHeroic coach. It speaks MCP over stdi
 credentials from the environment, and caches the exercise library on disk. There is no
 OAuth and no database, so it needs nothing beyond Node.
 
-Part of the [trainheroic-unofficial](../../../README.md) workspace. For the hosted,
+Part of the [trainheroic-unofficial](../../README.md) workspace. For the hosted,
 multi-tenant version, see the `cloudflare` package.
 
 ## What it does
@@ -35,7 +35,7 @@ development you can point it at the source through `tsx`:
   "mcpServers": {
     "trainheroic": {
       "command": "npx",
-      "args": ["tsx", "/abs/path/to/mcp/packages/local/src/server.ts"],
+      "args": ["tsx", "/abs/path/to/trainheroic-2/packages/coach-mcp/src/server.ts"],
       "env": { "TRAINHEROIC_EMAIL": "coach@example.com", "TRAINHEROIC_PASSWORD": "..." },
     },
   },

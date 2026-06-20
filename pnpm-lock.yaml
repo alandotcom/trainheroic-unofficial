@@ -89,6 +89,40 @@ importers:
         specifier: ^4.103.0
         version: 4.103.0(@cloudflare/workers-types@4.20260620.1)
 
+  packages/coach-mcp:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@trainheroic-unofficial/core':
+        specifier: workspace:*
+        version: link:../core
+      '@trainheroic-unofficial/js':
+        specifier: workspace:*
+        version: link:../js
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@anthropic-ai/mcpb':
+        specifier: ^2.1.2
+        version: 2.1.2
+      '@types/node':
+        specifier: ^26.0.0
+        version: 26.0.0
+      tsdown:
+        specifier: ^0.22.3
+        version: 0.22.3(tsx@4.22.4)(typescript@6.0.3)
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@26.0.0)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0))
+
   packages/core:
     dependencies:
       '@cfworker/json-schema':
@@ -148,40 +182,6 @@ importers:
       tsdown:
         specifier: ^0.22.3
         version: 0.22.3(tsx@4.22.4)(typescript@6.0.3)
-      vitest:
-        specifier: ^4.1.9
-        version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@26.0.0)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0))
-
-  packages/local:
-    dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
-      '@trainheroic-unofficial/core':
-        specifier: workspace:*
-        version: link:../core
-      '@trainheroic-unofficial/js':
-        specifier: workspace:*
-        version: link:../js
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@anthropic-ai/mcpb':
-        specifier: ^2.1.2
-        version: 2.1.2
-      '@types/node':
-        specifier: ^26.0.0
-        version: 26.0.0
-      tsdown:
-        specifier: ^0.22.3
-        version: 0.22.3(tsx@4.22.4)(typescript@6.0.3)
-      tsx:
-        specifier: ^4.22.4
-        version: 4.22.4
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
       vitest:
         specifier: ^4.1.9
         version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@26.0.0)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0))

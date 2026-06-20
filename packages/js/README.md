@@ -5,7 +5,7 @@ renewal, talks to both TrainHeroic hosts, keeps a searchable exercise library, e
 workouts into the API's payload format, and wraps messaging. It runs in any modern
 JavaScript runtime, including Cloudflare workerd.
 
-Part of the [trainheroic-unofficial](../../../README.md) workspace.
+Part of the [trainheroic-unofficial](../../README.md) workspace.
 
 ## Two entry points
 

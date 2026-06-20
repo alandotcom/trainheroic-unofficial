@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Each package under `mcp/packages/` has its own `CLAUDE.md` and `README.md` with
+Each package under `packages/` has its own `CLAUDE.md` and `README.md` with
 package-specific detail. This file is the workspace-level picture; read it first, then the
 package file for whatever you are touching.
 
@@ -12,14 +12,14 @@ An unofficial TypeScript toolkit for the undocumented TrainHeroic coaching API. 
 tool layer runs in three shapes: a remote multi-tenant MCP server on Cloudflare Workers, a
 local single-user stdio MCP server, and a CLI.
 
-All active code lives in the `mcp/` pnpm workspace.
+All code lives in a single pnpm workspace at the repo root.
 
 ## Commands
 
-Everything below runs inside `mcp/`. It needs Node >= 22 and pnpm 10 (the version is pinned in
-`packageManager`). Run `pnpm install` once.
+Everything below runs from the repo root. It needs Node >= 22 and pnpm 10 (the version is
+pinned in `packageManager`). Run `pnpm install` once.
 
-Workspace-wide scripts live at the `mcp/` root and fan out to every package:
+Workspace-wide scripts live at the repo root and fan out to every package:
 
 ```bash
 pnpm build        # tsdown build of all publishable packages
@@ -75,7 +75,7 @@ The dependency graph runs one direction; nothing lower depends on anything highe
 - **`core`** (`@trainheroic-unofficial/core`): the shared MCP tool layer. Each tool is a
   `registerXxxTools(server, ctx)` function taking a `ToolContext` (`{ client, index }`). Tools
   are defined once here and reused by both servers.
-- **`local`** (`@trainheroic-unofficial/coach-mcp`): the stdio MCP server. It builds a
+- **`coach-mcp`** (`@trainheroic-unofficial/coach-mcp`): the stdio MCP server. It builds a
   `ToolContext` from env credentials and a JSON-file `ExerciseLibrary`, registers the core
   tools, and connects over stdio. No OAuth, no database. Entry: `src/server.ts`.
 - **`cloudflare`** (`@trainheroic-unofficial/cloudflare`): the hosted Worker. OAuth 2.1 via
@@ -117,11 +117,11 @@ storage-specific (the D1 warehouse syncs are the current example).
 ## Conventions
 
 - Build tooling: tsdown for the publishable packages (each has a `tsdown.config.ts`), wrangler
-  for the Worker. Lint and format are oxlint plus oxfmt, configured in `mcp/.oxlintrc.json`
+  for the Worker. Lint and format are oxlint plus oxfmt, configured in `.oxlintrc.json`
   (note `max-lines-per-function` warns at 120). TypeScript is strict with
   `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, and `verbatimModuleSyntax`; the
-  shared compiler options sit in `mcp/tsconfig.base.json`.
+  shared compiler options sit in `tsconfig.base.json`.
 - TrainHeroic state (the session cache and the exercise library JSON) is written under
   `~/.trainheroic/`, never in the repo.
-- The READMEs differ in scope: `mcp/README.md` is the server-focused overview, each package
-  has its own README for detail, and the top-level `README.md` covers the workspace.
+- The root `README.md` is the workspace overview (auth model, tool catalog, local and hosted
+  dev, storage, security); each package has its own README for package-specific detail.

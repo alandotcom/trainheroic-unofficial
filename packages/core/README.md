@@ -5,7 +5,7 @@ servers: the local stdio server (`@trainheroic-unofficial/coach-mcp`) and the ho
 Cloudflare worker (`@trainheroic-unofficial/cloudflare`). Keeping the tools here is what
 makes the two transports behave identically.
 
-Part of the [trainheroic-unofficial](../../../README.md) workspace.
+Part of the [trainheroic-unofficial](../../README.md) workspace.
 
 ## How a server uses it
 

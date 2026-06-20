@@ -17,14 +17,14 @@
   ],
   "kv_namespaces": [
     // Create with: wrangler kv namespace create OAUTH_KV  -> paste the id here.
-    { "binding": "OAUTH_KV", "id": "PLACEHOLDER_OAUTH_KV_ID" }
+    { "binding": "OAUTH_KV", "id": "80dcf1fcbb3c4f3590d9449c39a4ccc0" }
   ],
   "d1_databases": [
     // Create with: wrangler d1 create trainheroic  -> paste the database_id here.
     {
       "binding": "TH_DB",
       "database_name": "trainheroic",
-      "database_id": "PLACEHOLDER_TH_DB_ID",
+      "database_id": "7fb17862-31b9-4013-b601-18bff355038b",
       "migrations_dir": "migrations"
     }
   ],
