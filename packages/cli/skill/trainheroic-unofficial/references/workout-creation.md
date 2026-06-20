@@ -35,17 +35,20 @@ The response and its side-effect loads expose the calendar/program ID (e.g.
 ## Step 2 — Create an empty session on a date
 
 Date-based (team calendar):
+
 ```
 POST /2.0/coach/calendar/workout/createWorkoutForDay/{calendarId}/{year}/{month}/{day}/0
 ```
 
 Timeline-based (relative-day programs):
+
 ```
 POST /2.0/coach/calendar/workout/createWorkoutForTimelineDay/{programId}/{day}/null
 ```
 
 Pass an empty JSON body (`{}`). The response is a session object. Capture two
 IDs from it (verified live):
+
 - `workout_id` — the workout, needed by step 3 for blocks.
 - `id` — the programWorkout id, needed by step 5 to publish (and by
   `removeProgramWorkout` as `pwId`).
@@ -94,12 +97,26 @@ Every exercise object must include the full field set below. Omitting any of the
   "order": 1,
   "param_1_type": 3,
   "param_2_type": 1,
-  "param_1_data_1": "5", "param_1_data_2": "", "param_1_data_3": "",
-  "param_1_data_4": "", "param_1_data_5": "", "param_1_data_6": "",
-  "param_1_data_7": "", "param_1_data_8": "", "param_1_data_9": "", "param_1_data_10": "",
-  "param_2_data_1": "225", "param_2_data_2": "", "param_2_data_3": "",
-  "param_2_data_4": "", "param_2_data_5": "", "param_2_data_6": "",
-  "param_2_data_7": "", "param_2_data_8": "", "param_2_data_9": "", "param_2_data_10": "",
+  "param_1_data_1": "5",
+  "param_1_data_2": "",
+  "param_1_data_3": "",
+  "param_1_data_4": "",
+  "param_1_data_5": "",
+  "param_1_data_6": "",
+  "param_1_data_7": "",
+  "param_1_data_8": "",
+  "param_1_data_9": "",
+  "param_1_data_10": "",
+  "param_2_data_1": "225",
+  "param_2_data_2": "",
+  "param_2_data_3": "",
+  "param_2_data_4": "",
+  "param_2_data_5": "",
+  "param_2_data_6": "",
+  "param_2_data_7": "",
+  "param_2_data_8": "",
+  "param_2_data_9": "",
+  "param_2_data_10": "",
   "workout_set_exercise_template_id": null,
   "no_sets": 0,
   "param_count": 3,
@@ -115,6 +132,7 @@ Every exercise object must include the full field set below. Omitting any of the
 ```
 
 Fields that cause a 500 when missing:
+
 - `set_num` — number of sets (mirror `param_count`)
 - `key` — any unique string in the form `"k::<number>"`
 - `setKey` — equal to `workout_set_id`
@@ -173,22 +191,22 @@ rendered `title`, `instruction`, and `param_*_data_N` values.
 
 ## Parameter types
 
-| Value | Meaning | Display |
-|-------|---------|---------|
-| 0 | None | (no parameter) |
-| 1 | Weight | `225 lb` |
-| 2 | Weight (% of max) | `75%` |
-| 3 | Reps | `5` |
-| 4 | Time (seconds) | `1:00` |
-| 5 | Distance (yards) | `50yd` |
-| 6 | Distance (meters) | `50m` |
-| 7 | Height | inches |
-| 10 | Distance (miles) | miles |
-| 11 | Distance (feet) | feet |
-| 12 | Height (inches) | inches |
-| 13 | Heart Rate | bpm |
-| 14 | RPE | rating |
-| 18 | Time (seconds, alt) | `0:30` |
+| Value | Meaning             | Display        |
+| ----- | ------------------- | -------------- |
+| 0     | None                | (no parameter) |
+| 1     | Weight              | `225 lb`       |
+| 2     | Weight (% of max)   | `75%`          |
+| 3     | Reps                | `5`            |
+| 4     | Time (seconds)      | `1:00`         |
+| 5     | Distance (yards)    | `50yd`         |
+| 6     | Distance (meters)   | `50m`          |
+| 7     | Height              | inches         |
+| 10    | Distance (miles)    | miles          |
+| 11    | Distance (feet)     | feet           |
+| 12    | Height (inches)     | inches         |
+| 13    | Heart Rate          | bpm            |
+| 14    | RPE                 | rating         |
+| 18    | Time (seconds, alt) | `0:30`         |
 
 Most common combos: `p1=3,p2=1` (reps @ weight, e.g. Back Squat), `p1=3,p2=0`
 (reps only / bodyweight, e.g. Push-Up), `p1=3` with `p2` absent (reps only),
@@ -205,7 +223,7 @@ sent under the wrong assumed unit silently renders under the exercise's real uni
 
 - **`param_1_type` (primary): always forced to the exercise default.** You cannot
   change the primary unit at prescribe time. Stock `Run` (id 82) is miles, so a
-  "200 m run" written on `Run` renders as *200 miles*. For meters use a meters-native
+  "200 m run" written on `Run` renders as _200 miles_. For meters use a meters-native
   exercise (`Sprint` 127, `Rowing` 101, `Shuttle Sprint` 42523) or a custom exercise.
 - **`param_2_type` (secondary): forced to the default too, except** you may add weight
   (`1`) to an exercise that has no secondary param (default `0`/none) — that is how
@@ -225,7 +243,7 @@ sent under the wrong assumed unit silently renders under the exercise's real uni
   (e.g. reps `5,3,1,3,5` at weight `185,225,275,225,185`).
 - **Bodyweight**: `param_2_type: 0` and leave every `param_2_data_N` empty.
 - **Weighted bodyweight** (weighted Pull-Up/Dip): add `param_2_type: 1` with loads.
-  Adding weight sticks *only* on exercises whose default secondary is none (`0`).
+  Adding weight sticks _only_ on exercises whose default secondary is none (`0`).
 - **Max / AMRAP reps (verified)**: the rep slots are free text — put the literal
   string `"Max"` (or `"AMRAP"`, `"ME"`) in `param_1_data_N`; it round-trips verbatim
   and you can mix it with numbers (e.g. last set `"Max"`). The builder accepts
@@ -240,17 +258,17 @@ sent under the wrong assumed unit silently renders under the exercise's real uni
 
 ## Common exercise IDs
 
-| ID | Title | p1 | p2 |
-|----|-------|----|----|
-| 1 | Back Squat | 3 | 1 |
-| 3 | Front Squat | 3 | 1 |
-| 7 | Pull-Up | 3 | 0 |
-| 24 | Burpee | 3 | 0 |
-| 36 | Air Squat | 3 | 0 |
-| 67 | Plank | 4 | 0 |
-| 100 | Push-Up | 3 | 0 |
-| 424 | Deadlift | 3 | 1 |
-| 1162 | Bench Press | 3 | 1 |
+| ID   | Title       | p1  | p2  |
+| ---- | ----------- | --- | --- |
+| 1    | Back Squat  | 3   | 1   |
+| 3    | Front Squat | 3   | 1   |
+| 7    | Pull-Up     | 3   | 0   |
+| 24   | Burpee      | 3   | 0   |
+| 36   | Air Squat   | 3   | 0   |
+| 67   | Plank       | 4   | 0   |
+| 100  | Push-Up     | 3   | 0   |
+| 424  | Deadlift    | 3   | 1   |
+| 1162 | Bench Press | 3   | 1   |
 
 Full library: `GET /v5/exerciseLibrary/all`. Custom exercises:
 `POST /2.0/coach/exercise/create` with your own `title`, `param_1_type`,

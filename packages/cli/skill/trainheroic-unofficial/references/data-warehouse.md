@@ -1,6 +1,6 @@
 # Warehouse store (design reference)
 
-> **Note.** This documents the warehouse *design* — the exercise mirror plus the
+> **Note.** This documents the warehouse _design_ — the exercise mirror plus the
 > programming/messaging history zones, the prune-vs-accumulate rule, `source`
 > provenance, and the per-calendar month-window walk. That warehouse now lives in the
 > hosted MCP server (`@trainheroic-unofficial/cloudflare`, D1). The CLI and the local
