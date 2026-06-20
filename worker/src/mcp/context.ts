@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import type { ExerciseIndex } from "../store/exercise-util";
 import type { RequestOptions, TrainHeroicClient } from "../trainheroic/client";
-import type { Props } from "../types";
 
 /** A tool argument that accepts a numeric id as a number or string. */
 export const idParam = z.union([z.string(), z.number()]);
@@ -25,11 +25,10 @@ export const DESTRUCTIVE = {
   openWorldHint: true,
 } as const;
 
-/** Everything a tool handler needs: the authenticated client, the D1 store, props. */
+/** Everything a tool handler needs: the authenticated client and the exercise index. */
 export type ToolContext = {
   client: TrainHeroicClient;
-  db: D1Database;
-  props: Props;
+  index: ExerciseIndex;
 };
 
 /** Run a tool body, converting thrown errors into an in-band tool error. */

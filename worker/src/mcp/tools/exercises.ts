@@ -1,12 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { ExerciseStore } from "../../store/exercises";
 import { attempt, errorResult, idParam, jsonResult, READ, SYNC, toId } from "../context";
 import type { ToolContext } from "../context";
 
 /** Exercise library tools backed by the D1 reference-zone mirror. */
 export function registerExerciseTools(server: McpServer, ctx: ToolContext): void {
-  const store = new ExerciseStore(ctx.db, ctx.client);
+  const index = ctx.index;
 
   server.registerTool(
     "exercise_resolve",
@@ -19,7 +18,7 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
       inputSchema: { name: z.string().min(1) },
       annotations: READ,
     },
-    ({ name }) => attempt(async () => jsonResult(await store.resolve(name))),
+    ({ name }) => attempt(async () => jsonResult(await index.resolve(name))),
   );
 
   server.registerTool(
@@ -33,7 +32,7 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
       },
       annotations: READ,
     },
-    ({ query, limit }) => attempt(async () => jsonResult(await store.search(query, limit ?? 20))),
+    ({ query, limit }) => attempt(async () => jsonResult(await index.search(query, limit ?? 20))),
   );
 
   server.registerTool(
@@ -46,7 +45,7 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
     },
     ({ id }) =>
       attempt(async () => {
-        const ex = await store.get(toId(id));
+        const ex = await index.get(toId(id));
         return ex ? jsonResult(ex) : errorResult(`No exercise with id ${toId(id)}.`);
       }),
   );
@@ -61,9 +60,9 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
     },
     ({ force }) =>
       attempt(async () => {
-        if (force ?? false) return jsonResult(await store.refresh());
-        await store.ensureFresh();
-        return jsonResult(await store.stats());
+        if (force ?? false) return jsonResult(await index.refresh());
+        await index.ensureFresh();
+        return jsonResult(await index.stats());
       }),
   );
 
@@ -77,7 +76,7 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
       inputSchema: { exercise: z.record(z.string(), z.unknown()) },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
-    ({ exercise }) => attempt(async () => jsonResult(await store.create(exercise))),
+    ({ exercise }) => attempt(async () => jsonResult(await index.create(exercise))),
   );
 
   server.registerTool(
@@ -91,7 +90,7 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
     },
     ({ id }) =>
       attempt(async () => {
-        await store.recordDelete(toId(id));
+        await index.recordDelete(toId(id));
         return jsonResult({ forgotten: toId(id) });
       }),
   );
@@ -100,10 +99,10 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
     "store_stats",
     {
       title: "Local store stats",
-      description: "Row counts and sync watermarks for the local D1 store.",
+      description: "Row counts and sync watermarks for the local D1 index.",
       inputSchema: {},
       annotations: READ,
     },
-    () => attempt(async () => jsonResult(await store.stats())),
+    () => attempt(async () => jsonResult(await index.stats())),
   );
 }

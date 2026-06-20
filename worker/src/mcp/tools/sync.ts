@@ -3,13 +3,20 @@ import { z } from "zod";
 import { coerceInt } from "../../store/exercise-util";
 import { MessagingStore } from "../../store/messaging";
 import { ProgrammingStore } from "../../store/programming";
+import type { TrainHeroicClient } from "../../trainheroic/client";
 import { attempt, errorResult, idParam, jsonResult, READ, SYNC, toId } from "../context";
-import type { ToolContext } from "../context";
 
-/** Warehouse sync + read tools for the programming and messaging zones. */
-export function registerSyncTools(server: McpServer, ctx: ToolContext): void {
-  const programming = new ProgrammingStore(ctx.db, ctx.client);
-  const messaging = new MessagingStore(ctx.db, ctx.client);
+/**
+ * Warehouse sync + read tools for the programming and messaging zones. These persist
+ * to D1, so they are part of the hosted (Cloudflare) server only, not the local one.
+ */
+export function registerSyncTools(
+  server: McpServer,
+  db: D1Database,
+  client: TrainHeroicClient,
+): void {
+  const programming = new ProgrammingStore(db, client);
+  const messaging = new MessagingStore(db, client);
 
   server.registerTool(
     "programming_sync",

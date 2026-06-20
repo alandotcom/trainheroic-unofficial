@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "wrangler dev",
+    "local": "tsx src/local/server.ts",
     "deploy": "wrangler deploy",
     "cf-typegen": "wrangler types",
     "typecheck": "tsc --noEmit",
@@ -31,8 +32,10 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.18",
+    "@types/node": "^26.0.0",
     "oxfmt": "^0.55.0",
     "oxlint": "^1.70.0",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9",
     "wrangler": "^4.103.0"

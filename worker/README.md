@@ -5,10 +5,20 @@ the (reverse-engineered) TrainHeroic coaching API, deployed as a Cloudflare Work
 It lets an MCP client (Claude and others) authenticate a TrainHeroic coach and manage
 athletes, teams, programs, sessions, exercises, analytics, and chat.
 
-Built on `@cloudflare/workers-oauth-provider` (OAuth 2.1) and the Agents SDK
-`McpAgent`, with D1 for the per-tenant data store. It is the hosted counterpart to the
-local `trainheroic-api` Python skill; see `../docs/` for the architecture and build
-plan, and `../docs/mcp-spec-grounding.md` for the MCP `2025-11-25` compliance notes.
+It runs in two shapes from one codebase:
+
+- **Hosted, multi-tenant (Cloudflare Worker)** — `@cloudflare/workers-oauth-provider`
+  (OAuth 2.1) + the Agents SDK `McpAgent`, with D1 for per-tenant storage. Entry:
+  `src/index.ts`. Multiple coaches each log in via OAuth.
+- **Local, single-user (stdio)** — a plain Node MCP server over stdio with no OAuth and
+  no database: credentials come from the environment and the exercise library is cached
+  in memory. Entry: `src/local/server.ts`. See "Local single-user server" below.
+
+Both share the same tool implementations, TrainHeroic client, and workout encoder; the
+only differences are the transport, auth, and the exercise/warehouse storage backend.
+See `../docs/` for the architecture and build plan, and `../docs/mcp-spec-grounding.md`
+for the MCP `2025-11-25` compliance notes. It is the hosted/local counterpart to the
+local `trainheroic-api` Python skill.
 
 ## How auth works
 
@@ -52,18 +62,50 @@ and also accept `confirm: true` for clients without elicitation support.
 **Live messaging:** `messaging_conversations`, `messaging_read`, `message_draft`
 (preview only), `message_send` (gated), `message_delete` (gated).
 
-## Local development
+## Local single-user server (no Cloudflare, no database)
+
+For personal use, run the stdio server. It needs only Node, no Cloudflare account, no
+KV/D1/Durable Objects, and no OAuth — credentials come from the environment (like the
+Python skill) and the exercise library is cached in memory. It exposes 27 tools (the
+hosted set minus the D1-backed warehouse syncs).
+
+```bash
+pnpm install
+TRAINHEROIC_EMAIL="coach@example.com" TRAINHEROIC_PASSWORD="..." pnpm local
+```
+
+Register it with an MCP client (e.g. Claude Desktop) by command + args + env:
+
+```jsonc
+{
+  "mcpServers": {
+    "trainheroic": {
+      "command": "npx",
+      "args": ["tsx", "/abs/path/to/worker/src/local/server.ts"],
+      "env": { "TRAINHEROIC_EMAIL": "coach@example.com", "TRAINHEROIC_PASSWORD": "..." }
+    }
+  }
+}
+```
+
+The client launches the process and speaks MCP over stdio; the server calls the live
+TrainHeroic API directly. Nothing touches Cloudflare.
+
+## Hosted worker: local development
+
+To develop or test the hosted (Cloudflare) worker locally:
 
 ```bash
 pnpm install
 cp .dev.vars.example .dev.vars       # set COOKIE_ENCRYPTION_KEY; ALLOWED_EMAILS optional
 pnpm cf-typegen                      # regenerate worker-configuration.d.ts
 pnpm db:migrate:local                # apply migrations to the local D1
-pnpm dev                             # wrangler dev on http://localhost:8787
+pnpm dev                             # wrangler dev (local workerd) on http://localhost:8787
 ```
 
-Connect MCP Inspector or the Cloudflare AI Playground to `http://localhost:8787/mcp`,
-complete the TrainHeroic login, and exercise a read tool such as `whoami`.
+`wrangler dev` runs the full hosted server in local workerd + Miniflare (local KV/D1/DO,
+no Cloudflare account needed). Connect MCP Inspector or the Cloudflare AI Playground to
+`http://localhost:8787/mcp`, complete the TrainHeroic login, and call a read tool.
 
 ### Checks
 

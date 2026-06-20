@@ -156,3 +156,21 @@ export function chunk<T>(items: readonly T[], size: number): T[][] {
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
 }
+
+export type ResolveResult = { match: ExerciseView | null; candidates: ExerciseView[] };
+
+/**
+ * The exercise-library surface the tools depend on, so the tools work over either a
+ * D1-backed mirror (hosted, multi-tenant) or an in-memory cache (local, single-user).
+ */
+export interface ExerciseIndex {
+  ensureFresh(force?: boolean): Promise<void>;
+  refresh(): Promise<Record<string, unknown>>;
+  resolve(name: string): Promise<ResolveResult>;
+  search(query: string, limit?: number): Promise<ExerciseView[]>;
+  get(id: number): Promise<Record<string, unknown> | null>;
+  defaults(id: number): Promise<{ param1: number | null; param2: number | null } | null>;
+  create(body: Record<string, unknown>): Promise<Record<string, unknown>>;
+  recordDelete(id: number): Promise<void>;
+  stats(): Promise<Record<string, unknown>>;
+}

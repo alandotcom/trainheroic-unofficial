@@ -5,9 +5,11 @@ import {
   buildSearchText,
   chunk,
   coerceInt,
+  type ExerciseIndex,
   type ExerciseRow,
   type ExerciseView,
   rankSearch,
+  type ResolveResult,
   unitLabel,
   unwrapEnvelope,
   withUnits,
@@ -38,10 +40,8 @@ const COLS = [
 const SELECT_CORE =
   "SELECT id, title, param_1_type, param_2_type, can_edit, user_id, use_count FROM exercise";
 
-export type ResolveResult = { match: ExerciseView | null; candidates: ExerciseView[] };
-
 /** D1-backed mirror of the TrainHeroic exercise library (reference zone). */
-export class ExerciseStore extends OrgScopedStore {
+export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
   // -- meta / watermarks ---------------------------------------------------
 
   async #meta(org: number, key: string): Promise<string | null> {
