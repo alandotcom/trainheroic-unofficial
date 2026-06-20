@@ -1,0 +1,13 @@
+# Copy to .dev.vars for local development; set in production with `wrangler secret put`.
+
+# Random string used to sign the OAuth consent/state cookies (__Host-APPROVED_CLIENTS, CSRF, state).
+# Generate: openssl rand -hex 32
+COOKIE_ENCRYPTION_KEY="REPLACE_WITH_RANDOM_HEX"
+
+# Comma-separated allowlist of TrainHeroic emails permitted to authenticate.
+# Leave empty to allow any valid TrainHeroic login (private deployment).
+ALLOWED_EMAILS=""
+
+# NOTE: TrainHeroic credentials are NOT stored as a secret here. Each user enters
+# them at the OAuth login screen; they are kept in the grant's end-to-end-encrypted
+# `props` (encrypted by workers-oauth-provider with the issued token as key material).
