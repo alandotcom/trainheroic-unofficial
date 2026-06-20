@@ -1,6 +1,6 @@
 {
   "name": "@trainheroic-unofficial/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -15,7 +15,10 @@
   "publishConfig": {
     "access": "public"
   },
-  "files": ["dist", "skill"],
+  "files": [
+    "dist",
+    "skill"
+  ],
   "scripts": {
     "start": "tsx src/cli.ts",
     "build": "tsdown",
