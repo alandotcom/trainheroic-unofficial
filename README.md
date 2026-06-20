@@ -49,10 +49,6 @@ claude mcp add trainheroic --transport http https://trainheroic-mcp.alandotcom.w
 
 Runs on your machine. Credentials stay in your environment; nothing is sent to a third-party server.
 
-### Claude Desktop extension (easiest)
-
-Download `trainheroic-coach-mcp.mcpb` from the [Releases page](https://github.com/alandotcom/trainheroic-skill/releases), drag it onto Claude Desktop, and enter your TrainHeroic email and password. Credentials are stored in the OS keychain.
-
 ### Claude Code
 
 ```bash
