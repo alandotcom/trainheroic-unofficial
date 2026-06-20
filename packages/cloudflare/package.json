@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "inspect": "npx @modelcontextprotocol/inspector",
-    "deploy": "wrangler deploy",
+    "deploy": "sh scripts/deploy.sh",
+    "deploy:plain": "wrangler deploy",
     "cf-typegen": "wrangler types",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -17,6 +18,7 @@
     "@cfworker/json-schema": "^4.1.1",
     "@cloudflare/workers-oauth-provider": "^0.8.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@sentry/cloudflare": "^10.59.0",
     "@trainheroic-unofficial/core": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
     "agents": "^0.16.2",

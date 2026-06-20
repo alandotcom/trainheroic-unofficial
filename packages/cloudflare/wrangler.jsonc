@@ -7,6 +7,9 @@
   "observability": {
     "enabled": true
   },
+  // Emit source maps on deploy so stack traces are readable in Cloudflare's observability and,
+  // via `scripts/deploy.sh`, uploadable to Sentry.
+  "upload_source_maps": true,
   "durable_objects": {
     "bindings": [
       { "name": "MCP_OBJECT", "class_name": "TrainHeroicMCP" }
@@ -41,7 +44,8 @@
     "crons": ["0 4 * * *"]
   },
   "vars": {
-    // Non-secret defaults. Secrets (COOKIE_ENCRYPTION_KEY required, ALLOWED_EMAILS optional)
-    // go in .dev.vars locally and `wrangler secret put` in production.
+    // Non-secret defaults. Secrets (COOKIE_ENCRYPTION_KEY required; ALLOWED_EMAILS and
+    // SENTRY_DSN optional) go in .dev.vars locally and `wrangler secret put` in production.
+    // SENTRY_DSN is deliberately a secret, not a var, so it is never committed.
   }
 }
