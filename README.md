@@ -81,6 +81,46 @@ claude mcp add trainheroic \
 
 ---
 
+## Claude Code skill (CLI mode)
+
+An alternative to the MCP servers for Claude Code users. Instead of a persistent connection,
+Claude runs the `trainheroic` CLI directly as a shell command. No server process, no OAuth —
+just the CLI and your credentials in the environment.
+
+**1. Install the CLI**
+
+```bash
+npm install -g @trainheroic-unofficial/cli
+```
+
+**2. Set credentials** (add to `~/.zshrc`, `~/.bashrc`, or your shell profile)
+
+```bash
+export TRAINHEROIC_EMAIL="coach@example.com"
+export TRAINHEROIC_PASSWORD="yourpassword"
+```
+
+**3. Install the skill**
+
+```bash
+cp -r skills/trainheroic-api ~/.claude/skills/
+```
+
+Or if you don't have this repo cloned:
+
+```bash
+git clone --depth=1 https://github.com/alandotcom/trainheroic-unofficial.git /tmp/th \
+  && cp -r /tmp/th/skills/trainheroic-api ~/.claude/skills/ \
+  && rm -rf /tmp/th
+```
+
+**4. Use it**
+
+In any Claude Code session, type `/trainheroic-api` to load the skill. Claude will use the
+`trainheroic` binary to call the API on your behalf.
+
+---
+
 ## Tools
 
 **Coach reads:** `whoami`, `head_coach`, `list_athletes`, `list_teams`, `get_team`, `list_team_codes`, `list_programs`, `get_program`, `notifications`, `analytics_categories`
