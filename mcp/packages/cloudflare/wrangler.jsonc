@@ -33,7 +33,7 @@
     "crons": ["0 4 * * *"]
   },
   "vars": {
-    // Non-secret defaults. Secrets (CRED_ENC_KEY, COOKIE_ENCRYPTION_KEY, ALLOWED_EMAILS)
+    // Non-secret defaults. Secrets (COOKIE_ENCRYPTION_KEY required, ALLOWED_EMAILS optional)
     // go in .dev.vars locally and `wrangler secret put` in production.
   }
 }

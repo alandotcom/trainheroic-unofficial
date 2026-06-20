@@ -33,8 +33,10 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
 - Credentials live only in the encrypted grant `props`, never in logs, the user id, or
   metadata. The inbound MCP token is not forwarded to TrainHeroic.
 - `COOKIE_ENCRYPTION_KEY` is the only required secret and signs the CSRF and OAuth round-trip
-  values. The `CRED_ENC_KEY` mentioned in the `wrangler.jsonc` comment is not used by the
-  code; treat it as stale.
+  values; `ALLOWED_EMAILS` is the one optional var. An earlier design stored credentials at
+  rest in D1 under a `CRED_ENC_KEY`; the implementation instead keeps them in the OAuth grant's
+  encrypted `props`, so no such key exists. If you see `CRED_ENC_KEY` in the `docs/` plans,
+  that is historical.
 - Migrations are append-only. Add a new numbered file; do not edit a migration that has
   already been applied. After changing bindings, run `pnpm cf-typegen`.
 - The `wrangler.jsonc` KV and D1 ids are placeholders until a real deployment fills them.
