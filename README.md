@@ -1,5 +1,11 @@
 # trainheroic-unofficial
 
+[![npm](https://img.shields.io/npm/v/@trainheroic-unofficial/dto?label=dto)](https://www.npmjs.com/package/@trainheroic-unofficial/dto)
+[![npm](https://img.shields.io/npm/v/@trainheroic-unofficial/js?label=js)](https://www.npmjs.com/package/@trainheroic-unofficial/js)
+[![npm](https://img.shields.io/npm/v/@trainheroic-unofficial/core?label=core)](https://www.npmjs.com/package/@trainheroic-unofficial/core)
+[![npm](https://img.shields.io/npm/v/@trainheroic-unofficial/coach-mcp?label=coach-mcp)](https://www.npmjs.com/package/@trainheroic-unofficial/coach-mcp)
+[![npm](https://img.shields.io/npm/v/@trainheroic-unofficial/cli?label=cli)](https://www.npmjs.com/package/@trainheroic-unofficial/cli)
+
 TrainHeroic tools for Claude and other MCP clients. Build and publish workouts, manage athletes, teams, and programs, read analytics, and send messages — all from your AI assistant.
 
 Two ways to connect: a **hosted server** (no install, OAuth login) and a **local server** (runs on your machine, credentials in env).
