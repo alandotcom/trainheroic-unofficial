@@ -93,10 +93,14 @@ export function registerAnalyticsTools(server: McpServer, ctx: ToolContext): voi
         "these keys; you rarely need it). Team metrics (readiness-team, compliance-team, " +
         "lift-progress-team) need teamId; athlete metrics (readiness-athlete, " +
         "training-summary-athlete, lift-1rm-history, working-max-history) need userIds — get " +
-        "those from list_athletes. There is no team-wide training summary: for team volume, query " +
-        "training-summary-athlete with every athlete's userId. readiness-team takes a single " +
-        "`date`; every other metric takes dateStart/dateEnd. lift-1rm-history, lift-progress-team, " +
-        "and working-max-history also need exerciseId. All dates are YYYY-MM-DD.",
+        "those from list_athletes. userIds takes MANY athletes in ONE call (pass the whole " +
+        "roster's ids at once); the report comes back with a row per athlete, so do not loop one " +
+        "id per call. For team-wide training volume there is no team summary metric: pass every " +
+        "athlete's userId to training-summary-athlete in a single call and the rows cover the " +
+        "team. An athlete with no logged sessions in range simply returns no rows (not an error). " +
+        "readiness-team takes a single `date`; every other metric takes dateStart/dateEnd. " +
+        "lift-1rm-history, lift-progress-team, and working-max-history also need exerciseId. All " +
+        "dates are YYYY-MM-DD.",
       inputSchema: {
         metric: z.enum(METRIC_KEYS),
         teamId: idParam.optional(),

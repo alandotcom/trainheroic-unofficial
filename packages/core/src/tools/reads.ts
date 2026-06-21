@@ -1,7 +1,20 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { apiCall, attempt, idParam, jsonResult, READ } from "../context";
+import { dateString } from "@trainheroic-unofficial/dto";
+import { fetchExerciseHistoryDetail, presentExerciseHistory } from "@trainheroic-unofficial/js";
+import { apiCall, attempt, idParam, jsonResult, READ, toId } from "../context";
 import type { ToolContext } from "../context";
+import { historyInRange } from "../history";
+
+const ATHLETE_LIFT_HISTORY_DESC =
+  "A roster athlete's lift history for ONE exercise: the all-time PR board (liftPRs — each entry " +
+  "carries its rep-max label, weight, and the date it was set) plus the dated session series " +
+  "(sets, estimated 1RM). This is the coach-side way to answer 'show me <athlete>'s PRs / how is " +
+  "<athlete>'s squat trending' — pass athleteId from list_athletes and exerciseId from " +
+  "exercise_resolve. There is no cross-exercise PR summary, so query each lift you care about " +
+  "(squat, bench, deadlift, …) and an empty result just means the athlete has not logged that " +
+  "lift. liftPRs stay all-time; pass since/until (YYYY-MM-DD, inclusive) to window the session " +
+  "series. raw:true returns the untouched API object.";
 
 function enc(value: string | number): string {
   return encodeURIComponent(String(value));
@@ -30,7 +43,10 @@ const SIMPLE_GETS: ReadonlyArray<{
   {
     name: "list_programs",
     title: "List programs",
-    description: "Coach programs (standalone). Team group-programs come from list_teams.",
+    description:
+      "Coach programs (standalone only). This is often empty even for an active coach, because " +
+      "most programming lives as a team's group-program: if it returns [], call list_teams and " +
+      "read each team's group_program — do not conclude the coach has no programs.",
     path: "/1.0/coach/programs",
   },
   {
@@ -65,8 +81,12 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
     {
       title: "List athletes",
       description:
-        "Athletes visible to this coach. Optional q (case-insensitive substring filter over " +
-        "each athlete record) and limit, applied client-side, to keep large rosters small.",
+        "Every athlete on this coach's org roster, across all teams (not scoped to one team, and " +
+        "demo/placeholder athletes are included). `daysSinceLastLogin` is app-login recency, not " +
+        "training activity — an athlete can have logged in today yet have no logged sessions; " +
+        "null means no login on record. There is no per-athlete team field here, so to attribute " +
+        "athletes to a team use the team's roster. Optional q (case-insensitive substring filter " +
+        "over each athlete record) and limit, applied client-side, to keep large rosters small.",
       inputSchema: {
         q: z.string().optional(),
         limit: z.number().int().positive().max(500).optional(),
@@ -105,7 +125,12 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
     "list_teams",
     {
       title: "List teams",
-      description: "Coach teams. Optional pagination and search.",
+      description:
+        "Coach teams. The headcount fields are easy to misread: member_count and athlete_count " +
+        "are enrolled-athlete counts and are commonly 0 (a coach-built team with no enrolled " +
+        "members), while athleteIds typically holds just the owner's id, NOT the full roster. " +
+        "For who is actually on the roster use list_athletes (org-wide). Each team's group_program " +
+        "id is the team's programming. Optional pagination and search.",
       inputSchema: {
         page: z.number().int().positive().optional(),
         pageSize: z.number().int().positive().optional(),
@@ -146,6 +171,32 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
       annotations: READ,
     },
     ({ teamId }) => apiCall(ctx, "GET", `/v5/teams/${enc(teamId)}/teamCodes`),
+  );
+
+  server.registerTool(
+    "athlete_lift_history",
+    {
+      title: "Athlete lift history + PRs (roster)",
+      description: ATHLETE_LIFT_HISTORY_DESC,
+      inputSchema: {
+        athleteId: idParam,
+        exerciseId: idParam,
+        raw: z.boolean().optional(),
+        since: dateString.optional(),
+        until: dateString.optional(),
+      },
+      annotations: READ,
+    },
+    ({ athleteId, exerciseId, raw, since, until }) =>
+      attempt(async () => {
+        const detail = await fetchExerciseHistoryDetail(
+          ctx.client,
+          toId(exerciseId),
+          toId(athleteId),
+        );
+        if (raw === true) return jsonResult(detail);
+        return jsonResult(historyInRange(presentExerciseHistory(detail), since, until));
+      }),
   );
 
   server.registerTool(
