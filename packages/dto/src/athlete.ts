@@ -267,6 +267,42 @@ export type AthleteWorkoutSummary = {
   performedCount: number;
 };
 
+/** One exercise inside a coach-viewed athlete session (from the calendar summary). */
+export type CoachAthleteExercise = {
+  exerciseId: number | null;
+  title: string;
+  /** The set summary the API returns, e.g. "5 x 2 @ 205 lb" or "3 x 5 @ 24 in". */
+  summary: string | null;
+  completed: boolean;
+};
+
+/** One session in a coach's view of a roster athlete's training month. */
+export type CoachAthleteSession = {
+  workoutId: number | null;
+  savedWorkoutId: number | null;
+  title: string;
+  /** True when the athlete logged this session (the reliable did-they-train signal). */
+  logged: boolean;
+  completed: boolean;
+  rpe: number | null;
+  durationMin: number | null;
+  notes: string | null;
+  exercises: CoachAthleteExercise[];
+};
+
+/**
+ * A coach's month view of a roster athlete's training, presented from
+ * `/2.0/coach/athlete/calendar/summary`. Sessions are in calendar order within the month; the
+ * API carries no per-session date, so the month comes from year/month.
+ */
+export type CoachAthleteTraining = {
+  athleteId: number | null;
+  athleteName: string | null;
+  year: number;
+  month: number;
+  sessions: CoachAthleteSession[];
+};
+
 /** One performed session in a presented exercise history. */
 export type PresentedExerciseSession = {
   date: string;

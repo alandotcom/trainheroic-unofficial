@@ -1,7 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { dateString } from "@trainheroic-unofficial/dto";
-import { fetchExerciseHistoryDetail, presentExerciseHistory } from "@trainheroic-unofficial/js";
+import {
+  fetchCoachAthleteCalendarSummary,
+  fetchExerciseHistoryDetail,
+  presentCoachAthleteTraining,
+  presentExerciseHistory,
+} from "@trainheroic-unofficial/js";
 import { apiCall, attempt, idParam, jsonResult, READ, toId } from "../context";
 import type { ToolContext } from "../context";
 import { historyInRange } from "../history";
@@ -11,14 +16,23 @@ const ATHLETE_LIFT_HISTORY_DESC =
   "carries its rep-max label, weight, and the date it was set) plus the dated session series " +
   "(sets, estimated 1RM). This is the coach-side way to answer 'show me <athlete>'s PRs / how is " +
   "<athlete>'s squat trending' — pass athleteId from list_athletes and exerciseId from " +
-  "exercise_resolve. The API has no endpoint that lists which exercises an athlete has logged and " +
-  "no cross-exercise PR rollup, so you must name each lift. Do NOT fan out one call per guessed " +
-  "lift blindly: first triage with analytics_query metric:training-summary-athlete " +
-  "(userIds:[athleteId]) — if it returns no rows the athlete has logged nothing in range, so stop " +
-  "rather than firing empty per-exercise calls; if it returns rows, query the standard barbell " +
-  "lifts (squat, bench, deadlift, press, clean) here, where an empty result just means that lift " +
-  "was not logged. liftPRs stay all-time; pass since/until (YYYY-MM-DD, inclusive) to window the " +
-  "session series. raw:true returns the untouched API object.";
+  "exercise_resolve. There is no cross-exercise PR rollup, so you query one lift at a time, but do " +
+  "NOT guess lift names blindly: first call athlete_training for the month(s) of interest — it " +
+  "lists every exercise the athlete actually performed (with the exact exercise the program used, " +
+  "e.g. 'Clean & Jerk' not 'Clean') — then bring those exerciseIds here. An empty result means " +
+  "that lift was not logged. liftPRs stay all-time; pass since/until (YYYY-MM-DD, inclusive) to " +
+  "window the session series. raw:true returns the untouched API object.";
+
+const ATHLETE_TRAINING_DESC =
+  "A roster athlete's training for one calendar month (coach-side): one row per session with its " +
+  "title, the `logged` flag (the reliable did-they-train signal — true means they logged it), rpe, " +
+  "duration (minutes), notes, and the exercises they performed, each with a set summary like " +
+  "'5 x 2 @ 205 lb'. Use this to answer 'how has <athlete> been training lately' in ONE call, and " +
+  "as the discovery handle a coach otherwise lacks: read the exercise titles here to learn what the " +
+  "athlete actually did, then pass the lifts you care about to athlete_lift_history for their dated " +
+  "PR board. Pass athleteId from list_athletes and a year + month (1-12); query the current month, " +
+  "and the previous month for more history. Sessions are in calendar order within the month (the " +
+  "API carries no per-session date). An empty list means no sessions that month.";
 
 function enc(value: string | number): string {
   return encodeURIComponent(String(value));
@@ -212,6 +226,32 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         );
         if (raw === true) return jsonResult(detail);
         return jsonResult(historyInRange(presentExerciseHistory(detail), since, until));
+      }),
+  );
+
+  server.registerTool(
+    "athlete_training",
+    {
+      title: "Athlete training month (roster)",
+      description: ATHLETE_TRAINING_DESC,
+      inputSchema: {
+        athleteId: idParam,
+        year: z.number().int(),
+        month: z.number().int().min(1).max(12),
+      },
+      annotations: READ,
+    },
+    ({ athleteId, year, month }) =>
+      attempt(async () => {
+        const raw = await fetchCoachAthleteCalendarSummary(
+          ctx.client,
+          toId(athleteId),
+          year,
+          month,
+        );
+        return jsonResult(presentCoachAthleteTraining(raw, toId(athleteId), year, month), {
+          hint: "One session per row for the month. Use the exercise titles to pick lifts, then athlete_lift_history for their PRs.",
+        });
       }),
   );
 

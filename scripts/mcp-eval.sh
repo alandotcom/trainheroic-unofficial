@@ -35,7 +35,7 @@ case "$ROLE" in
   coach)
     SERVER="trainheroic-local-coach"
     PREFIX="mcp__trainheroic-local-coach__"
-    READS="whoami head_coach list_programs notifications analytics_categories list_athletes list_teams get_team list_team_codes get_program athlete_lift_history analytics_query exercise_resolve exercise_search exercise_get store_stats messaging_conversations messaging_read message_draft"
+    READS="whoami head_coach list_programs notifications analytics_categories list_athletes list_teams get_team list_team_codes get_program athlete_lift_history athlete_training analytics_query exercise_resolve exercise_search exercise_get store_stats messaging_conversations messaging_read message_draft"
     WRITES="message_send message_delete athlete_invite athlete_archive athlete_restore team_create team_update team_delete team_code_create team_code_delete exercise_create exercise_forget exercise_sync session_copy session_remove session_unpublish session_save_as_template workout_build workout_publish"
     ;;
   *)
