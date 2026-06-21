@@ -107,7 +107,7 @@ trainheroic request POST /some/path '{"key":"value"}' --base apis
 
 ## Develop
 
-Run `pnpm install` once at the repo root (Node >= 24, pnpm 10), then from this package. During
+Run `pnpm install` once at the repo root (Node >= 24, pnpm 11), then from this package. During
 development, run from source with `pnpm start <args>`; after `pnpm build`, the `trainheroic`
 binary (`dist/cli.mjs`) does the same.
 

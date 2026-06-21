@@ -238,7 +238,7 @@ the unit notes and warnings for a set of blocks.
 
 ## Develop
 
-Clone the workspace and run `pnpm install` once at the repo root (Node >= 24, pnpm 10), then
+Clone the workspace and run `pnpm install` once at the repo root (Node >= 24, pnpm 11), then
 from this package directory:
 
 ```bash

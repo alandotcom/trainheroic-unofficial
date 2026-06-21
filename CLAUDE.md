@@ -18,7 +18,7 @@ All code lives in a single pnpm workspace at the repo root.
 
 ## Commands
 
-Everything below runs from the repo root. It needs Node >= 24 and pnpm 10 (the version is
+Everything below runs from the repo root. It needs Node >= 24 and pnpm 11 (the version is
 pinned in `packageManager`). Run `pnpm install` once.
 
 Workspace-wide scripts live at the repo root and fan out to every package:

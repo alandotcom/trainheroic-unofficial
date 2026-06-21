@@ -1,2 +1,14 @@
 packages:
   - "packages/*"
+
+# pnpm 11 build-script policy (replaces package.json's "pnpm.onlyBuiltDependencies").
+# Every dependency with an install script needs an explicit decision, or pnpm fails the
+# deps-status check with ERR_PNPM_IGNORED_BUILDS. Only the toolchain binaries we actually
+# use are allowed to build; the rest are intentionally not built.
+allowBuilds:
+  esbuild: true
+  workerd: true
+  "@mongodb-js/zstd": false
+  core-js-pure: false
+  node-liblzma: false
+  sharp: false
