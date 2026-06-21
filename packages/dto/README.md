@@ -6,16 +6,34 @@ their types from here instead of redefining them.
 
 Part of the [trainheroic-unofficial](../../README.md) workspace.
 
+## Contents
+
+- [Install](#install)
+- [What's inside](#whats-inside)
+- [Develop](#develop)
+
 ## Install
 
-Internal to the workspace (consumed as `workspace:*`). Published builds expose a single ESM
-entry with type declarations.
+Published to npm as a single ESM entry with type declarations; other packages in this
+workspace depend on it via `workspace:*`. You can install it on its own:
+
+```bash
+npm install @trainheroic-unofficial/dto
+```
+
+It depends on [zod](https://zod.dev) (v4), pulled in automatically as a dependency. Each schema
+travels with its inferred type, so you validate and type from one import. `.parse()` throws a `ZodError` on bad data; use
+`.safeParse()` if you want a result object instead.
 
 ```ts
-import { workoutSpecSchema, type WorkoutSpec, idSchema } from "@trainheroic-unofficial/dto";
+import { workoutSpecSchema, type WorkoutSpec } from "@trainheroic-unofficial/dto";
 
+// `input` is untrusted data (e.g. a parsed JSON file or request body).
 const spec: WorkoutSpec = workoutSpecSchema.parse(input);
 ```
+
+It imports no `node:*` and touches no filesystem, so it runs anywhere — Node, browsers, and
+Cloudflare workerd.
 
 ## What's inside
 
@@ -28,16 +46,22 @@ for ids, so upstream API drift adds fields without breaking parsing.
 re-exported through `index.ts`. The central pieces:
 
 - `idSchema` normalizes the API's number-or-string ids.
-- `workoutSpecSchema` / `WorkoutSpec` is the protocol used to build a session: an optional
-  top-level instruction plus an array of blocks, where each block carries an exercises
-  array and each exercise references a library id. `blockSpecSchema` and
-  `exerciseSpecSchema` are its parts; `leaderboardSpecSchema` covers red-zone leaderboards.
-- The read-back types (`ReadResult` and friends) describe a decoded session, and `Advisory`
-  carries the unit notes and warnings the encoder produces.
-- The `responses` module holds the tolerant schemas used to validate API payloads at
-  checkpoints without rejecting unknown fields.
+- `workoutSpecSchema` / `WorkoutSpec` is the input you hand to the SDK's workout encoder (the
+  code in `js` that turns a spec into TrainHeroic's payload): an optional top-level
+  instruction plus an array of blocks, where each block carries an exercises array and each
+  exercise references an exercise-library id. `blockSpecSchema` and `exerciseSpecSchema` are
+  its parts; `leaderboardSpecSchema` covers Red Zone leaderboards (TrainHeroic's competitive
+  block type, where athletes are ranked on a score).
+- The read-back types (`ReadResult`, `ReadBlock`, `ReadExercise`) describe a session decoded
+  back out of the API into a readable shape, and `Advisory` carries the unit notes and
+  warnings the encoder emits (for example, a prescription whose unit does not match the
+  exercise's parameter type).
+- The `responses` module holds the tolerant schemas the SDK uses to sanity-check an API
+  response before trusting it, without rejecting unknown fields.
 
 ## Develop
+
+Run `pnpm install` once at the repo root (Node >= 22, pnpm 10), then from this package:
 
 ```bash
 pnpm build       # tsdown -> dist (ESM + .d.mts)

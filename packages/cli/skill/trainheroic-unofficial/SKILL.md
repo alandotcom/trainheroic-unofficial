@@ -76,24 +76,25 @@ cat block.json | $TH request POST /2.0/coach/calendar/saveProgramWorkoutSets
 ```
 
 A few endpoints live on the login host (`apis.trainheroic.com`); reach them with
-`--base apis` (the default base is the coach host). Named shortcuts cover the common
-reads: `whoami`, `head-coach`, `athletes`, `programs`, `teams`, `notifications`,
-`analytics`, `program <id>`, `team <id>`, `team-codes <id>`.
+`--base apis` (the default base is the coach host). `whoami` and `request` are top-level;
+the coach reads live under the `coach` group: `coach head-coach`, `coach athletes`,
+`coach programs`, `coach teams`, `coach notifications`, `coach analytics`,
+`coach program <id>`, `coach team <id>`, `coach team-codes <id>`.
 
 Load `references/api-reference.md` when you need an endpoint's exact request or
 response shape, or an area not covered here.
 
 ## What you can do
 
-| Area                | How                                                                                                                       |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Athletes            | `$TH athletes`; invite/archive/restore via `$TH request ...`                                                              |
-| Teams               | `$TH teams`, `$TH team <id>`, `$TH team-codes <id>`; create via `$TH request POST /1.0/coach/team/createWithTitleAndCode` |
-| Programs            | `$TH programs`, `$TH program <id>`                                                                                        |
-| Exercises           | `$TH exercise resolve\|search\|get\|sync\|create\|forget\|stats` (below)                                                  |
-| Sessions / workouts | `$TH workout build\|read\|publish\|remove` (below)                                                                        |
-| Messaging           | `$TH message list\|read\|draft\|send\|delete` (below)                                                                     |
-| Analytics           | `$TH analytics`, then `$TH request POST /v5/analytics/*`                                                                  |
+| Area                | How                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Athletes            | `$TH coach athletes`; invite/archive/restore via `$TH request ...`                                                                          |
+| Teams               | `$TH coach teams`, `$TH coach team <id>`, `$TH coach team-codes <id>`; create via `$TH request POST /1.0/coach/team/createWithTitleAndCode` |
+| Programs            | `$TH coach programs`, `$TH coach program <id>`                                                                                              |
+| Exercises           | `$TH coach exercise resolve\|search\|get\|sync\|create\|forget\|stats` (below)                                                              |
+| Sessions / workouts | `$TH coach workout build\|read\|publish\|remove` (below)                                                                                    |
+| Messaging           | `$TH coach message list\|read\|draft\|send\|delete` (below)                                                                                 |
+| Analytics           | `$TH coach analytics`, then `$TH request POST /v5/analytics/*`                                                                              |
 
 ## Resolving exercises
 
@@ -102,9 +103,9 @@ cache, which mirrors the library into `~/.trainheroic/library.json` and serves l
 locally:
 
 ```bash
-$TH exercise resolve "Back Squat"      # exact/best match -> id (+ unit labels)
-$TH exercise search  "incline press"   # ranked candidates
-$TH exercise sync --force              # refresh the mirror (7-day TTL otherwise)
+$TH coach exercise resolve "Back Squat"      # exact/best match -> id (+ unit labels)
+$TH coach exercise search  "incline press"   # ranked candidates
+$TH coach exercise sync --force              # refresh the mirror (7-day TTL otherwise)
 ```
 
 `resolve` returns `match: null` plus a candidate list when a name is ambiguous; pick the
@@ -114,11 +115,11 @@ After creating a custom exercise, go through the cache so the mirror stays curre
 deleting one via the API, drop it from the mirror:
 
 ```bash
-$TH exercise create '{"title":"Sandbag Clean","param_1_type":3,"param_2_type":1}'
-$TH exercise forget 7721170 --yes      # cache-only, run after an API delete
+$TH coach exercise create '{"title":"Sandbag Clean","param_1_type":3,"param_2_type":1}'
+$TH coach exercise forget 7721170 --yes      # cache-only, run after an API delete
 ```
 
-`$TH exercise stats` shows the cached row count.
+`$TH coach exercise stats` shows the cached row count.
 
 ## Building a workout
 
@@ -130,7 +131,7 @@ follow-up questions first; do not guess.** Restate the program you intend to bui
 explicit confirmation before publishing. Build a draft (the default), show the read-back
 for review, and only publish once the user confirms.
 
-`$TH workout build` runs the whole sequence (program → session → blocks → exercises),
+`$TH coach workout build` runs the whole sequence (program → session → blocks → exercises),
 fills every field that otherwise makes the exercise step return HTTP 500, encodes
 prescriptions correctly, and prints unit advisories plus a read-back. Feed it a JSON spec
 (inline, `--file`, or stdin):
@@ -146,15 +147,15 @@ cat > day.json <<'JSON'
 ] }
 JSON
 
-$TH workout build --program 4980851 --date 2026-6-22 --file day.json     # draft
-$TH workout publish --pw <id> --yes                                       # publish after review
+$TH coach workout build --program 4980851 --date 2026-6-22 --file day.json   # draft
+$TH coach workout publish --pw <id> --yes                                     # publish after review
 ```
 
 The build defaults to a **draft** (unpublished). Add `--publish --yes` to publish in one
-step, or publish later with `$TH workout publish --pw <id> --yes`. Read a built session
-back with `$TH workout read --program <id> --date Y-M-D --pw <id>`. There is no in-place
+step, or publish later with `$TH coach workout publish --pw <id> --yes`. Read a built session
+back with `$TH coach workout read --program <id> --date Y-M-D --pw <id>`. There is no in-place
 replace: to rebuild a date, remove the old session first with
-`$TH workout remove --program <id> --pw <id> --yes`.
+`$TH coach workout remove --program <id> --pw <id> --yes`.
 
 Two exercises in one block become a superset. Add `"leaderboard": "rounds"` (or
 `reps`/`time`/`calories`/`meters`/… or `{"unit":"time","lowest_wins":true}`) to a block to
@@ -178,17 +179,17 @@ draft state, so a POST is delivered at once. The CLI therefore separates draftin
 sending and requires `--yes` to actually send or delete.
 
 ```bash
-$TH message list                                  # conversations (id, kind, title)
-$TH message read   37730920                        # recent messages
-$TH message draft  37730920 "Great session today!" # PREVIEW only — never sends
-$TH message send   37730920 "Great session today!" --yes              # delivers (gate behind user OK)
-$TH message send   37730920 "Nice PR!" --reply-to 125652586 --yes     # threaded reply
-$TH message delete 37730920 <commentId> --yes                          # soft delete (destructive)
+$TH coach message list                                  # conversations (id, kind, title)
+$TH coach message read   37730920                        # recent messages
+$TH coach message draft  37730920 "Great session today!" # PREVIEW only — never sends
+$TH coach message send   37730920 "Great session today!" --yes              # delivers (gate behind user OK)
+$TH coach message send   37730920 "Nice PR!" --reply-to 125652586 --yes     # threaded reply
+$TH coach message delete 37730920 <commentId> --yes                          # soft delete (destructive)
 ```
 
 Default to `draft`: it prints the exact payload and target without touching the account.
 Run `send` only after the user confirms the wording and recipient. Check
-`$TH notifications` (`countMessagingNotViewed`) first as a cheap "anything new?" gate.
+`$TH coach notifications` (`countMessagingNotViewed`) first as a cheap "anything new?" gate.
 
 ## Gotchas
 
@@ -204,7 +205,7 @@ Environment-specific facts that defy reasonable assumptions:
   "200 m run" on it shows as 200 _miles_. And `param_2_type` `2` (% of max) and `14` (RPE)
   coerce to weight on a weight lift, rendering as pounds — put % or RPE in the
   `instruction` (the builder does this from `rpe`). You _can_ add weight (`1`) to a
-  no-secondary-param lift (weighted Pull-Ups). Check units with `$TH exercise resolve`
+  no-secondary-param lift (weighted Pull-Ups). Check units with `$TH coach exercise resolve`
   (the `units` array, ordered by entry slot `[param 1, param 2]`); the builder prints a
   warning when a sent type will be overridden. "Max"/"AMRAP" reps work as free text in the
   rep slots.
@@ -235,9 +236,9 @@ Environment-specific facts that defy reasonable assumptions:
   3. **offer the user the option to do it themselves** — hand them the exact command (e.g.
      `$TH request DELETE /v5/teamCodes/874586`) or the UI steps.
 
-  The CLI enforces a `--yes` flag on `message send`/`message delete`, `workout publish`,
-  `workout remove`, and `exercise forget`, but the gate above still applies: confirm in the
-  moment before adding `--yes`.
+  The CLI enforces a `--yes` flag on `coach message send`/`coach message delete`,
+  `coach workout publish`, `coach workout remove`, and `coach exercise forget`, but the gate
+  above still applies: confirm in the moment before adding `--yes`.
 
 ## Beyond the CLI
 

@@ -554,7 +554,7 @@ This creates A1: Back Squat, A2: Front Squat displayed as a superset.
 >   `Run` (id 82) is `10` (miles); sending `6` (meters) is ignored and `200` shows as
 >   _200 miles_. To program meters, pick a meters-native exercise (`Sprint` 127,
 >   `Rowing` 101, `Shuttle Sprint` 42523) or a custom exercise — there is no metric
->   "Run". `$TH exercise resolve` now prints a `units` array (ordered by entry slot,
+>   "Run". `$TH coach exercise resolve` now prints a `units` array (ordered by entry slot,
 >   `[param 1, param 2]`); check it.
 > - **`param_2_type` (secondary) is forced to the default too, with one exception:**
 >   if the exercise has no secondary param (default `0`/none) you may add weight
@@ -753,7 +753,7 @@ Creates a reusable session template in the library.
 
 Chat between a coach and athletes/teams. A **stream** is a conversation; a
 **comment** is a message in it. Verified against a live
-account (see `$TH message`).
+account (see `$TH coach message`).
 
 | Method | Endpoint                                                       | Description                                                                    |
 | ------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
