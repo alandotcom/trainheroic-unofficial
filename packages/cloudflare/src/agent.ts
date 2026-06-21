@@ -68,18 +68,33 @@ async function registerCoachSurface(
   registerSyncTools(server, env.TH_DB, client, orgId);
 }
 
+/** Which tool surfaces a server variant exposes. See the three concrete classes below. */
+interface SurfaceSelection {
+  athlete: boolean;
+  coach: boolean;
+}
+
 /**
  * The MCP server, one Durable Object instance per client session. Credentials arrive
  * via the end-to-end-encrypted grant `props`; the TrainHeroic session is acquired
- * lazily by the client and cached in memory for the life of the instance. Tools are
- * registered by role: every account gets the athlete surface; coach accounts also get
- * the coaching surface.
+ * lazily by the client and cached in memory for the life of the instance.
+ *
+ * Three concrete variants extend this, bound to three paths (see index.ts / wrangler.jsonc):
+ *   - `/mcp`         → {@link TrainHeroicMCP}: the full role-aware surface (athlete for every
+ *                       account, plus coaching for a coach account). The production endpoint.
+ *   - `/mcp/coach`   → {@link CoachMCP}: only the coaching surface (empty for an athlete account).
+ *   - `/mcp/athlete` → {@link AthleteMCP}: only the athlete surface.
+ * The coach/athlete variants expose a single tool set, for a user who keeps separate accounts
+ * or wants a connection scoped to one role.
  */
-export class TrainHeroicMCP extends McpAgent<Env, State, Props> {
+abstract class TrainHeroicMCPBase extends McpAgent<Env, State, Props> {
   server = new McpServer(
     { name: "trainheroic", version: pkg.version },
     { instructions: SERVER_INSTRUCTIONS },
   );
+
+  /** The surfaces this variant registers. Coaching still requires a coach account. */
+  protected abstract readonly surfaces: SurfaceSelection;
 
   async init(): Promise<void> {
     const props = this.props;
@@ -91,15 +106,20 @@ export class TrainHeroicMCP extends McpAgent<Env, State, Props> {
     Sentry.setUser({ email: props.email });
 
     // Patch the registerTool seam before any surface registers, so every tool call emits aggregate
-    // usage metrics and tags its trace span with the session id (tool name + ok/error + opaque
-    // session id only — no args/results; see tool-metrics.ts). `this.name` is the per-session DO
-    // name (`streamable-http:<mcp-session-id>`), an opaque, non-PII session identifier.
-    instrumentToolMetrics(this.server, this.name);
+    // usage metrics and tags its trace span with the session id (tool name + surface + ok/error +
+    // opaque session id only — no args/results; see tool-metrics.ts). `this.name` is the
+    // per-session DO name (`streamable-http:<mcp-session-id>`), an opaque, non-PII session id.
+    // Flip `.surface` around each registration block so every tool is tagged with its tool set.
+    const instrumentation = instrumentToolMetrics(this.server, this.name);
 
     const client = new TrainHeroicClient(props.email, props.password);
 
-    await registerAthleteSurface(this.server, this.env, client);
-    if (props.role === "coach") {
+    if (this.surfaces.athlete) {
+      instrumentation.surface = "athlete";
+      await registerAthleteSurface(this.server, this.env, client);
+    }
+    if (this.surfaces.coach && props.role === "coach") {
+      instrumentation.surface = "coach";
       await registerCoachSurface(this.server, this.env, client);
     }
   }
@@ -117,4 +137,19 @@ export class TrainHeroicMCP extends McpAgent<Env, State, Props> {
       ? super.onError(connectionOrError as Connection, error)
       : super.onError(connectionOrError);
   }
+}
+
+/** `/mcp`: the full role-aware surface. Athlete for everyone; coaching for a coach account. */
+export class TrainHeroicMCP extends TrainHeroicMCPBase {
+  protected readonly surfaces = { athlete: true, coach: true };
+}
+
+/** `/mcp/coach`: coaching tools only (registers nothing for a non-coach account). */
+export class CoachMCP extends TrainHeroicMCPBase {
+  protected readonly surfaces = { athlete: false, coach: true };
+}
+
+/** `/mcp/athlete`: athlete training tools only. */
+export class AthleteMCP extends TrainHeroicMCPBase {
+  protected readonly surfaces = { athlete: true, coach: false };
 }

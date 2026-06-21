@@ -1,19 +1,35 @@
 import * as Sentry from "@sentry/cloudflare";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+/** Which tool set a tool belongs to. A coach session also registers the athlete surface. */
+export type ToolSurface = "athlete" | "coach";
+
+/**
+ * A mutable handle returned by {@link instrumentToolMetrics}. Set `.surface` to the surface
+ * currently registering, before each `registerXxxSurface` call; every tool registered while it
+ * holds that value is tagged with it. Each tool belongs to exactly one surface, so this adds a
+ * queryable dimension at zero extra metric cardinality.
+ */
+export interface ToolInstrumentation {
+  surface: ToolSurface;
+}
+
 /**
  * Wrap every tool registered on `server` with two kinds of telemetry:
- *   - Aggregate metrics: `mcp.tool.call` (counter, tagged by `tool` + `status`) and
- *     `mcp.tool.duration_ms` (distribution, tagged by `tool`).
+ *   - Aggregate metrics: `mcp.tool.call` (counter, tagged by `tool`, `surface`, `status`) and
+ *     `mcp.tool.duration_ms` (distribution, tagged by `tool`, `surface`).
  *   - Per-session tracing: the active request span (created by the DO's Sentry instrumentation)
- *     is annotated with the tool name and the opaque `sessionId`, so Sentry's trace view can be
- *     filtered to a single session's tool calls. Aggregation stays the metrics' job; per-session
- *     drill-down stays the trace's job.
+ *     is annotated with the tool name, surface, and the opaque `sessionId`, so Sentry's trace
+ *     view can be filtered to a single session's tool calls. Aggregation stays the metrics' job;
+ *     per-session drill-down stays the trace's job.
  *
- * Privacy: the only attributes are the tool name, an ok/error status, and the session id — never
- * the tool arguments or result payloads, which can carry athlete PII. This keeps the Sentry
- * privacy invariant intact (see sentry.ts). No-op when SENTRY_DSN is unset, and the metrics and
- * spans flush on `ctx.waitUntil` via the Durable Object's Sentry instrumentation, like the auth flow.
+ * The returned handle's `surface` is read at registration time (synchronously, while a surface's
+ * tools register), so the caller flips it around each registration block — see agent.ts.
+ *
+ * Privacy: the only attributes are the tool name, surface, an ok/error status, and the session id
+ * — never the tool arguments or result payloads, which can carry athlete PII. This keeps the
+ * Sentry privacy invariant intact (see sentry.ts). No-op when SENTRY_DSN is unset, and the metrics
+ * and spans flush on `ctx.waitUntil` via the DO's Sentry instrumentation, like the auth flow.
  *
  * This lives here, not in `core`, so the shared tool layer stays transport- and Sentry-agnostic
  * (the local stdio servers reuse it without pulling in `@sentry/cloudflare`). Patching the single
@@ -24,15 +40,18 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
  * approximate: Workers advances `Date.now()` only across I/O, which every TrainHeroic-backed
  * tool performs, so the wall-clock spent waiting on the API is captured.
  */
-export function instrumentToolMetrics(server: McpServer, sessionId: string): void {
+export function instrumentToolMetrics(server: McpServer, sessionId: string): ToolInstrumentation {
+  const state: ToolInstrumentation = { surface: "athlete" };
   const original = server.registerTool.bind(server) as (...args: unknown[]) => unknown;
   const patched = (...args: unknown[]): unknown => {
     const name = typeof args[0] === "string" ? args[0] : "unknown";
+    const surface = state.surface;
     const lastIndex = args.length - 1;
     const handler = args[lastIndex];
     if (typeof handler === "function") {
       args[lastIndex] = wrapHandler(
         name,
+        surface,
         sessionId,
         handler as (...handlerArgs: unknown[]) => unknown,
       );
@@ -40,6 +59,7 @@ export function instrumentToolMetrics(server: McpServer, sessionId: string): voi
     return original(...args);
   };
   (server as unknown as { registerTool: unknown }).registerTool = patched;
+  return state;
 }
 
 function isErrorResult(result: unknown): boolean {
@@ -52,20 +72,25 @@ function isErrorResult(result: unknown): boolean {
 
 function wrapHandler(
   name: string,
+  surface: ToolSurface,
   sessionId: string,
   handler: (...handlerArgs: unknown[]) => unknown,
 ): (...handlerArgs: unknown[]) => unknown {
   return (...handlerArgs: unknown[]): unknown => {
     // Annotate the active request span (from the DO's Sentry instrumentation) so the trace view
     // can be sliced to one session's tool calls. Null-safe when tracing is off / no active span.
-    Sentry.getActiveSpan()?.setAttributes({ "mcp.tool": name, "mcp.session": sessionId });
+    Sentry.getActiveSpan()?.setAttributes({
+      "mcp.tool": name,
+      "mcp.surface": surface,
+      "mcp.session": sessionId,
+    });
 
     const start = Date.now();
     const finish = (status: "ok" | "error"): void => {
-      Sentry.metrics.count("mcp.tool.call", 1, { attributes: { tool: name, status } });
+      Sentry.metrics.count("mcp.tool.call", 1, { attributes: { tool: name, surface, status } });
       Sentry.metrics.distribution("mcp.tool.duration_ms", Date.now() - start, {
         unit: "millisecond",
-        attributes: { tool: name },
+        attributes: { tool: name, surface },
       });
     };
 

@@ -112,7 +112,8 @@ The dependency graph runs one direction; nothing lower depends on anything highe
   session). Tool registration is **role-aware** (`src/agent.ts`): every account gets the
   athlete surface (live tools + the D1 athlete warehouse); a coach account also gets the
   coaching surface (the core coach tools + a D1-backed `ExerciseStore` + the coach warehouse).
-  Entry: `src/index.ts`.
+  Served at three paths via separate DO classes: `/mcp` (full, role-aware), `/mcp/coach`, and
+  `/mcp/athlete` (one tool set each). Entry: `src/index.ts`.
 - **`cli`** (`@trainheroic-unofficial/cli`): an argv-driven tool over the `js` SDK directly, no
   MCP. It caches the session under `~/.trainheroic/`. Has an `athlete` command group and an
   `athlete export` that dumps historicals to JSON (the local counterpart to the hosted warehouse).

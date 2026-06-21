@@ -11,12 +11,17 @@
   // via `scripts/deploy.sh`, uploadable to Sentry.
   "upload_source_maps": true,
   "durable_objects": {
+    // One namespace per server variant: /mcp (full), /mcp/coach, /mcp/athlete. Each is a
+    // distinct Durable Object class so its session registers only that variant's tool set.
     "bindings": [
-      { "name": "MCP_OBJECT", "class_name": "TrainHeroicMCP" }
+      { "name": "MCP_OBJECT", "class_name": "TrainHeroicMCP" },
+      { "name": "MCP_OBJECT_COACH", "class_name": "CoachMCP" },
+      { "name": "MCP_OBJECT_ATHLETE", "class_name": "AthleteMCP" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["TrainHeroicMCP"] }
+    { "tag": "v1", "new_sqlite_classes": ["TrainHeroicMCP"] },
+    { "tag": "v2", "new_sqlite_classes": ["CoachMCP", "AthleteMCP"] }
   ],
   "kv_namespaces": [
     // Create with: wrangler kv namespace create OAUTH_KV  -> paste the id here.

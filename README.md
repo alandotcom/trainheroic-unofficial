@@ -60,6 +60,8 @@ https://mcp.trainheroic-unofficial.com/mcp
 
 The tools the hosted server exposes depend on the account you log in with: a coach account gets the coaching tools **and** its own athlete training tools; an athlete account gets the athlete tools. (For the local servers below, pick by account: a coach runs the **coach** server, which already includes the athlete tools; the **athlete** server is for athlete-only accounts.)
 
+Two extra paths expose a single tool set, for when you keep separate accounts or want a connection scoped to one role: `https://mcp.trainheroic-unofficial.com/mcp/coach` (coaching tools only) and `.../mcp/athlete` (athlete training tools only). Same login; the coach path is empty for an athlete account.
+
 <details open>
 <summary><b>Claude.ai</b></summary>
 

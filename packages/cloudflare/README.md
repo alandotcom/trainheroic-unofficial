@@ -15,7 +15,7 @@ This runs the worker locally with no Cloudflare account, using Miniflare (a loca
 1. Create a `.dev.vars` file (wrangler's local-secrets file). The full set of variables:
    - `COOKIE_ENCRYPTION_KEY` (**required**) — signs the OAuth/CSRF round-trip values. Generate one with `openssl rand -hex 32` and paste the output as the value.
    - `ALLOWED_EMAILS` (optional) — comma-separated allowlist of TrainHeroic emails permitted to register; empty or unset allows any.
-   - `SENTRY_DSN` (optional) — enables error reporting; unset disables it.
+   - `SENTRY_DSN` (optional) — enables error reporting, aggregate usage metrics (auth + per tool call), and per-session tracing; unset disables all of it. The traces sample rate is the `SENTRY_TRACES_SAMPLE_RATE` var (default `1`, in `wrangler.jsonc`), dialable from the Cloudflare dashboard without a redeploy.
 
    ```
    COOKIE_ENCRYPTION_KEY=2f1c...your-generated-hex
@@ -30,7 +30,7 @@ This runs the worker locally with no Cloudflare account, using Miniflare (a loca
    pnpm dev                 # wrangler dev on http://localhost:8787
    ```
 
-3. With `pnpm dev` running, launch the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) (the official MCP debugging UI), point it at `http://localhost:8787/mcp`, and complete the OAuth + TrainHeroic login flow:
+3. With `pnpm dev` running, launch the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) (the official MCP debugging UI), point it at `http://localhost:8787/mcp`, and complete the OAuth + TrainHeroic login flow. Two extra paths expose one tool set, for separate accounts or a connection scoped to one role — `http://localhost:8787/mcp/coach` (coaching tools only) and `http://localhost:8787/mcp/athlete` (athlete tools only):
 
    ```bash
    pnpm inspect             # fetches and opens the Inspector UI via npx (nothing to install)
