@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/core
 
+## 0.6.2
+
+### Patch Changes
+
+- Require Node >= 24 and move the toolchain to pnpm 11. Release is now automated in CI (deploy on merge to main, publish on a version tag via npm OIDC trusted publishing).
+  - @trainheroic-unofficial/dto@0.6.2
+  - @trainheroic-unofficial/js@0.6.2
+
 ## 0.6.1
 
 ### Patch Changes
