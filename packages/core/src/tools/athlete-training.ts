@@ -26,6 +26,7 @@ import {
 import type { TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { confirmGate, NOT_CONFIRMED } from "../confirm";
 import { attempt, DESTRUCTIVE, errorResult, idParam, jsonResult, READ, toId } from "../context";
+import { historyInRange } from "../history";
 
 /**
  * Athlete tools need only the client (no exercise-library index), so they take a narrower
@@ -62,8 +63,10 @@ function registerProfileTools(
     {
       title: "Athlete profile + lifetime totals",
       description:
-        "Lifetime training totals (reps, volume, sessions, first/last logged) plus the profile " +
-        "(name, units, dob). Set useMetric for kg/metric totals.",
+        "Lifetime training totals in one call — all-time session count (summary.sessions_count), " +
+        "total reps and volume, first/last logged date — plus the profile (name, units, dob). " +
+        "Use this for any 'how many sessions all-time / total volume ever' question rather than " +
+        "summing athlete_workouts windows. Set useMetric for kg/metric totals.",
       inputSchema: { useMetric: z.boolean().optional() },
       annotations: READ,
     },
@@ -93,7 +96,10 @@ function registerProfileTools(
     "athlete_working_maxes",
     {
       title: "Working maxes",
-      description: "The athlete's working max per exercise (drives % prescriptions).",
+      description:
+        "The athlete's working max per exercise (drives % prescriptions). An entry can carry a " +
+        "null value: the exercise has a working-max slot but no number has been set yet, which " +
+        "means there is effectively no working max for it.",
       inputSchema: {},
       annotations: READ,
     },
@@ -124,7 +130,9 @@ function registerProfileTools(
   );
 }
 
-/** Kept at module scope so registerExerciseTools stays under the line cap. */
+// These descriptions and the date-range helper sit at module scope so the register
+// functions below stay under the oxlint max-lines-per-function cap.
+
 const ATHLETE_WORKOUTS_DESC =
   "Workouts in an inclusive YYYY-MM-DD window, flattened to blocks/exercises. Each exercise " +
   "carries both its `prescribed` sets (what the program called for) and `performed` sets (what " +
@@ -132,10 +140,28 @@ const ATHLETE_WORKOUTS_DESC =
   "`performed`/`logged` to tell what was recorded or done. That is the reliable signal: a " +
   "session can hold logged sets while the API's own completion flags stay 0, and an empty " +
   "`performed` means nothing was logged for that exercise. For 'did I record anything / what " +
-  "did I do', set loggedOnly:true to return only sessions with logged sets (this also shrinks a " +
-  "large result); limit returns the most recent N workouts (newest first). Both apply to the " +
-  "presented view, not raw. raw:true returns the untouched API objects. Narrow the window if " +
-  "the result is truncated.";
+  "did I do', set loggedOnly:true to return only sessions with logged sets (it keeps whole " +
+  "sessions that have any logged set, so individual exercises inside can still show empty " +
+  "`performed`; it also shrinks a large result); limit returns the most recent N workouts " +
+  "(newest first). For 'what's my next workout', query a forward window from today; if it comes " +
+  "back empty, the most recent session is likely yesterday's still-unlogged one, so widen the " +
+  "window backward a day or two. Both filters apply to the presented view, not raw. raw:true " +
+  "returns the untouched API objects. This is a date-windowed fetch, NOT an aggregate: for " +
+  "lifetime totals (all-time session count, total volume, first/last logged date) call " +
+  "athlete_profile instead of summing windows — a multi-year range here can time out. Narrow the " +
+  "window if the result is truncated.";
+
+const ATHLETE_EXERCISE_HISTORY_DESC =
+  "Per-exercise PRs and the dated session time-series (sets performed, estimated 1RM). The " +
+  "returned `sessions` run all-time, newest first; pass since/until (YYYY-MM-DD, inclusive) to " +
+  "keep only sessions in that window — use it for 'last 3 months' / 'this year' questions so the " +
+  "result stays small. `liftPRs` are always all-time and ignore since/until. Set raw:true for " +
+  "the untouched API object. Get the exercise id from athlete_exercises.";
+
+const ATHLETE_EXERCISES_DESC =
+  "The exercises the athlete has logged (id + title + positional units). Pass q to free-text " +
+  "search by name; use the returned id with athlete_exercise_history, athlete_personal_records, " +
+  "or athlete_exercise_stats (all of which require an exercise id).";
 
 /** Workouts, exercise catalog, per-exercise history/PRs/stats. */
 function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: UserId): void {
@@ -173,10 +199,7 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
     "athlete_exercises",
     {
       title: "Search logged exercises",
-      description:
-        "The exercises the athlete has logged (id + title + positional units). Pass q to " +
-        "free-text search by name; use the returned id with athlete_exercise_history, " +
-        "athlete_personal_records, or athlete_exercise_stats (all of which require an exercise id).",
+      description: ATHLETE_EXERCISES_DESC,
       inputSchema: {
         q: z.string().optional(),
         limit: z.number().int().positive().max(200).optional(),
@@ -195,7 +218,9 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
           isCircuit: r.isCircuit ?? false,
           units: exerciseUnits(r.param1Type, r.param2Type),
         }));
-        return jsonResult(items, { hint: "Pass q to search by name, or limit to cap the list." });
+        // searchExerciseHistory already applies limit; the full-list branch did not, so cap here.
+        const capped = limit !== undefined ? items.slice(0, limit) : items;
+        return jsonResult(capped, { hint: "Pass q to search by name, or limit to cap the list." });
       }),
   );
 
@@ -203,20 +228,24 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
     "athlete_exercise_history",
     {
       title: "Exercise history + PRs",
-      description:
-        "Per-exercise PRs and the dated session time-series (sets performed, estimated 1RM). " +
-        "Set raw:true for the untouched API object. Get the exercise id from athlete_exercises.",
-      inputSchema: { exerciseId: idParam, raw: z.boolean().optional() },
+      description: ATHLETE_EXERCISE_HISTORY_DESC,
+      inputSchema: {
+        exerciseId: idParam,
+        raw: z.boolean().optional(),
+        since: dateString.optional(),
+        until: dateString.optional(),
+      },
       annotations: READ,
     },
-    ({ exerciseId, raw }) =>
+    ({ exerciseId, raw, since, until }) =>
       attempt(async () => {
         const detail = await fetchExerciseHistoryDetail(
           ctx.client,
           toId(exerciseId),
           await userId(),
         );
-        return jsonResult(raw === true ? detail : presentExerciseHistory(detail));
+        if (raw === true) return jsonResult(detail);
+        return jsonResult(historyInRange(presentExerciseHistory(detail), since, until));
       }),
   );
 

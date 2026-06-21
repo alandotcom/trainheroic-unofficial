@@ -42,7 +42,11 @@ function registerReads(server: McpServer, ctx: ToolContext): void {
     {
       title: "Read messages (live)",
       description:
-        "Recent comments in a stream, live from the API (the stream is fetched whole, then trimmed to `limit`).",
+        "Recent comments in a stream, live from the API (the stream is fetched whole, then " +
+        "trimmed to `limit`, default 20). Each comment's `isAuthor` is true when the logged-in " +
+        "user sent it — to answer 'did an athlete message me', look for comments with " +
+        "isAuthor:false. Timestamps are Unix seconds. An empty result means the thread has no " +
+        "messages.",
       inputSchema: { streamId: idParam, limit: z.number().int().positive().max(200).optional() },
       annotations: READ,
     },

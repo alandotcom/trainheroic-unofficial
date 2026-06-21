@@ -17,10 +17,12 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
     {
       title: "Resolve exercise name",
       description:
-        "Map a name to an exercise id via the local mirror. Returns the match plus ranked " +
+        "Map a name to an exercise id via the local mirror. Prefer this over exercise_search when " +
+        "you want a single authoritative id for a known name. Returns the match plus ranked " +
         "candidates; when ambiguous, match is null and you should pick from candidates. " +
         "Each result's `units` array lists the fixed measurement units by entry slot; they " +
-        "are fixed per exercise — check them before prescribing.",
+        "are fixed per exercise — check them before prescribing. `can_edit` is 1 only for the " +
+        "coach's own custom exercises and 0 for built-in library exercises.",
       inputSchema: { name: z.string().min(1) },
       annotations: READ,
     },
@@ -31,7 +33,11 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
     "exercise_search",
     {
       title: "Search exercises",
-      description: "Ranked fuzzy search over exercise titles. Returns candidates with units.",
+      description:
+        "Ranked fuzzy search over exercise titles. Returns candidates with units. Each result's " +
+        "`can_edit` flag marks ownership: 1 = the coach's own custom exercise, 0 = a built-in " +
+        "library exercise — filter on it to answer 'do I have a custom exercise for X'. When you " +
+        "want one definitive id for a known name, use exercise_resolve instead.",
       inputSchema: {
         query: z.string().min(1),
         limit: z.number().int().positive().max(100).optional(),

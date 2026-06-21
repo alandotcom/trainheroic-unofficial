@@ -13,6 +13,28 @@ The tools are defined once in `packages/core` and reused by every server, so an 
 **local** stdio server exercises the same surface a user hits on the hosted worker, without a
 deploy. Default to local.
 
+## Fastest path: the standalone runner (`scripts/mcp-eval.sh`)
+
+Prefer this. `scripts/mcp-eval.sh <athlete|coach> "<query>" [YYYY-MM-DD]` runs ONE query through a
+fresh headless `claude -p` subprocess that spawns its OWN stdio server from `.mcp.json`. Because
+each run is a new process, it always loads the CURRENT source — no reconnect, and no dependency on
+this session's pinned MCP connection (the running stdio servers cache the code they booted with, so
+in-session edits are invisible to them until restart; the standalone runner sidesteps that). It is
+read-only by construction: only read/query tools are whitelisted and every write tool is denied.
+It prints the model's answer followed by the `===EVAL REPORT===` block.
+
+Fan out a whole bank by backgrounding several at once and collecting their stdout:
+
+```bash
+scripts/mcp-eval.sh athlete "Did I record anything this week?" > /tmp/e1.txt 2>/dev/null &
+scripts/mcp-eval.sh athlete "What are my working maxes right now?" > /tmp/e2.txt 2>/dev/null &
+wait
+```
+
+Then synthesize from the report blocks exactly as in Step 4. Use the in-session subagent path
+below only when you specifically want to measure the harness's own tool surface (deferred-tool
+loading, ToolSearch friction) rather than the cleanest navigation of the tools themselves.
+
 ## Inputs (from the skill args, all optional)
 - **target**: `local` (default) or `hosted`. `local` uses the project's stdio servers;
   `hosted` uses the deployed worker's `mcp__claude_ai_Trainheroic__*` tools.

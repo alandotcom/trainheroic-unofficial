@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/core
 
+## 0.6.1
+
+### Patch Changes
+
+- Improve MCP tool usability from eval findings: add coach-side `athlete_lift_history` (a roster athlete's PR board + dated session series for one lift), add `since`/`until` date filtering to `athlete_exercise_history`, and fix `athlete_exercises` to honor `limit` when no query is given. Sharpen descriptions so all-time totals route to `athlete_profile` (not window-summing), `analytics_query` documents that `userIds` takes the whole roster in one call, and `list_teams`/`list_athletes`/`list_programs`/exercise/messaging/working-maxes clarify their semantics.
+  - @trainheroic-unofficial/dto@0.6.1
+  - @trainheroic-unofficial/js@0.6.1
+
 ## 0.6.0
 
 ### Minor Changes
