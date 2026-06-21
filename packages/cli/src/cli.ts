@@ -34,6 +34,7 @@ import {
   presentAthleteWorkouts,
   presentExerciseHistory,
   publishSession,
+  selectWorkouts,
   readLive,
   readSession,
   removeSession,
@@ -92,7 +93,7 @@ Coach — manage a roster (needs a coach account):
 
 Athlete — the logged-in user's own training (a coach account works too):
   athlete whoami | profile [--metric] | prefs | working-maxes
-  athlete workouts --start Y-M-D --end Y-M-D [--raw]
+  athlete workouts --start Y-M-D --end Y-M-D [--raw] [--logged-only] [--limit N]
   athlete exercises [--q <text>] [--limit N]
   athlete history <exerciseId> [--raw]
   athlete prs <exerciseId>
@@ -561,6 +562,8 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
         start: { type: "string" },
         end: { type: "string" },
         raw: { type: "boolean" },
+        "logged-only": { type: "boolean" },
+        limit: { type: "string" },
       });
       const start = isoDate(
         need(values.start as string | undefined, "athlete workouts --start Y-M-D --end Y-M-D"),
@@ -571,7 +574,11 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
         "--end",
       );
       const workouts = await fetchAthleteWorkouts(client, start, end);
-      return out(values.raw === true ? workouts : presentAthleteWorkouts(workouts));
+      if (values.raw === true) return out(workouts);
+      const opts: { loggedOnly?: boolean; limit?: number } = {};
+      if (values["logged-only"] === true) opts.loggedOnly = true;
+      if (values.limit !== undefined) opts.limit = toInt(values.limit as string, "--limit");
+      return out(selectWorkouts(presentAthleteWorkouts(workouts), opts));
     }
     case "exercises": {
       const { values } = parse(a, { q: { type: "string" }, limit: { type: "string" } });

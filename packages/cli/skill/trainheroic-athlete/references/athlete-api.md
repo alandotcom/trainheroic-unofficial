@@ -28,12 +28,23 @@ completed workouts in an inclusive window. Each item:
       and the prescription in `param_1_data_1..10` / `param_2_data_1..10` (one slot per set;
       empty string for unused). Non-numeric prescriptions (`AMRAP`, `8-12`) appear as-is.
 - `summarizedSavedWorkout.saved_workout`: the athlete's logged copy, with `workoutSets[]`
-  whose `id` is the **savedWorkoutSetId** and whose `workoutSetExercises[].id` is the
-  **savedWorkoutSetExerciseId** — the ids the logging write targets.
+  (plus `addedWorkoutSets[]` for work the athlete added) whose `id` is the
+  **savedWorkoutSetId** and whose `workoutSetExercises[].id` is the **savedWorkoutSetExerciseId**
+  — the ids the logging write targets. Each saved exercise's `workout_set_exercise_id` points
+  back at the prescription exercise's `id`.
+  - The athlete's entered values live in the same `param_1_data_1..10` / `param_2_data_1..10`
+    slots, but the saved copy **pre-fills those with the prescription**, so data presence does
+    not mean a set was logged. The reliable per-set "performed" signal is `param_{i}_made == 1`
+    (the same flag the logging write sets). The set/workout-level `completed` and
+    `percent_completed` are unreliable — a session routinely holds logged sets with those left
+    at 0.
 
-The SDK's `presentAthleteWorkout` flattens this to `{ id, date, title, program, team,
-instruction, blocks: [{ order, title, instruction, isTest, exercises: [{ exerciseId, title,
-instruction, units, prescribed }] }] }`.
+The SDK's `presentAthleteWorkout` merges the two copies into `{ id, date, title, program, team,
+instruction, logged, blocks: [{ order, title, instruction, isTest, exercises: [{ exerciseId,
+title, instruction, units, prescribed, performed }] }] }`. `performed` holds the per-set values
+the athlete logged (made-gated; empty when nothing was recorded), `logged` is true when any
+exercise has `performed` values, and athlete-added/personal work with no prescription is
+appended as its own blocks. No `--raw` is needed to read logged results.
 
 ## Exercises, history, PRs
 

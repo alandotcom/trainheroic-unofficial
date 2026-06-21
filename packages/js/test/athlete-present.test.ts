@@ -7,8 +7,13 @@ import {
   findSavedWorkoutSet,
   presentAthleteWorkout,
   presentExerciseHistory,
+  selectWorkouts,
 } from "../src/athlete";
-import type { ExerciseHistoryDetail, ProgramWorkout } from "@trainheroic-unofficial/dto";
+import type {
+  AthleteWorkoutView,
+  ExerciseHistoryDetail,
+  ProgramWorkout,
+} from "@trainheroic-unofficial/dto";
 
 const fixture = <T>(name: string): T =>
   JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", name), "utf8")) as T;
@@ -35,6 +40,111 @@ describe("presentAthleteWorkout", () => {
   it("marks test blocks", () => {
     const hasTest = view.blocks.some((b) => b.isTest);
     expect(typeof hasTest).toBe("boolean");
+  });
+
+  it("merges logged results onto the prescribed exercise and flags the workout as logged", () => {
+    expect(view.logged).toBe(true);
+    const squat = view.blocks.flatMap((b) => b.exercises).find((e) => e.title === "Back Squat");
+    // The athlete's entered sets (reps @ weight), not the prescription.
+    expect(squat?.performed).toEqual(["3 @ 275", "3 @ 285", "3 @ 295", "3 @ 295"]);
+    // The prescription is still present alongside the logged values.
+    expect(squat?.prescribed.length).toBeGreaterThan(0);
+  });
+
+  it("appends athlete-added work that has no prescription as its own block", () => {
+    const bike = view.blocks.flatMap((b) => b.exercises).find((e) => e.title === "Assault Bike");
+    expect(bike).toBeDefined();
+    expect(bike?.prescribed).toEqual([]);
+    expect(bike?.performed).toEqual(["12"]);
+  });
+
+  it("does not treat prescription pre-fill (data present, made=0) as performed", () => {
+    // The saved copy carries Split Squat data identical to the prescription, but its
+    // param_N_made flags are 0 — the athlete never logged it. performed must stay empty.
+    const split = view.blocks
+      .flatMap((b) => b.exercises)
+      .find((e) => e.title === "Front Foot Elevated Split Squat");
+    expect(split?.prescribed.length).toBeGreaterThan(0);
+    expect(split?.performed).toEqual([]);
+  });
+
+  it("presents a personal session (saved copy only, no prescription) from logged data", () => {
+    const personal = presentAthleteWorkout({
+      id: 1,
+      date: "2026-06-20",
+      program_title: "Alan Cohen",
+      summarizedSavedWorkout: {
+        saved_workout: {
+          id: 42,
+          workoutSets: [
+            {
+              id: 7,
+              order: 1,
+              title: "Personal",
+              workoutSetExercises: [
+                {
+                  id: 70,
+                  workout_set_exercise_id: 70,
+                  exercise_id: 1162,
+                  exercise_title: "Bench Press",
+                  param_1_type: 3,
+                  param_2_type: 1,
+                  param_1_data_1: "5",
+                  param_2_data_1: "185",
+                  param_1_made: 1,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    } as unknown as ProgramWorkout);
+    expect(personal.logged).toBe(true);
+    const bench = personal.blocks
+      .flatMap((b) => b.exercises)
+      .find((e) => e.title === "Bench Press");
+    expect(bench?.performed).toEqual(["5 @ 185"]);
+    expect(bench?.prescribed).toEqual([]);
+  });
+});
+
+describe("selectWorkouts", () => {
+  const view = (date: string, logged: boolean): AthleteWorkoutView => ({
+    id: Number(date.replaceAll("-", "")),
+    date,
+    title: date,
+    program: null,
+    team: null,
+    instruction: null,
+    logged,
+    blocks: [],
+  });
+  const list: AthleteWorkoutView[] = [
+    view("2026-06-16", false),
+    view("2026-06-18", true),
+    view("2026-06-20", false),
+    view("2026-06-11", true),
+  ];
+
+  it("returns everything (a copy) with no options", () => {
+    const out = selectWorkouts(list);
+    expect(out).toHaveLength(4);
+    expect(out).not.toBe(list);
+  });
+
+  it("loggedOnly keeps only workouts with logged sets", () => {
+    const out = selectWorkouts(list, { loggedOnly: true });
+    expect(out.map((w) => w.date)).toEqual(["2026-06-18", "2026-06-11"]);
+  });
+
+  it("limit returns the most recent N, newest first", () => {
+    const out = selectWorkouts(list, { limit: 2 });
+    expect(out.map((w) => w.date)).toEqual(["2026-06-20", "2026-06-18"]);
+  });
+
+  it("combines loggedOnly and limit", () => {
+    const out = selectWorkouts(list, { loggedOnly: true, limit: 1 });
+    expect(out.map((w) => w.date)).toEqual(["2026-06-18"]);
   });
 });
 

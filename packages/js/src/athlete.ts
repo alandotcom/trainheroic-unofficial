@@ -189,19 +189,49 @@ function prescribedSets(ex: Record<string, unknown>): string[] {
   return out;
 }
 
-function presentExercise(ex: Record<string, unknown>): AthleteWorkoutExercise {
+/**
+ * The per-set values the athlete actually logged, read from a saved-copy exercise. A set
+ * counts as performed only when its `param_{i}_made` flag is 1: the saved copy pre-fills the
+ * `param_N_data` slots with the prescription, so the presence of data alone does not mean a
+ * set was done. `param_{i}_made` is the same per-set flag the logging write sets, and is the
+ * only reliable signal (the `completed` flags are often left at 0 on a logged session).
+ */
+function performedSets(ex: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  for (let i = 1; i <= SLOTS; i += 1) {
+    if (coerceInt(ex[`param_${i}_made`]) !== 1) continue;
+    const p1 = ex[`param_1_data_${i}`];
+    const p2 = ex[`param_2_data_${i}`];
+    const has1 = nonEmpty(p1);
+    const has2 = nonEmpty(p2);
+    if (has1 && has2) out.push(`${p1} @ ${p2}`);
+    else if (has1) out.push(String(p1));
+    else if (has2) out.push(`@ ${p2}`);
+  }
+  return out;
+}
+
+function presentExercise(
+  ex: Record<string, unknown>,
+  performedById: Map<number, string[]>,
+): AthleteWorkoutExercise {
   const instruction =
     typeof ex.instruction === "string" && ex.instruction !== "" ? ex.instruction : null;
+  const id = coerceInt(ex.id);
   return {
     exerciseId: coerceInt(ex.exercise_id),
     title: typeof ex.title === "string" ? ex.title : "",
     instruction,
     units: exerciseUnits(ex.param_1_type, ex.param_2_type),
     prescribed: prescribedSets(ex),
+    performed: (id !== null ? performedById.get(id) : undefined) ?? [],
   };
 }
 
-function presentBlock(set: Record<string, unknown>): AthleteWorkoutBlock {
+function presentBlock(
+  set: Record<string, unknown>,
+  performedById: Map<number, string[]>,
+): AthleteWorkoutBlock {
   const exercises = Array.isArray(set.workoutSetExercises) ? set.workoutSetExercises : [];
   return {
     order: coerceInt(set.order) ?? 0,
@@ -209,7 +239,7 @@ function presentBlock(set: Record<string, unknown>): AthleteWorkoutBlock {
     instruction:
       typeof set.instruction === "string" && set.instruction !== "" ? set.instruction : null,
     isTest: coerceInt(set.is_test) === 1,
-    exercises: exercises.filter(isRecord).map(presentExercise),
+    exercises: exercises.filter(isRecord).map((ex) => presentExercise(ex, performedById)),
   };
 }
 
@@ -217,12 +247,111 @@ function str(v: unknown): string | null {
   return typeof v === "string" && v !== "" ? v : null;
 }
 
-/** Flatten one `/3.0/athlete/programworkout/range` item into a readable workout. */
+/** Every logged set (programmed + athlete-added) in the saved copy, paired with its exercises. */
+function savedSets(
+  saved: Record<string, unknown>,
+): Array<{ set: Record<string, unknown>; exercises: Record<string, unknown>[] }> {
+  const out: Array<{ set: Record<string, unknown>; exercises: Record<string, unknown>[] }> = [];
+  for (const key of ["workoutSets", "addedWorkoutSets"] as const) {
+    const sets = Array.isArray(saved[key]) ? saved[key] : [];
+    for (const set of sets) {
+      if (!isRecord(set)) continue;
+      const exercises = (
+        Array.isArray(set.workoutSetExercises) ? set.workoutSetExercises : []
+      ).filter(isRecord);
+      out.push({ set, exercises });
+    }
+  }
+  return out;
+}
+
+/**
+ * Map each prescription exercise id to the per-set values the athlete logged. In the saved
+ * copy, `workout_set_exercise_id` points back at the prescription exercise's `id`, and the
+ * entered values live in the same `param_N_data` slots as a prescription — so the
+ * prescription reader works on them unchanged.
+ */
+function performedByExerciseId(
+  sets: Array<{ exercises: Record<string, unknown>[] }>,
+): Map<number, string[]> {
+  const map = new Map<number, string[]>();
+  for (const { exercises } of sets) {
+    for (const ex of exercises) {
+      const id = coerceInt(ex.workout_set_exercise_id);
+      if (id === null) continue;
+      const values = performedSets(ex);
+      if (values.length > 0) map.set(id, values);
+    }
+  }
+  return map;
+}
+
+/** Present a logged set straight from the saved copy (athlete-added or personal work). */
+function presentSavedBlock(
+  set: Record<string, unknown>,
+  exercises: Record<string, unknown>[],
+): AthleteWorkoutBlock {
+  return {
+    order: coerceInt(set.order) ?? 0,
+    title: typeof set.title === "string" && set.title !== "" ? set.title : null,
+    instruction:
+      typeof set.instruction === "string" && set.instruction !== "" ? set.instruction : null,
+    isTest: coerceInt(set.is_test) === 1,
+    exercises: exercises.map((ex) => ({
+      exerciseId: coerceInt(ex.exercise_id),
+      title: typeof ex.exercise_title === "string" ? ex.exercise_title : "",
+      instruction:
+        typeof ex.instruction === "string" && ex.instruction !== "" ? ex.instruction : null,
+      units: exerciseUnits(ex.param_1_type, ex.param_2_type),
+      prescribed: [],
+      performed: performedSets(ex),
+    })),
+  };
+}
+
+/**
+ * Flatten one `/3.0/athlete/programworkout/range` item into a readable workout, merging the
+ * prescription (`summarizedSavedWorkout.workout`) with what the athlete logged
+ * (`summarizedSavedWorkout.saved_workout`). Each exercise carries both its `prescribed` and
+ * `performed` sets; athlete-added/personal work that has no prescription is appended as its
+ * own blocks. No `raw` is needed to see logged results.
+ */
 export function presentAthleteWorkout(raw: ProgramWorkout): AthleteWorkoutView {
   const rec = raw as Record<string, unknown>;
   const ssw = isRecord(rec.summarizedSavedWorkout) ? rec.summarizedSavedWorkout : {};
   const workout = isRecord(ssw.workout) ? ssw.workout : {};
-  const sets = Array.isArray(workout.workoutSets) ? workout.workoutSets : [];
+  const saved = isRecord(ssw.saved_workout) ? ssw.saved_workout : {};
+  const prescriptionSets = (Array.isArray(workout.workoutSets) ? workout.workoutSets : []).filter(
+    isRecord,
+  );
+
+  const logged = savedSets(saved);
+  const performedById = performedByExerciseId(logged);
+
+  // Prescription blocks, each exercise enriched with what the athlete actually logged.
+  const blocks = prescriptionSets
+    .map((s) => presentBlock(s, performedById))
+    .sort((a, b) => a.order - b.order);
+
+  // Logged sets with no matching prescription (athlete-added work, personal sessions).
+  const prescribedIds = new Set<number>();
+  for (const s of prescriptionSets) {
+    const exs = Array.isArray(s.workoutSetExercises) ? s.workoutSetExercises : [];
+    for (const ex of exs) {
+      if (!isRecord(ex)) continue;
+      const id = coerceInt(ex.id);
+      if (id !== null) prescribedIds.add(id);
+    }
+  }
+  for (const { set, exercises } of logged) {
+    const extra = exercises.filter((ex) => {
+      if (performedSets(ex).length === 0) return false;
+      const id = coerceInt(ex.workout_set_exercise_id);
+      return id === null || !prescribedIds.has(id);
+    });
+    if (extra.length > 0) blocks.push(presentSavedBlock(set, extra));
+  }
+
   return {
     id: coerceInt(rec.id),
     date: str(rec.date) ?? "",
@@ -230,15 +359,32 @@ export function presentAthleteWorkout(raw: ProgramWorkout): AthleteWorkoutView {
     program: str(rec.program_title),
     team: str(rec.team_title),
     instruction: str(workout.instruction),
-    blocks: sets
-      .filter(isRecord)
-      .map(presentBlock)
-      .sort((a, b) => a.order - b.order),
+    logged: blocks.some((b) => b.exercises.some((e) => e.performed.length > 0)),
+    blocks,
   };
 }
 
 export function presentAthleteWorkouts(list: readonly ProgramWorkout[]): AthleteWorkoutView[] {
   return list.map(presentAthleteWorkout);
+}
+
+/**
+ * Narrow a presented workout list for the common "what did I actually do" reads. `loggedOnly`
+ * keeps only workouts the athlete logged a set on (the reliable signal, not the API's
+ * completion flag). `limit` keeps the most recent N by date (newest first). Both are pure
+ * post-filters over the presented view; the raw API path is left untouched.
+ */
+export function selectWorkouts(
+  list: readonly AthleteWorkoutView[],
+  opts: { loggedOnly?: boolean; limit?: number } = {},
+): AthleteWorkoutView[] {
+  let out = opts.loggedOnly === true ? list.filter((w) => w.logged) : [...list];
+  if (opts.limit !== undefined) {
+    out = [...out]
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+      .slice(0, opts.limit);
+  }
+  return out;
 }
 
 // --- Set logging write path ---

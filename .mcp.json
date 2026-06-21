@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "trainheroic-local": {
+      "command": "bash",
+      "args": ["scripts/mcp-eval-server.sh", "athlete"]
+    },
+    "trainheroic-local-coach": {
+      "command": "bash",
+      "args": ["scripts/mcp-eval-server.sh", "coach"]
+    }
+  }
+}

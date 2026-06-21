@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import schema1 from "../migrations/0001_init.sql?raw";
 import schema3 from "../migrations/0003_athlete.sql?raw";
+import schema4 from "../migrations/0004_athlete_performed.sql?raw";
 import { AthleteTrainingStore } from "../src/store/athlete-training";
 import { AthleteWorkoutStore } from "../src/store/athlete-workouts";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
@@ -44,6 +45,7 @@ const WORKOUT = {
           type: 4,
           workoutSetExercises: [
             {
+              id: 100,
               exercise_id: 1,
               title: "Back Squat",
               instruction: "heavy",
@@ -53,6 +55,30 @@ const WORKOUT = {
               param_2_data_1: "185",
               param_1_data_2: "5",
               param_2_data_2: "205",
+            },
+          ],
+        },
+      ],
+    },
+    saved_workout: {
+      id: 9001,
+      completed: 0,
+      workoutSets: [
+        {
+          id: 9002,
+          order: 1,
+          title: "Primary",
+          workoutSetExercises: [
+            {
+              id: 9003,
+              workout_set_exercise_id: 100,
+              exercise_id: 1,
+              exercise_title: "Back Squat",
+              param_1_type: 3,
+              param_2_type: 1,
+              param_1_data_1: "5",
+              param_2_data_1: "190",
+              param_1_made: 1,
             },
           ],
         },
@@ -112,9 +138,16 @@ function stubApi(): void {
 const client = (): TrainHeroicClient => new TrainHeroicClient("a@b.com", "pw");
 
 beforeEach(async () => {
-  await env.TH_DB.batch(
-    [...statements(schema1), ...statements(schema3)].map((s) => env.TH_DB.prepare(s)),
-  );
+  // The test D1 persists across beforeEach runs. CREATE TABLE IF NOT EXISTS is idempotent, but
+  // 0004's ALTER TABLE ADD COLUMN is not — re-applying it raises "duplicate column", which is
+  // the already-migrated state we want, so swallow just that.
+  for (const s of [...statements(schema1), ...statements(schema3), ...statements(schema4)]) {
+    try {
+      await env.TH_DB.prepare(s).run();
+    } catch (e) {
+      if (!String(e).includes("duplicate column")) throw e;
+    }
+  }
   await env.TH_DB.batch(
     [
       "athlete_workout",
@@ -139,17 +172,21 @@ describe("AthleteWorkoutStore", () => {
     const result = await store.sync("2026-06-01", "2026-06-07");
     expect(result).toMatchObject({ workouts: 1, exercises: 1 });
 
-    const list = (await store.list()) as Array<{ id: number; title: string }>;
+    const list = (await store.list()) as Array<{ id: number; title: string; logged: boolean }>;
     expect(list).toHaveLength(1);
     expect(list[0]?.title).toBe("Day 1");
+    expect(list[0]?.logged).toBe(true);
 
     const rows = (await store.workoutExercises(555)) as Array<{
       title: string;
       prescribed: unknown;
+      performed: unknown;
     }>;
     expect(rows).toHaveLength(1);
     expect(rows[0]?.title).toBe("Back Squat");
     expect(rows[0]?.prescribed).toEqual(["5 @ 185", "5 @ 205"]);
+    // Only the made-gated set is performed (190, not the prescription's 185/205).
+    expect(rows[0]?.performed).toEqual(["5 @ 190"]);
   });
 
   it("is idempotent: re-sync rebuilds exercise rows without duplicating", async () => {

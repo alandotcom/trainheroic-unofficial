@@ -199,7 +199,7 @@ export type LogSetArgs = z.infer<typeof logSetArgsSchema>;
 
 // --- Presented (model-friendly) view types, produced by the `js` presenters ---
 
-/** A flattened exercise within a presented workout: prescriptions per set + positional units. */
+/** A flattened exercise within a presented workout: prescriptions, logged results, units. */
 export type AthleteWorkoutExercise = {
   exerciseId: number | null;
   title: string;
@@ -207,6 +207,13 @@ export type AthleteWorkoutExercise = {
   units: Array<string | null>;
   /** Per-set prescriptions, e.g. ["5 @ 225 lb", "3 @ 245 lb"] or ["AMRAP"]. */
   prescribed: string[];
+  /**
+   * Per-set values the athlete actually logged, same shape as `prescribed`. Empty when
+   * nothing was recorded for this exercise. This — not any "completed" flag — is the
+   * reliable signal that a set was performed (the API leaves completion flags at 0 even
+   * when results were entered).
+   */
+  performed: string[];
 };
 
 /** A block (workout set) within a presented workout. */
@@ -226,6 +233,12 @@ export type AthleteWorkoutView = {
   program: string | null;
   team: string | null;
   instruction: string | null;
+  /**
+   * True when the athlete logged at least one set on this workout (any exercise has
+   * `performed` values). Use this to tell a recorded session from a merely scheduled one;
+   * the API's own completion flags are unreliable.
+   */
+  logged: boolean;
   blocks: AthleteWorkoutBlock[];
 };
 
