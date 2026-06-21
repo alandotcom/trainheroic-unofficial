@@ -1,8 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import process from "node:process";
-import { registerAthleteTrainingTools } from "@trainheroic-unofficial/core";
+import { registerAthleteTrainingTools, SERVER_INSTRUCTIONS } from "@trainheroic-unofficial/core";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
+import pkg from "../package.json" with { type: "json" };
 
 // Single-user local MCP server over stdio for a TrainHeroic ATHLETE account. No OAuth, no
 // database, no exercise-library index: the athlete tools read the logged-in user's own
@@ -19,7 +20,10 @@ async function main(): Promise<void> {
 
   const client = new TrainHeroicClient(email, password);
 
-  const server = new McpServer({ name: "trainheroic-athlete", version: "0.1.0" });
+  const server = new McpServer(
+    { name: "trainheroic-athlete", version: pkg.version },
+    { instructions: SERVER_INSTRUCTIONS },
+  );
   registerAthleteTrainingTools(server, { client });
 
   await server.connect(new StdioServerTransport());
