@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/core
 
+## 0.6.4
+
+### Patch Changes
+
+- New coach `roster_activity(athleteIds)` tool ranks a roster by actual training recency (each athlete's all-time session count and first/last logged date, sorted most-recently-active first), so "who is my most recently active athlete / who is falling behind" no longer needs an analytics fan-out off the misleading app-login signal. Backed by `fetchRosterActivity` in the SDK, which fans out the per-athlete profile summary, normalizes the API's epoch placeholder to null, and breaks recency ties by session count.
+  - @trainheroic-unofficial/dto@0.6.4
+  - @trainheroic-unofficial/js@0.6.4
+
 ## 0.6.3
 
 ### Patch Changes
