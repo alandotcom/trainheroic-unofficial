@@ -1,5 +1,12 @@
 # @trainheroic-unofficial/js
 
+## 0.4.1
+
+### Patch Changes
+
+- Add `createPersonalWorkout` and `addExercisesToWorkout` SDK functions plus `athlete_session_create` and `athlete_session_add_exercises` MCP tools.
+  - @trainheroic-unofficial/dto@0.4.1
+
 ## 0.4.0
 
 ### Minor Changes

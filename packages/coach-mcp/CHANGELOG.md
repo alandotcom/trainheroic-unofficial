@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/coach-mcp
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @trainheroic-unofficial/js@0.4.1
+  - @trainheroic-unofficial/core@0.4.1
+
 ## 0.4.0
 
 ### Patch Changes
