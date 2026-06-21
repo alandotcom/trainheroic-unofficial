@@ -4,6 +4,7 @@ import { dateString } from "@trainheroic-unofficial/dto";
 import {
   fetchCoachAthleteCalendarSummary,
   fetchExerciseHistoryDetail,
+  fetchRosterActivity,
   presentCoachAthleteTraining,
   presentExerciseHistory,
 } from "@trainheroic-unofficial/js";
@@ -22,6 +23,16 @@ const ATHLETE_LIFT_HISTORY_DESC =
   "e.g. 'Clean & Jerk' not 'Clean') — then bring those exerciseIds here. An empty result means " +
   "that lift was not logged. liftPRs stay all-time; pass since/until (YYYY-MM-DD, inclusive) to " +
   "window the session series. raw:true returns the untouched API object.";
+
+const ROSTER_ACTIVITY_DESC =
+  "A coach's roster ranked by actual training recency: for each athleteId you pass (from " +
+  "list_athletes), the all-time sessionsCount, firstLoggedDate, lastLoggedDate, totalReps and " +
+  "totalVolume, sorted most-recently-active first. Use lastLoggedDate — the real training signal — " +
+  "NOT list_athletes' daysSinceLastLogin (app-login, not training) to answer 'who is my most " +
+  "recently active athlete' (the top row) or 'who is falling behind' (a stale or null " +
+  "lastLoggedDate, or low volume). A null lastLoggedDate means the athlete has never logged a " +
+  "session. This fans out one lookup per athlete, so for a large org pass only the athletes you " +
+  "care about. Then drill into a name with athlete_training (their month) or athlete_lift_history.";
 
 const ATHLETE_TRAINING_DESC =
   "A roster athlete's training for one calendar month (coach-side): one row per session with its " +
@@ -105,7 +116,9 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
         "athlete can have logged in today yet have no logged sessions; null means no login on " +
         "record. For per-team attribution use each athlete's own `groups`/`groupTitles` (the teams " +
         "they are enrolled in) and `teamCount`; there is no per-team roster endpoint or other " +
-        "per-athlete team field. Optional q (case-insensitive; each whitespace-separated word must " +
+        "per-athlete team field. To rank athletes by real training recency (most recently active, " +
+        "or who is falling behind), pass their ids to roster_activity instead of reading " +
+        "daysSinceLastLogin. Optional q (case-insensitive; each whitespace-separated word must " +
         "appear in the record, so 'Kyle Jones' matches a 'Jones, [Demo] Kyle' entry) and limit, " +
         "applied client-side, keep large rosters small.",
       inputSchema: {
@@ -227,6 +240,28 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         if (raw === true) return jsonResult(detail);
         return jsonResult(historyInRange(presentExerciseHistory(detail), since, until));
       }),
+  );
+
+  server.registerTool(
+    "roster_activity",
+    {
+      title: "Roster training activity (recency)",
+      description: ROSTER_ACTIVITY_DESC,
+      inputSchema: {
+        athleteIds: z.array(idParam).min(1),
+        useMetric: z.boolean().optional(),
+      },
+      annotations: READ,
+    },
+    ({ athleteIds, useMetric }) =>
+      attempt(async () =>
+        jsonResult(
+          await fetchRosterActivity(ctx.client, athleteIds.map(toId), useMetric ?? false),
+          {
+            hint: "Sorted most-recently-active first; lastLoggedDate null = never logged. The top row is the most recently active athlete.",
+          },
+        ),
+      ),
   );
 
   server.registerTool(

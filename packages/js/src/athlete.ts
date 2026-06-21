@@ -23,6 +23,7 @@ import type {
   PersonalRecord,
   PresentedExerciseHistory,
   ProgramWorkout,
+  RosterActivityRow,
 } from "@trainheroic-unofficial/dto";
 
 async function getJson<T>(client: TrainHeroicClient, path: string, label: string): Promise<T> {
@@ -70,6 +71,68 @@ export function fetchAthleteProfileSummary(
 
 export function fetchAthleteUser(client: TrainHeroicClient, userId: number): Promise<AthleteUser> {
   return getJson(client, `/v5/users/${userId}`, "athlete user");
+}
+
+/**
+ * Sort a roster-activity list most-recently-active first; never-logged rows (null date) last.
+ * Athletes tied on lastLoggedDate break by session count (more sessions first), so a tie is not
+ * left to arbitrary input order.
+ */
+export function sortRosterByRecency(rows: readonly RosterActivityRow[]): RosterActivityRow[] {
+  return [...rows].sort((a, b) => {
+    if (a.lastLoggedDate !== b.lastLoggedDate) {
+      if (a.lastLoggedDate === null) return 1;
+      if (b.lastLoggedDate === null) return -1;
+      return a.lastLoggedDate < b.lastLoggedDate ? 1 : -1;
+    }
+    return (b.sessionsCount ?? 0) - (a.sessionsCount ?? 0);
+  });
+}
+
+/**
+ * A coach's roster-activity ranking: each athlete's all-time training snapshot (session count,
+ * first/last logged date, total reps/volume), sorted most-recently-active first. There is no
+ * single roster-activity endpoint, so this fans out `/v5/athleteProfile/summary` per athlete with
+ * a small concurrency cap; pass the subset you care about for a large org. A failed or missing
+ * summary becomes a null-data row (sorted last), not an error.
+ */
+export async function fetchRosterActivity(
+  client: TrainHeroicClient,
+  athleteIds: readonly number[],
+  useMetric = false,
+): Promise<RosterActivityRow[]> {
+  const rows: RosterActivityRow[] = [];
+  const concurrency = 6;
+  for (let i = 0; i < athleteIds.length; i += concurrency) {
+    const chunk = athleteIds.slice(i, i + concurrency);
+    const settled = await Promise.all(
+      chunk.map(async (id) => {
+        try {
+          return { id, summary: await fetchAthleteProfileSummary(client, id, useMetric) };
+        } catch {
+          return { id, summary: null };
+        }
+      }),
+    );
+    for (const { id, summary } of settled) {
+      const count = summary?.sessions_count ?? null;
+      // The summary endpoint returns the epoch placeholder "1970-01-01" (not null) for an athlete
+      // who has never logged. Normalize that — and any date when the session count is 0 — to null,
+      // so a null lastLoggedDate means exactly "never logged".
+      const hasSessions = count !== null && count > 0;
+      const normDate = (d: string | undefined): string | null =>
+        hasSessions && d !== undefined && d !== "" && !d.startsWith("1970") ? d : null;
+      rows.push({
+        athleteId: id,
+        sessionsCount: count,
+        firstLoggedDate: normDate(summary?.first_logged_date),
+        lastLoggedDate: normDate(summary?.last_logged_date),
+        totalReps: summary?.reps_sum ?? null,
+        totalVolume: summary?.volume_sum ?? null,
+      });
+    }
+  }
+  return sortRosterByRecency(rows);
 }
 
 export function fetchAthletePrefs(client: TrainHeroicClient): Promise<AthletePrefs> {

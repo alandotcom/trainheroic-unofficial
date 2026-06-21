@@ -303,6 +303,20 @@ export type CoachAthleteTraining = {
   sessions: CoachAthleteSession[];
 };
 
+/**
+ * One athlete's all-time training snapshot in a coach's roster-activity ranking. `lastLoggedDate`
+ * is the real training-recency signal (null means the athlete has never logged a session),
+ * distinct from `list_athletes`'s `daysSinceLastLogin`, which is app-login recency.
+ */
+export type RosterActivityRow = {
+  athleteId: number;
+  sessionsCount: number | null;
+  firstLoggedDate: string | null;
+  lastLoggedDate: string | null;
+  totalReps: number | null;
+  totalVolume: number | null;
+};
+
 /** One performed session in a presented exercise history. */
 export type PresentedExerciseSession = {
   date: string;

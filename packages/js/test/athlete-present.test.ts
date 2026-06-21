@@ -5,12 +5,16 @@ import {
   buildExerciseLogPayload,
   buildSetCompletePayload,
   findSavedWorkoutSet,
+  fetchRosterActivity,
   presentAthleteWorkout,
   presentCoachAthleteTraining,
   presentExerciseHistory,
   selectWorkouts,
+  sortRosterByRecency,
   summarizeAthleteWorkouts,
 } from "../src/athlete";
+import type { TrainHeroicClient } from "../src/client";
+import type { RosterActivityRow } from "@trainheroic-unofficial/dto";
 import type {
   AthleteWorkoutView,
   ExerciseHistoryDetail,
@@ -212,6 +216,61 @@ describe("summarizeAthleteWorkouts", () => {
     const [row] = summarizeAthleteWorkouts([view]);
     expect(row?.exerciseCount).toBe(2);
     expect(row?.performedCount).toBe(1);
+  });
+});
+
+describe("sortRosterByRecency", () => {
+  const row = (athleteId: number, lastLoggedDate: string | null): RosterActivityRow => ({
+    athleteId,
+    sessionsCount: null,
+    firstLoggedDate: null,
+    lastLoggedDate,
+    totalReps: null,
+    totalVolume: null,
+  });
+
+  it("orders most-recently-active first and pushes never-logged (null) to the end", () => {
+    const out = sortRosterByRecency([
+      row(1, "2026-06-10"),
+      row(2, null),
+      row(3, "2026-06-17"),
+      row(4, "2026-05-01"),
+    ]);
+    expect(out.map((r) => r.athleteId)).toEqual([3, 1, 4, 2]);
+  });
+
+  it("breaks a recency tie by session count (more first)", () => {
+    const out = sortRosterByRecency([
+      { ...row(1, "2026-06-17"), sessionsCount: 4 },
+      { ...row(2, "2026-06-17"), sessionsCount: 9 },
+    ]);
+    expect(out.map((r) => r.athleteId)).toEqual([2, 1]);
+  });
+});
+
+describe("fetchRosterActivity", () => {
+  // Stub client: a logged athlete (10, 11), and a never-logged one (12) that the live endpoint
+  // reports with sessions_count 0 and the epoch placeholder "1970-01-01".
+  const fixtures: Record<number, { sessions_count: number; last_logged_date: string }> = {
+    10: { sessions_count: 9, last_logged_date: "2026-06-17" },
+    11: { sessions_count: 5, last_logged_date: "2026-06-08" },
+    12: { sessions_count: 0, last_logged_date: "1970-01-01" },
+  };
+  const client = {
+    request: async (_method: string, path: string) => {
+      const id = Number(/user_id=(\d+)/.exec(path)?.[1]);
+      return { status: 200, ok: true, data: fixtures[id] };
+    },
+  } as unknown as TrainHeroicClient;
+
+  it("fans out a per-athlete snapshot, ranks by recency, and normalizes the epoch placeholder", async () => {
+    const out = await fetchRosterActivity(client, [11, 12, 10]);
+    expect(out.map((r) => r.athleteId)).toEqual([10, 11, 12]);
+    expect(out[0]?.lastLoggedDate).toBe("2026-06-17");
+    // The never-logged athlete sorts last with a null date (not "1970-01-01") and 0 sessions.
+    expect(out[2]?.athleteId).toBe(12);
+    expect(out[2]?.lastLoggedDate).toBeNull();
+    expect(out[2]?.sessionsCount).toBe(0);
   });
 });
 
