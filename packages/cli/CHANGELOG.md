@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/cli
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @trainheroic-unofficial/js@0.4.1
+  - @trainheroic-unofficial/dto@0.4.1
+
 ## 0.4.0
 
 ### Minor Changes

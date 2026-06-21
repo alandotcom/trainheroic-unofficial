@@ -456,6 +456,71 @@ export async function logAthleteSet(
   return { savedWorkoutSetId: args.savedWorkoutSetId, exercisesLogged };
 }
 
+export type PersonalWorkoutCreated = {
+  programWorkoutId: number;
+  workoutId: number;
+  savedWorkoutId: number;
+  groupId: number;
+  date: string;
+};
+
+/**
+ * POST /v5/programWorkouts/personal — create a personal workout session for a given date.
+ * Returns the key ids: workoutId (needed for addExercisesToWorkout), programWorkoutId,
+ * savedWorkoutId, and groupId.
+ */
+export async function createPersonalWorkout(
+  client: TrainHeroicClient,
+  date: string,
+): Promise<PersonalWorkoutCreated> {
+  const res = await client.request<unknown>("POST", "/v5/programWorkouts/personal", {
+    body: { date },
+  });
+  if (!res.ok) throw new Error(`Create personal workout failed (HTTP ${res.status}).`);
+  if (!isRecord(res.data))
+    throw new Error("Unexpected response from /v5/programWorkouts/personal.");
+  const pw = isRecord(res.data.programWorkout) ? res.data.programWorkout : null;
+  const sw = isRecord(res.data.savedWorkout) ? res.data.savedWorkout : null;
+  if (!pw || !sw) throw new Error("Missing programWorkout or savedWorkout in response.");
+  const programWorkoutId = coerceInt(pw.id);
+  const workoutId = coerceInt(pw.workoutId);
+  const savedWorkoutId = coerceInt(sw.id);
+  const groupId = coerceInt(sw.group_id);
+  if (!programWorkoutId || !workoutId || !savedWorkoutId || !groupId) {
+    throw new Error("Could not parse required ids from personal workout response.");
+  }
+  return {
+    programWorkoutId,
+    workoutId,
+    savedWorkoutId,
+    groupId,
+    date: typeof pw.date === "string" ? pw.date : date,
+  };
+}
+
+/** One exercise item for addExercisesToWorkout. */
+export type AddedExercise = { exerciseId: number; order: number };
+
+/**
+ * PUT /v5/personalCalendar/workouts/{workoutId}/addExercises — add exercises to a personal
+ * workout. Returns saved workout set objects: each top-level `id` is a savedWorkoutSetId
+ * and `savedWorkoutSetExercises[].id` is a savedWorkoutSetExerciseId, both needed by
+ * logAthleteSet.
+ */
+export async function addExercisesToWorkout(
+  client: TrainHeroicClient,
+  workoutId: number,
+  exercises: AddedExercise[],
+): Promise<unknown> {
+  const res = await client.request<unknown>(
+    "PUT",
+    `/v5/personalCalendar/workouts/${workoutId}/addExercises`,
+    { body: { exercises, circuits: [] } },
+  );
+  if (!res.ok) throw new Error(`Add exercises to workout failed (HTTP ${res.status}).`);
+  return res.data;
+}
+
 /** Flatten `/v5/exercises/{id}/history` into PRs + a session time-series. */
 export function presentExerciseHistory(detail: ExerciseHistoryDetail): PresentedExerciseHistory {
   const liftPRs = (detail.liftPRs ?? []).map((p) => ({

@@ -2,7 +2,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { dateString, logSetArgsSchema } from "@trainheroic-unofficial/dto";
 import {
+  addExercisesToWorkout,
   coerceInt,
+  createPersonalWorkout,
   exerciseUnits,
   fetchAthletePrefs,
   fetchAthleteProfileSummary,
@@ -220,6 +222,50 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
   );
 }
 
+/** Create a personal workout session and add exercises to it. */
+function registerSessionTools(server: McpServer, ctx: AthleteContext): void {
+  server.registerTool(
+    "athlete_session_create",
+    {
+      title: "Create personal workout session",
+      description:
+        "Create a new personal workout session for a given YYYY-MM-DD date on the athlete's " +
+        "personal calendar. Returns programWorkoutId, workoutId (pass to " +
+        "athlete_session_add_exercises), savedWorkoutId, groupId, and date.",
+      inputSchema: { date: dateString },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    ({ date }) => attempt(async () => jsonResult(await createPersonalWorkout(ctx.client, date))),
+  );
+
+  server.registerTool(
+    "athlete_session_add_exercises",
+    {
+      title: "Add exercises to a personal workout session",
+      description:
+        "Add one or more exercises to a personal workout session. Get workoutId from " +
+        "athlete_session_create. Each item needs an exerciseId (from athlete_exercises) and a " +
+        "1-based order. Returns saved workout set objects: each top-level id is a " +
+        "savedWorkoutSetId and savedWorkoutSetExercises[].id is a savedWorkoutSetExerciseId " +
+        "— both needed for athlete_log_set.",
+      inputSchema: {
+        workoutId: idParam,
+        exercises: z
+          .array(z.object({ exerciseId: idParam, order: z.number().int().positive() }))
+          .min(1),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    ({ workoutId, exercises }) =>
+      attempt(async () => {
+        const mapped = exercises.map((e) => ({ exerciseId: toId(e.exerciseId), order: e.order }));
+        return jsonResult(await addExercisesToWorkout(ctx.client, toId(workoutId), mapped), {
+          hint: "Each top-level id is a savedWorkoutSetId; savedWorkoutSetExercises[].id is the savedWorkoutSetExerciseId for athlete_log_set.",
+        });
+      }),
+  );
+}
+
 /** The gated set-logging write. */
 function registerLogTool(server: McpServer, ctx: AthleteContext): void {
   server.registerTool(
@@ -290,5 +336,6 @@ export function registerAthleteTrainingTools(server: McpServer, ctx: AthleteCont
 
   registerProfileTools(server, ctx, whoami, userId);
   registerExerciseTools(server, ctx, userId);
+  registerSessionTools(server, ctx);
   registerLogTool(server, ctx);
 }
