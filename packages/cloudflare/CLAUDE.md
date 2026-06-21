@@ -26,7 +26,11 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
 - `src/auth/`: the `/authorize` login flow, the login page, and the crypto helpers.
 - `src/store/`: the per-tenant D1 layer. `ExerciseStore` implements the SDK's `ExerciseIndex`
   interface (the hosted counterpart to the in-memory `ExerciseLibrary`); the programming and
-  messaging stores back the warehouse zones.
+  messaging stores back the warehouse zones. Queries go through Drizzle ORM (pinned to the v1
+  release candidate `drizzle-orm@1.0.0-rc.3`): `src/store/schema.ts` is the typed table
+  definition, and the base stores wrap their `D1Database` in a Drizzle handle (`makeDb`). The
+  shared write helpers (`runGroups`/`runBatches`, the cursor upserts) live in `src/store/d1.ts`
+  and operate over Drizzle batch items.
 - `src/tools/sync.ts`: the warehouse sync tools, which belong here because they need D1.
 - `src/tool-metrics.ts`: patches the `registerTool` seam (once, in `init()`) so every tool call
   emits aggregate Sentry metrics (`mcp.tool.call`, `mcp.tool.duration_ms`, tagged by tool +
@@ -60,7 +64,10 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   SDK is disabled and every Sentry call is a no-op. Keep new PII out of error paths, and do not
   set the user to anything but the email.
 - Migrations are append-only. Add a new numbered file; do not edit a migration that has
-  already been applied. After changing bindings, run `pnpm cf-typegen`.
+  already been applied. After changing bindings, run `pnpm cf-typegen`. `migrations/` is the
+  source of truth for the live DB — Drizzle does NOT generate it. When a migration changes a
+  table, hand-update `src/store/schema.ts` to match (verify with `drizzle-kit pull`/`check` via
+  `drizzle.config.ts`, which only reads the DB and never writes migrations).
 - The `wrangler.jsonc` KV and D1 ids are placeholders until a real deployment fills them.
 - Rate limiting lives at the edge in `src/index.ts` (keyed by `CF-Connecting-IP`), backed by
   two `ratelimits` bindings in `wrangler.jsonc` (`LOGIN_RATE_LIMITER`, `MCP_RATE_LIMITER`).

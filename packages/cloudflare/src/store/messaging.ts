@@ -1,6 +1,8 @@
+import { and, desc, eq, sql } from "drizzle-orm";
 import { fetchStreams } from "@trainheroic-unofficial/js";
 import { OrgScopedStore } from "./base";
-import { cursorUpsertStmt, runBatches } from "./d1";
+import { type BatchStmt, cursorUpsertStmt, runBatches } from "./d1";
+import { messageComment, messageStream, syncState } from "./schema";
 import { coerceInt, isRecord } from "@trainheroic-unofficial/js";
 
 export type StreamSyncResult = {
@@ -17,29 +19,30 @@ export class MessagingStore extends OrgScopedStore {
     return fetchStreams(this.client);
   }
 
-  #upsertStreamStmt(
-    org: number,
-    sid: number,
-    kind: string,
-    s: Record<string, unknown>,
-  ): D1PreparedStatement {
+  #upsertStreamStmt(org: number, sid: number, kind: string, s: Record<string, unknown>): BatchStmt {
     return this.db
-      .prepare(
-        "INSERT INTO message_stream (org_id, id, kind, title, team_id, user_id, last_viewed, raw, source) " +
-          "VALUES (?,?,?,?,?,?,?,?,'api') ON CONFLICT(org_id, id) DO UPDATE SET " +
-          "kind=excluded.kind, title=excluded.title, team_id=excluded.team_id, " +
-          "user_id=excluded.user_id, last_viewed=excluded.last_viewed, raw=excluded.raw",
-      )
-      .bind(
-        org,
-        sid,
+      .insert(messageStream)
+      .values({
+        orgId: org,
+        id: sid,
         kind,
-        String(s.title ?? ""),
-        coerceInt(s.teamId),
-        coerceInt(s.userId),
-        coerceInt(s.lastViewed),
-        JSON.stringify(s),
-      );
+        title: String(s.title ?? ""),
+        teamId: coerceInt(s.teamId),
+        userId: coerceInt(s.userId),
+        lastViewed: coerceInt(s.lastViewed),
+        raw: JSON.stringify(s),
+      })
+      .onConflictDoUpdate({
+        target: [messageStream.orgId, messageStream.id],
+        set: {
+          kind: sql`excluded.kind`,
+          title: sql`excluded.title`,
+          teamId: sql`excluded.team_id`,
+          userId: sql`excluded.user_id`,
+          lastViewed: sql`excluded.last_viewed`,
+          raw: sql`excluded.raw`,
+        },
+      });
   }
 
   #commentStatements(
@@ -47,33 +50,41 @@ export class MessagingStore extends OrgScopedStore {
     streamId: number,
     c: Record<string, unknown>,
     parentId: number | null,
-    stmts: D1PreparedStatement[],
+    stmts: BatchStmt[],
   ): void {
     const cid = coerceInt(c.id);
     if (cid === null) return;
     stmts.push(
       this.db
-        .prepare(
-          "INSERT INTO message_comment (org_id, id, stream_id, ts, content, author_name, author_logo, " +
-            "image_url, is_author, parent_id, reactions, raw, source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'api') " +
-            "ON CONFLICT(org_id, id) DO UPDATE SET ts=excluded.ts, content=excluded.content, " +
-            "author_name=excluded.author_name, author_logo=excluded.author_logo, image_url=excluded.image_url, " +
-            "is_author=excluded.is_author, parent_id=excluded.parent_id, reactions=excluded.reactions, raw=excluded.raw",
-        )
-        .bind(
-          org,
-          cid,
+        .insert(messageComment)
+        .values({
+          orgId: org,
+          id: cid,
           streamId,
-          coerceInt(c.timestamp),
-          String(c.content ?? ""),
-          String(c.authorName ?? ""),
-          String(c.authorLogo ?? ""),
-          c.imageUrl === undefined ? null : String(c.imageUrl),
-          c.isAuthor ? 1 : 0,
+          ts: coerceInt(c.timestamp),
+          content: String(c.content ?? ""),
+          authorName: String(c.authorName ?? ""),
+          authorLogo: String(c.authorLogo ?? ""),
+          imageUrl: c.imageUrl === undefined ? null : String(c.imageUrl),
+          isAuthor: c.isAuthor ? 1 : 0,
           parentId,
-          JSON.stringify(c.reactions ?? []),
-          JSON.stringify(c),
-        ),
+          reactions: JSON.stringify(c.reactions ?? []),
+          raw: JSON.stringify(c),
+        })
+        .onConflictDoUpdate({
+          target: [messageComment.orgId, messageComment.id],
+          set: {
+            ts: sql`excluded.ts`,
+            content: sql`excluded.content`,
+            authorName: sql`excluded.author_name`,
+            authorLogo: sql`excluded.author_logo`,
+            imageUrl: sql`excluded.image_url`,
+            isAuthor: sql`excluded.is_author`,
+            parentId: sql`excluded.parent_id`,
+            reactions: sql`excluded.reactions`,
+            raw: sql`excluded.raw`,
+          },
+        }),
     );
     const replies = Array.isArray(c.replies) ? c.replies.filter(isRecord) : [];
     for (const reply of replies) {
@@ -83,11 +94,16 @@ export class MessagingStore extends OrgScopedStore {
 
   async #cursor(org: number, sid: number): Promise<string> {
     const row = await this.db
-      .prepare(
-        "SELECT cursor FROM sync_state WHERE org_id=? AND resource='messaging' AND scope_id=?",
+      .select({ cursor: syncState.cursor })
+      .from(syncState)
+      .where(
+        and(
+          eq(syncState.orgId, org),
+          eq(syncState.resource, "messaging"),
+          eq(syncState.scopeId, sid),
+        ),
       )
-      .bind(org, sid)
-      .first<{ cursor: string | null }>();
+      .get();
     return row?.cursor ?? "";
   }
 
@@ -99,7 +115,7 @@ export class MessagingStore extends OrgScopedStore {
     const org = await this.org();
     const sid = coerceInt(s.id) ?? 0;
     const title = String(s.title ?? "");
-    const stmts: D1PreparedStatement[] = [this.#upsertStreamStmt(org, sid, kind, s)];
+    const stmts: BatchStmt[] = [this.#upsertStreamStmt(org, sid, kind, s)];
 
     const cursor = full ? "" : await this.#cursor(org, sid);
     const res = await this.client.request<unknown>(
@@ -158,25 +174,37 @@ export class MessagingStore extends OrgScopedStore {
 
   async streams(): Promise<unknown[]> {
     const org = await this.org();
-    const res = await this.db
-      .prepare(
-        "SELECT id, kind, title, team_id, user_id, last_viewed FROM message_stream WHERE org_id=? ORDER BY last_viewed DESC",
-      )
-      .bind(org)
-      .all();
-    return res.results;
+    return this.db
+      .select({
+        id: messageStream.id,
+        kind: messageStream.kind,
+        title: messageStream.title,
+        team_id: messageStream.teamId,
+        user_id: messageStream.userId,
+        last_viewed: messageStream.lastViewed,
+      })
+      .from(messageStream)
+      .where(eq(messageStream.orgId, org))
+      .orderBy(desc(messageStream.lastViewed));
   }
 
   async history(streamId: number, limit = 50): Promise<unknown[]> {
     const org = await this.org();
-    const res = await this.db
-      .prepare(
-        "SELECT id, ts, content, author_name, is_author, parent_id, reactions FROM message_comment " +
-          "WHERE org_id=? AND stream_id=? ORDER BY ts DESC, id DESC LIMIT ?",
-      )
-      .bind(org, streamId, limit)
-      .all<Record<string, unknown>>();
-    return res.results.map((row) => ({ ...row, reactions: safeParse(row.reactions) }));
+    const rows = await this.db
+      .select({
+        id: messageComment.id,
+        ts: messageComment.ts,
+        content: messageComment.content,
+        author_name: messageComment.authorName,
+        is_author: messageComment.isAuthor,
+        parent_id: messageComment.parentId,
+        reactions: messageComment.reactions,
+      })
+      .from(messageComment)
+      .where(and(eq(messageComment.orgId, org), eq(messageComment.streamId, streamId)))
+      .orderBy(desc(messageComment.ts), desc(messageComment.id))
+      .limit(limit);
+    return rows.map((row) => ({ ...row, reactions: safeParse(row.reactions) }));
   }
 }
 

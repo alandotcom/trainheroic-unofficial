@@ -1,7 +1,9 @@
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { coerceInt, fetchAthleteWorkouts, presentAthleteWorkout } from "@trainheroic-unofficial/js";
 import type { ProgramWorkout } from "@trainheroic-unofficial/js";
 import { AthleteScopedStore } from "./base";
-import { athleteCursorUpsertStmt, runGroups } from "./d1";
+import { type BatchStmt, athleteCursorUpsertStmt, runGroups } from "./d1";
+import { athleteWorkout, athleteWorkoutExercise } from "./schema";
 
 export type WorkoutSyncResult = {
   workouts: number;
@@ -12,40 +14,42 @@ export type WorkoutSyncResult = {
 
 /** Athlete workouts zone: scheduled + completed workouts, flattened to exercise rows. */
 export class AthleteWorkoutStore extends AthleteScopedStore {
-  #upsertWorkout(
-    user: number,
-    w: ProgramWorkout,
-    id: number,
-    logged: boolean,
-  ): D1PreparedStatement {
+  #upsertWorkout(user: number, w: ProgramWorkout, id: number, logged: boolean): BatchStmt {
     const rec = w as Record<string, unknown>;
     return this.db
-      .prepare(
-        "INSERT INTO athlete_workout (user_id, id, date, title, program_id, program_title, team_id, team_title, logged, raw, source) " +
-          "VALUES (?,?,?,?,?,?,?,?,?,?,'api') ON CONFLICT(user_id, id) DO UPDATE SET " +
-          "date=excluded.date, title=excluded.title, program_id=excluded.program_id, " +
-          "program_title=excluded.program_title, team_id=excluded.team_id, team_title=excluded.team_title, " +
-          "logged=excluded.logged, raw=excluded.raw",
-      )
-      .bind(
-        user,
+      .insert(athleteWorkout)
+      .values({
+        userId: user,
         id,
-        typeof rec.date === "string" ? rec.date : null,
-        typeof rec.workout_title === "string" ? rec.workout_title : null,
-        coerceInt(rec.program_id),
-        typeof rec.program_title === "string" ? rec.program_title : null,
-        coerceInt(rec.team_id),
-        typeof rec.team_title === "string" ? rec.team_title : null,
-        logged ? 1 : 0,
-        JSON.stringify(w),
-      );
+        date: typeof rec.date === "string" ? rec.date : null,
+        title: typeof rec.workout_title === "string" ? rec.workout_title : null,
+        programId: coerceInt(rec.program_id),
+        programTitle: typeof rec.program_title === "string" ? rec.program_title : null,
+        teamId: coerceInt(rec.team_id),
+        teamTitle: typeof rec.team_title === "string" ? rec.team_title : null,
+        logged: logged ? 1 : 0,
+        raw: JSON.stringify(w),
+      })
+      .onConflictDoUpdate({
+        target: [athleteWorkout.userId, athleteWorkout.id],
+        set: {
+          date: sql`excluded.date`,
+          title: sql`excluded.title`,
+          programId: sql`excluded.program_id`,
+          programTitle: sql`excluded.program_title`,
+          teamId: sql`excluded.team_id`,
+          teamTitle: sql`excluded.team_title`,
+          logged: sql`excluded.logged`,
+          raw: sql`excluded.raw`,
+        },
+      });
   }
 
   /** Pull a date window into the workouts zone. Each workout's exercise rows are rebuilt. */
   async sync(startDate: string, endDate: string): Promise<WorkoutSyncResult> {
     const user = await this.user();
     const workouts = await fetchAthleteWorkouts(this.client, startDate, endDate);
-    const groups: D1PreparedStatement[][] = [];
+    const groups: BatchStmt[][] = [];
     let exercises = 0;
 
     for (const w of workouts) {
@@ -53,33 +57,30 @@ export class AthleteWorkoutStore extends AthleteScopedStore {
       if (id === null) continue;
       const view = presentAthleteWorkout(w);
       // One atomic group per workout: upsert the workout, then rebuild its exercise rows.
-      const group: D1PreparedStatement[] = [
+      const group: BatchStmt[] = [
         this.#upsertWorkout(user, w, id, view.logged),
         this.db
-          .prepare("DELETE FROM athlete_workout_exercise WHERE user_id=? AND workout_id=?")
-          .bind(user, id),
+          .delete(athleteWorkoutExercise)
+          .where(
+            and(eq(athleteWorkoutExercise.userId, user), eq(athleteWorkoutExercise.workoutId, id)),
+          ),
       ];
       for (const block of view.blocks) {
         for (const ex of block.exercises) {
           group.push(
-            this.db
-              .prepare(
-                "INSERT INTO athlete_workout_exercise (user_id, workout_id, block_order, block_title, is_test, " +
-                  "exercise_id, title, units, prescribed, performed, instruction, source) VALUES (?,?,?,?,?,?,?,?,?,?,?,'api')",
-              )
-              .bind(
-                user,
-                id,
-                block.order,
-                block.title,
-                block.isTest ? 1 : 0,
-                ex.exerciseId,
-                ex.title,
-                JSON.stringify(ex.units),
-                JSON.stringify(ex.prescribed),
-                JSON.stringify(ex.performed),
-                ex.instruction,
-              ),
+            this.db.insert(athleteWorkoutExercise).values({
+              userId: user,
+              workoutId: id,
+              blockOrder: block.order,
+              blockTitle: block.title,
+              isTest: block.isTest ? 1 : 0,
+              exerciseId: ex.exerciseId,
+              title: ex.title,
+              units: JSON.stringify(ex.units),
+              prescribed: JSON.stringify(ex.prescribed),
+              performed: JSON.stringify(ex.performed),
+              instruction: ex.instruction,
+            }),
           );
           exercises += 1;
         }
@@ -97,38 +98,48 @@ export class AthleteWorkoutStore extends AthleteScopedStore {
   /** Stored workouts, optionally bounded by an inclusive date window (newest first). */
   async list(startDate?: string, endDate?: string): Promise<unknown[]> {
     const user = await this.user();
-    const clauses = ["user_id=?"];
-    const binds: Array<number | string> = [user];
-    if (startDate !== undefined) {
-      clauses.push("date>=?");
-      binds.push(startDate);
-    }
-    if (endDate !== undefined) {
-      clauses.push("date<=?");
-      binds.push(endDate);
-    }
-    const res = await this.db
-      .prepare(
-        `SELECT id, date, title, program_title, team_title, logged FROM athlete_workout WHERE ${clauses.join(
-          " AND ",
-        )} ORDER BY date DESC`,
-      )
-      .bind(...binds)
-      .all<Record<string, unknown>>();
-    return res.results.map((row) => ({ ...row, logged: coerceInt(row.logged) === 1 }));
+    const conditions = [eq(athleteWorkout.userId, user)];
+    if (startDate !== undefined) conditions.push(gte(athleteWorkout.date, startDate));
+    if (endDate !== undefined) conditions.push(lte(athleteWorkout.date, endDate));
+    const rows = await this.db
+      .select({
+        id: athleteWorkout.id,
+        date: athleteWorkout.date,
+        title: athleteWorkout.title,
+        program_title: athleteWorkout.programTitle,
+        team_title: athleteWorkout.teamTitle,
+        logged: athleteWorkout.logged,
+      })
+      .from(athleteWorkout)
+      .where(and(...conditions))
+      .orderBy(desc(athleteWorkout.date));
+    return rows.map((row) => ({ ...row, logged: row.logged === 1 }));
   }
 
   /** The flattened exercise rows for one stored workout. */
   async workoutExercises(workoutId: number): Promise<unknown[]> {
     const user = await this.user();
-    const res = await this.db
-      .prepare(
-        "SELECT block_order, block_title, is_test, exercise_id, title, units, prescribed, performed, instruction " +
-          "FROM athlete_workout_exercise WHERE user_id=? AND workout_id=? ORDER BY block_order",
+    const rows = await this.db
+      .select({
+        block_order: athleteWorkoutExercise.blockOrder,
+        block_title: athleteWorkoutExercise.blockTitle,
+        is_test: athleteWorkoutExercise.isTest,
+        exercise_id: athleteWorkoutExercise.exerciseId,
+        title: athleteWorkoutExercise.title,
+        units: athleteWorkoutExercise.units,
+        prescribed: athleteWorkoutExercise.prescribed,
+        performed: athleteWorkoutExercise.performed,
+        instruction: athleteWorkoutExercise.instruction,
+      })
+      .from(athleteWorkoutExercise)
+      .where(
+        and(
+          eq(athleteWorkoutExercise.userId, user),
+          eq(athleteWorkoutExercise.workoutId, workoutId),
+        ),
       )
-      .bind(user, workoutId)
-      .all<Record<string, unknown>>();
-    return res.results.map((row) => ({
+      .orderBy(athleteWorkoutExercise.blockOrder);
+    return rows.map((row) => ({
       ...row,
       units: safeParse(row.units),
       prescribed: safeParse(row.prescribed),

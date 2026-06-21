@@ -4,7 +4,9 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { sql } from "drizzle-orm";
 import { loginTrainHeroic } from "@trainheroic-unofficial/js";
+import { account, makeDb } from "../store/schema";
 import type { Props } from "../types";
 import { randomToken, safeEqual, signPayload, verifyPayload } from "./crypto";
 import { renderLoginPage } from "./login-page";
@@ -176,14 +178,27 @@ app.post("/authorize", async (c) => {
   const now = Date.now();
   let isNewAccount = false;
   try {
-    const row = await c.env.TH_DB.prepare(
-      "INSERT INTO account (th_user_id, org_id, email, role, created_at, last_seen) VALUES (?,?,?,?,?,?) " +
-        "ON CONFLICT(th_user_id) DO UPDATE SET email=excluded.email, role=excluded.role, last_seen=excluded.last_seen " +
-        "RETURNING created_at",
-    )
-      .bind(session.thUserId, null, email, session.role, now, now)
-      .first<{ created_at: number }>();
-    isNewAccount = row?.created_at === now;
+    const row = await makeDb(c.env.TH_DB)
+      .insert(account)
+      .values({
+        thUserId: session.thUserId,
+        orgId: null,
+        email,
+        role: session.role,
+        createdAt: now,
+        lastSeen: now,
+      })
+      .onConflictDoUpdate({
+        target: account.thUserId,
+        set: {
+          email: sql`excluded.email`,
+          role: sql`excluded.role`,
+          lastSeen: sql`excluded.last_seen`,
+        },
+      })
+      .returning({ createdAt: account.createdAt })
+      .get();
+    isNewAccount = row?.createdAt === now;
   } catch (err) {
     // Best-effort: never block login, but log so a persistently-failing registry write
     // (e.g. schema drift) is diagnosable. No credentials here — thUserId only.

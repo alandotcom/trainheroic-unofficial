@@ -1,18 +1,21 @@
 import type { TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { resolveAthleteUserId } from "@trainheroic-unofficial/js";
 import { resolveOrgId } from "./d1";
+import { type DrizzleDb, makeDb } from "./schema";
 
 /**
  * Base for tenant-scoped D1 stores. Holds the database + client and lazily resolves
- * the coach's org_id (the tenant key) once, via the single shared resolver.
+ * the coach's org_id (the tenant key) once, via the single shared resolver. The constructor
+ * still takes a raw `D1Database` (so every call site is unchanged); it is wrapped in a Drizzle
+ * handle here, which is what subclasses query against.
  */
 export abstract class OrgScopedStore {
-  protected readonly db: D1Database;
+  protected readonly db: DrizzleDb;
   protected readonly client: TrainHeroicClient;
   #orgId: number | null;
 
   constructor(db: D1Database, client: TrainHeroicClient, orgId: number | null = null) {
-    this.db = db;
+    this.db = makeDb(db);
     this.client = client;
     this.#orgId = orgId;
   }
@@ -37,12 +40,12 @@ export abstract class OrgScopedStore {
  * bogus tenant key (two athletes must never collapse onto one partition).
  */
 export abstract class AthleteScopedStore {
-  protected readonly db: D1Database;
+  protected readonly db: DrizzleDb;
   protected readonly client: TrainHeroicClient;
   #userId: number | null;
 
   constructor(db: D1Database, client: TrainHeroicClient, userId: number | null = null) {
-    this.db = db;
+    this.db = makeDb(db);
     this.client = client;
     this.#userId = userId;
   }

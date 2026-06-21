@@ -1,5 +1,7 @@
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { OrgScopedStore } from "./base";
-import { cursorUpsertStmt, mapPool, runGroups } from "./d1";
+import { type BatchStmt, cursorUpsertStmt, mapPool, runGroups } from "./d1";
+import { block, prescribedSet, program, programSession } from "./schema";
 import {
   checkResponse,
   coerceInt,
@@ -50,7 +52,14 @@ export type CalendarSyncResult = {
   error?: string;
 };
 
-export type ProgramSessionRow = { id: number; date: string; title: string; published: number };
+// date/title are nullable in the schema (a session can be stored before either is known),
+// so the row type reflects that rather than asserting non-null at the read boundary.
+export type ProgramSessionRow = {
+  id: number;
+  date: string | null;
+  title: string | null;
+  published: number;
+};
 
 /** Programming zone: prescribed programs -> sessions -> blocks -> sets. Accumulate-only. */
 export class ProgrammingStore extends OrgScopedStore {
@@ -111,15 +120,20 @@ export class ProgrammingStore extends OrgScopedStore {
 
     // Each session is one atomic group (its delete-then-reinsert must not split
     // across batches), so a mid-sync failure can never half-apply a session.
-    const groups: D1PreparedStatement[][] = [
+    const groups: BatchStmt[][] = [
       [
         this.db
-          .prepare(
-            "INSERT INTO program (org_id, id, title, raw, source) VALUES (?,?,?,?,'api') " +
-              "ON CONFLICT(org_id, id) DO UPDATE SET " +
-              "title=CASE WHEN excluded.title <> '' THEN excluded.title ELSE title END, raw=excluded.raw",
-          )
-          .bind(org, calId, title, JSON.stringify({ id: calId, title })),
+          .insert(program)
+          .values({ orgId: org, id: calId, title, raw: JSON.stringify({ id: calId, title }) })
+          .onConflictDoUpdate({
+            target: [program.orgId, program.id],
+            // Keep the existing title when the incoming one is blank (team group-programs
+            // arrive titleless from the calendar fetch); always take the fresh raw.
+            set: {
+              title: sql`CASE WHEN excluded.title <> '' THEN excluded.title ELSE ${program.title} END`,
+              raw: sql`excluded.raw`,
+            },
+          }),
       ],
     ];
 
@@ -160,7 +174,7 @@ export class ProgrammingStore extends OrgScopedStore {
     calId: number,
     sid: number,
     pw: Record<string, unknown>,
-  ): { stmts: D1PreparedStatement[]; blocks: number; sets: number } {
+  ): { stmts: BatchStmt[]; blocks: number; sets: number } {
     const year = coerceInt(pw.year) ?? 0;
     const month = coerceInt(pw.month) ?? 0;
     const day = coerceInt(pw.day) ?? 0;
@@ -169,31 +183,44 @@ export class ProgrammingStore extends OrgScopedStore {
       Object.fromEntries(Object.entries(pw).filter(([k]) => k !== "sets")),
     );
 
-    const stmts: D1PreparedStatement[] = [
+    const stmts: BatchStmt[] = [
       this.db
-        .prepare(
-          "INSERT INTO program_session (org_id, id, program_id, day_index, date, title, published, raw, source) " +
-            "VALUES (?,?,?,?,?,?,?,?,'api') ON CONFLICT(org_id, id) DO UPDATE SET " +
-            "program_id=excluded.program_id, day_index=excluded.day_index, date=excluded.date, " +
-            "title=excluded.title, published=excluded.published, raw=excluded.raw",
-        )
-        .bind(
-          org,
-          sid,
-          calId,
-          coerceInt(pw.timeline_day),
+        .insert(programSession)
+        .values({
+          orgId: org,
+          id: sid,
+          programId: calId,
+          dayIndex: coerceInt(pw.timeline_day),
           date,
-          String(pw.title ?? ""),
-          coerceInt(pw.published) ?? 0,
-          sessionRaw,
+          title: String(pw.title ?? ""),
+          published: coerceInt(pw.published) ?? 0,
+          raw: sessionRaw,
+        })
+        .onConflictDoUpdate({
+          target: [programSession.orgId, programSession.id],
+          set: {
+            programId: sql`excluded.program_id`,
+            dayIndex: sql`excluded.day_index`,
+            date: sql`excluded.date`,
+            title: sql`excluded.title`,
+            published: sql`excluded.published`,
+            raw: sql`excluded.raw`,
+          },
+        }),
+      // Cascade-clear this session's sets (via its blocks), then its blocks, before rebuild.
+      this.db.delete(prescribedSet).where(
+        and(
+          eq(prescribedSet.orgId, org),
+          inArray(
+            prescribedSet.blockId,
+            this.db
+              .select({ id: block.id })
+              .from(block)
+              .where(and(eq(block.orgId, org), eq(block.programSessionId, sid))),
+          ),
         ),
-      this.db
-        .prepare(
-          "DELETE FROM prescribed_set WHERE org_id=? AND block_id IN " +
-            "(SELECT id FROM block WHERE org_id=? AND program_session_id=?)",
-        )
-        .bind(org, org, sid),
-      this.db.prepare("DELETE FROM block WHERE org_id=? AND program_session_id=?").bind(org, sid),
+      ),
+      this.db.delete(block).where(and(eq(block.orgId, org), eq(block.programSessionId, sid))),
     ];
 
     let blocks = 0;
@@ -208,22 +235,28 @@ export class ProgrammingStore extends OrgScopedStore {
       if (bid === null) continue;
       stmts.push(
         this.db
-          .prepare(
-            "INSERT INTO block (org_id, id, program_session_id, ord, type, title, instruction, raw, source) " +
-              "VALUES (?,?,?,?,?,?,?,?,'api') ON CONFLICT(org_id, id) DO UPDATE SET " +
-              "program_session_id=excluded.program_session_id, ord=excluded.ord, type=excluded.type, " +
-              "title=excluded.title, instruction=excluded.instruction, raw=excluded.raw",
-          )
-          .bind(
-            org,
-            bid,
-            sid,
-            coerceInt(blk.order),
-            coerceInt(blk.type),
-            String(blk.title ?? ""),
-            String(blk.instruction ?? ""),
-            JSON.stringify(blk),
-          ),
+          .insert(block)
+          .values({
+            orgId: org,
+            id: bid,
+            programSessionId: sid,
+            ord: coerceInt(blk.order),
+            type: coerceInt(blk.type),
+            title: String(blk.title ?? ""),
+            instruction: String(blk.instruction ?? ""),
+            raw: JSON.stringify(blk),
+          })
+          .onConflictDoUpdate({
+            target: [block.orgId, block.id],
+            set: {
+              programSessionId: sql`excluded.program_session_id`,
+              ord: sql`excluded.ord`,
+              type: sql`excluded.type`,
+              title: sql`excluded.title`,
+              instruction: sql`excluded.instruction`,
+              raw: sql`excluded.raw`,
+            },
+          }),
       );
       blocks += 1;
       const exercises = Array.isArray(blk.exercises) ? blk.exercises.filter(isRecord) : [];
@@ -236,7 +269,7 @@ export class ProgrammingStore extends OrgScopedStore {
     org: number,
     bid: number,
     ex: Record<string, unknown>,
-    stmts: D1PreparedStatement[],
+    stmts: BatchStmt[],
   ): number {
     const exId = coerceInt(ex.exercise_id);
     const p1t = coerceInt(ex.param_1_type);
@@ -249,12 +282,16 @@ export class ProgrammingStore extends OrgScopedStore {
       const empty2 = v2 === undefined || v2 === null || v2 === "";
       if (empty1 && empty2) continue;
       stmts.push(
-        this.db
-          .prepare(
-            "INSERT INTO prescribed_set (org_id, block_id, exercise_id, set_index, " +
-              "param_1_type, param_1_value, param_2_type, param_2_value, source) VALUES (?,?,?,?,?,?,?,?,'api')",
-          )
-          .bind(org, bid, exId, i, p1t, prescribedValue(v1), p2t, prescribedValue(v2)),
+        this.db.insert(prescribedSet).values({
+          orgId: org,
+          blockId: bid,
+          exerciseId: exId,
+          setIndex: i,
+          param1Type: p1t,
+          param1Value: prescribedValue(v1),
+          param2Type: p2t,
+          param2Value: prescribedValue(v2),
+        }),
       );
       count += 1;
     }
@@ -287,42 +324,67 @@ export class ProgrammingStore extends OrgScopedStore {
 
   async getProgramSessions(programId: number): Promise<ProgramSessionRow[]> {
     const org = await this.org();
-    const res = await this.db
-      .prepare(
-        "SELECT id, date, title, published FROM program_session WHERE org_id=? AND program_id=? ORDER BY date",
-      )
-      .bind(org, programId)
-      .all<ProgramSessionRow>();
-    return res.results;
+    const rows = await this.db
+      .select({
+        id: programSession.id,
+        date: programSession.date,
+        title: programSession.title,
+        published: programSession.published,
+      })
+      .from(programSession)
+      .where(and(eq(programSession.orgId, org), eq(programSession.programId, programId)))
+      .orderBy(programSession.date);
+    return rows;
   }
 
   async getSession(sessionId: number): Promise<{ sessionId: number; blocks: unknown[] }> {
     const org = await this.org();
-    const blocksRes = await this.db
-      .prepare(
-        "SELECT id, ord, type, title, instruction FROM block WHERE org_id=? AND program_session_id=? ORDER BY ord",
-      )
-      .bind(org, sessionId)
-      .all<{ id: number; ord: number; type: number; title: string; instruction: string }>();
+    const blockRows = await this.db
+      .select({
+        id: block.id,
+        ord: block.ord,
+        type: block.type,
+        title: block.title,
+        instruction: block.instruction,
+      })
+      .from(block)
+      .where(and(eq(block.orgId, org), eq(block.programSessionId, sessionId)))
+      .orderBy(block.ord);
 
     // One query for every set in the session (via the block subquery), grouped by block
     // in memory — instead of one query per block.
-    const setsRes = await this.db
-      .prepare(
-        "SELECT block_id, exercise_id, set_index, param_1_type, param_1_value, param_2_type, param_2_value " +
-          "FROM prescribed_set WHERE org_id=? AND block_id IN " +
-          "(SELECT id FROM block WHERE org_id=? AND program_session_id=?) ORDER BY block_id, set_index",
+    const setRows = await this.db
+      .select({
+        block_id: prescribedSet.blockId,
+        exercise_id: prescribedSet.exerciseId,
+        set_index: prescribedSet.setIndex,
+        param_1_type: prescribedSet.param1Type,
+        param_1_value: prescribedSet.param1Value,
+        param_2_type: prescribedSet.param2Type,
+        param_2_value: prescribedSet.param2Value,
+      })
+      .from(prescribedSet)
+      .where(
+        and(
+          eq(prescribedSet.orgId, org),
+          inArray(
+            prescribedSet.blockId,
+            this.db
+              .select({ id: block.id })
+              .from(block)
+              .where(and(eq(block.orgId, org), eq(block.programSessionId, sessionId))),
+          ),
+        ),
       )
-      .bind(org, org, sessionId)
-      .all<{ block_id: number } & Record<string, unknown>>();
+      .orderBy(prescribedSet.blockId, prescribedSet.setIndex);
 
     const byBlock = new Map<number, Record<string, unknown>[]>();
-    for (const { block_id, ...set } of setsRes.results) {
+    for (const { block_id, ...set } of setRows) {
       const bucket = byBlock.get(block_id) ?? [];
       bucket.push(set);
       byBlock.set(block_id, bucket);
     }
-    const blocks = blocksRes.results.map((b) => ({ ...b, sets: byBlock.get(b.id) ?? [] }));
+    const blocks = blockRows.map((b) => ({ ...b, sets: byBlock.get(b.id) ?? [] }));
     return { sessionId, blocks };
   }
 }

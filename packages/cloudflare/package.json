@@ -22,12 +22,14 @@
     "@trainheroic-unofficial/core": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
     "agents": "^0.16.2",
+    "drizzle-orm": "1.0.0-rc.3",
     "hono": "^4.12.26",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.18",
     "@types/node": "^26.0.0",
+    "drizzle-kit": "1.0.0-rc.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9",
     "wrangler": "^4.103.0"
