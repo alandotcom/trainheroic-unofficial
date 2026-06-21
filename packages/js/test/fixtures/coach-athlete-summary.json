@@ -1,0 +1,60 @@
+[
+  {
+    "userId": 2855688,
+    "athleteName": "[Demo] Kyle Jones",
+    "saved_workout_id": 348229759,
+    "workout_id": 149525974,
+    "workout_title": "Lift 1 - Clean Focus",
+    "completed": 1,
+    "logged": 1,
+    "rpe": 5,
+    "session_duration": 80,
+    "notes": "That conditioning at the end got me. Fun though!",
+    "sets": [
+      {
+        "id": 715790936,
+        "completed": 1,
+        "exercises": [
+          {
+            "exercise_id": 408,
+            "title": "Clean & Jerk",
+            "abr": "5 x 2 @ 205 lb",
+            "completed": 1
+          },
+          {
+            "exercise_id": 30,
+            "title": "Box Jump",
+            "abr": "3 x 5 @ 24 in",
+            "completed": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "userId": 2855688,
+    "athleteName": "[Demo] Kyle Jones",
+    "saved_workout_id": 348229762,
+    "workout_id": 149525977,
+    "workout_title": "Rest Day",
+    "completed": 0,
+    "logged": 0,
+    "rpe": null,
+    "session_duration": 0,
+    "notes": "",
+    "sets": [
+      {
+        "id": 715790949,
+        "completed": 0,
+        "exercises": [
+          {
+            "exercise_id": 51432,
+            "title": "Active Recovery",
+            "abr": " ",
+            "completed": 0
+          }
+        ]
+      }
+    ]
+  }
+]

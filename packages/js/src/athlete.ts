@@ -14,6 +14,9 @@ import type {
   AthleteWorkoutExercise,
   AthleteWorkoutSummary,
   AthleteWorkoutView,
+  CoachAthleteExercise,
+  CoachAthleteSession,
+  CoachAthleteTraining,
   ExerciseHistoryDetail,
   ExerciseHistoryListItem,
   ExerciseStats,
@@ -142,6 +145,25 @@ export function fetchAthleteWorkouts(
     client,
     `/3.0/athlete/programworkout/range?startDate=${startDate}&endDate=${endDate}`,
     "athlete workouts",
+  );
+}
+
+/**
+ * A coach's month view of a roster athlete's logged sessions
+ * (`/2.0/coach/athlete/calendar/summary`). The trailing path segment is required by the API but
+ * ignored (any value returns the whole month); it mirrors the coach web app, which sends 7. The
+ * `userId` in each row is the roster athlete, not the calling coach.
+ */
+export function fetchCoachAthleteCalendarSummary(
+  client: TrainHeroicClient,
+  athleteId: number,
+  year: number,
+  month: number,
+): Promise<unknown[]> {
+  return getArray(
+    client,
+    `/2.0/coach/athlete/calendar/summary/${athleteId}/${year}/${month}/7`,
+    "coach athlete calendar summary",
   );
 }
 
@@ -414,6 +436,56 @@ export function summarizeAthleteWorkouts(
       performedCount,
     };
   });
+}
+
+/**
+ * Flatten the coach athlete-calendar summary into compact per-session rows: title, the `logged`
+ * flag (the reliable did-they-train signal), rpe/duration/notes, and the exercises performed with
+ * the API's own set summary string (`abr`, e.g. "5 x 2 @ 205 lb"). The exercise titles here are
+ * the discovery handle a coach otherwise lacks: read what the athlete actually did, then pull the
+ * specific lift's PRs.
+ */
+export function presentCoachAthleteTraining(
+  raw: readonly unknown[],
+  athleteId: number,
+  year: number,
+  month: number,
+): CoachAthleteTraining {
+  const sessions: CoachAthleteSession[] = [];
+  let athleteName: string | null = null;
+  for (const item of raw) {
+    if (!isRecord(item)) continue;
+    if (athleteName === null && typeof item.athleteName === "string") {
+      athleteName = item.athleteName;
+    }
+    const exercises: CoachAthleteExercise[] = [];
+    const sets = Array.isArray(item.sets) ? item.sets : [];
+    for (const set of sets) {
+      if (!isRecord(set)) continue;
+      const exs = Array.isArray(set.exercises) ? set.exercises : [];
+      for (const ex of exs) {
+        if (!isRecord(ex)) continue;
+        exercises.push({
+          exerciseId: coerceInt(ex.exercise_id),
+          title: typeof ex.title === "string" ? ex.title : "",
+          summary: typeof ex.abr === "string" && ex.abr !== "" ? ex.abr : null,
+          completed: coerceInt(ex.completed) === 1,
+        });
+      }
+    }
+    sessions.push({
+      workoutId: coerceInt(item.workout_id),
+      savedWorkoutId: coerceInt(item.saved_workout_id),
+      title: typeof item.workout_title === "string" ? item.workout_title : "",
+      logged: coerceInt(item.logged) === 1,
+      completed: coerceInt(item.completed) === 1,
+      rpe: coerceInt(item.rpe),
+      durationMin: coerceInt(item.session_duration),
+      notes: typeof item.notes === "string" && item.notes !== "" ? item.notes : null,
+      exercises,
+    });
+  }
+  return { athleteId, athleteName, year, month, sessions };
 }
 
 // --- Set logging write path ---

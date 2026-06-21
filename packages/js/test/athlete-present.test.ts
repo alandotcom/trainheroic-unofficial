@@ -6,6 +6,7 @@ import {
   buildSetCompletePayload,
   findSavedWorkoutSet,
   presentAthleteWorkout,
+  presentCoachAthleteTraining,
   presentExerciseHistory,
   selectWorkouts,
   summarizeAthleteWorkouts,
@@ -211,6 +212,38 @@ describe("summarizeAthleteWorkouts", () => {
     const [row] = summarizeAthleteWorkouts([view]);
     expect(row?.exerciseCount).toBe(2);
     expect(row?.performedCount).toBe(1);
+  });
+});
+
+describe("presentCoachAthleteTraining", () => {
+  const raw = fixture<unknown[]>("coach-athlete-summary.json");
+  const view = presentCoachAthleteTraining(raw, 2855688, 2026, 6);
+
+  it("carries the athlete + month and one row per session", () => {
+    expect(view.athleteId).toBe(2855688);
+    expect(view.athleteName).toBe("[Demo] Kyle Jones");
+    expect(view.year).toBe(2026);
+    expect(view.month).toBe(6);
+    expect(view.sessions).toHaveLength(2);
+  });
+
+  it("flattens exercises with the API set summary and the logged flag", () => {
+    const lift = view.sessions[0];
+    expect(lift?.title).toBe("Lift 1 - Clean Focus");
+    expect(lift?.logged).toBe(true);
+    expect(lift?.rpe).toBe(5);
+    expect(lift?.durationMin).toBe(80);
+    const clean = lift?.exercises.find((e) => e.title === "Clean & Jerk");
+    expect(clean?.exerciseId).toBe(408);
+    expect(clean?.summary).toBe("5 x 2 @ 205 lb");
+    expect(clean?.completed).toBe(true);
+  });
+
+  it("marks a rest/unlogged session as not logged", () => {
+    const rest = view.sessions[1];
+    expect(rest?.title).toBe("Rest Day");
+    expect(rest?.logged).toBe(false);
+    expect(rest?.rpe).toBeNull();
   });
 });
 
