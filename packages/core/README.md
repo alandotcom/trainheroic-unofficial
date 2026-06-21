@@ -89,7 +89,7 @@ because they depend on its storage.
 
 ## Develop
 
-Run `pnpm install` once at the repo root (Node >= 22, pnpm 10), then from this package:
+Run `pnpm install` once at the repo root (Node >= 24, pnpm 10), then from this package:
 
 ```bash
 pnpm build       # tsdown

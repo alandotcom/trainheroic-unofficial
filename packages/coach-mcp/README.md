@@ -69,7 +69,7 @@ The individual tool names the assistant calls are snake_case (e.g. `list_athlete
 
 ## Develop
 
-Run `pnpm install` once at the repo root (Node >= 22, pnpm 10), then from this package. The `pnpm start`/`pnpm inspect` commands need `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD` exported in your shell. "MCP Inspector" is the [official MCP debugging UI](https://github.com/modelcontextprotocol/inspector).
+Run `pnpm install` once at the repo root (Node >= 24, pnpm 10), then from this package. The `pnpm start`/`pnpm inspect` commands need `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD` exported in your shell. "MCP Inspector" is the [official MCP debugging UI](https://github.com/modelcontextprotocol/inspector).
 
 ```bash
 pnpm start       # run from source

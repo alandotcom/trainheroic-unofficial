@@ -1,0 +1,62 @@
+name: Deploy
+
+# Deploy the hosted Cloudflare Worker on every merge to main, but only after the CI
+# workflow has gone green for that commit. Triggering on CI completion (rather than the
+# raw push) keeps a failing build from shipping. Pull-request CI runs are ignored via the
+# branch filter and the event check below.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# Never run two deploys at once; let an in-progress deploy finish rather than cancelling it.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # Only when CI passed for an actual push to main (not a PR run that happened to be on main).
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Deploy exactly the commit CI validated, not whatever is newest on main.
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # Apply remote D1 migrations before the new code goes live, so the Worker never queries
+      # a table that does not exist yet. migrations/ is append-only and idempotent, so this is
+      # a no-op when nothing is pending.
+      - name: Apply remote D1 migrations
+        run: pnpm --filter @trainheroic-unofficial/cloudflare run db:migrate
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # scripts/deploy.sh: wrangler deploy (+ Cloudflare source maps), then upload source maps
+      # to Sentry when SENTRY_AUTH_TOKEN is set. Without the token the Sentry step is skipped
+      # and the deploy still succeeds. SENTRY_RELEASE defaults to the short git sha.
+      - name: Deploy worker
+        run: pnpm run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}

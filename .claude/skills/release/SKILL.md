@@ -58,66 +58,40 @@ Publishable packages: `dto`, `js`, `core`, `cli`, `coach-mcp`. The `cloudflare` 
    `packages/core/package.json` (`git log -p -- packages/core/package.json`), tagging that
    commit, and creating its release with `--latest=false`.
 
-6. **Apply remote D1 migrations** before the new worker code goes live, so any new tables the
-   code queries already exist. `migrations/` is append-only and every file is idempotent
-   (`CREATE TABLE/INDEX IF NOT EXISTS`), so this is safe to run even when nothing is pending.
+6. **CI takes over — migrate, deploy, and publish are automated.** Pushing the bump commit
+   and the tag is all you do; two workflows finish the release:
 
-   ```bash
-   cd packages/cloudflare
-   pnpm exec wrangler d1 migrations list trainheroic --remote   # what's pending
-   pnpm run db:migrate                                          # apply to remote (--remote)
-   ```
+   - **`.github/workflows/deploy.yml`** runs after the `CI` workflow goes green on `main`. It
+     applies remote D1 migrations (`pnpm --filter …/cloudflare run db:migrate`, idempotent) and
+     then deploys the worker (`pnpm run deploy` → `scripts/deploy.sh`, incl. Sentry source maps
+     when `SENTRY_AUTH_TOKEN` is set). So step 5's push to `main` triggers the deploy.
+   - **`.github/workflows/publish.yml`** runs on the `v*` tag from step 5b. It builds and runs
+     `changeset publish` (idempotent; skips versions already on the registry; excludes the
+     private worker). Auth is **npm OIDC trusted publishing** — no `NPM_TOKEN`; the workflow has
+     `id-token: write` and npm trusts this repo's `publish.yml`, so pnpm exchanges the OIDC token
+     itself. No interactive 2FA.
 
-   `pnpm run db:migrate` runs `wrangler d1 migrations apply trainheroic --remote`. In a
-   non-interactive shell wrangler auto-answers "yes" to the apply prompt. Verify it ends with
-   "No migrations to apply!" on a re-list. If a release adds no migration files, this is a
-   no-op — skip only when you are sure `migrations/` is unchanged since the last deploy.
+   Watch both: `gh run watch` (or `gh run list --workflow=deploy.yml` / `--workflow=publish.yml`).
+   Confirm the worker is live (`curl -s -o /dev/null -w '%{http_code}' .../mcp` → 401) and that
+   `npm view @trainheroic-unofficial/core version` shows the new version once publish finishes.
 
-7. **Deploy the worker** so the hosted server matches the libraries you're about to publish:
+   Required repo config (one-time): secrets `CLOUDFLARE_API_TOKEN` (Workers + D1 edit),
+   `CLOUDFLARE_ACCOUNT_ID`, and optional `SENTRY_AUTH_TOKEN`; and an npm trusted publisher per
+   package pointing at `alandotcom/trainheroic-unofficial` workflow `publish.yml`.
 
-   ```bash
-   pnpm run deploy        # from repo root; or: pnpm --filter @trainheroic-unofficial/cloudflare run deploy
-   ```
+### Manual fallback (only if CI is unavailable)
 
-   Use `run deploy`. Bare `pnpm deploy` is a pnpm builtin (deploy a pruned package to a
-   directory) and errors with `ERR_PNPM_NOTHING_TO_DEPLOY` / `ERR_PNPM_INVALID_DEPLOY_TARGET`
-   — this bites at **both** levels, so the root script itself must be
-   `pnpm --filter … run deploy`, not `pnpm --filter … deploy`.
+The exact commands the workflows run, for an emergency local release. Order matters: migrate
+before deploy (so new code never queries a missing table), and deploy before publish (so the
+hosted MCP and the published SDK/CLI match). Never publish a version not pushed to `main`.
 
-   `run deploy` runs `packages/cloudflare/scripts/deploy.sh`, not a bare `wrangler deploy`. The
-   script: (a) `wrangler deploy` with `--outdir dist` and `--var SENTRY_RELEASE:<short-sha>`,
-   emitting source maps (`upload_source_maps: true` in `wrangler.jsonc`); (b) if
-   `SENTRY_AUTH_TOKEN` is set, creates + finalizes a Sentry release named for the git short sha
-   and uploads the source maps to it via `@sentry/cli`. The token is read from a gitignored
-   `.env` (repo root or `packages/cloudflare/`); with no token the deploy still succeeds and
-   only skips the Sentry upload. `pnpm --filter @trainheroic-unofficial/cloudflare run deploy:plain`
-   is the bare `wrangler deploy` escape hatch.
+```bash
+cd packages/cloudflare && pnpm run db:migrate && cd ../..   # remote D1 (idempotent)
+pnpm run deploy                                             # worker + Sentry source maps
+pnpm release                                               # build + changeset publish
+```
 
-   Deploy needs Cloudflare auth (wrangler login or `CLOUDFLARE_API_TOKEN`). On success it
-   prints the worker URL and a Version ID, then (with the token) a "source maps uploaded to
-   Sentry" report ending in a Bundle ID. To confirm the source maps landed, check the worker is
-   live (`curl -s -o /dev/null -w '%{http_code}' .../mcp` → 401) and that the release's artifact
-   bundle exists:
-
-   ```bash
-   set -a; . ./.env; set +a
-   curl -s -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
-     "https://sentry.io/api/0/projects/${SENTRY_ORG:-alan-zy}/${SENTRY_PROJECT:-trainheroic-mcp}/files/artifact-bundles/?query=<short-sha>"
-   ```
-
-   It should return a bundle whose `associations[].release` is the short sha with `fileCount: 2`
-   (`index.js` + `index.js.map`). `sentry-cli releases files … list` is deprecated for these
-   debug-id bundles and shows nothing — use the artifact-bundles endpoint above.
-
-8. **Publish** the public packages: `pnpm release` (runs `pnpm build` then
-   `changeset publish`). Needs `npm whoami` logged in with publish rights on the
-   `@trainheroic-unofficial` scope; the npm 2FA OTP prompt is interactive. `changeset
-   publish` skips packages already on the registry and excludes the private worker, so it is
-   safe to re-run. Publishing is human-run — do not publish on the user's behalf unless they
-   ask.
-
-## Order matters
-
-Apply remote D1 migrations before deploying, so the new worker code never queries a table that
-does not exist yet. Deploy the worker before publishing, so the live hosted MCP and the
-published SDK/CLI are the same version. Never publish a version you have not pushed to `main`.
+`pnpm run deploy` must use `run deploy` — bare `pnpm deploy` is a pnpm builtin that errors with
+`ERR_PNPM_NOTHING_TO_DEPLOY`. A manual `pnpm release` needs `npm whoami` logged in with publish
+rights on the `@trainheroic-unofficial` scope, and its 2FA OTP prompt is interactive (CI avoids
+this via OIDC).

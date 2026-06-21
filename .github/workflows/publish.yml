@@ -1,0 +1,45 @@
+name: Publish
+
+# Publish the public packages to npm on a version tag (vX.Y.Z). Versioning stays local:
+# the release skill bumps with changesets, commits, pushes main, then pushes the tag — this
+# workflow only builds and publishes whatever versions that tag carries.
+#
+# Auth is npm OIDC trusted publishing (no NPM_TOKEN): npm trusts this repo's `publish.yml`
+# workflow, and pnpm (>= 10.12) performs the OIDC token exchange automatically when
+# `id-token: write` is granted. Provenance is attached automatically.
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # required for npm OIDC trusted publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # `pnpm run release` = build + `changeset publish`. changeset publish is idempotent
+      # (skips versions already on the registry) and excludes the private worker, so a re-run
+      # is safe. OIDC supplies the publish credential via id-token: write above.
+      - name: Build and publish to npm
+        run: pnpm run release
