@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/core
 
+## 0.6.3
+
+### Patch Changes
+
+- Eval-driven usability batch (rounds 3 / 3b). `athlete_workouts` gains a `summary` mode (one compact row per session) that ends the dense-week file offload; new coach `athlete_training(athleteId, year, month)` tool returns a roster athlete's logged month with the exercises they performed, which is also the discovery handle for picking lifts to query in `athlete_lift_history`; `list_athletes` name filter now matches each word independently ("Kyle Jones" finds "Jones, [Demo] Kyle"); plus discovery-triage and accuracy description tuning across the athlete and coach surfaces.
+  - @trainheroic-unofficial/dto@0.6.3
+  - @trainheroic-unofficial/js@0.6.3
+
 ## 0.6.2
 
 ### Patch Changes
