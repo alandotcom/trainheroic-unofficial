@@ -7,6 +7,7 @@ import { resolveOrgId } from "./store/d1";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { resolveAthleteUserId } from "@trainheroic-unofficial/js";
 import type { Props } from "./types";
+import pkg from "../package.json" with { type: "json" };
 import type { ToolContext } from "@trainheroic-unofficial/core";
 import { registerAnalyticsTools } from "@trainheroic-unofficial/core";
 import { registerAthleteTools } from "@trainheroic-unofficial/core";
@@ -14,6 +15,7 @@ import { registerAthleteTrainingTools } from "@trainheroic-unofficial/core";
 import { registerExerciseTools } from "@trainheroic-unofficial/core";
 import { registerMessagingTools } from "@trainheroic-unofficial/core";
 import { registerReadTools } from "@trainheroic-unofficial/core";
+import { SERVER_INSTRUCTIONS } from "@trainheroic-unofficial/core";
 import { registerTeamTools } from "@trainheroic-unofficial/core";
 import { registerAthleteSyncTools } from "./tools/athlete-sync";
 import { registerSyncTools } from "./tools/sync";
@@ -73,7 +75,10 @@ async function registerCoachSurface(
  * the coaching surface.
  */
 export class TrainHeroicMCP extends McpAgent<Env, State, Props> {
-  server = new McpServer({ name: "trainheroic", version: "0.1.0" });
+  server = new McpServer(
+    { name: "trainheroic", version: pkg.version },
+    { instructions: SERVER_INSTRUCTIONS },
+  );
 
   async init(): Promise<void> {
     const props = this.props;

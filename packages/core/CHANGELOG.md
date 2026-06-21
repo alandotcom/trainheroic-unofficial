@@ -1,5 +1,15 @@
 # @trainheroic-unofficial/core
 
+## 0.4.2
+
+### Patch Changes
+
+- Add a server `instructions` string so the host model describes actions in the app's own terms
+  and stops surfacing internal tool names (e.g. `athlete_session_create`) and ids in user-facing
+  replies. Each server now reports its own `package.json` version instead of a hardcoded string.
+  - @trainheroic-unofficial/dto@0.4.2
+  - @trainheroic-unofficial/js@0.4.2
+
 ## 0.4.1
 
 ### Patch Changes

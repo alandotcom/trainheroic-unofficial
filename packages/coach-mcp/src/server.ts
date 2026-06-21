@@ -8,9 +8,11 @@ import { registerExerciseTools } from "@trainheroic-unofficial/core";
 import { registerMessagingTools } from "@trainheroic-unofficial/core";
 import { registerReadTools } from "@trainheroic-unofficial/core";
 import { registerTeamTools } from "@trainheroic-unofficial/core";
+import { SERVER_INSTRUCTIONS } from "@trainheroic-unofficial/core";
 import { registerWorkoutTools } from "@trainheroic-unofficial/core";
 import { ExerciseLibrary, TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
+import pkg from "../package.json" with { type: "json" };
 
 // Single-user local MCP server over stdio. No OAuth and no database: credentials come
 // from the environment and the exercise library is cached on disk (JSON). Launch it from
@@ -29,7 +31,10 @@ async function main(): Promise<void> {
     index: new ExerciseLibrary(client, new JsonFileLibraryCache()),
   };
 
-  const server = new McpServer({ name: "trainheroic-local", version: "0.2.0" });
+  const server = new McpServer(
+    { name: "trainheroic-local", version: pkg.version },
+    { instructions: SERVER_INSTRUCTIONS },
+  );
   registerReadTools(server, ctx);
   registerAthleteTools(server, ctx);
   registerTeamTools(server, ctx);
