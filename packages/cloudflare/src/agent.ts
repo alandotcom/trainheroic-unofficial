@@ -19,6 +19,7 @@ import { SERVER_INSTRUCTIONS } from "@trainheroic-unofficial/core";
 import { registerTeamTools } from "@trainheroic-unofficial/core";
 import { registerAthleteSyncTools } from "./tools/athlete-sync";
 import { registerSyncTools } from "./tools/sync";
+import { instrumentToolMetrics } from "./tool-metrics";
 import { registerWorkoutTools } from "@trainheroic-unofficial/core";
 
 type State = Record<string, never>;
@@ -88,6 +89,12 @@ export class TrainHeroicMCP extends McpAgent<Env, State, Props> {
     // init() runs inside the DO's request scope; onError below re-sets it for the separate
     // per-message scopes that init() does not reach.
     Sentry.setUser({ email: props.email });
+
+    // Patch the registerTool seam before any surface registers, so every tool call emits aggregate
+    // usage metrics and tags its trace span with the session id (tool name + ok/error + opaque
+    // session id only — no args/results; see tool-metrics.ts). `this.name` is the per-session DO
+    // name (`streamable-http:<mcp-session-id>`), an opaque, non-PII session identifier.
+    instrumentToolMetrics(this.server, this.name);
 
     const client = new TrainHeroicClient(props.email, props.password);
 

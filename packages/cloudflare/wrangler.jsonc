@@ -47,5 +47,11 @@
     // Non-secret defaults. Secrets (COOKIE_ENCRYPTION_KEY required; ALLOWED_EMAILS and
     // SENTRY_DSN optional) go in .dev.vars locally and `wrangler secret put` in production.
     // SENTRY_DSN is deliberately a secret, not a var, so it is never committed.
+    //
+    // Sentry traces sample rate (0..1). A plain var so it can be dialed quickly from the
+    // Cloudflare dashboard (Settings → Variables) without a code change. Note a later
+    // `wrangler deploy` reasserts this committed default, so update it here for the durable
+    // value. Unset/unparseable falls back to 1 in src/sentry.ts.
+    "SENTRY_TRACES_SAMPLE_RATE": "1"
   }
 }
