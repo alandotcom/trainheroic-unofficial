@@ -2,8 +2,7 @@
 
 The shared MCP tool layer for TrainHeroic. Each tool is defined once here and reused by both
 servers: the local stdio server (`@trainheroic-unofficial/coach-mcp`) and the hosted
-Cloudflare worker (`@trainheroic-unofficial/cloudflare`). Keeping the tools here is what
-makes the two transports behave identically.
+Cloudflare worker (`@trainheroic-unofficial/cloudflare`).
 
 Part of the [trainheroic-unofficial](../../README.md) workspace.
 
