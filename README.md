@@ -9,6 +9,19 @@
 
 > Drive the TrainHeroic coaching API from Claude and other AI assistants — or from your own scripts.
 
+[TrainHeroic](https://www.trainheroic.com) is a strength-and-conditioning platform: a coach programs workouts for a roster of athletes, and each athlete logs their training. This project wraps its (undocumented) API as a Claude Code skill, [MCP](https://modelcontextprotocol.io) servers (Model Context Protocol — the standard Claude and other assistants use to call external tools), and a CLI. You sign in with an existing TrainHeroic account; this does not create one.
+
+> **Credentials:** every entry point below authenticates with your real TrainHeroic email and password. Wherever you put them — a shell `export`, an MCP config file, a `claude mcp add -e` flag — they are stored in plaintext and may land in shell history. Treat them like any other secret. The hosted server is the one exception: it holds credentials server-side behind OAuth.
+
+## Contents
+
+- [What you can do](#what-you-can-do)
+- [Skill](#skill)
+- [MCP server](#mcp-server)
+- [CLI](#cli)
+- [Packages](#packages)
+- [Disclaimer](#disclaimer)
+
 ## What you can do
 
 | Account | Capabilities |
@@ -17,15 +30,6 @@
 | **Athlete** | Review training history · track PRs and progress on a lift over time · see what's programmed · export your data |
 
 A coach account also carries athlete scope, so it can reach its own training data through the athlete tools.
-
-## Pick a setup
-
-| Setup | What it is | Good for |
-| --- | --- | --- |
-| [**Skill**](#skill) | A Claude Code skill that drives the CLI | Claude Code (recommended) |
-| [**MCP — hosted**](#mcp-server) | Remote server, OAuth login, nothing to install | Claude.ai, quickest start |
-| [**MCP — local**](#mcp-server) | stdio server on your machine, credentials stay local | privacy, offline control |
-| [**CLI**](#cli) | A command-line binary over the API | scripting and automation |
 
 ## Skill
 
@@ -54,7 +58,7 @@ The hosted URL is:
 https://trainheroic-mcp.alandotcom.workers.dev/mcp
 ```
 
-The tools the hosted server exposes depend on the account you log in with: a coach account gets the coaching tools **and** its own athlete training tools; an athlete account gets the athlete tools.
+The tools the hosted server exposes depend on the account you log in with: a coach account gets the coaching tools **and** its own athlete training tools; an athlete account gets the athlete tools. (For the local servers below, pick by account: a coach runs the **coach** server, which already includes the athlete tools; the **athlete** server is for athlete-only accounts.)
 
 <details open>
 <summary><b>Claude.ai</b></summary>
@@ -125,15 +129,16 @@ For the athlete server, swap the package name to `@trainheroic-unofficial/athlet
 
 ## CLI
 
-A standalone binary for scripting and automation:
+A command-line tool (installed as a global npm package) for scripting and automation:
 
 ```bash
 npm install -g @trainheroic-unofficial/cli
 export TRAINHEROIC_EMAIL=coach@example.com TRAINHEROIC_PASSWORD=yourpassword
 
-trainheroic whoami            # coach: confirm auth
+trainheroic whoami            # confirm auth (shared)
+trainheroic coach athletes    # coach: list your roster
 trainheroic athlete profile   # athlete: lifetime totals + profile
-trainheroic athlete export    # dump your training history to JSON
+trainheroic athlete export    # athlete: dump training history to JSON
 trainheroic help
 ```
 
@@ -152,3 +157,7 @@ trainheroic help
 ## Disclaimer
 
 Unofficial, not affiliated with or endorsed by TrainHeroic. Use against your own account at your own risk. The TrainHeroic API is undocumented and may change.
+
+## License
+
+MIT

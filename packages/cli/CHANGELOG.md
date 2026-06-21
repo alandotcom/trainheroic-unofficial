@@ -1,5 +1,16 @@
 # @trainheroic-unofficial/cli
 
+## 0.5.0
+
+### Minor Changes
+
+- CLI: move all coaching commands under a `coach` namespace (`coach athletes`, `coach programs`, `coach teams`, `coach exercise …`, `coach workout …`, `coach message …`), mirroring the existing `athlete` group; `whoami` and `request` stay top-level. This is a breaking change to the command surface. Add a `trainheroic skill` command that prints the bundled usage guide and copy-paste workout-spec examples to stdout (`--full` also prints the API and workout-creation reference docs), surfaced from a "Start here" pointer in `--help` and from the `coach workout build` validation error. Documentation: rewrite the SDK and workspace READMEs (install/usage examples, MCP and credential context, prerequisites) and update the coach skill to the `coach` namespace.
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@0.5.0
+- @trainheroic-unofficial/js@0.5.0
+
 ## 0.4.2
 
 ### Patch Changes

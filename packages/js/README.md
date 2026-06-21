@@ -10,6 +10,18 @@ Part of the [trainheroic-unofficial](../../README.md) workspace.
 > Unaffiliated with TrainHeroic. It drives the same undocumented endpoints the web app uses,
 > so a server-side change can break it without warning. Use it against your own account.
 
+## Contents
+
+- [Install](#install)
+- [Quickstart](#quickstart)
+- [Two entry points](#two-entry-points)
+- [What it covers](#what-it-covers)
+- [Working with exercises](#working-with-exercises)
+- [Building a workout](#building-a-workout)
+- [Reading athlete training](#reading-athlete-training)
+- [The workout encoder](#the-workout-encoder)
+- [Develop](#develop)
+
 ## Install
 
 ```bash
@@ -32,23 +44,70 @@ const client = new TrainHeroicClient(
   process.env.TRAINHEROIC_PASSWORD!,
 );
 
-// Every endpoint is reachable through request<T>(method, path, options).
-const res = await client.request("GET", "/user/simple");
+// request<T>(method, path, options) reaches any endpoint the web app uses.
+// The type parameter T types res.data; omit it and data is `unknown`.
+const res = await client.request<{ id: number }>("GET", "/user/simple");
 if (res.ok) {
-  console.log(res.data); // parsed JSON, typed as T
+  console.log(res.data.id);
 }
 ```
 
-`request` returns `{ status, ok, data }`. It never throws on an HTTP error status; check
-`res.ok`. It does throw `TrainHeroicAuthError` when a fresh login fails (bad credentials).
+`request` returns `{ status: number; ok: boolean; data: T }`. It does not throw on an HTTP
+error status, so check `res.ok`. It throws `TrainHeroicAuthError` only when a login attempt
+fails (bad credentials).
 
-If you already hold a session id (for example, one cached from a previous run), pass it as
-the third constructor argument to skip the cold login:
+The third argument, `options`, is `RequestOptions`:
 
 ```ts
-const client = new TrainHeroicClient(email, password, cachedSessionId);
-// client.sessionId is null until a login happens, then holds the current token.
+type RequestOptions = {
+  body?: unknown; // serialized as JSON for non-GET/DELETE requests
+  base?: "coach" | "apis"; // which host; defaults to "coach" (api.trainheroic.com)
+};
 ```
+
+So a write is the same call with a body:
+
+```ts
+const created = await client.request("POST", "/2.0/coach/exercise/create", {
+  body: { title: "Sled Push" },
+});
+```
+
+There is no enumerated endpoint catalog; the paths are the ones the TrainHeroic web app calls.
+Most are reachable through the typed helpers below, so you rarely call `request` directly. The
+request and response shapes those helpers use live in
+[`@trainheroic-unofficial/dto`](../dto) as zod schemas and types.
+
+### Reusing a session across restarts
+
+TrainHeroic has no refresh token and a session expires after roughly one or two hours. By
+default the client logs in on its first request and keeps the session token in memory for the
+life of the process, so a fresh process logs in again. To skip that login, read the token off
+one client and hand it to the next via the third constructor argument.
+
+After a request has run, `client.sessionId` holds the active token, typed `string | null` (it
+is `null` only before the first login). Persist it with your own storage — `saveToken` and
+`loadToken` below stand in for whatever you use (a file, a KV store, an env var):
+
+```ts
+await client.request("GET", "/user/simple");
+const token = client.sessionId;
+if (token) saveToken(token);
+```
+
+A later process passes the saved token as the third constructor argument (also `string | null`,
+so a missing token simply falls back to a normal login):
+
+```ts
+const client = new TrainHeroicClient(
+  process.env.TRAINHEROIC_EMAIL!,
+  process.env.TRAINHEROIC_PASSWORD!,
+  loadToken(),
+);
+```
+
+If the reused token has expired, the next request gets a 401/403; the client logs in once with
+the credentials, retries, and updates `client.sessionId` to the new token.
 
 ## Two entry points
 
@@ -86,52 +145,71 @@ The `.` entry imports no `node:*` modules. Anything that touches the filesystem 
 
 `ExerciseLibrary` loads the full library once, caches it, and answers name lookups and fuzzy
 search against the in-memory copy. By default it caches in memory; pass a `JsonFileLibraryCache`
-from `./node` to persist between runs.
+from `./node` to persist between runs (it writes to `defaultCachePath()`,
+`~/.trainheroic/library.json`, unless you pass a path).
 
 ```ts
 import { ExerciseLibrary } from "@trainheroic-unofficial/js";
 import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
 
+// `client` is the TrainHeroicClient from the Quickstart above.
 const library = new ExerciseLibrary(client, new JsonFileLibraryCache());
 
-// Fuzzy search, ranked.
+// Fuzzy search, ranked. Returns up to `limit` matches, each with id, title, and units.
 const matches = await library.search("back squat", 5);
 
-// Resolve a name to one exercise. A single confident hit lands in `match`;
-// an ambiguous name returns `match: null` with the candidates to disambiguate.
+// resolve() returns { match, candidates }. A single confident hit fills `match`;
+// an ambiguous name leaves `match` null and returns the candidates to choose from.
 const { match, candidates } = await library.resolve("Barbell Back Squat");
+if (!match) {
+  // Ask the user (or the model) to pick one of `candidates`, then use its id.
+  console.log(candidates.map((c) => `${c.id}: ${c.title}`));
+}
 ```
 
 ## Building a workout
 
-`buildSession` runs the full create-to-publish flow against one program day. Exercise ids
-come from the library.
+`buildSession` writes one session into a program on a given day: it creates the session, saves
+the blocks and exercises, and optionally publishes. `programId` identifies one of your
+TrainHeroic programs — find it in the program's URL in the web app, or from a programs read
+(`client.request("GET", ...)`). Exercise ids come from the library.
 
 ```ts
 import { buildSession, type BlockSpec } from "@trainheroic-unofficial/js";
 
 const { match } = await library.resolve("Back Squat");
+if (!match) throw new Error("Resolve to a single exercise before building.");
 
 const blocks: BlockSpec[] = [
   {
     title: "Strength",
     exercises: [
-      { id: match!.id, sets: 5, reps: 5, weight: 225, rpe: 8 },
+      // sets/reps/weight scalars; rpe is routed into the instruction text (see the encoder).
+      { id: match.id, sets: 5, reps: 5, weight: 225, rpe: 8 },
     ],
   },
 ];
 
 const { pwId, workoutId } = await buildSession(client, {
   programId: 12345,
-  date: [2026, 6, 22], // [year, month, day]
+  date: [2026, 6, 22], // [year, month, day]; month is 1-based, so 6 = June
   blocks,
   instruction: "Warm up first.",
-  publish: false, // leave it as a draft
+  publish: false, // build as a draft; publish makes it visible to athletes
 });
 ```
 
-Read it back with `readSession(client, programId, date, pwId)`, publish later with
-`publishSession(client, pwId)`, or remove it with `removeSession(client, programId, pwId)`.
+Each exercise needs an `id`; `sets`, `reps`, `weight`, `rpe`, and a per-exercise `instr` are
+optional. `reps` and `weight` take a scalar (broadcast across every set) or a per-set array
+like `reps: [5, 5, 3]`. The full field list is `ExerciseSpec` / `BlockSpec` in
+[`@trainheroic-unofficial/dto`](../dto). Loads are in whatever unit the exercise is configured
+for in TrainHeroic; a mismatch becomes an advisory rather than a silent change (below).
+
+`buildSession` returns `{ pwId, workoutId }`: `pwId` is the program-workout id (the placement
+of the session in the program — this is the handle the other calls take), and `workoutId` is
+the underlying workout id. Read it back with `readSession(client, programId, date, pwId)`,
+publish later with `publishSession(client, pwId)`, or remove it with
+`removeSession(client, programId, pwId)`.
 
 ## Reading athlete training
 
@@ -147,14 +225,21 @@ scope.
 
 ## The workout encoder
 
-TrainHeroic's exercise payload expects every
-parameter slot present, so the encoder fills all of them (empty slots included) to avoid an
-HTTP 500. A scalar prescription is broadcast across the set count, RPE is routed into the
-instruction text rather than a numeric slot (the API would otherwise coerce it to load), and
-unit mismatches between a spec and the exercise's fixed parameter types are surfaced as
-advisories instead of silently dropped.
+`buildSession` calls the encoder for you; you only deal with it directly to preview warnings.
+TrainHeroic's exercise payload expects every parameter slot present, so the encoder fills all
+of them (empty slots included) to avoid an HTTP 500. A scalar prescription is broadcast across
+the set count, RPE is routed into the instruction text rather than a numeric slot (the API
+would otherwise coerce it to load), and unit mismatches between a spec and the exercise's fixed
+parameter types are collected as advisories rather than silently dropped.
+
+Those advisories are not part of the `buildSession` result; read them before building by
+calling `collectAdvisories(blocks, index)` (the `index` is an `ExerciseLibrary`), which returns
+the unit notes and warnings for a set of blocks.
 
 ## Develop
+
+Clone the workspace and run `pnpm install` once at the repo root (Node >= 22, pnpm 10), then
+from this package directory:
 
 ```bash
 pnpm build       # tsdown -> dist (separate "." and "./node" outputs)

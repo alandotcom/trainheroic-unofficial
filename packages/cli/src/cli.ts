@@ -49,38 +49,48 @@ import { loadSession, saveSession } from "./session-cache";
 const HELP = `trainheroic — command-line tool for the TrainHeroic coaching API
 
 Credentials come from TRAINHEROIC_EMAIL and TRAINHEROIC_PASSWORD. Output is JSON.
+Coaching commands live under 'coach'; your own training lives under 'athlete'.
+
+Start here (for AI agents):
+  trainheroic skill          full workflow guide + copy-paste examples (esp. workout specs)
+  trainheroic skill --full   also print the API + workout-creation reference docs
+  trainheroic skill list     list the available guides (coach, athlete)
 
 Setup:
   install-skill   copy the Claude Code skills to ~/.claude/skills/
 
-Reads:
-  whoami | head-coach | athletes | programs | teams | notifications | analytics
-  program <id> | team <id> | team-codes <id>
-  request <METHOD> <path> [json] [--base coach|apis] [--file f]   raw API call
+Shared:
+  whoami                                                          the logged-in account
+  request <METHOD> <path> [json] [--base coach|apis] [--file f]   raw API call (--base defaults to coach)
 
-Exercises (cached at ~/.trainheroic/library.json):
-  exercise resolve <name>
-  exercise search <query> [--limit N]
-  exercise get <id>
-  exercise sync [--force]
-  exercise create <json>|--file f
-  exercise forget <id> --yes
-  exercise stats
+Coach — manage a roster (needs a coach account):
+  coach head-coach | athletes | programs | teams | notifications | analytics
+  coach program <id> | team <id> | team-codes <id>
 
-Workouts:
-  workout build --program <id> (--date Y-M-D | --timeline-day <n>) [--publish --yes] <spec.json>|--file f
-  workout read --program <id> --date Y-M-D --pw <id>
-  workout publish --pw <id> --yes
-  workout remove --program <id> --pw <id> --yes
+  exercise library (cached at ~/.trainheroic/library.json):
+  coach exercise resolve <name>
+  coach exercise search <query> [--limit N]
+  coach exercise get <id>
+  coach exercise sync [--force]
+  coach exercise create <json>|--file f
+  coach exercise forget <id> --yes
+  coach exercise stats
 
-Messaging:
-  message list
-  message read <streamId> [--limit N]
-  message draft <streamId> <text> [--reply-to <id>]
-  message send <streamId> <text> [--reply-to <id>] --yes
-  message delete <streamId> <commentId> --yes
+  workouts (spec: {"blocks":[{"title","exercises":[{"id","sets"?,"reps"?,"weight"?,"rpe"?}]}],"instruction"?};
+            reps/weight may be a scalar or per-set array; omit --publish to leave a draft):
+  coach workout build --program <id> (--date Y-M-D | --timeline-day <n>) [--publish --yes] <spec.json>|--file f
+  coach workout read --program <id> --date Y-M-D --pw <id>
+  coach workout publish --pw <id> --yes
+  coach workout remove --program <id> --pw <id> --yes
 
-Athlete (the logged-in user's own training; a coach account works too):
+  messaging:
+  coach message list
+  coach message read <streamId> [--limit N]
+  coach message draft <streamId> <text> [--reply-to <id>]
+  coach message send <streamId> <text> [--reply-to <id>] --yes
+  coach message delete <streamId> <commentId> --yes
+
+Athlete — the logged-in user's own training (a coach account works too):
   athlete whoami | profile [--metric] | prefs | working-maxes
   athlete workouts --start Y-M-D --end Y-M-D [--raw]
   athlete exercises [--q <text>] [--limit N]
@@ -113,13 +123,13 @@ function toInt(value: string, label: string): number {
 }
 
 /** Validate input against a dto schema, failing with a readable message on mismatch. */
-function validate<T>(schema: ZodType<T>, value: unknown, label: string): T {
+function validate<T>(schema: ZodType<T>, value: unknown, label: string, hint?: string): T {
   const result = schema.safeParse(value);
   if (!result.success) {
     const issues = result.error.issues
       .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
       .join("; ");
-    fail(`invalid ${label} — ${issues}`);
+    fail(`invalid ${label} — ${issues}${hint ? `\n${hint}` : ""}`);
   }
   return result.data;
 }
@@ -192,16 +202,19 @@ async function cmdExercise(client: TrainHeroicClient, rest: string[]): Promise<v
   switch (sub) {
     case "resolve":
       return out(
-        await lib.resolve(need(a.join(" ").trim() || undefined, "exercise resolve <name>")),
+        await lib.resolve(need(a.join(" ").trim() || undefined, "coach exercise resolve <name>")),
       );
     case "search": {
       const { values, positionals } = parse(a, { limit: { type: "string" } });
-      const query = need(positionals.join(" ").trim() || undefined, "exercise search <query>");
+      const query = need(
+        positionals.join(" ").trim() || undefined,
+        "coach exercise search <query>",
+      );
       const limit = values.limit !== undefined ? toInt(values.limit as string, "--limit") : 20;
       return out(await lib.search(query, limit));
     }
     case "get":
-      return out(await lib.get(toInt(need(a[0], "exercise get <id>"), "id")));
+      return out(await lib.get(toInt(need(a[0], "coach exercise get <id>"), "id")));
     case "sync": {
       const { values } = parse(a, { force: { type: "boolean" } });
       if (values.force === true) return out(await lib.refresh());
@@ -216,7 +229,7 @@ async function cmdExercise(client: TrainHeroicClient, rest: string[]): Promise<v
     }
     case "forget": {
       const { values, positionals } = parse(a, { yes: { type: "boolean" } });
-      const id = toInt(need(positionals[0], "exercise forget <id> --yes"), "id");
+      const id = toInt(need(positionals[0], "coach exercise forget <id> --yes"), "id");
       if (values.yes !== true) fail(`add --yes to forget exercise ${id} from the local cache.`);
       await lib.recordDelete(id);
       return out({ forgotten: id });
@@ -224,7 +237,9 @@ async function cmdExercise(client: TrainHeroicClient, rest: string[]): Promise<v
     case "stats":
       return out(await lib.stats());
     default:
-      return fail("usage: trainheroic exercise <resolve|search|get|sync|create|forget|stats>");
+      return fail(
+        "usage: trainheroic coach exercise <resolve|search|get|sync|create|forget|stats>",
+      );
   }
 }
 
@@ -241,7 +256,7 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
         file: { type: "string" },
       });
       const programId = toInt(
-        need(values.program as string | undefined, "workout build --program <id> ..."),
+        need(values.program as string | undefined, "coach workout build --program <id> ..."),
         "--program",
       );
       if (values.date === undefined && values["timeline-day"] === undefined) {
@@ -253,6 +268,7 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
         workoutSpecSchema,
         Array.isArray(parsed) ? { blocks: parsed } : parsed,
         "workout spec",
+        "run 'trainheroic skill' for the workout spec format and copy-paste examples.",
       );
       const publish = values.publish === true;
       if (publish && values.yes !== true)
@@ -279,18 +295,21 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
       const programId = toInt(
         need(
           values.program as string | undefined,
-          "workout read --program <id> --date Y-M-D --pw <id>",
+          "coach workout read --program <id> --date Y-M-D --pw <id>",
         ),
         "--program",
       );
       const date = parseDate(
         need(
           values.date as string | undefined,
-          "workout read --program <id> --date Y-M-D --pw <id>",
+          "coach workout read --program <id> --date Y-M-D --pw <id>",
         ),
       );
       const pw = toInt(
-        need(values.pw as string | undefined, "workout read --program <id> --date Y-M-D --pw <id>"),
+        need(
+          values.pw as string | undefined,
+          "coach workout read --program <id> --date Y-M-D --pw <id>",
+        ),
         "--pw",
       );
       return out(await readSession(client, programId, date, pw));
@@ -298,7 +317,7 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
     case "publish": {
       const { values } = parse(a, { pw: { type: "string" }, yes: { type: "boolean" } });
       const pw = toInt(
-        need(values.pw as string | undefined, "workout publish --pw <id> --yes"),
+        need(values.pw as string | undefined, "coach workout publish --pw <id> --yes"),
         "--pw",
       );
       if (values.yes !== true) fail(`publishing makes pw ${pw} athlete-visible; add --yes.`);
@@ -312,11 +331,17 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
         yes: { type: "boolean" },
       });
       const programId = toInt(
-        need(values.program as string | undefined, "workout remove --program <id> --pw <id> --yes"),
+        need(
+          values.program as string | undefined,
+          "coach workout remove --program <id> --pw <id> --yes",
+        ),
         "--program",
       );
       const pw = toInt(
-        need(values.pw as string | undefined, "workout remove --program <id> --pw <id> --yes"),
+        need(
+          values.pw as string | undefined,
+          "coach workout remove --program <id> --pw <id> --yes",
+        ),
         "--pw",
       );
       if (values.yes !== true) fail(`removing pw ${pw} deletes the session; add --yes.`);
@@ -324,7 +349,7 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
       return out({ removed: pw });
     }
     default:
-      return fail("usage: trainheroic workout <build|read|publish|remove>");
+      return fail("usage: trainheroic coach workout <build|read|publish|remove>");
   }
 }
 
@@ -346,7 +371,7 @@ async function cmdMessage(client: TrainHeroicClient, rest: string[]): Promise<vo
     case "read": {
       const { values, positionals } = parse(a, { limit: { type: "string" } });
       const streamId = toInt(
-        need(positionals[0], "message read <streamId> [--limit N]"),
+        need(positionals[0], "coach message read <streamId> [--limit N]"),
         "streamId",
       );
       const limit = values.limit !== undefined ? toInt(values.limit as string, "--limit") : 20;
@@ -354,10 +379,13 @@ async function cmdMessage(client: TrainHeroicClient, rest: string[]): Promise<vo
     }
     case "draft": {
       const { values, positionals } = parse(a, { "reply-to": { type: "string" } });
-      const streamId = toInt(need(positionals[0], "message draft <streamId> <text>"), "streamId");
+      const streamId = toInt(
+        need(positionals[0], "coach message draft <streamId> <text>"),
+        "streamId",
+      );
       const text = need(
         positionals.slice(1).join(" ").trim() || undefined,
-        "message draft <streamId> <text>",
+        "coach message draft <streamId> <text>",
       );
       const replyTo =
         values["reply-to"] !== undefined ? toInt(values["reply-to"] as string, "--reply-to") : null;
@@ -373,12 +401,12 @@ async function cmdMessage(client: TrainHeroicClient, rest: string[]): Promise<vo
         yes: { type: "boolean" },
       });
       const streamId = toInt(
-        need(positionals[0], "message send <streamId> <text> --yes"),
+        need(positionals[0], "coach message send <streamId> <text> --yes"),
         "streamId",
       );
       const text = need(
         positionals.slice(1).join(" ").trim() || undefined,
-        "message send <streamId> <text> --yes",
+        "coach message send <streamId> <text> --yes",
       );
       const replyTo =
         values["reply-to"] !== undefined ? toInt(values["reply-to"] as string, "--reply-to") : null;
@@ -389,11 +417,11 @@ async function cmdMessage(client: TrainHeroicClient, rest: string[]): Promise<vo
     case "delete": {
       const { values, positionals } = parse(a, { yes: { type: "boolean" } });
       const streamId = toInt(
-        need(positionals[0], "message delete <streamId> <commentId> --yes"),
+        need(positionals[0], "coach message delete <streamId> <commentId> --yes"),
         "streamId",
       );
       const commentId = toInt(
-        need(positionals[1], "message delete <streamId> <commentId> --yes"),
+        need(positionals[1], "coach message delete <streamId> <commentId> --yes"),
         "commentId",
       );
       if (values.yes !== true)
@@ -401,7 +429,7 @@ async function cmdMessage(client: TrainHeroicClient, rest: string[]): Promise<vo
       return out({ deleted: true, response: await deleteComment(client, streamId, commentId) });
     }
     default:
-      return fail("usage: trainheroic message <list|read|draft|send|delete>");
+      return fail("usage: trainheroic coach message <list|read|draft|send|delete>");
   }
 }
 
@@ -609,6 +637,39 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
   }
 }
 
+// Print a shipped skill guide to stdout so an agent can read it in-context (the way
+// `agent-browser skills get core` works). Defaults to the coach guide; `--full` appends the
+// reference docs (API reference, workout-creation, data-warehouse).
+async function cmdSkill(rest: string[]): Promise<void> {
+  const skillRoot = join(import.meta.dirname, "../skill");
+  const positional = rest.find((r) => !r.startsWith("-"));
+  if (positional === "list") {
+    const entries = await readdir(skillRoot, { withFileTypes: true });
+    return out(entries.filter((e) => e.isDirectory()).map((e) => e.name));
+  }
+  const name = positional ?? "trainheroic-unofficial";
+  const dir = join(skillRoot, name);
+  let text: string;
+  try {
+    text = await readFile(join(dir, "SKILL.md"), "utf8");
+  } catch {
+    return fail(`unknown skill "${name}". Run 'trainheroic skill list'.`);
+  }
+  process.stdout.write(text);
+  if (rest.includes("--full")) {
+    try {
+      const refDir = join(dir, "references");
+      const refs = (await readdir(refDir)).filter((f) => f.endsWith(".md")).sort();
+      for (const f of refs) {
+        process.stdout.write(`\n\n===== references/${f} =====\n\n`);
+        process.stdout.write(await readFile(join(refDir, f), "utf8"));
+      }
+    } catch {
+      /* no references dir: the SKILL.md alone is the guide */
+    }
+  }
+}
+
 async function cmdInstallSkill(): Promise<void> {
   const home = process.env.HOME ?? process.env.USERPROFILE;
   if (!home) fail("cannot determine home directory.");
@@ -627,10 +688,12 @@ async function cmdInstallSkill(): Promise<void> {
   out({ installed });
 }
 
-async function dispatch(client: TrainHeroicClient, group: string, rest: string[]): Promise<void> {
-  switch (group) {
-    case "whoami":
-      return out(await get(client, "/user/simple"));
+const COACH_USAGE =
+  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|exercise|workout|message>";
+
+async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void> {
+  const [sub, ...a] = rest;
+  switch (sub) {
     case "head-coach":
       return out(await get(client, "/v5/headCoach"));
     case "athletes":
@@ -647,26 +710,41 @@ async function dispatch(client: TrainHeroicClient, group: string, rest: string[]
       return out(
         await get(
           client,
-          `/3.0/coach/program/${encodeURIComponent(need(rest[0], "program <id>"))}`,
+          `/3.0/coach/program/${encodeURIComponent(need(a[0], "coach program <id>"))}`,
         ),
       );
     case "team":
-      return out(await get(client, `/v5/teams/${encodeURIComponent(need(rest[0], "team <id>"))}`));
+      return out(
+        await get(client, `/v5/teams/${encodeURIComponent(need(a[0], "coach team <id>"))}`),
+      );
     case "team-codes":
       return out(
         await get(
           client,
-          `/v5/teams/${encodeURIComponent(need(rest[0], "team-codes <id>"))}/teamCodes`,
+          `/v5/teams/${encodeURIComponent(need(a[0], "coach team-codes <id>"))}/teamCodes`,
         ),
       );
+    case "exercise":
+      return cmdExercise(client, a);
+    case "workout":
+      return cmdWorkout(client, a);
+    case "message":
+      return cmdMessage(client, a);
+    default:
+      return fail(COACH_USAGE);
+  }
+}
+
+async function dispatch(client: TrainHeroicClient, group: string, rest: string[]): Promise<void> {
+  switch (group) {
+    // Shared: role-agnostic.
+    case "whoami":
+      return out(await get(client, "/user/simple"));
     case "request":
       return cmdRequest(client, rest);
-    case "exercise":
-      return cmdExercise(client, rest);
-    case "workout":
-      return cmdWorkout(client, rest);
-    case "message":
-      return cmdMessage(client, rest);
+    // Coaching (roster) commands live under `coach`; the athlete's own training under `athlete`.
+    case "coach":
+      return cmdCoach(client, rest);
     case "athlete":
       return cmdAthlete(client, rest);
     default:
@@ -683,6 +761,11 @@ async function main(): Promise<void> {
 
   if (group === "install-skill") {
     await cmdInstallSkill();
+    return;
+  }
+
+  if (group === "skill") {
+    await cmdSkill(rest);
     return;
   }
 

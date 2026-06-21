@@ -1,31 +1,53 @@
 # @trainheroic-unofficial/cloudflare
 
-The hosted, multi-tenant TrainHeroic MCP server on Cloudflare Workers. Each coach signs in with their own TrainHeroic credentials through an OAuth flow; the worker stores per-tenant data in D1.
+The hosted, multi-tenant [TrainHeroic](https://www.trainheroic.com) [MCP](https://modelcontextprotocol.io) server on [Cloudflare Workers](https://developers.cloudflare.com/workers/). It serves the same tools as the local servers, but for many users at once: each user signs in with their own TrainHeroic credentials through an OAuth flow, so credentials are held server-side instead of in a local config. Per-tenant data (the exercise mirror and the training warehouse) lives in [D1](https://developers.cloudflare.com/d1/), Cloudflare's SQLite database, scoped by account.
 
 **To use the public hosted server**, see the [root README](../../README.md) — no deployment needed.
 
-**To self-host your own instance**, follow [DEPLOY.md](./DEPLOY.md). You need a Cloudflare account on the Workers Paid plan (Durable Objects + D1 + cron).
+**To self-host your own instance**, follow [DEPLOY.md](./DEPLOY.md). You need a Cloudflare account on the Workers Paid plan, which this server requires for [Durable Objects](https://developers.cloudflare.com/durable-objects/) (one per session, holding the MCP agent), D1, and a [cron trigger](https://developers.cloudflare.com/workers/configuration/cron-triggers/) (a scheduled purge job).
 
 ---
 
 ## Local development
 
+This runs the worker locally with no Cloudflare account, using Miniflare (a local Workers runtime) and a local D1 file. First run `pnpm install` once at the repo root (Node >= 22, pnpm 10), then from `packages/cloudflare`:
+
+1. Create a `.dev.vars` file (wrangler's local-secrets file). The full set of variables:
+   - `COOKIE_ENCRYPTION_KEY` (**required**) — signs the OAuth/CSRF round-trip values. Generate one with `openssl rand -hex 32` and paste the output as the value.
+   - `ALLOWED_EMAILS` (optional) — comma-separated allowlist of TrainHeroic emails permitted to register; empty or unset allows any.
+   - `SENTRY_DSN` (optional) — enables error reporting; unset disables it.
+
+   ```
+   COOKIE_ENCRYPTION_KEY=2f1c...your-generated-hex
+   ALLOWED_EMAILS=
+   ```
+
+2. Generate types, migrate the local D1, and start the dev server:
+
+   ```bash
+   pnpm cf-typegen          # generate worker-configuration.d.ts (re-run after binding changes)
+   pnpm db:migrate:local    # apply migrations to the local D1
+   pnpm dev                 # wrangler dev on http://localhost:8787
+   ```
+
+3. With `pnpm dev` running, launch the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) (the official MCP debugging UI), point it at `http://localhost:8787/mcp`, and complete the OAuth + TrainHeroic login flow:
+
+   ```bash
+   pnpm inspect             # fetches and opens the Inspector UI via npx (nothing to install)
+   ```
+
+Typecheck and tests run locally, no Cloudflare account needed:
+
 ```bash
-# In packages/cloudflare:
-# 1. Create .dev.vars with at least:
-#    COOKIE_ENCRYPTION_KEY=<openssl rand -hex 32>
-#    ALLOWED_EMAILS=                # optional
-pnpm cf-typegen          # regenerate worker-configuration.d.ts
-pnpm db:migrate:local    # apply migrations to the local D1
-pnpm dev                 # wrangler dev on http://localhost:8787
+pnpm typecheck
+pnpm test                # runs inside workerd (Cloudflare's runtime) via @cloudflare/vitest-pool-workers
 ```
 
-Point MCP Inspector at `http://localhost:8787/mcp` and complete the OAuth + TrainHeroic login flow.
+Deploying and migrating the remote database do need a Cloudflare account and wrangler auth
+(`wrangler login` or a `CLOUDFLARE_API_TOKEN` env var); see [DEPLOY.md](./DEPLOY.md) for the
+one-time setup:
 
 ```bash
-pnpm inspect             # open Inspector UI (requires pnpm dev running)
-pnpm deploy              # wrangler deploy (see DEPLOY.md first)
+pnpm deploy              # wrangler deploy
 pnpm db:migrate          # apply migrations to the remote D1
-pnpm typecheck
-pnpm test                # runs inside workerd via @cloudflare/vitest-pool-workers
 ```
