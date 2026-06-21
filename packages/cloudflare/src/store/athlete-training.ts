@@ -1,3 +1,4 @@
+import { and, desc, eq, isNull, like, sql } from "drizzle-orm";
 import {
   buildSearchText,
   coerceInt,
@@ -7,7 +8,8 @@ import {
   fetchWorkingMaxes,
 } from "@trainheroic-unofficial/js";
 import { AthleteScopedStore } from "./base";
-import { mapPool, runBatches, runGroups } from "./d1";
+import { type BatchStmt, mapPool, runBatches, runGroups } from "./d1";
+import { athleteExercise, athleteExerciseSession, athletePr, athleteWorkingMax } from "./schema";
 
 // Bound the per-exercise history fan-out so a sync doesn't burst the host or blow the Worker
 // subrequest budget. History is drained in batches (sessions_synced_at watermark per exercise).
@@ -34,29 +36,37 @@ export class AthleteTrainingStore extends AthleteScopedStore {
   async syncCatalog(): Promise<number> {
     const user = await this.user();
     const list = await fetchExerciseHistoryList(this.client);
-    const stmts: D1PreparedStatement[] = [];
+    const stmts: BatchStmt[] = [];
     for (const item of list) {
       const id = coerceInt(item.id);
       if (id === null) continue;
       const title = item.title;
       stmts.push(
         this.db
-          .prepare(
-            "INSERT INTO athlete_exercise (user_id, id, title, search_text, param_1_type, param_2_type, is_circuit, raw, source) " +
-              "VALUES (?,?,?,?,?,?,?,?,'api') ON CONFLICT(user_id, id) DO UPDATE SET " +
-              "title=excluded.title, search_text=excluded.search_text, param_1_type=excluded.param_1_type, " +
-              "param_2_type=excluded.param_2_type, is_circuit=excluded.is_circuit, raw=excluded.raw",
-          )
-          .bind(
-            user,
+          .insert(athleteExercise)
+          .values({
+            userId: user,
             id,
             title,
-            buildSearchText(title),
-            coerceInt(item.param1Type),
-            coerceInt(item.param2Type),
-            item.isCircuit ? 1 : 0,
-            JSON.stringify(item),
-          ),
+            searchText: buildSearchText(title),
+            param1Type: coerceInt(item.param1Type),
+            param2Type: coerceInt(item.param2Type),
+            isCircuit: item.isCircuit ? 1 : 0,
+            raw: JSON.stringify(item),
+          })
+          // sessions_synced_at is intentionally NOT in the set clause: re-syncing the catalog
+          // must preserve each exercise's history watermark.
+          .onConflictDoUpdate({
+            target: [athleteExercise.userId, athleteExercise.id],
+            set: {
+              title: sql`excluded.title`,
+              searchText: sql`excluded.search_text`,
+              param1Type: sql`excluded.param_1_type`,
+              param2Type: sql`excluded.param_2_type`,
+              isCircuit: sql`excluded.is_circuit`,
+              raw: sql`excluded.raw`,
+            },
+          }),
       );
     }
     await runBatches(this.db, stmts);
@@ -67,28 +77,34 @@ export class AthleteTrainingStore extends AthleteScopedStore {
   async syncWorkingMaxes(): Promise<number> {
     const user = await this.user();
     const maxes = await fetchWorkingMaxes(this.client);
-    const stmts: D1PreparedStatement[] = [];
+    const stmts: BatchStmt[] = [];
     for (const m of maxes) {
       const exId = coerceInt(m.exercise_id);
       if (exId === null) continue;
       stmts.push(
         this.db
-          .prepare(
-            "INSERT INTO athlete_working_max (user_id, exercise_id, title, param_type, value, type_suffix, working_max_id, raw, source) " +
-              "VALUES (?,?,?,?,?,?,?,?,'api') ON CONFLICT(user_id, exercise_id) DO UPDATE SET " +
-              "title=excluded.title, param_type=excluded.param_type, value=excluded.value, " +
-              "type_suffix=excluded.type_suffix, working_max_id=excluded.working_max_id, raw=excluded.raw",
-          )
-          .bind(
-            user,
-            exId,
-            m.title ?? null,
-            coerceInt(m.param_type),
-            coerceNum(m.value),
-            m.type_suffix ?? null,
-            coerceInt(m.working_max_id),
-            JSON.stringify(m),
-          ),
+          .insert(athleteWorkingMax)
+          .values({
+            userId: user,
+            exerciseId: exId,
+            title: m.title ?? null,
+            paramType: coerceInt(m.param_type),
+            value: coerceNum(m.value),
+            typeSuffix: m.type_suffix ?? null,
+            workingMaxId: coerceInt(m.working_max_id),
+            raw: JSON.stringify(m),
+          })
+          .onConflictDoUpdate({
+            target: [athleteWorkingMax.userId, athleteWorkingMax.exerciseId],
+            set: {
+              title: sql`excluded.title`,
+              paramType: sql`excluded.param_type`,
+              value: sql`excluded.value`,
+              typeSuffix: sql`excluded.type_suffix`,
+              workingMaxId: sql`excluded.working_max_id`,
+              raw: sql`excluded.raw`,
+            },
+          }),
       );
     }
     await runBatches(this.db, stmts);
@@ -99,30 +115,25 @@ export class AthleteTrainingStore extends AthleteScopedStore {
   async syncExercise(exerciseId: number): Promise<ExerciseSyncResult> {
     const user = await this.user();
     const detail = await fetchExerciseHistoryDetail(this.client, exerciseId, user);
-    const group: D1PreparedStatement[] = [
+    const group: BatchStmt[] = [
       this.db
-        .prepare("DELETE FROM athlete_pr WHERE user_id=? AND exercise_id=?")
-        .bind(user, exerciseId),
+        .delete(athletePr)
+        .where(and(eq(athletePr.userId, user), eq(athletePr.exerciseId, exerciseId))),
     ];
 
     let prs = 0;
     for (const pr of detail.liftPRs ?? []) {
       group.push(
-        this.db
-          .prepare(
-            "INSERT INTO athlete_pr (user_id, exercise_id, description, reps, weight, units, date, saved_workout_set_exercise_id, source) " +
-              "VALUES (?,?,?,?,?,?,?,?,'api')",
-          )
-          .bind(
-            user,
-            exerciseId,
-            pr.description ?? null,
-            coerceInt(pr.reps),
-            coerceNum(pr.weight),
-            pr.units ?? null,
-            pr.dateCompleted ?? null,
-            coerceInt(pr.savedWorkoutSetExerciseId),
-          ),
+        this.db.insert(athletePr).values({
+          userId: user,
+          exerciseId,
+          description: pr.description ?? null,
+          reps: coerceInt(pr.reps),
+          weight: coerceNum(pr.weight),
+          units: pr.units ?? null,
+          date: pr.dateCompleted ?? null,
+          savedWorkoutSetExerciseId: coerceInt(pr.savedWorkoutSetExerciseId),
+        }),
       );
       prs += 1;
     }
@@ -133,32 +144,41 @@ export class AthleteTrainingStore extends AthleteScopedStore {
       if (sid === null) continue;
       group.push(
         this.db
-          .prepare(
-            "INSERT INTO athlete_exercise_session (user_id, saved_workout_set_exercise_id, exercise_id, date, abr, " +
-              "best_estimated_1rm, program_workout_id, team_id, raw, source) VALUES (?,?,?,?,?,?,?,?,?,'api') " +
-              "ON CONFLICT(user_id, saved_workout_set_exercise_id) DO UPDATE SET date=excluded.date, abr=excluded.abr, " +
-              "best_estimated_1rm=excluded.best_estimated_1rm, program_workout_id=excluded.program_workout_id, " +
-              "team_id=excluded.team_id, raw=excluded.raw",
-          )
-          .bind(
-            user,
-            sid,
+          .insert(athleteExerciseSession)
+          .values({
+            userId: user,
+            savedWorkoutSetExerciseId: sid,
             exerciseId,
-            h.dateCompleted ?? null,
-            h.abr ?? null,
-            coerceNum(h.bestEstimated1RM),
-            coerceInt(h.programWorkoutId),
-            coerceInt(h.teamId),
-            JSON.stringify(h),
-          ),
+            date: h.dateCompleted ?? null,
+            abr: h.abr ?? null,
+            bestEstimated1rm: coerceNum(h.bestEstimated1RM),
+            programWorkoutId: coerceInt(h.programWorkoutId),
+            teamId: coerceInt(h.teamId),
+            raw: JSON.stringify(h),
+          })
+          .onConflictDoUpdate({
+            target: [
+              athleteExerciseSession.userId,
+              athleteExerciseSession.savedWorkoutSetExerciseId,
+            ],
+            set: {
+              date: sql`excluded.date`,
+              abr: sql`excluded.abr`,
+              bestEstimated1rm: sql`excluded.best_estimated_1rm`,
+              programWorkoutId: sql`excluded.program_workout_id`,
+              teamId: sql`excluded.team_id`,
+              raw: sql`excluded.raw`,
+            },
+          }),
       );
       sessions += 1;
     }
 
     group.push(
       this.db
-        .prepare("UPDATE athlete_exercise SET sessions_synced_at=? WHERE user_id=? AND id=?")
-        .bind(Date.now(), user, exerciseId),
+        .update(athleteExercise)
+        .set({ sessionsSyncedAt: Date.now() })
+        .where(and(eq(athleteExercise.userId, user), eq(athleteExercise.id, exerciseId))),
     );
     await runGroups(this.db, [group]);
     return { exerciseId, sessions, prs };
@@ -168,12 +188,12 @@ export class AthleteTrainingStore extends AthleteScopedStore {
   async syncNextBatch(batchSize = DEFAULT_BATCH): Promise<ExerciseSyncResult[]> {
     const user = await this.user();
     const rows = await this.db
-      .prepare(
-        "SELECT id FROM athlete_exercise WHERE user_id=? AND sessions_synced_at IS NULL ORDER BY id LIMIT ?",
-      )
-      .bind(user, batchSize)
-      .all<{ id: number }>();
-    const ids = rows.results.map((r) => r.id);
+      .select({ id: athleteExercise.id })
+      .from(athleteExercise)
+      .where(and(eq(athleteExercise.userId, user), isNull(athleteExercise.sessionsSyncedAt)))
+      .orderBy(athleteExercise.id)
+      .limit(batchSize);
+    const ids = rows.map((r) => r.id);
     return mapPool(ids, FETCH_CONCURRENCY, async (id) => {
       try {
         return await this.syncExercise(id);
@@ -190,78 +210,101 @@ export class AthleteTrainingStore extends AthleteScopedStore {
 
   async unsyncedCount(): Promise<number> {
     const user = await this.user();
-    const row = await this.db
-      .prepare(
-        "SELECT COUNT(*) AS n FROM athlete_exercise WHERE user_id=? AND sessions_synced_at IS NULL",
-      )
-      .bind(user)
-      .first<{ n: number }>();
-    return row?.n ?? 0;
+    return this.db.$count(
+      athleteExercise,
+      and(eq(athleteExercise.userId, user), isNull(athleteExercise.sessionsSyncedAt)),
+    );
   }
 
   /** Forget the per-exercise watermark so the next batch sync re-pulls every exercise. */
   async resetSessionsWatermark(): Promise<void> {
     const user = await this.user();
     await this.db
-      .prepare("UPDATE athlete_exercise SET sessions_synced_at=NULL WHERE user_id=?")
-      .bind(user)
-      .run();
+      .update(athleteExercise)
+      .set({ sessionsSyncedAt: null })
+      .where(eq(athleteExercise.userId, user));
   }
 
   // --- queries ---
 
   async searchCatalog(q: string | undefined, limit: number): Promise<unknown[]> {
     const user = await this.user();
+    const cols = {
+      id: athleteExercise.id,
+      title: athleteExercise.title,
+      param_1_type: athleteExercise.param1Type,
+      param_2_type: athleteExercise.param2Type,
+      is_circuit: athleteExercise.isCircuit,
+    };
     if (q === undefined || q.trim() === "") {
-      const res = await this.db
-        .prepare(
-          "SELECT id, title, param_1_type, param_2_type, is_circuit FROM athlete_exercise WHERE user_id=? ORDER BY title LIMIT ?",
-        )
-        .bind(user, limit)
-        .all();
-      return res.results;
+      return this.db
+        .select(cols)
+        .from(athleteExercise)
+        .where(eq(athleteExercise.userId, user))
+        .orderBy(athleteExercise.title)
+        .limit(limit);
     }
-    const res = await this.db
-      .prepare(
-        "SELECT id, title, param_1_type, param_2_type, is_circuit FROM athlete_exercise " +
-          "WHERE user_id=? AND search_text LIKE ? ORDER BY length(title), title LIMIT ?",
+    return this.db
+      .select(cols)
+      .from(athleteExercise)
+      .where(
+        and(
+          eq(athleteExercise.userId, user),
+          like(athleteExercise.searchText, `%${buildSearchText(q)}%`),
+        ),
       )
-      .bind(user, `%${buildSearchText(q)}%`, limit)
-      .all();
-    return res.results;
+      .orderBy(sql`length(${athleteExercise.title})`, athleteExercise.title)
+      .limit(limit);
   }
 
   async sessions(exerciseId: number, limit: number): Promise<unknown[]> {
     const user = await this.user();
-    const res = await this.db
-      .prepare(
-        "SELECT date, abr, best_estimated_1rm, program_workout_id, saved_workout_set_exercise_id " +
-          "FROM athlete_exercise_session WHERE user_id=? AND exercise_id=? ORDER BY date DESC LIMIT ?",
+    return this.db
+      .select({
+        date: athleteExerciseSession.date,
+        abr: athleteExerciseSession.abr,
+        best_estimated_1rm: athleteExerciseSession.bestEstimated1rm,
+        program_workout_id: athleteExerciseSession.programWorkoutId,
+        saved_workout_set_exercise_id: athleteExerciseSession.savedWorkoutSetExerciseId,
+      })
+      .from(athleteExerciseSession)
+      .where(
+        and(
+          eq(athleteExerciseSession.userId, user),
+          eq(athleteExerciseSession.exerciseId, exerciseId),
+        ),
       )
-      .bind(user, exerciseId, limit)
-      .all();
-    return res.results;
+      .orderBy(desc(athleteExerciseSession.date))
+      .limit(limit);
   }
 
   async prs(exerciseId: number): Promise<unknown[]> {
     const user = await this.user();
-    const res = await this.db
-      .prepare(
-        "SELECT description, reps, weight, units, date FROM athlete_pr WHERE user_id=? AND exercise_id=? ORDER BY reps",
-      )
-      .bind(user, exerciseId)
-      .all();
-    return res.results;
+    return this.db
+      .select({
+        description: athletePr.description,
+        reps: athletePr.reps,
+        weight: athletePr.weight,
+        units: athletePr.units,
+        date: athletePr.date,
+      })
+      .from(athletePr)
+      .where(and(eq(athletePr.userId, user), eq(athletePr.exerciseId, exerciseId)))
+      .orderBy(athletePr.reps);
   }
 
   async workingMaxes(): Promise<unknown[]> {
     const user = await this.user();
-    const res = await this.db
-      .prepare(
-        "SELECT exercise_id, title, param_type, value, type_suffix FROM athlete_working_max WHERE user_id=? ORDER BY title",
-      )
-      .bind(user)
-      .all();
-    return res.results;
+    return this.db
+      .select({
+        exercise_id: athleteWorkingMax.exerciseId,
+        title: athleteWorkingMax.title,
+        param_type: athleteWorkingMax.paramType,
+        value: athleteWorkingMax.value,
+        type_suffix: athleteWorkingMax.typeSuffix,
+      })
+      .from(athleteWorkingMax)
+      .where(eq(athleteWorkingMax.userId, user))
+      .orderBy(athleteWorkingMax.title);
   }
 }

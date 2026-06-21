@@ -1,53 +1,63 @@
 import { coerceInt } from "@trainheroic-unofficial/js";
+import type { BatchItem } from "drizzle-orm/batch";
+import { type DrizzleDb, athleteSyncState, syncState } from "./schema";
 
 // The bounded-concurrency fan-out helper lives in the SDK (one canonical copy, shared with the
 // CLI export); re-exported here so the warehouse stores keep importing it from `./d1`.
 export { mapPool } from "@trainheroic-unofficial/js";
 
+/** A single write in a Drizzle/D1 batch (insert/update/delete builder). */
+export type BatchStmt = BatchItem<"sqlite">;
+
 export type CursorUpsert = { cursor?: string | null; generation?: number | null };
 
 /** Build a sync_state upsert. One home for the table's write shape (cursor + generation). */
 export function cursorUpsertStmt(
-  db: D1Database,
+  db: DrizzleDb,
   org: number,
   resource: string,
   scopeId: number,
   opts: CursorUpsert,
-): D1PreparedStatement {
+): BatchStmt {
+  const cursor = opts.cursor ?? null;
+  const generation = opts.generation ?? null;
+  const syncedAt = Date.now();
+  // On conflict, set the same values we just supplied (equivalent to the SQL's excluded.*).
   return db
-    .prepare(
-      "INSERT INTO sync_state (org_id, resource, scope_id, cursor, synced_at, generation) " +
-        "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(org_id, resource, scope_id) DO UPDATE SET " +
-        "cursor=excluded.cursor, synced_at=excluded.synced_at, generation=excluded.generation",
-    )
-    .bind(org, resource, scopeId, opts.cursor ?? null, Date.now(), opts.generation ?? null);
+    .insert(syncState)
+    .values({ orgId: org, resource, scopeId, cursor, syncedAt, generation })
+    .onConflictDoUpdate({
+      target: [syncState.orgId, syncState.resource, syncState.scopeId],
+      set: { cursor, syncedAt, generation },
+    });
 }
 
 /** Build an athlete_sync_state upsert (the athlete-warehouse watermark, keyed by user_id). */
 export function athleteCursorUpsertStmt(
-  db: D1Database,
+  db: DrizzleDb,
   userId: number,
   resource: string,
   scopeId: number,
   cursor: string | null = null,
-): D1PreparedStatement {
+): BatchStmt {
+  const syncedAt = Date.now();
   return db
-    .prepare(
-      "INSERT INTO athlete_sync_state (user_id, resource, scope_id, cursor, synced_at) " +
-        "VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, resource, scope_id) DO UPDATE SET " +
-        "cursor=excluded.cursor, synced_at=excluded.synced_at",
-    )
-    .bind(userId, resource, scopeId, cursor, Date.now());
+    .insert(athleteSyncState)
+    .values({ userId, resource, scopeId, cursor, syncedAt })
+    .onConflictDoUpdate({
+      target: [athleteSyncState.userId, athleteSyncState.resource, athleteSyncState.scopeId],
+      set: { cursor, syncedAt },
+    });
 }
 
 /**
- * Run prepared statements in ordered chunks, each chunk as one atomic D1 batch.
+ * Run statements in ordered chunks, each chunk as one atomic D1 batch.
  * Sequential so order holds and the per-invocation query limit is respected. Use for
  * statements with no cross-statement atomicity requirement (idempotent upserts).
  */
 export async function runBatches(
-  db: D1Database,
-  statements: readonly D1PreparedStatement[],
+  db: DrizzleDb,
+  statements: readonly BatchStmt[],
   chunkSize = 100,
 ): Promise<void> {
   await runGroups(
@@ -64,12 +74,12 @@ export async function runBatches(
  * group larger than chunkSize is run as its own batch (atomicity wins over the cap).
  */
 export async function runGroups(
-  db: D1Database,
-  groups: ReadonlyArray<readonly D1PreparedStatement[]>,
+  db: DrizzleDb,
+  groups: ReadonlyArray<readonly BatchStmt[]>,
   chunkSize = 100,
 ): Promise<void> {
-  const batches: D1PreparedStatement[][] = [];
-  let current: D1PreparedStatement[] = [];
+  const batches: BatchStmt[][] = [];
+  let current: BatchStmt[] = [];
   for (const group of groups) {
     if (group.length === 0) continue;
     if (current.length > 0 && current.length + group.length > chunkSize) {
@@ -80,7 +90,10 @@ export async function runGroups(
   }
   if (current.length > 0) batches.push(current);
   for (const batch of batches) {
-    await db.batch(batch);
+    // Only non-empty groups are pushed, so head is always present; destructuring into a
+    // [head, ...tail] literal gives D1's batch() the non-empty tuple type it requires.
+    const [head, ...tail] = batch;
+    if (head) await db.batch([head, ...tail]);
   }
 }
 

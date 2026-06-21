@@ -1,5 +1,7 @@
+import { and, eq, like, lt, sql } from "drizzle-orm";
 import { OrgScopedStore } from "./base";
-import { cursorUpsertStmt } from "./d1";
+import { type BatchStmt, cursorUpsertStmt } from "./d1";
+import { exercise, syncMeta, syncState } from "./schema";
 import {
   asExerciseList,
   buildSearchText,
@@ -9,7 +11,6 @@ import {
   type ExerciseIndex,
   exerciseLibraryResponseSchema,
   exerciseResponseSchema,
-  type ExerciseRow,
   type ExerciseView,
   presentExercise,
   rankSearch,
@@ -31,23 +32,17 @@ const UPSERT_CHUNK = 8;
 // How many LIKE matches to pull before app-side ranking decides the final order.
 const SEARCH_CANDIDATES = 200;
 
-const COLS = [
-  "org_id",
-  "id",
-  "title",
-  "search_text",
-  "param_1_type",
-  "param_2_type",
-  "can_edit",
-  "user_id",
-  "use_count",
-  "raw",
-  "generation",
-  "source",
-] as const;
-
-const SELECT_CORE =
-  "SELECT id, title, param_1_type, param_2_type, can_edit, user_id, use_count FROM exercise";
+// The reads that feed the SDK's ExerciseRow shape: snake_case keys, matching the legacy SQL
+// projection so rankSearch/withUnits keep their input contract.
+const exerciseRowCols = {
+  id: exercise.id,
+  title: exercise.title,
+  param_1_type: exercise.param1Type,
+  param_2_type: exercise.param2Type,
+  can_edit: exercise.canEdit,
+  user_id: exercise.userId,
+  use_count: exercise.useCount,
+};
 
 /** D1-backed mirror of the TrainHeroic exercise library (reference zone). */
 export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
@@ -57,36 +52,26 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
 
   async #meta(org: number, key: string): Promise<string | null> {
     const row = await this.db
-      .prepare("SELECT value FROM sync_meta WHERE org_id = ? AND key = ?")
-      .bind(org, key)
-      .first<{ value: string }>();
+      .select({ value: syncMeta.value })
+      .from(syncMeta)
+      .where(and(eq(syncMeta.orgId, org), eq(syncMeta.key, key)))
+      .get();
     return row?.value ?? null;
   }
 
-  #setMetaStmt(org: number, key: string, value: string): D1PreparedStatement {
+  #setMetaStmt(org: number, key: string, value: string): BatchStmt {
     return this.db
-      .prepare(
-        "INSERT INTO sync_meta (org_id, key, value) VALUES (?, ?, ?) " +
-          "ON CONFLICT(org_id, key) DO UPDATE SET value = excluded.value",
-      )
-      .bind(org, key, value);
+      .insert(syncMeta)
+      .values({ orgId: org, key, value })
+      .onConflictDoUpdate({ target: [syncMeta.orgId, syncMeta.key], set: { value } });
   }
 
-  #setCursorStmt(
-    org: number,
-    resource: string,
-    scopeId: number,
-    generation: number,
-  ): D1PreparedStatement {
+  #setCursorStmt(org: number, resource: string, scopeId: number, generation: number): BatchStmt {
     return cursorUpsertStmt(this.db, org, resource, scopeId, { generation });
   }
 
   async #count(org: number): Promise<number> {
-    const row = await this.db
-      .prepare("SELECT COUNT(*) AS n FROM exercise WHERE org_id = ?")
-      .bind(org)
-      .first<{ n: number }>();
-    return row?.n ?? 0;
+    return this.db.$count(exercise, eq(exercise.orgId, org));
   }
 
   // -- sync ----------------------------------------------------------------
@@ -119,17 +104,18 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
     // leave rows written at a generation the meta never recorded (which would break the
     // prune-to-match self-healing). A crash before the prune just leaves prunable rows
     // for the next run, since the generation is already durable.
-    await this.db.batch([
+    const [firstWrite, ...restWrites] = [
       ...chunk(list, UPSERT_CHUNK).map((c) => this.#upsertStmt(org, c, generation)),
       this.#setMetaStmt(org, "sync_generation", String(generation)),
-    ]);
+    ];
+    // firstWrite is always present (the meta bump), but the guard keeps the batch tuple typed.
+    if (firstWrite) await this.db.batch([firstWrite, ...restWrites]);
 
     let pruned = 0;
     if (list.length >= PRUNE_FLOOR) {
       const del = await this.db
-        .prepare("DELETE FROM exercise WHERE org_id = ? AND generation < ?")
-        .bind(org, generation)
-        .run();
+        .delete(exercise)
+        .where(and(eq(exercise.orgId, org), lt(exercise.generation, generation)));
       pruned = del.meta.changes ?? 0;
     }
 
@@ -146,34 +132,45 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
     org: number,
     rows: ReadonlyArray<Record<string, unknown>>,
     generation: number,
-  ): D1PreparedStatement {
-    const rowSql = `(${COLS.map(() => "?").join(", ")})`;
-    const updates = COLS.filter((c) => c !== "org_id" && c !== "id")
-      .map((c) => `${c} = excluded.${c}`)
-      .join(", ");
-    const sql =
-      `INSERT INTO exercise (${COLS.join(", ")}) VALUES ${rows.map(() => rowSql).join(", ")} ` +
-      `ON CONFLICT(org_id, id) DO UPDATE SET ${updates}`;
-
-    const binds: unknown[] = [];
+  ): BatchStmt {
+    const values = [];
     for (const ex of rows) {
+      const id = coerceInt(ex.id);
+      if (id === null) continue;
       const title = String(ex.title ?? "");
-      binds.push(
-        org,
-        coerceInt(ex.id),
+      values.push({
+        orgId: org,
+        id,
         title,
-        buildSearchText(title),
-        coerceInt(ex.param_1_type),
-        coerceInt(ex.param_2_type),
-        coerceInt(ex.can_edit) ?? 0,
-        coerceInt(ex.user_id),
-        coerceInt(ex.use_count) ?? 0,
-        JSON.stringify(ex),
+        searchText: buildSearchText(title),
+        param1Type: coerceInt(ex.param_1_type),
+        param2Type: coerceInt(ex.param_2_type),
+        canEdit: coerceInt(ex.can_edit) ?? 0,
+        userId: coerceInt(ex.user_id),
+        useCount: coerceInt(ex.use_count) ?? 0,
+        raw: JSON.stringify(ex),
         generation,
-        "api",
-      );
+        source: "api",
+      });
     }
-    return this.db.prepare(sql).bind(...binds);
+    return this.db
+      .insert(exercise)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [exercise.orgId, exercise.id],
+        set: {
+          title: sql`excluded.title`,
+          searchText: sql`excluded.search_text`,
+          param1Type: sql`excluded.param_1_type`,
+          param2Type: sql`excluded.param_2_type`,
+          canEdit: sql`excluded.can_edit`,
+          userId: sql`excluded.user_id`,
+          useCount: sql`excluded.use_count`,
+          raw: sql`excluded.raw`,
+          generation: sql`excluded.generation`,
+          source: sql`excluded.source`,
+        },
+      });
   }
 
   // -- write-through (after API create/update/delete) ----------------------
@@ -184,12 +181,12 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
     // refresh's prune (generation < newGen) cannot delete a just-created exercise that the
     // bulk library endpoint has not surfaced yet.
     const generation = Number((await this.#meta(org, "sync_generation")) ?? "0") + 1;
-    await this.#upsertStmt(org, [ex], generation).run();
+    await this.#upsertStmt(org, [ex], generation);
   }
 
   async recordDelete(id: number): Promise<void> {
     const org = await this.org();
-    await this.db.prepare("DELETE FROM exercise WHERE org_id = ? AND id = ?").bind(org, id).run();
+    await this.db.delete(exercise).where(and(eq(exercise.orgId, org), eq(exercise.id, id)));
   }
 
   // -- reads ---------------------------------------------------------------
@@ -198,20 +195,22 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
   async defaults(id: number): Promise<{ param1: number | null; param2: number | null } | null> {
     const org = await this.org();
     const row = await this.db
-      .prepare("SELECT param_1_type, param_2_type FROM exercise WHERE org_id = ? AND id = ?")
-      .bind(org, id)
-      .first<{ param_1_type: number | null; param_2_type: number | null }>();
+      .select({ param1: exercise.param1Type, param2: exercise.param2Type })
+      .from(exercise)
+      .where(and(eq(exercise.orgId, org), eq(exercise.id, id)))
+      .get();
     if (!row) return null;
-    return { param1: row.param_1_type, param2: row.param_2_type };
+    return { param1: row.param1, param2: row.param2 };
   }
 
   async get(id: number): Promise<Record<string, unknown> | null> {
     await this.ensureFresh();
     const org = await this.org();
     const row = await this.db
-      .prepare("SELECT raw FROM exercise WHERE org_id = ? AND id = ?")
-      .bind(org, id)
-      .first<{ raw: string }>();
+      .select({ raw: exercise.raw })
+      .from(exercise)
+      .where(and(eq(exercise.orgId, org), eq(exercise.id, id)))
+      .get();
     if (!row) return null;
     return presentExercise(JSON.parse(row.raw) as Record<string, unknown>);
   }
@@ -228,24 +227,30 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
       .split(/\s+/u)
       .filter((t) => t.length > 0);
     if (tokens.length === 0) return [];
-    const where = tokens.map(() => "search_text LIKE ?").join(" AND ");
     // No SQL ORDER BY: rankSearch is the authoritative ranker, so an upstream
     // ORDER BY use_count would only bias which rows survive the LIMIT truncation and
     // could starve it of the best lexical match. Cap the candidate scan instead.
-    const binds = [org, ...tokens.map((t) => `%${t}%`), SEARCH_CANDIDATES];
-    const res = await this.db
-      .prepare(`${SELECT_CORE} WHERE org_id = ? AND ${where} LIMIT ?`)
-      .bind(...binds)
-      .all<ExerciseRow>();
-    return rankSearch(res.results, query, limit).map(withUnits);
+    const where = and(
+      eq(exercise.orgId, org),
+      ...tokens.map((t) => like(exercise.searchText, `%${t}%`)),
+    );
+    const rows = await this.db
+      .select(exerciseRowCols)
+      .from(exercise)
+      .where(where)
+      .limit(SEARCH_CANDIDATES);
+    return rankSearch(rows, query, limit).map(withUnits);
   }
 
   async #exact(query: string): Promise<ExerciseView | null> {
     const org = await this.org();
     const row = await this.db
-      .prepare(`${SELECT_CORE} WHERE org_id = ? AND search_text = ? ORDER BY can_edit LIMIT 1`)
-      .bind(org, query.trim().toLowerCase())
-      .first<ExerciseRow>();
+      .select(exerciseRowCols)
+      .from(exercise)
+      .where(and(eq(exercise.orgId, org), eq(exercise.searchText, query.trim().toLowerCase())))
+      .orderBy(exercise.canEdit)
+      .limit(1)
+      .get();
     return row ? withUnits(row) : null;
   }
 
@@ -282,16 +287,20 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
   async stats(): Promise<Record<string, unknown>> {
     const org = await this.org();
     const total = await this.#count(org);
-    const custom = await this.db
-      .prepare("SELECT COUNT(*) AS n FROM exercise WHERE org_id = ? AND can_edit = 1")
-      .bind(org)
-      .first<{ n: number }>();
+    const custom = await this.db.$count(
+      exercise,
+      and(eq(exercise.orgId, org), eq(exercise.canEdit, 1)),
+    );
     const cursors = await this.db
-      .prepare(
-        "SELECT resource, scope_id, cursor, synced_at, generation FROM sync_state WHERE org_id = ?",
-      )
-      .bind(org)
-      .all();
-    return { org_id: org, exercises: total, custom: custom?.n ?? 0, cursors: cursors.results };
+      .select({
+        resource: syncState.resource,
+        scope_id: syncState.scopeId,
+        cursor: syncState.cursor,
+        synced_at: syncState.syncedAt,
+        generation: syncState.generation,
+      })
+      .from(syncState)
+      .where(eq(syncState.orgId, org));
+    return { org_id: org, exercises: total, custom, cursors };
   }
 }
