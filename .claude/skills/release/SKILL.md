@@ -41,6 +41,23 @@ Publishable packages: `dto`, `js`, `core`, `cli`, `coach-mcp`. The `cloudflare` 
 
 5. **Push:** `git push` to `main`.
 
+5b. **Tag the release and cut GitHub release notes.** Every version bump gets an annotated
+   `vX.Y.Z` tag on the bump commit and a matching GitHub release. The release body is the
+   version's section from `packages/core/CHANGELOG.md`.
+
+   ```bash
+   git tag -a "v<x.y.z>" -m "v<x.y.z>" && git push origin "v<x.y.z>"
+   # body = the "## <x.y.z>" section of packages/core/CHANGELOG.md
+   awk -v v="## <x.y.z>" '$0==v{f=1;next} /^## /{if(f)exit} f{print}' \
+     packages/core/CHANGELOG.md > /tmp/relnotes.md
+   gh release create "v<x.y.z>" --title "v<x.y.z>" --notes-file /tmp/relnotes.md --latest
+   ```
+
+   Tags use the `v` prefix and point at the bump commit. If older releases are ever missing
+   tags, backfill them by mapping each version to the commit whose diff set that version in
+   `packages/core/package.json` (`git log -p -- packages/core/package.json`), tagging that
+   commit, and creating its release with `--latest=false`.
+
 6. **Apply remote D1 migrations** before the new worker code goes live, so any new tables the
    code queries already exist. `migrations/` is append-only and every file is idempotent
    (`CREATE TABLE/INDEX IF NOT EXISTS`), so this is safe to run even when nothing is pending.
