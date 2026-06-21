@@ -10,7 +10,7 @@ The hosted, multi-tenant [TrainHeroic](https://www.trainheroic.com) [MCP](https:
 
 ## Local development
 
-This runs the worker locally with no Cloudflare account, using Miniflare (a local Workers runtime) and a local D1 file. First run `pnpm install` once at the repo root (Node >= 22, pnpm 10), then from `packages/cloudflare`:
+This runs the worker locally with no Cloudflare account, using Miniflare (a local Workers runtime) and a local D1 file. First run `pnpm install` once at the repo root (Node >= 24, pnpm 10), then from `packages/cloudflare`:
 
 1. Create a `.dev.vars` file (wrangler's local-secrets file). The full set of variables:
    - `COOKIE_ENCRYPTION_KEY` (**required**) — signs the OAuth/CSRF round-trip values. Generate one with `openssl rand -hex 32` and paste the output as the value.

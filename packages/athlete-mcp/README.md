@@ -72,7 +72,7 @@ are `YYYY-MM-DD`); your MCP client shows the full schema for each.
 
 ## Develop
 
-Run `pnpm install` once at the repo root (Node >= 22, pnpm 10), then from this package. The
+Run `pnpm install` once at the repo root (Node >= 24, pnpm 10), then from this package. The
 `pnpm start`/`pnpm inspect` commands need `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD`
 exported in your shell. "MCP Inspector" is the [official MCP debugging UI](https://github.com/modelcontextprotocol/inspector).
 

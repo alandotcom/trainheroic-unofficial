@@ -18,7 +18,7 @@ All code lives in a single pnpm workspace at the repo root.
 
 ## Commands
 
-Everything below runs from the repo root. It needs Node >= 22 and pnpm 10 (the version is
+Everything below runs from the repo root. It needs Node >= 24 and pnpm 10 (the version is
 pinned in `packageManager`). Run `pnpm install` once.
 
 Workspace-wide scripts live at the repo root and fan out to every package:
@@ -34,24 +34,25 @@ pnpm check        # fmt:check + lint + typecheck + test; run this before conside
 
 ## Releasing
 
-Versioning and publishing use [Changesets](https://github.com/changesets/changesets),
-configured in `.changeset/config.json` (`access: public`, `baseBranch: main`). Publishing is
-local-only for now; there is no release GitHub Action. You must be logged in to npm (`npm
-whoami`) with publish rights on the `@trainheroic-unofficial` scope.
+Versioning is local with [Changesets](https://github.com/changesets/changesets) (configured in
+`.changeset/config.json`: `access: public`, `baseBranch: main`, and a `fixed` group so the whole
+suite shares one version). Deploy and publish are automated in CI — use the `release` skill,
+which encodes the full flow and its footguns.
 
 ```bash
-pnpm changeset          # author a changeset: pick packages, bump type, write a summary line
+pnpm changeset          # author a changeset: bump type + summary line (fixed group → whole suite)
 pnpm version-packages   # apply pending changesets: bump versions + changelogs, rewrite
                         #   internal workspace:* ranges, delete the consumed changeset files
-pnpm release            # pnpm build, then `changeset publish`
+# then: commit, push main, tag vX.Y.Z, push the tag — CI does the rest.
 ```
 
-`changeset publish` detects pnpm and shells out to `pnpm publish`, so `workspace:*` deps are
-rewritten to real versions in the published manifests and an npm 2FA OTP prompt works
-interactively. It only publishes packages whose version isn't already on the registry, so
-re-running is safe. The private `cloudflare` worker is excluded automatically (it is
-`private: true`); the six publishable packages are `dto`, `js`, `core`, `cli`, `coach-mcp`,
-and `athlete-mcp`.
+CI ownership (`.github/workflows/`): **`deploy.yml`** applies remote D1 migrations and deploys
+the Worker after `CI` goes green on `main`; **`publish.yml`** runs `changeset publish` on a `v*`
+tag, authenticated by **npm OIDC trusted publishing** (no `NPM_TOKEN`, no interactive 2FA).
+`changeset publish` only publishes versions not already on the registry, so re-runs are safe; the
+private `cloudflare` worker is excluded (`private: true`). The six publishable packages are `dto`,
+`js`, `core`, `cli`, `coach-mcp`, and `athlete-mcp`. `pnpm release` (build + `changeset publish`)
+remains the manual fallback when CI is unavailable.
 
 `dev`, `start`, `deploy`, `cf-typegen`, and the D1 migration scripts do not exist at the
 workspace root. They are per-package, so run them with a filter or from inside the package
