@@ -1,4 +1,5 @@
 import type { AuthRequest, ClientInfo } from "@cloudflare/workers-oauth-provider";
+import * as Sentry from "@sentry/cloudflare";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -135,6 +136,8 @@ app.post("/authorize", async (c) => {
     );
   }
   if (allowed.length > 0 && !allowed.includes(email.toLowerCase())) {
+    // Aggregate counter only; no email/PII in attributes (see sentry.ts privacy invariant).
+    Sentry.metrics.count("auth.login.denied", 1);
     return renderLogin(
       c,
       oauthReq,
@@ -146,6 +149,7 @@ app.post("/authorize", async (c) => {
 
   const session = await loginTrainHeroic(email, password);
   if (!session) {
+    Sentry.metrics.count("auth.login.failed", 1);
     return renderLogin(c, oauthReq, client, 401, "Invalid TrainHeroic email or password.");
   }
 
@@ -166,17 +170,31 @@ app.post("/authorize", async (c) => {
   });
 
   // Best-effort tenant registry (last_seen); never blocks login. No credentials here.
+  // RETURNING created_at distinguishes a first-time signup (row's created_at == the now we
+  // just bound) from a returning login (created_at is older, since it's never updated on
+  // conflict), so we can emit the two metrics separately below.
+  const now = Date.now();
+  let isNewAccount = false;
   try {
-    await c.env.TH_DB.prepare(
+    const row = await c.env.TH_DB.prepare(
       "INSERT INTO account (th_user_id, org_id, email, role, created_at, last_seen) VALUES (?,?,?,?,?,?) " +
-        "ON CONFLICT(th_user_id) DO UPDATE SET email=excluded.email, role=excluded.role, last_seen=excluded.last_seen",
+        "ON CONFLICT(th_user_id) DO UPDATE SET email=excluded.email, role=excluded.role, last_seen=excluded.last_seen " +
+        "RETURNING created_at",
     )
-      .bind(session.thUserId, null, email, session.role, Date.now(), Date.now())
-      .run();
+      .bind(session.thUserId, null, email, session.role, now, now)
+      .first<{ created_at: number }>();
+    isNewAccount = row?.created_at === now;
   } catch (err) {
     // Best-effort: never block login, but log so a persistently-failing registry write
     // (e.g. schema drift) is diagnosable. No credentials here — thUserId only.
     console.warn("account registry upsert failed (non-fatal)", { thUserId: session.thUserId, err });
+  }
+
+  // Aggregate usage metrics. Role is the only attribute — no email/PII (see sentry.ts privacy
+  // invariant). No-op when SENTRY_DSN is unset, so local dev and tests are untouched.
+  Sentry.metrics.count("auth.login.success", 1, { attributes: { role: session.role } });
+  if (isNewAccount) {
+    Sentry.metrics.count("auth.signup", 1, { attributes: { role: session.role } });
   }
 
   deleteCookie(c, CSRF_COOKIE, { path: "/" });

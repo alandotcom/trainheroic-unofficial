@@ -55,7 +55,7 @@ Connect a hosted server (OAuth login, nothing to install) or a local one (runs o
 The hosted URL is:
 
 ```
-https://trainheroic-mcp.alandotcom.workers.dev/mcp
+https://mcp.trainheroic-unofficial.com/mcp
 ```
 
 The tools the hosted server exposes depend on the account you log in with: a coach account gets the coaching tools **and** its own athlete training tools; an athlete account gets the athlete tools. (For the local servers below, pick by account: a coach runs the **coach** server, which already includes the athlete tools; the **athlete** server is for athlete-only accounts.)
@@ -78,7 +78,7 @@ Open [Settings → Connectors → Add custom connector](https://claude.ai/custom
 
 ```bash
 claude mcp add trainheroic --transport http \
-  https://trainheroic-mcp.alandotcom.workers.dev/mcp
+  https://mcp.trainheroic-unofficial.com/mcp
 ```
 
 **Local — coach** (full coaching surface, plus your own athlete training)

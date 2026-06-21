@@ -19,6 +19,9 @@ import type { CloudflareOptions } from "@sentry/cloudflare";
  *   - `tracesSampleRate: 0` keeps it errors-only; no performance spans are sent.
  *   - The email is attached explicitly via `Sentry.setUser` in the agent, and `beforeSend`
  *     clamps `event.user` down to just the email so nothing else (id, username, geo) leaks.
+ *   - Aggregate metrics (`Sentry.metrics.*`, emitted from the auth flow) are a separate channel
+ *     from error events; their attributes carry only low-cardinality tags like `role`, never the
+ *     email or any other PII. Keep it that way.
  */
 export function sentryOptions(env: Env): CloudflareOptions {
   return {
