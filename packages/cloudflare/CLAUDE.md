@@ -30,12 +30,16 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
 - `src/tools/sync.ts`: the warehouse sync tools, which belong here because they need D1.
 - `src/tool-metrics.ts`: patches the `registerTool` seam (once, in `init()`) so every tool call
   emits aggregate Sentry metrics (`mcp.tool.call`, `mcp.tool.duration_ms`, tagged by tool +
-  surface + ok/error) and tags its trace span with the tool name, surface, and opaque
-  mcp-session-id. Lives here, not in `core`, so the shared tool layer stays Sentry-agnostic.
+  surface + ok/error) and runs inside its own `mcp.tool/<name>` span (a named, timed row in the
+  trace waterfall, tagged with tool, surface, ok/error status, and the opaque mcp-session-id;
+  errors marked red). It also stamps the `mcp.session` tag on the enclosing DO transaction and
+  scope. Lives here, not in `core`, so the shared tool layer stays Sentry-agnostic.
 - `src/sentry.ts`: the shared Sentry config (`sentryOptions(env)`) used by both `withSentry`
   (the handler in `index.ts`) and `instrumentDurableObjectWithSentry` (the DO export). Sends the
-  error + user email, aggregate metrics, and traces (`SENTRY_TRACES_SAMPLE_RATE` var, default 1);
-  see the invariant below.
+  error + user email, aggregate metrics, and traces (`SENTRY_TRACES_SAMPLE_RATE` var, default 1).
+  A single MCP session spans many requests/traces, so they are correlated by a shared `mcp.session`
+  tag (worker request span in `index.ts`, DO init/error scopes in `agent.ts`, tool calls in
+  `tool-metrics.ts`) rather than one merged trace; see the invariant below.
 - `migrations/`: the D1 schema, applied in order.
 
 ## Invariants and gotchas
