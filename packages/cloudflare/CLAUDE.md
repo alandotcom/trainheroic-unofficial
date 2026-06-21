@@ -15,18 +15,27 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
 ## Where things live
 
 - `src/index.ts`: the OAuth provider wiring, the per-IP edge rate limiting that runs before
-  `provider.fetch`, and the scheduled (cron) purge.
-- `src/agent.ts`: the `McpAgent` Durable Object. `init()` builds the `ToolContext` and
-  registers the core tools plus `registerSyncTools`. One instance per client session; it
-  throws if the grant props are missing.
+  `provider.fetch`, and the scheduled (cron) purge. The provider's `apiHandlers` mount three
+  variant paths (most-specific first, since matching is prefix-ordered): `/mcp` (full),
+  `/mcp/coach`, `/mcp/athlete` — each to its own Sentry-wrapped DO class/binding.
+- `src/agent.ts`: the `McpAgent` Durable Object. An abstract `TrainHeroicMCPBase` does the work
+  in `init()` (one instance per client session; throws if the grant props are missing); three
+  concrete subclasses set which surfaces register — `TrainHeroicMCP` (athlete + coach, role-aware),
+  `CoachMCP` (coach only), `AthleteMCP` (athlete only). Each is a separate DO class because the
+  path is invisible to the DO; the binding is the only way it learns which variant it is.
 - `src/auth/`: the `/authorize` login flow, the login page, and the crypto helpers.
 - `src/store/`: the per-tenant D1 layer. `ExerciseStore` implements the SDK's `ExerciseIndex`
   interface (the hosted counterpart to the in-memory `ExerciseLibrary`); the programming and
   messaging stores back the warehouse zones.
 - `src/tools/sync.ts`: the warehouse sync tools, which belong here because they need D1.
+- `src/tool-metrics.ts`: patches the `registerTool` seam (once, in `init()`) so every tool call
+  emits aggregate Sentry metrics (`mcp.tool.call`, `mcp.tool.duration_ms`, tagged by tool +
+  surface + ok/error) and tags its trace span with the tool name, surface, and opaque
+  mcp-session-id. Lives here, not in `core`, so the shared tool layer stays Sentry-agnostic.
 - `src/sentry.ts`: the shared Sentry config (`sentryOptions(env)`) used by both `withSentry`
-  (the handler in `index.ts`) and `instrumentDurableObjectWithSentry` (the DO export). Tuned to
-  send only the error and the user email; see the invariant below.
+  (the handler in `index.ts`) and `instrumentDurableObjectWithSentry` (the DO export). Sends the
+  error + user email, aggregate metrics, and traces (`SENTRY_TRACES_SAMPLE_RATE` var, default 1);
+  see the invariant below.
 - `migrations/`: the D1 schema, applied in order.
 
 ## Invariants and gotchas

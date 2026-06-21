@@ -1,22 +1,36 @@
 import * as Sentry from "@sentry/cloudflare";
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { authHandler } from "./auth/handler";
-import { TrainHeroicMCP as TrainHeroicMCPBase } from "./agent";
+import {
+  AthleteMCP as AthleteMCPBase,
+  CoachMCP as CoachMCPBase,
+  TrainHeroicMCP as TrainHeroicMCPBase,
+} from "./agent";
 import { sentryOptions } from "./sentry";
 
-// Durable Object export (referenced by the wrangler migration + binding). Wrapped with Sentry
-// so errors thrown inside the DO — init, transport, tool dispatch — are reported with the
-// session's user email attached. The wrapper is a Proxy over the class; the wrangler binding
-// (class_name "TrainHeroicMCP") resolves to this exported name, and the static `serve` below
-// passes through the Proxy untouched.
+// Durable Object exports (referenced by the wrangler migrations + bindings). Each is wrapped with
+// Sentry so errors thrown inside the DO — init, transport, tool dispatch — are reported with the
+// session's user email attached. The wrapper is a Proxy over the class; the wrangler binding's
+// class_name resolves to these exported names, and the static `serve` below passes through the
+// Proxy untouched. The three variants expose different tool sets at three paths (see below).
 export const TrainHeroicMCP = Sentry.instrumentDurableObjectWithSentry(
   sentryOptions,
   TrainHeroicMCPBase,
 );
+export const CoachMCP = Sentry.instrumentDurableObjectWithSentry(sentryOptions, CoachMCPBase);
+export const AthleteMCP = Sentry.instrumentDurableObjectWithSentry(sentryOptions, AthleteMCPBase);
 
 const provider = new OAuthProvider({
-  apiRoute: "/mcp",
-  apiHandler: TrainHeroicMCP.serve("/mcp", { binding: "MCP_OBJECT" }),
+  // Most specific routes first: `apiHandlers` is matched by prefix in insertion order, so
+  // `/mcp/coach` and `/mcp/athlete` must precede `/mcp` or they'd be swallowed by it.
+  //   /mcp         → full role-aware surface (production)
+  //   /mcp/coach   → coaching tools only        } a single tool set, for separate accounts or
+  //   /mcp/athlete → athlete training tools only } a connection scoped to one role
+  apiHandlers: {
+    "/mcp/coach": CoachMCP.serve("/mcp/coach", { binding: "MCP_OBJECT_COACH" }),
+    "/mcp/athlete": AthleteMCP.serve("/mcp/athlete", { binding: "MCP_OBJECT_ATHLETE" }),
+    "/mcp": TrainHeroicMCP.serve("/mcp", { binding: "MCP_OBJECT" }),
+  },
   defaultHandler: authHandler,
   authorizeEndpoint: "/authorize",
   tokenEndpoint: "/token",
