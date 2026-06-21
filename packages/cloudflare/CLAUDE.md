@@ -43,7 +43,9 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   error + user email, aggregate metrics, and traces (`SENTRY_TRACES_SAMPLE_RATE` var, default 1).
   A single MCP session spans many requests/traces, so they are correlated by a shared `mcp.session`
   tag (worker request span in `index.ts`, DO init/error scopes in `agent.ts`, tool calls in
-  `tool-metrics.ts`) rather than one merged trace; see the invariant below.
+  `tool-metrics.ts`) rather than one merged trace; see the invariant below. D1 queries are traced
+  separately via `Sentry.instrumentD1WithSentry`, applied once inside `makeDb` (`store/schema.ts`),
+  since the DO wrapper does not auto-instrument D1.
 - `migrations/`: the D1 schema, applied in order.
 
 ## Invariants and gotchas

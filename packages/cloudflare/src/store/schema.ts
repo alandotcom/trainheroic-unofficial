@@ -7,6 +7,7 @@
 //
 // Column types deliberately mirror the SQLite affinities 1:1 (flags stay `integer` 0/1, JSON
 // blobs stay `text`) so the query rewrite preserves the existing read/write behaviour exactly.
+import * as Sentry from "@sentry/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { customType, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
@@ -299,9 +300,15 @@ export const schema = {
   athleteWorkingMax,
 };
 
-/** Wrap a raw D1 binding in a Drizzle handle bound to the warehouse schema. */
+/**
+ * Wrap a raw D1 binding in a Drizzle handle bound to the warehouse schema. The binding is first
+ * passed through `Sentry.instrumentD1WithSentry`, so every query Drizzle issues (the stores and the
+ * auth account upsert all build their handles here) emits a `db.query` span on the active trace.
+ * This is the single chokepoint for D1 access, so instrumenting it once covers the whole package; it
+ * is a no-op when SENTRY_DSN is unset. Sentry's Durable Object wrapper does not auto-instrument D1.
+ */
 export function makeDb(d1: D1Database): DrizzleDb {
-  return drizzle(d1, { schema });
+  return drizzle(Sentry.instrumentD1WithSentry(d1), { schema });
 }
 
 export type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
