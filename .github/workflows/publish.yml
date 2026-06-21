@@ -11,6 +11,10 @@ name: Publish
 on:
   push:
     tags: ['v*']
+  # Manual re-run / recovery: `gh workflow run publish.yml --ref vX.Y.Z` publishes that tag's
+  # versions (idempotent — skips anything already on the registry). Useful for a tag that was
+  # pushed before this workflow existed.
+  workflow_dispatch:
 
 concurrency:
   group: publish-${{ github.ref }}
@@ -28,7 +32,7 @@ jobs:
 
       - uses: pnpm/action-setup@v6
         with:
-          version: 10.32.1
+          version: 11.8.0
 
       - uses: actions/setup-node@v6
         with:

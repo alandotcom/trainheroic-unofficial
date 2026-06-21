@@ -61,7 +61,7 @@ re-exported through `index.ts`. The central pieces:
 
 ## Develop
 
-Run `pnpm install` once at the repo root (Node >= 24, pnpm 10), then from this package:
+Run `pnpm install` once at the repo root (Node >= 24, pnpm 11), then from this package:
 
 ```bash
 pnpm build       # tsdown -> dist (ESM + .d.mts)
