@@ -32,3 +32,4 @@ session.json
 # Editor / env
 .env
 *.local
+.claude/worktrees/
