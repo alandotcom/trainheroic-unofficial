@@ -98,6 +98,10 @@ export function registerAnalyticsTools(server: McpServer, ctx: ToolContext): voi
         "id per call. For team-wide training volume there is no team summary metric: pass every " +
         "athlete's userId to training-summary-athlete in a single call and the rows cover the " +
         "team. An athlete with no logged sessions in range simply returns no rows (not an error). " +
+        "Use that for triage: training-summary-athlete with a single athleteId is the fastest " +
+        "'has this athlete trained at all, and when' check — no rows means no logged training in " +
+        "range, so don't then fan out blind per-lift athlete_lift_history calls. Despite 'athlete' " +
+        "in the name this metric accepts 1–N userIds. " +
         "readiness-team takes a single `date`; every other metric takes dateStart/dateEnd. " +
         "lift-1rm-history, lift-progress-team, and working-max-history also need exerciseId. All " +
         "dates are YYYY-MM-DD.",

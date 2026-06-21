@@ -12,6 +12,7 @@ import type {
   AthleteWorkingMax,
   AthleteWorkoutBlock,
   AthleteWorkoutExercise,
+  AthleteWorkoutSummary,
   AthleteWorkoutView,
   ExerciseHistoryDetail,
   ExerciseHistoryListItem,
@@ -385,6 +386,34 @@ export function selectWorkouts(
       .slice(0, opts.limit);
   }
   return out;
+}
+
+/**
+ * Project presented workouts to compact headers (date/title/program + logged flag + exercise
+ * counts), dropping the per-set block detail. A dense multi-program week of full views can be
+ * tens of KB; this keeps an overview question to one small row per session, with a drill-in
+ * (narrow the date range) when the detail is actually needed.
+ */
+export function summarizeAthleteWorkouts(
+  list: readonly AthleteWorkoutView[],
+): AthleteWorkoutSummary[] {
+  return list.map((w) => {
+    const exerciseCount = w.blocks.reduce((n, b) => n + b.exercises.length, 0);
+    const performedCount = w.blocks.reduce(
+      (n, b) => n + b.exercises.filter((e) => e.performed.length > 0).length,
+      0,
+    );
+    return {
+      id: w.id,
+      date: w.date,
+      title: w.title,
+      program: w.program,
+      team: w.team,
+      logged: w.logged,
+      exerciseCount,
+      performedCount,
+    };
+  });
 }
 
 // --- Set logging write path ---

@@ -22,6 +22,7 @@ import {
   presentExerciseHistory,
   searchExerciseHistory,
   selectWorkouts,
+  summarizeAthleteWorkouts,
 } from "@trainheroic-unofficial/js";
 import type { TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { confirmGate, NOT_CONFIRMED } from "../confirm";
@@ -143,7 +144,12 @@ const ATHLETE_WORKOUTS_DESC =
   "did I do', set loggedOnly:true to return only sessions with logged sets (it keeps whole " +
   "sessions that have any logged set, so individual exercises inside can still show empty " +
   "`performed`; it also shrinks a large result); limit returns the most recent N workouts " +
-  "(newest first). For 'what's my next workout', query a forward window from today; if it comes " +
+  "(newest first). For a high-level overview ('what's on my schedule this week', 'what have I " +
+  "been training lately') set summary:true to get one compact row per session (date, program, " +
+  "title, logged flag, and exerciseCount/performedCount — read performedCount against " +
+  "exerciseCount, e.g. 1 of 12 logged) instead of every set — a multi-program week " +
+  "of full detail is large, so prefer summary first, then re-query a single day without it to " +
+  "drill into that day's sets. For 'what's my next workout', query a forward window from today; if it comes " +
   "back empty, the most recent session is likely yesterday's still-unlogged one, so widen the " +
   "window backward a day or two. Both filters apply to the presented view, not raw. raw:true " +
   "returns the untouched API objects. This is a date-windowed fetch, NOT an aggregate: for " +
@@ -155,13 +161,52 @@ const ATHLETE_EXERCISE_HISTORY_DESC =
   "Per-exercise PRs and the dated session time-series (sets performed, estimated 1RM). The " +
   "returned `sessions` run all-time, newest first; pass since/until (YYYY-MM-DD, inclusive) to " +
   "keep only sessions in that window — use it for 'last 3 months' / 'this year' questions so the " +
-  "result stays small. `liftPRs` are always all-time and ignore since/until. Set raw:true for " +
-  "the untouched API object. Get the exercise id from athlete_exercises.";
+  "result stays small. estimated1RM is a formula off the session's best set and reads high when " +
+  "a session mixes a heavy single with high-rep backdown work, so treat it as approximate, not a " +
+  "logged single. `liftPRs` are always all-time and ignore since/until, but each carries the date " +
+  "it was set, so filter those dates yourself to answer 'PRs set this year'. Set raw:true for the " +
+  "untouched API object. Get the exercise id from athlete_exercises.";
 
 const ATHLETE_EXERCISES_DESC =
   "The exercises the athlete has logged (id + title + positional units). Pass q to free-text " +
   "search by name; use the returned id with athlete_exercise_history, athlete_personal_records, " +
-  "or athlete_exercise_stats (all of which require an exercise id).";
+  "or athlete_exercise_stats (all of which require an exercise id). A common name returns several " +
+  "variants (e.g. plain 'Bench Press' id 1162 vs 'BARBELL BENCH PRESS'); each variant keeps its " +
+  "own separate history and PR board, so prefer the plain canonical entry, and if a PR or trend " +
+  "looks incomplete, the work may be split across variants — check the others.";
+
+/**
+ * Body of the athlete_workouts handler, hoisted to module scope so registerExerciseTools stays
+ * under the oxlint max-lines-per-function cap (mirrors the hoisted descriptions above).
+ */
+type WorkoutsArgs = {
+  startDate: string;
+  endDate: string;
+  raw?: boolean | undefined;
+  loggedOnly?: boolean | undefined;
+  limit?: number | undefined;
+  summary?: boolean | undefined;
+};
+function runAthleteWorkouts(ctx: AthleteContext, args: WorkoutsArgs) {
+  return attempt(async () => {
+    const workouts = await fetchAthleteWorkouts(ctx.client, args.startDate, args.endDate);
+    if (args.raw === true) {
+      return jsonResult(workouts, { hint: "Narrow startDate/endDate to shrink this result." });
+    }
+    const opts: { loggedOnly?: boolean; limit?: number } = {};
+    if (args.loggedOnly !== undefined) opts.loggedOnly = args.loggedOnly;
+    if (args.limit !== undefined) opts.limit = args.limit;
+    const selected = selectWorkouts(presentAthleteWorkouts(workouts), opts);
+    if (args.summary === true) {
+      return jsonResult(summarizeAthleteWorkouts(selected), {
+        hint: "Compact per-session overview. Re-query a narrow startDate/endDate without summary for a day's full prescribed/performed sets.",
+      });
+    }
+    return jsonResult(selected, {
+      hint: "Large? Set summary:true for one row per session, loggedOnly:true, pass limit, or narrow the dates.",
+    });
+  });
+}
 
 /** Workouts, exercise catalog, per-exercise history/PRs/stats. */
 function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: UserId): void {
@@ -176,23 +221,11 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
         raw: z.boolean().optional(),
         loggedOnly: z.boolean().optional(),
         limit: z.number().int().positive().max(200).optional(),
+        summary: z.boolean().optional(),
       },
       annotations: READ,
     },
-    ({ startDate, endDate, raw, loggedOnly, limit }) =>
-      attempt(async () => {
-        const workouts = await fetchAthleteWorkouts(ctx.client, startDate, endDate);
-        if (raw === true) {
-          return jsonResult(workouts, { hint: "Narrow startDate/endDate to shrink this result." });
-        }
-        const opts: { loggedOnly?: boolean; limit?: number } = {};
-        if (loggedOnly !== undefined) opts.loggedOnly = loggedOnly;
-        if (limit !== undefined) opts.limit = limit;
-        const data = selectWorkouts(presentAthleteWorkouts(workouts), opts);
-        return jsonResult(data, {
-          hint: "Large? Set loggedOnly:true, pass limit, or narrow startDate/endDate.",
-        });
-      }),
+    (args) => runAthleteWorkouts(ctx, args),
   );
 
   server.registerTool(
@@ -255,8 +288,10 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
       title: "Exercise personal records",
       description:
         "The all-time PR board for an exercise (reps/weight per rep-max, strength-standard " +
-        "filters). Get the exercise id from athlete_exercises. For a point-in-time snapshot use " +
-        "athlete_exercise_stats; for the dated session trend use athlete_exercise_history.",
+        "filters). Get the exercise id from athlete_exercises. A lift is often logged under " +
+        "several name variants, each with its own board, so if a PR looks missing check the other " +
+        "variants. For a point-in-time snapshot use athlete_exercise_stats; for the dated session " +
+        "trend use athlete_exercise_history.",
       inputSchema: { exerciseId: idParam },
       annotations: READ,
     },
