@@ -11,10 +11,14 @@ const ATHLETE_LIFT_HISTORY_DESC =
   "carries its rep-max label, weight, and the date it was set) plus the dated session series " +
   "(sets, estimated 1RM). This is the coach-side way to answer 'show me <athlete>'s PRs / how is " +
   "<athlete>'s squat trending' — pass athleteId from list_athletes and exerciseId from " +
-  "exercise_resolve. There is no cross-exercise PR summary, so query each lift you care about " +
-  "(squat, bench, deadlift, …) and an empty result just means the athlete has not logged that " +
-  "lift. liftPRs stay all-time; pass since/until (YYYY-MM-DD, inclusive) to window the session " +
-  "series. raw:true returns the untouched API object.";
+  "exercise_resolve. The API has no endpoint that lists which exercises an athlete has logged and " +
+  "no cross-exercise PR rollup, so you must name each lift. Do NOT fan out one call per guessed " +
+  "lift blindly: first triage with analytics_query metric:training-summary-athlete " +
+  "(userIds:[athleteId]) — if it returns no rows the athlete has logged nothing in range, so stop " +
+  "rather than firing empty per-exercise calls; if it returns rows, query the standard barbell " +
+  "lifts (squat, bench, deadlift, press, clean) here, where an empty result just means that lift " +
+  "was not logged. liftPRs stay all-time; pass since/until (YYYY-MM-DD, inclusive) to window the " +
+  "session series. raw:true returns the untouched API object.";
 
 function enc(value: string | number): string {
   return encodeURIComponent(String(value));
@@ -81,12 +85,15 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
     {
       title: "List athletes",
       description:
-        "Every athlete on this coach's org roster, across all teams (not scoped to one team, and " +
-        "demo/placeholder athletes are included). `daysSinceLastLogin` is app-login recency, not " +
-        "training activity — an athlete can have logged in today yet have no logged sessions; " +
-        "null means no login on record. There is no per-athlete team field here, so to attribute " +
-        "athletes to a team use the team's roster. Optional q (case-insensitive substring filter " +
-        "over each athlete record) and limit, applied client-side, to keep large rosters small.",
+        "Every athlete on this coach's org roster, across all teams (not scoped to one team; the " +
+        "account owner themselves and demo/placeholder athletes are included, so the roster count " +
+        "includes you). `daysSinceLastLogin` is app-login recency, not training activity — an " +
+        "athlete can have logged in today yet have no logged sessions; null means no login on " +
+        "record. For per-team attribution use each athlete's own `groups`/`groupTitles` (the teams " +
+        "they are enrolled in) and `teamCount`; there is no per-team roster endpoint or other " +
+        "per-athlete team field. Optional q (case-insensitive; each whitespace-separated word must " +
+        "appear in the record, so 'Kyle Jones' matches a 'Jones, [Demo] Kyle' entry) and limit, " +
+        "applied client-side, keep large rosters small.",
       inputSchema: {
         q: z.string().optional(),
         limit: z.number().int().positive().max(500).optional(),
@@ -103,8 +110,17 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
         if (!Array.isArray(res.data)) return jsonResult(res.data);
         let rows = res.data as unknown[];
         if (q !== undefined) {
-          const needle = q.toLowerCase();
-          rows = rows.filter((row) => JSON.stringify(row).toLowerCase().includes(needle));
+          // Match on each whitespace-separated token independently (AND), so "Kyle Jones"
+          // finds a record stored "Jones, [Demo] Kyle" — a single contiguous-substring match
+          // would miss it because first/last name are reordered and interleaved with tags.
+          const needles = q
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((t) => t.length > 0);
+          rows = rows.filter((row) => {
+            const hay = JSON.stringify(row).toLowerCase();
+            return needles.every((n) => hay.includes(n));
+          });
         }
         const total = rows.length;
         if (limit !== undefined && rows.length > limit) {

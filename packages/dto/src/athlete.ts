@@ -242,6 +242,31 @@ export type AthleteWorkoutView = {
   blocks: AthleteWorkoutBlock[];
 };
 
+/**
+ * A compact per-workout header with no block/exercise detail. Produced by the summary
+ * projection so an overview question ("what's on my schedule this week", "what have I been
+ * training lately") returns one small row per session instead of the full prescribed/performed
+ * sets — a dense multi-program week of `AthleteWorkoutView`s can run tens of KB and force a
+ * follow-up drill-in.
+ */
+export type AthleteWorkoutSummary = {
+  id: number | null;
+  date: string;
+  title: string;
+  program: string | null;
+  team: string | null;
+  /** True when the athlete logged at least one set on this workout. */
+  logged: boolean;
+  /** Total prescribed exercises across all blocks. */
+  exerciseCount: number;
+  /**
+   * How many of those exercises have at least one logged set. Read it against exerciseCount
+   * (e.g. 1 of 12), not in isolation — a low number means the session was mostly unlogged, not
+   * that only one exercise was prescribed.
+   */
+  performedCount: number;
+};
+
 /** One performed session in a presented exercise history. */
 export type PresentedExerciseSession = {
   date: string;

@@ -8,6 +8,7 @@ import {
   presentAthleteWorkout,
   presentExerciseHistory,
   selectWorkouts,
+  summarizeAthleteWorkouts,
 } from "../src/athlete";
 import type {
   AthleteWorkoutView,
@@ -145,6 +146,71 @@ describe("selectWorkouts", () => {
   it("combines loggedOnly and limit", () => {
     const out = selectWorkouts(list, { loggedOnly: true, limit: 1 });
     expect(out.map((w) => w.date)).toEqual(["2026-06-18"]);
+  });
+});
+
+describe("summarizeAthleteWorkouts", () => {
+  it("projects the fixture workout to a compact header with exercise/performed counts", () => {
+    const view = presentAthleteWorkout(fixture<ProgramWorkout>("program-workout.json"));
+    const [row] = summarizeAthleteWorkouts([view]);
+    expect(row).toBeDefined();
+    if (!row) return;
+    expect(row.date).toBe(view.date);
+    expect(row.title).toBe(view.title);
+    expect(row.program).toBe(view.program);
+    expect(row.logged).toBe(view.logged);
+    // Counts mirror the flattened view; performed never exceeds total exercises.
+    const totalExercises = view.blocks.reduce((n, b) => n + b.exercises.length, 0);
+    const performed = view.blocks.reduce(
+      (n, b) => n + b.exercises.filter((e) => e.performed.length > 0).length,
+      0,
+    );
+    expect(row.exerciseCount).toBe(totalExercises);
+    expect(row.performedCount).toBe(performed);
+    expect(row.performedCount).toBeLessThanOrEqual(row.exerciseCount);
+    // The summary carries no block/exercise detail.
+    expect(row).not.toHaveProperty("blocks");
+  });
+
+  it("counts only exercises with a performed set", () => {
+    const view: AthleteWorkoutView = {
+      id: 1,
+      date: "2026-06-18",
+      title: "Mixed",
+      program: "BB202",
+      team: null,
+      instruction: null,
+      logged: true,
+      blocks: [
+        {
+          order: 1,
+          title: null,
+          instruction: null,
+          isTest: false,
+          exercises: [
+            {
+              exerciseId: 1,
+              title: "Bench",
+              instruction: null,
+              units: [],
+              prescribed: ["4 @ 225"],
+              performed: ["4 @ 225"],
+            },
+            {
+              exerciseId: 2,
+              title: "Fly",
+              instruction: null,
+              units: [],
+              prescribed: ["12"],
+              performed: [],
+            },
+          ],
+        },
+      ],
+    };
+    const [row] = summarizeAthleteWorkouts([view]);
+    expect(row?.exerciseCount).toBe(2);
+    expect(row?.performedCount).toBe(1);
   });
 });
 
