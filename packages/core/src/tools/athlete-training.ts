@@ -21,6 +21,7 @@ import {
   presentAthleteWorkouts,
   presentExerciseHistory,
   searchExerciseHistory,
+  selectWorkouts,
 } from "@trainheroic-unofficial/js";
 import type { TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { confirmGate, NOT_CONFIRMED } from "../confirm";
@@ -123,24 +124,48 @@ function registerProfileTools(
   );
 }
 
+/** Kept at module scope so registerExerciseTools stays under the line cap. */
+const ATHLETE_WORKOUTS_DESC =
+  "Workouts in an inclusive YYYY-MM-DD window, flattened to blocks/exercises. Each exercise " +
+  "carries both its `prescribed` sets (what the program called for) and `performed` sets (what " +
+  "the athlete actually logged); each workout has a top-level `logged` flag. Use " +
+  "`performed`/`logged` to tell what was recorded or done. That is the reliable signal: a " +
+  "session can hold logged sets while the API's own completion flags stay 0, and an empty " +
+  "`performed` means nothing was logged for that exercise. For 'did I record anything / what " +
+  "did I do', set loggedOnly:true to return only sessions with logged sets (this also shrinks a " +
+  "large result); limit returns the most recent N workouts (newest first). Both apply to the " +
+  "presented view, not raw. raw:true returns the untouched API objects. Narrow the window if " +
+  "the result is truncated.";
+
 /** Workouts, exercise catalog, per-exercise history/PRs/stats. */
 function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: UserId): void {
   server.registerTool(
     "athlete_workouts",
     {
       title: "Workouts in a date range",
-      description:
-        "Scheduled + completed workouts in an inclusive YYYY-MM-DD window, flattened to " +
-        "blocks/exercises with per-set prescriptions and positional units. Set raw:true for the " +
-        "untouched API objects. Narrow the window if the result is truncated.",
-      inputSchema: { startDate: dateString, endDate: dateString, raw: z.boolean().optional() },
+      description: ATHLETE_WORKOUTS_DESC,
+      inputSchema: {
+        startDate: dateString,
+        endDate: dateString,
+        raw: z.boolean().optional(),
+        loggedOnly: z.boolean().optional(),
+        limit: z.number().int().positive().max(200).optional(),
+      },
       annotations: READ,
     },
-    ({ startDate, endDate, raw }) =>
+    ({ startDate, endDate, raw, loggedOnly, limit }) =>
       attempt(async () => {
         const workouts = await fetchAthleteWorkouts(ctx.client, startDate, endDate);
-        const data = raw === true ? workouts : presentAthleteWorkouts(workouts);
-        return jsonResult(data, { hint: "Narrow startDate/endDate to shrink this result." });
+        if (raw === true) {
+          return jsonResult(workouts, { hint: "Narrow startDate/endDate to shrink this result." });
+        }
+        const opts: { loggedOnly?: boolean; limit?: number } = {};
+        if (loggedOnly !== undefined) opts.loggedOnly = loggedOnly;
+        if (limit !== undefined) opts.limit = limit;
+        const data = selectWorkouts(presentAthleteWorkouts(workouts), opts);
+        return jsonResult(data, {
+          hint: "Large? Set loggedOnly:true, pass limit, or narrow startDate/endDate.",
+        });
       }),
   );
 
@@ -150,7 +175,8 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
       title: "Search logged exercises",
       description:
         "The exercises the athlete has logged (id + title + positional units). Pass q to " +
-        "free-text search by name; use the returned id with athlete_exercise_history / _stats.",
+        "free-text search by name; use the returned id with athlete_exercise_history, " +
+        "athlete_personal_records, or athlete_exercise_stats (all of which require an exercise id).",
       inputSchema: {
         q: z.string().optional(),
         limit: z.number().int().positive().max(200).optional(),
@@ -198,7 +224,10 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
     "athlete_personal_records",
     {
       title: "Exercise personal records",
-      description: "Personal records for an exercise (reps/weight, strength-standard filters).",
+      description:
+        "The all-time PR board for an exercise (reps/weight per rep-max, strength-standard " +
+        "filters). Get the exercise id from athlete_exercises. For a point-in-time snapshot use " +
+        "athlete_exercise_stats; for the dated session trend use athlete_exercise_history.",
       inputSchema: { exerciseId: idParam },
       annotations: READ,
     },
@@ -211,7 +240,10 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
     {
       title: "Exercise stats (last performance + PR)",
       description:
-        "Last performance and PR for an exercise as of a date (YYYY-MM-DD, required by the API).",
+        "A point-in-time snapshot for an exercise: last performance and PR as of a date " +
+        "(YYYY-MM-DD, required by the API). Not a range query — for the all-time board use " +
+        "athlete_personal_records, for progress over time use athlete_exercise_history. Get the " +
+        "exercise id from athlete_exercises.",
       inputSchema: { exerciseId: idParam, date: dateString },
       annotations: READ,
     },

@@ -88,11 +88,15 @@ export function registerAnalyticsTools(server: McpServer, ctx: ToolContext): voi
     {
       title: "Pull an analytics report",
       description:
-        "Read a TrainHeroic analytics report. `metric` picks the report (run analytics_categories " +
-        "for the catalog). Team metrics (readiness-team, compliance-team, lift-progress-team) need " +
-        "teamId; athlete metrics need userIds. readiness-team takes a single `date`; every other " +
-        "metric takes dateStart/dateEnd. lift-1rm-history, lift-progress-team, and " +
-        "working-max-history also need exerciseId. All dates are YYYY-MM-DD.",
+        "Read a TrainHeroic analytics report. The `metric` enum below IS the catalog — pick from " +
+        "it directly (analytics_categories lists the API's raw category names, which do NOT match " +
+        "these keys; you rarely need it). Team metrics (readiness-team, compliance-team, " +
+        "lift-progress-team) need teamId; athlete metrics (readiness-athlete, " +
+        "training-summary-athlete, lift-1rm-history, working-max-history) need userIds — get " +
+        "those from list_athletes. There is no team-wide training summary: for team volume, query " +
+        "training-summary-athlete with every athlete's userId. readiness-team takes a single " +
+        "`date`; every other metric takes dateStart/dateEnd. lift-1rm-history, lift-progress-team, " +
+        "and working-max-history also need exerciseId. All dates are YYYY-MM-DD.",
       inputSchema: {
         metric: z.enum(METRIC_KEYS),
         teamId: idParam.optional(),

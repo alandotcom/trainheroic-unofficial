@@ -185,6 +185,82 @@
           ]
         }
       ]
+    },
+    "saved_workout": {
+      "id": 555000,
+      "completed": 0,
+      "percent_completed": 0,
+      "status": 0,
+      "workoutSets": [
+        {
+          "id": 900900,
+          "workout_set_id": 708064498,
+          "order": 2,
+          "title": "Strength/Power",
+          "completed": 0,
+          "workoutSetExercises": [
+            {
+              "id": 2700000001,
+              "workout_set_exercise_id": 1174955442,
+              "exercise_id": 1,
+              "exercise_title": "Back Squat",
+              "completed": 0,
+              "param_1_type": 3,
+              "param_2_type": 1,
+              "param_1_data_1": "3",
+              "param_1_data_2": "3",
+              "param_1_data_3": "3",
+              "param_1_data_4": "3",
+              "param_2_data_1": "275",
+              "param_2_data_2": "285",
+              "param_2_data_3": "295",
+              "param_2_data_4": "295",
+              "param_1_made": 1,
+              "param_2_made": 1,
+              "param_3_made": 1,
+              "param_4_made": 1,
+              "abr": "3 x 295"
+            },
+            {
+              "id": 2700000002,
+              "workout_set_exercise_id": 1174955455,
+              "exercise_id": 4292,
+              "exercise_title": "Front Foot Elevated Split Squat",
+              "completed": 0,
+              "param_1_type": 3,
+              "param_2_type": 1,
+              "param_1_data_1": "16",
+              "param_1_data_2": "16",
+              "param_1_data_3": "16",
+              "param_1_made": 0,
+              "param_2_made": 0,
+              "param_3_made": 0
+            }
+          ]
+        }
+      ],
+      "addedWorkoutSets": [
+        {
+          "id": 900901,
+          "order": 99,
+          "title": "Extra Finisher",
+          "completed": 0,
+          "workoutSetExercises": [
+            {
+              "id": 2700000099,
+              "workout_set_exercise_id": 2700000099,
+              "exercise_id": 9999,
+              "exercise_title": "Assault Bike",
+              "completed": 0,
+              "param_1_type": 8,
+              "param_2_type": 1,
+              "param_1_data_1": "12",
+              "param_2_data_1": "",
+              "param_1_made": 1
+            }
+          ]
+        }
+      ]
     }
   }
 }

@@ -43,7 +43,9 @@ const SIMPLE_GETS: ReadonlyArray<{
     name: "analytics_categories",
     title: "Analytics categories",
     description:
-      "Lists available analytics types. Pull a report with analytics_query (pick the matching metric).",
+      "TrainHeroic's raw analytics catalog. Its keys are the API's own names and do NOT match " +
+      "analytics_query's `metric` values — choose the metric straight from analytics_query's " +
+      "(self-describing) enum instead; you rarely need this tool.",
     path: "/v5/analytics",
   },
 ];

@@ -18,8 +18,9 @@ function registerWorkoutsZone(server: McpServer, workouts: AthleteWorkoutStore):
     {
       title: "Sync workout history",
       description:
-        "Populate the workouts warehouse: pull scheduled + completed workouts in a YYYY-MM-DD " +
-        "window into D1 (each workout flattened to exercise rows). Then read with athlete_workouts_stored.",
+        "Populate the workouts warehouse: pull workouts in a YYYY-MM-DD window into D1 (each " +
+        "workout flattened to exercise rows with both prescribed and logged/performed sets). " +
+        "Then read with athlete_workouts_stored.",
       inputSchema: athleteWorkoutRangeArgsSchema.shape,
       annotations: SYNC,
     },
@@ -33,8 +34,9 @@ function registerWorkoutsZone(server: McpServer, workouts: AthleteWorkoutStore):
       title: "Query workout history",
       description:
         "Query the workouts warehouse (populate it with athlete_workouts_sync first). Give " +
-        "workoutId for one workout's flattened exercises; omit it to list workouts (optionally " +
-        "bounded by startDate/endDate). For current data live from the API, use athlete_workouts.",
+        "workoutId for one workout's flattened exercises (each with prescribed + performed sets); " +
+        "omit it to list workouts (optionally bounded by startDate/endDate), each carrying a " +
+        "logged flag. For current data live from the API, use athlete_workouts.",
       inputSchema: {
         workoutId: idParam.optional(),
         startDate: dateString.optional(),
