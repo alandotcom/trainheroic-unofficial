@@ -20,6 +20,7 @@ import { registerTeamTools } from "@trainheroic-unofficial/core";
 import { registerAthleteSyncTools } from "./tools/athlete-sync";
 import { registerSyncTools } from "./tools/sync";
 import { instrumentToolMetrics } from "./tool-metrics";
+import { tagMcpSession } from "./sentry";
 import { registerWorkoutTools } from "@trainheroic-unofficial/core";
 
 type State = Record<string, never>;
@@ -100,10 +101,13 @@ abstract class TrainHeroicMCPBase extends McpAgent<Env, State, Props> {
     const props = this.props;
     if (!props) throw new Error("Missing authentication context");
 
-    // Tag Sentry events from this session with the user's email (the only user datum we keep).
-    // init() runs inside the DO's request scope; onError below re-sets it for the separate
-    // per-message scopes that init() does not reach.
+    // Tag this session's Sentry scope with the user's email (the only user datum we keep) and the
+    // opaque session id. `this.name` is the per-session DO name (`streamable-http:<mcp-session-id>`),
+    // the value index.ts mirrors at the worker layer so worker and DO spans line up. onError and
+    // the tool wrapper (tool-metrics.ts) re-tag for the fresh per-message scopes init() can't reach;
+    // see tagMcpSession.
     Sentry.setUser({ email: props.email });
+    tagMcpSession(this.name);
 
     // Patch the registerTool seam before any surface registers, so every tool call emits aggregate
     // usage metrics and tags its trace span with the session id (tool name + surface + ok/error +
@@ -126,13 +130,15 @@ abstract class TrainHeroicMCPBase extends McpAgent<Env, State, Props> {
 
   /**
    * The agents runtime funnels websocket, request, and server errors through onError. Each
-   * per-message DO invocation runs in its own Sentry isolation scope, so the email set in
-   * init() does not carry to it; setting it here — inside that scope, just before the Sentry
-   * DO wrapper captures the rethrown error — keeps the email attached to every reported error.
-   * We only enrich the scope, then defer to the base handler, which logs and rethrows.
+   * per-message DO invocation runs in its own Sentry isolation scope, so the email and session
+   * tag set in init() do not carry to it; setting them here — inside that scope, just before the
+   * Sentry DO wrapper captures the rethrown error — keeps the email and `mcp.session` attached to
+   * every reported error. We only enrich the scope, then defer to the base handler, which logs
+   * and rethrows.
    */
   override onError(connectionOrError: unknown, error?: unknown): void | Promise<void> {
     if (this.props?.email) Sentry.setUser({ email: this.props.email });
+    tagMcpSession(this.name);
     return error !== undefined
       ? super.onError(connectionOrError as Connection, error)
       : super.onError(connectionOrError);

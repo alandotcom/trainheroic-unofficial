@@ -6,7 +6,7 @@ import {
   CoachMCP as CoachMCPBase,
   TrainHeroicMCP as TrainHeroicMCPBase,
 } from "./agent";
-import { sentryOptions } from "./sentry";
+import { mcpSessionKey, sentryOptions, tagMcpSession } from "./sentry";
 
 // Durable Object exports (referenced by the wrangler migrations + bindings). Each is wrapped with
 // Sentry so errors thrown inside the DO — init, transport, tool dispatch — are reported with the
@@ -67,6 +67,11 @@ function tooManyRequests(): Response {
 const handler = {
   fetch: async (request: Request, env: Env, ctx: ExecutionContext): Promise<Response> => {
     if (await isRateLimited(request, env)) return tooManyRequests();
+    // Tag the worker-level request span with the session, so the GET stream and the POST tool-call
+    // requests for one MCP session filter together in the trace explorer (alongside the matching
+    // DO-side tags). Only /mcp* carries this header; everything else stays untagged.
+    const sessionId = request.headers.get("mcp-session-id");
+    if (sessionId) tagMcpSession(mcpSessionKey(sessionId));
     return provider.fetch(request, env, ctx);
   },
   scheduled: async (_controller: ScheduledController, env: Env): Promise<void> => {
