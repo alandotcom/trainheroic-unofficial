@@ -1,5 +1,12 @@
 # @trainheroic-unofficial/cloudflare
 
+## 1.0.0
+
+### Patch Changes
+
+- @trainheroic-unofficial/js@1.0.0
+- @trainheroic-unofficial/core@1.0.0
+
 ## 0.6.5
 
 ### Patch Changes

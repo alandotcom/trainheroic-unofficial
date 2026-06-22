@@ -1,5 +1,16 @@
 # @trainheroic-unofficial/cli
 
+## 1.0.0
+
+### Major Changes
+
+- 109e4ec: First stable release. The whole suite (dto, js, core, cli, coach-mcp, athlete-mcp) graduates to 1.0.0 under the shared fixed version.
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@1.0.0
+- @trainheroic-unofficial/js@1.0.0
+
 ## 0.6.5
 
 ### Patch Changes
