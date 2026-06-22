@@ -160,3 +160,17 @@ storage-specific (the D1 warehouse syncs are the current example).
   `~/.trainheroic/`, never in the repo.
 - The root `README.md` is the workspace overview (auth model, tool catalog, local and hosted
   dev, storage, security); each package has its own README for package-specific detail.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues (`alandotcom/trainheroic-unofficial`) via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default canonical labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root (created lazily). See `docs/agents/domain.md`.
