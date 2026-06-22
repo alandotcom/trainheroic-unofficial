@@ -28,8 +28,8 @@ harness serves **simulated** data from `src/datasets.ts` over a local HTTP serve
 
 1. `startBackend(dataset)` boots the fake backend on an ephemeral port.
 2. A **surface driver** spawns `claude -p … --output-format stream-json --verbose`:
-   - **MCP** (`src/surfaces/mcp.ts`): runs the local coach MCP server directly via its tsx bin, with
-     the base-URL overrides + fake creds injected on the server's env.
+   - **MCP** (`src/surfaces/mcp.ts`): runs the role's local MCP server (coach-mcp / athlete-mcp)
+     directly via its tsx bin, with the base-URL overrides + fake creds injected on the server's env.
    - **CLI** (`src/surfaces/cli.ts`): generates a `trainheroic` shim on PATH (scoped via
      `Bash(trainheroic:*)`), pointed at the fake backend, with `--yes` blocked so a read eval can't
      commit a write.
