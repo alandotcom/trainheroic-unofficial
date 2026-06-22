@@ -130,15 +130,15 @@ For the athlete server, swap the package name to `@trainheroic-unofficial/athlet
 </details>
 
 <details>
-<summary><b>Headless / no-browser environments (SSH, containers, CI, web IDEs)</b></summary>
+<summary><b>Headless / no browser</b></summary>
 
 <br>
 
-OAuth redirects to `http://localhost:<port>`, which on a remote box resolves to your machine, not the box. Pick whichever fits:
+OAuth redirects to `localhost`, which on a remote box is your machine, not the box. Pick one:
 
-**1. Run a local server.** Use the Claude Code or stdio examples above with your credentials in the environment.
+**1. Local server.** Use the Claude Code or stdio examples above with credentials in the environment.
 
-**2. Hosted server in a web IDE (Codespaces, VS Code Remote, code-server).** These forward `localhost` automatically, so [`mcp-remote`](https://github.com/geelen/mcp-remote) just works:
+**2. Web IDE (Codespaces, VS Code Remote, code-server).** `localhost` is forwarded automatically, so [`mcp-remote`](https://github.com/geelen/mcp-remote) works as-is:
 
 ```jsonc
 {
@@ -151,17 +151,15 @@ OAuth redirects to `http://localhost:<port>`, which on a remote box resolves to 
 }
 ```
 
-**3. Hosted server, paste the redirect back.** Open the authorize URL in any browser, approve, then copy the `http://localhost:…/callback?code=…` URL it lands on (it will fail to load) and paste it into the terminal. Needs a bridge with out-of-band support, e.g. Hermes' `--manual-paste`.
+**3. Paste the redirect back.** Open the authorize URL in any browser, approve, copy the `localhost/callback?code=…` URL it lands on, paste it into the terminal. Needs a bridge with out-of-band support, e.g. Hermes' `--manual-paste`.
 
-**4. Hosted server over SSH.** Forward the callback port once, then sign in from your local browser:
+**4. SSH.** Forward the callback port, then sign in from your browser:
 
 ```bash
 ssh -L 3334:localhost:3334 user@remote-host
 ```
 
-The token caches under `~/.mcp-auth` after the first login.
-
-Already have a token? Pass `--header "Authorization: Bearer …"` and skip OAuth. (Device grant / RFC 8628 isn't supported — tracking: #13.)
+Already have a token? Pass `--header "Authorization: Bearer …"`.
 
 </details>
 
