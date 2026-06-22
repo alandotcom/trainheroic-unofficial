@@ -108,15 +108,13 @@ jobs:
           git push origin HEAD:main
           git push origin "v$version"
 
-      # GitHub release notes = this version's section of the core changelog.
+      # Let GitHub auto-generate the release notes from the commits/PRs since the last tag.
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="${{ steps.version.outputs.version }}"
-          awk -v v="## $version" '$0==v{f=1;next} /^## /{if(f)exit} f{print}' \
-            packages/core/CHANGELOG.md > /tmp/relnotes.md
-          gh release create "v$version" --title "v$version" --notes-file /tmp/relnotes.md --latest
+          gh release create "v$version" --title "v$version" --generate-notes --latest
 
   # Migrate + deploy the worker at the release tag, before publishing, so the hosted worker and
   # the published SDK/CLI match. deploy.yml authenticates with Cloudflare API-token secrets
