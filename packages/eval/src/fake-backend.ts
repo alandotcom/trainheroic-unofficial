@@ -30,6 +30,41 @@ function intParam(value: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** One in-flight ad-hoc personal session (athlete_log_session): created, then exercises added, then
+ * read back by the range so the log write can find it. The single bit of read-after-write state the
+ * backend keeps — enough for the create→add→log flow without a full stateful store. */
+type PersonalSession = { date: string; exercises: Array<{ exerciseId: number }> };
+
+function personalRangeWorkout(p: PersonalSession): Record<string, unknown> {
+  const SET_ID = 5560000;
+  return {
+    id: 5550000,
+    date: p.date,
+    workout_title: "Personal Session",
+    personal_cal: true,
+    program_title: null,
+    summarizedSavedWorkout: {
+      saved_workout: {
+        id: 5550003,
+        workoutSets: [
+          {
+            id: SET_ID,
+            saved_workout_id: 5550003,
+            workout_set_id: 5590000,
+            order: 0,
+            unit: "lb",
+            workoutSetExercises: p.exercises.map((e, i) => ({
+              id: 5570000 + i,
+              workout_set_exercise_id: 5580000 + i,
+              exercise_id: e.exerciseId,
+            })),
+          },
+        ],
+      },
+    },
+  };
+}
+
 function buildApp(
   dataset: Dataset,
   requests: string[],
@@ -37,6 +72,8 @@ function buildApp(
   writes: WriteRecord[],
 ): Hono {
   const app = new Hono();
+  // Holds the one ad-hoc personal session between its create/add writes and the range read.
+  const personal: { current: PersonalSession | null } = { current: null };
 
   app.use("*", async (c, next) => {
     requests.push(`${c.req.method} ${new URL(c.req.url).pathname}`);
@@ -103,23 +140,17 @@ function buildApp(
     );
   });
 
-  // --- athlete-surface reads (the logged-in athlete's own training) ---
-  app.get("/v5/users/exercises/history", (c) => c.json(dataset.athlete.exercisesList));
-  app.get("/3.0/athlete/programworkout/range", (c) =>
-    c.json(dataset.athlete.range(c.req.query("startDate") ?? "", c.req.query("endDate") ?? "")),
-  );
-  app.get("/2.0/athlete/workingMax", (c) => c.json(dataset.athlete.workingMaxes));
-  app.get("/1.0/athlete/prefs", (c) => c.json(dataset.athlete.prefs));
-  app.get("/v5/exercises/:id/personalRecords", (c) =>
-    c.json(dataset.athlete.getPersonalRecords(Number(c.req.param("id")))),
-  );
-  app.get("/v5/exercises/:id/stats", (c) =>
-    c.json(dataset.athlete.getExerciseStats(Number(c.req.param("id")))),
-  );
-  app.get("/3.0/athlete/leaderboard/:id", (c) => c.json({ entries: [] }));
-  app.get("/v5/users/:id", (c) => c.json({ id: Number(c.req.param("id")) }));
+  registerAthleteReads(app, dataset, personal);
 
-  registerWrites(app, writes);
+  // --- messaging ---
+  app.get("/v5/messaging/streams", (c) => c.json(dataset.messagingStreams));
+  app.get("/v5/messaging/streams/:id/comments", (c) =>
+    c.json(dataset.getMessages(Number(c.req.param("id")))),
+  );
+
+  app.get("/v5/users/:id", (c) => c.json(dataset.getUser(Number(c.req.param("id")))));
+
+  registerWrites(app, writes, personal);
 
   // --- analytics (POST reports) ---
   app.post("/v5/analytics/training-summary/users", async (c) => {
@@ -155,7 +186,38 @@ async function record(c: Context, writes: WriteRecord[]): Promise<unknown> {
  * roster/session writes to complete. State is intentionally not mutated back into the reads: a
  * write-mode scenario asserts on the recorded writes, not read-after-write consistency.
  */
-function registerWrites(app: Hono, writes: WriteRecord[]): void {
+/** Athlete-surface reads (the logged-in athlete's own training), incl. the read-after-write of the
+ * in-flight ad-hoc personal session. Split out to keep buildApp under the line cap. */
+function registerAthleteReads(
+  app: Hono,
+  dataset: Dataset,
+  personal: { current: PersonalSession | null },
+): void {
+  app.get("/v5/users/exercises/history", (c) => c.json(dataset.athlete.exercisesList));
+  app.get("/3.0/athlete/programworkout/range", (c) => {
+    const start = c.req.query("startDate") ?? "";
+    const end = c.req.query("endDate") ?? "";
+    const scheduled = dataset.athlete.range(start, end);
+    const p = personal.current;
+    const inWindow = p !== null && (!start || p.date >= start) && (!end || p.date <= end);
+    return c.json(inWindow && p !== null ? [...scheduled, personalRangeWorkout(p)] : scheduled);
+  });
+  app.get("/2.0/athlete/workingMax", (c) => c.json(dataset.athlete.workingMaxes));
+  app.get("/1.0/athlete/prefs", (c) => c.json(dataset.athlete.prefs));
+  app.get("/v5/exercises/:id/personalRecords", (c) =>
+    c.json(dataset.athlete.getPersonalRecords(Number(c.req.param("id")))),
+  );
+  app.get("/v5/exercises/:id/stats", (c) =>
+    c.json(dataset.athlete.getExerciseStats(Number(c.req.param("id")))),
+  );
+  app.get("/3.0/athlete/leaderboard/:id", (c) => c.json({ entries: [] }));
+}
+
+function registerWrites(
+  app: Hono,
+  writes: WriteRecord[],
+  personal: { current: PersonalSession | null },
+): void {
   // Set-write step 1 (the data write) + step 2 (mark complete), coach (…/{athleteId}) and athlete.
   app.put("/1.0/coach/savedworkoutsetexercise/:id/:athleteId", async (c) => {
     await record(c, writes);
@@ -205,21 +267,32 @@ function registerWrites(app: Hono, writes: WriteRecord[]): void {
     return c.json({ success: true });
   });
 
-  // Athlete personal-session writes (create then add exercises).
+  // Athlete personal-session writes (create → add exercises → the range then surfaces it to log).
   app.post("/v5/programWorkouts/personal", async (c) => {
-    await record(c, writes);
+    const body = (await record(c, writes)) as { date?: string } | null;
+    personal.current = { date: body?.date ?? "2026-03-27", exercises: [] };
     return c.json({
-      programWorkout: { id: 5550001, workoutId: 5550002, date: "2026-03-27" },
+      programWorkout: { id: 5550001, workoutId: 5550002, date: personal.current.date },
       savedWorkout: { id: 5550003, group_id: 5550004 },
     });
   });
   app.put("/v5/personalCalendar/workouts/:id/addExercises", async (c) => {
     const body = (await record(c, writes)) as { exercises?: Array<{ exerciseId?: number }> } | null;
-    const added = (body?.exercises ?? []).map((e, i) => ({
-      id: 5560000 + i,
-      savedWorkoutSetExercises: [{ id: 5570000 + i, exerciseId: e.exerciseId }],
-    }));
-    return c.json(added);
+    const exercises = (body?.exercises ?? [])
+      .map((e) => (typeof e.exerciseId === "number" ? { exerciseId: e.exerciseId } : null))
+      .filter((e): e is { exerciseId: number } => e !== null);
+    if (personal.current) personal.current.exercises = exercises;
+    // The add-exercises response (one saved set holding every added exercise) — its ids match the
+    // session personalRangeWorkout() builds, so the subsequent log finds the same set.
+    return c.json([
+      {
+        id: 5560000,
+        savedWorkoutSetExercises: exercises.map((e, i) => ({
+          id: 5570000 + i,
+          exerciseId: e.exerciseId,
+        })),
+      },
+    ]);
   });
 }
 

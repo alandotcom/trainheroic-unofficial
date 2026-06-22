@@ -223,3 +223,125 @@ export function liftPR(opts: {
     units: "lb",
   };
 }
+
+/** One `/v5/exercises/{id}/personalRecords` row. */
+export function personalRecord(opts: {
+  reps: number;
+  weight: number;
+  setNumber?: number;
+}): Record<string, unknown> {
+  return {
+    setNumber: opts.setNumber ?? 1,
+    reps: opts.reps,
+    weight: opts.weight,
+    units: "lb",
+    isMetric: false,
+  };
+}
+
+/** One `/2.0/athlete/workingMax` row. */
+export function workingMax(opts: {
+  exerciseId: number;
+  title: string;
+  value: number | null;
+}): Record<string, unknown> {
+  return {
+    exercise_id: opts.exerciseId,
+    title: opts.title,
+    param_type: 2,
+    value: opts.value,
+    type_suffix: " lb",
+  };
+}
+
+/**
+ * One `/3.0/athlete/programworkout/range` item for the athlete's OWN workouts. When `logged`, a
+ * saved copy mirrors the prescription with `param_N_made = 1`, which is what makes the presenter
+ * mark it performed (the reliable did-they-train signal); otherwise it is scheduled-only.
+ */
+export function athleteRangeWorkout(opts: {
+  id: number;
+  date: string;
+  title: string;
+  program: string;
+  team?: string;
+  logged: boolean;
+  exercises: Array<{ exerciseId: number; title: string; reps: number; weight: number }>;
+}): Record<string, unknown> {
+  const prescription = opts.exercises.map((e, i) => ({
+    id: 600000 + i,
+    exercise_id: e.exerciseId,
+    title: e.title,
+    param_1_type: "reps",
+    param_2_type: "lb",
+    param_1_data_1: String(e.reps),
+    param_2_data_1: String(e.weight),
+  }));
+  const savedExercises = opts.exercises.map((e, i) => ({
+    id: 610000 + i,
+    workout_set_exercise_id: 600000 + i,
+    exercise_title: e.title,
+    param_1_type: "reps",
+    param_2_type: "lb",
+    param_1_made: 1,
+    param_1_data_1: String(e.reps),
+    param_2_made: 1,
+    param_2_data_1: String(e.weight),
+  }));
+  return {
+    id: opts.id,
+    date: opts.date,
+    workout_title: opts.title,
+    program_title: opts.program,
+    team_title: opts.team ?? opts.program,
+    summarizedSavedWorkout: {
+      workout: {
+        instruction: "",
+        workoutSets: [{ order: 0, title: "Main", workoutSetExercises: prescription }],
+      },
+      saved_workout: {
+        id: opts.id + 700000,
+        workoutSets: opts.logged
+          ? [{ id: opts.id + 800000, order: 0, workoutSetExercises: savedExercises }]
+          : [],
+      },
+    },
+  };
+}
+
+/** `/v5/messaging/streams` — the coach's message threads, in the bucketed shape the SDK flattens. */
+export function messagingStreams(
+  threads: Array<{ id: number; title: string; userId?: number }>,
+): Record<string, unknown> {
+  return { teams: [], athletes: threads, programs: [], coaches: [] };
+}
+
+/** One `/v5/messaging/streams/{id}/comments` row. */
+export function messageComment(opts: {
+  id: number;
+  content: string;
+  authorName?: string;
+}): Record<string, unknown> {
+  return {
+    id: opts.id,
+    content: opts.content,
+    type: 0,
+    author_name: opts.authorName ?? "Athlete",
+  };
+}
+
+/** `/v5/users/{id}` — an athlete user record (athlete_profile reads the name fields). */
+export function athleteUser(opts: {
+  id: number;
+  nameFirst: string;
+  nameLast: string;
+  email?: string;
+}): Record<string, unknown> {
+  return {
+    id: opts.id,
+    name_first: opts.nameFirst,
+    name_last: opts.nameLast,
+    email: opts.email ?? `${opts.nameFirst.toLowerCase()}@example.com`,
+    use_metric: false,
+  };
+}

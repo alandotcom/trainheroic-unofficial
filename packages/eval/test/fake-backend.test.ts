@@ -12,6 +12,12 @@ import {
 import { startBackend } from "../src/fake-backend";
 import type { BackendHandle } from "../src/fake-backend";
 import type { Dataset } from "../src/datasets";
+import { demoAthlete, demoCoach } from "../src/demo";
+import {
+  presentAthleteWorkouts,
+  presentExerciseHistory,
+  type ExerciseHistoryDetail,
+} from "@trainheroic-unofficial/js";
 
 // Deterministic coverage for the fake backend + datasets — no claude, runs in the normal gate.
 // These assert the datasets actually serve large orgs (hundreds of athletes, dozens of teams),
@@ -242,6 +248,60 @@ describe("write routes (write-mode support)", () => {
     expect(b.writes[0]?.method).toBe("PUT");
     expect(b.writes[0]?.path).toContain("savedworkoutsetexercise");
     expect(JSON.stringify(b.writes[0]?.body)).toContain("235");
+    expect(b.unmatched).toHaveLength(0);
+  });
+});
+
+describe("demoAthlete (query bank fixture)", () => {
+  it("serves logged + scheduled workouts, working maxes, PRs, and a progression", async () => {
+    const { dataset } = demoAthlete();
+    const b = await boot(dataset);
+
+    // athlete_workouts: some logged (performed), one scheduled-only.
+    const range = (await getJson(
+      `${b.url}/3.0/athlete/programworkout/range?startDate=2026-03-22&endDate=2026-03-29`,
+    )) as Parameters<typeof presentAthleteWorkouts>[0];
+    const views = presentAthleteWorkouts(range);
+    expect(views.filter((w) => w.logged).length).toBeGreaterThanOrEqual(2);
+    expect(views.some((w) => !w.logged)).toBe(true);
+
+    // athlete_working_maxes + athlete_personal_records answer non-empty.
+    expect((await getJson(`${b.url}/2.0/athlete/workingMax`)) as unknown[]).not.toHaveLength(0);
+    const prs = (await getJson(`${b.url}/v5/exercises/920002/personalRecords`)) as unknown[];
+    expect(prs).not.toHaveLength(0);
+
+    // athlete_exercise_history: a back-squat progression that trends up.
+    const detail = (await getJson(
+      `${b.url}/v5/exercises/920001/history?userId=100001`,
+    )) as ExerciseHistoryDetail;
+    const series = presentExerciseHistory(detail).sessions;
+    expect(series.length).toBeGreaterThan(5);
+    expect(b.unmatched).toHaveLength(0);
+  });
+});
+
+describe("demoCoach (query bank fixture)", () => {
+  it("serves a named roster, a resolvable custom exercise, a recent message, a session to log", async () => {
+    const { dataset } = demoCoach();
+    const b = await boot(dataset);
+
+    const roster = (await getJson(`${b.url}/v5/athletes`)) as unknown[];
+    expect(roster.length).toBeGreaterThan(0);
+
+    const library = (await getJson(`${b.url}/v5/exerciseLibrary/all`)) as Array<{ title: string }>;
+    expect(library.some((e) => e.title === "Romanian Deadlift")).toBe(true);
+    expect(library.some((e) => e.title.toLowerCase().includes("sled push"))).toBe(true);
+
+    const streams = (await getJson(`${b.url}/v5/messaging/streams`)) as { athletes: unknown[] };
+    expect(streams.athletes.length).toBeGreaterThan(0);
+    const msgs = (await getJson(`${b.url}/v5/messaging/streams/5001/comments`)) as unknown[];
+    expect(msgs.length).toBeGreaterThan(0);
+
+    // A coach "log a result" has a prescribed bench session for athlete 100001 today.
+    const coachRange = (await getJson(
+      `${b.url}/3.0/coach/athlete/programworkout/range/100001?startDate=2026-03-27&endDate=2026-03-27`,
+    )) as unknown[];
+    expect(coachRange).toHaveLength(1);
     expect(b.unmatched).toHaveLength(0);
   });
 });

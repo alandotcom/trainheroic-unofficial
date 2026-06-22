@@ -89,6 +89,17 @@ where values (per-set weights) are synthesized.
 A scenario declares its `surfaces`; truncation-driven ones are MCP-only because the CLI streams full
 results (no result budget). `EVAL_SURFACES` further narrows what runs.
 
+### The query bank (breadth)
+
+Beyond the hand-written failure-mode scenarios above, `evals/coach-bank.eval.ts` and
+`evals/athlete-bank.eval.ts` port the historic query bank (`.claude/skills/mcp-eval/queries.md`) —
+real questions a person types — as data-backed scenarios against populated demo accounts
+(`src/demo.ts`). Each bank entry (`src/bank.ts`) maps a query to the capability that should answer
+it; a shared light grader checks the agent reached an answer via that capability (read) or fired the
+expected write (write). This is breadth coverage; the named scenarios remain the sharp regression
+guards. Filter to one with vitest `-t`, e.g.
+`RUN_EVALS=1 pnpm --filter @trainheroic-unofficial/eval exec vitest run evals/coach-bank.eval.ts -t "Romanian Deadlift"`.
+
 ## Adding a tool / command
 
 Keep three lists in sync so both surfaces can exercise a new capability:

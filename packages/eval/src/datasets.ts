@@ -9,6 +9,7 @@ import type { HistoryCorpus } from "./history";
 import {
   calendarSession,
   libraryExercise,
+  messagingStreams,
   profileSummary,
   programWorkout,
   userSimple,
@@ -48,6 +49,12 @@ export type Dataset = {
   getExerciseHistory: (exerciseId: number, athleteId: number) => unknown;
   /** GET /v5/exerciseLibrary/all — the org's exercise catalog (exercise_resolve/search/get). */
   exerciseLibrary: Array<Record<string, unknown>>;
+  /** GET /v5/messaging/streams — the coach's message threads (bucketed). */
+  messagingStreams: Record<string, unknown>;
+  /** GET /v5/messaging/streams/:id/comments — one thread's messages. */
+  getMessages: (streamId: number) => unknown[];
+  /** GET /v5/users/:id — a user record (athlete_profile reads the name). */
+  getUser: (id: number) => Record<string, unknown>;
   /** Athlete-surface endpoints (the logged-in athlete reads their OWN training). */
   athlete: AthleteEndpoints;
 };
@@ -209,7 +216,7 @@ function baseUserSimple(): Record<string, unknown> {
   return userSimple({ id: COACH_ID, roles: ["coach"], nameFirst: "Casey", nameLast: "Coach" });
 }
 
-type OrgOptions = {
+export type OrgOptions = {
   name: string;
   athleteCount: number;
   /** Titles for each team's program, one per team. */
@@ -224,7 +231,7 @@ type OrgOptions = {
  * Build a coach org from athlete count + a program title per team. Athletes are distributed
  * round-robin across teams (so every team has members and most athletes carry a couple of teams).
  */
-function buildOrg(opts: OrgOptions): Dataset {
+export function buildOrg(opts: OrgOptions): Dataset {
   const teamCount = opts.programTitles.length;
   const teams: TeamRow[] = opts.programTitles.map((title, t) => ({
     id: TEAM_BASE + t,
@@ -301,6 +308,9 @@ function buildOrg(opts: OrgOptions): Dataset {
     getCoachAthleteRange: () => [],
     getExerciseHistory: () => ({ liftPRs: [], history: [] }),
     exerciseLibrary: defaultExerciseLibrary(),
+    messagingStreams: messagingStreams([]),
+    getMessages: () => [],
+    getUser: (id) => ({ id }),
     athlete: emptyAthleteEndpoints(),
   };
 }
