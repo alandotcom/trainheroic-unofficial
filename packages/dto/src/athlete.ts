@@ -207,6 +207,17 @@ export const coachLogSetArgsSchema = logSetArgsSchema.extend({ athleteId: idArgS
 export type CoachLogSetArgs = z.infer<typeof coachLogSetArgsSchema>;
 
 /**
+ * Args for the coach prescription-override write. Structurally the same as
+ * {@link coachLogSetArgsSchema} (athleteId + date + savedWorkoutSetId + per-exercise `sets`), but
+ * the values are prescribed targets (param1 = reps, param2 = weight) written to the athlete's
+ * plan without marking the set performed. It is a separate schema (not an alias) so a future
+ * prescribe-only constraint can be added here without changing the log args, and the write
+ * replaces the slot's prescribed values for this athlete only.
+ */
+export const coachPrescribeSetArgsSchema = logSetArgsSchema.extend({ athleteId: idArgSchema });
+export type CoachPrescribeSetArgs = z.infer<typeof coachPrescribeSetArgsSchema>;
+
+/**
  * Args for the coach per-athlete exercise swap: replace the exercise prescribed in one of a
  * roster athlete's saved-workout slots with a different exercise, the API equivalent of the
  * app's per-athlete "swap exercise". `savedWorkoutSetExerciseId` is that athlete's own slot id

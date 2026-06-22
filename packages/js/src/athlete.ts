@@ -655,38 +655,87 @@ export type SetResult = {
 };
 
 /**
- * Build the body for `PUT /1.0/athlete/savedworkoutsetexercise/{id}`. The body uses
- * snake_case keys matching the live API response shape. Each set slot (1-10) gets a
- * `param_N_made` flag (1 if data is present, 0 otherwise) and `param_1_data_N` /
- * `param_2_data_N` string values.
+ * Which write a set-write is: `"log"` records a performed result (and marks the set done),
+ * `"prescribe"` sets prescribed targets without marking it done. Threaded through
+ * {@link buildExerciseSetPayload} and the set-write helper so the two contracts share one path.
+ */
+export type SetWriteMode = "log" | "prescribe";
+
+/**
+ * Coerce the loosely-typed `results` from a validated log/prescribe args object into the SDK's
+ * {@link SetResult}[]. The dto schemas validate ids as a number or a numeric string and leave
+ * empty param slots optional; this narrows the id to a number and copies only the present per-set
+ * values (so the per-set type stays free of `undefined` under exactOptionalPropertyTypes). Shared
+ * by the MCP tools and the CLI so the mapping lives in one place rather than once per surface.
+ */
+export function toSetResults(
+  results: ReadonlyArray<{
+    savedWorkoutSetExerciseId: number | string;
+    sets: ReadonlyArray<{
+      param1?: number | string | undefined;
+      param2?: number | string | undefined;
+    }>;
+  }>,
+): SetResult[] {
+  return results.map((r) => {
+    const id = coerceInt(r.savedWorkoutSetExerciseId);
+    if (id === null) {
+      throw new Error(`Invalid savedWorkoutSetExerciseId: ${String(r.savedWorkoutSetExerciseId)}`);
+    }
+    return {
+      savedWorkoutSetExerciseId: id,
+      sets: r.sets.map((s) => {
+        const slot: { param1?: number | string; param2?: number | string } = {};
+        if (s.param1 !== undefined) slot.param1 = s.param1;
+        if (s.param2 !== undefined) slot.param2 = s.param2;
+        return slot;
+      }),
+    };
+  });
+}
+
+/**
+ * Build the body for `PUT /1.0/{role}/savedworkoutsetexercise/{id}`. The body uses snake_case
+ * keys matching the live API response shape. Each set slot (1-10) carries `param_1_data_N` /
+ * `param_2_data_N` string values plus a `param_N_made` flag.
+ *
+ * `mode` selects which write this is — the same endpoint serves both:
+ *   - `"log"`: the values ARE a performed result, so `param_N_made` is 1 where the slot has data
+ *     and the exercise `completed` flag is 1 when any set has data.
+ *   - `"prescribe"`: the values are prescribed targets, written with every `param_N_made` and
+ *     `completed` left at 0 so the set is not marked done. This matches what the app sends when a
+ *     coach edits an athlete's prescribed reps/weight.
  *
  * Only `savedWorkoutSetExerciseId`, `savedWorkoutSetId`, and `workoutSetExerciseId` are
  * required from the live exercise record; everything else is derived from `results`.
  *
- * Exported for unit testing — callers should use `logAthleteSet` instead.
+ * Exported for unit testing — callers should use `logAthleteSet` / `prescribeForAthlete` instead.
  */
-export function buildExerciseLogPayload(
+export function buildExerciseSetPayload(
   savedWorkoutSetExerciseId: number,
   savedWorkoutSetId: number,
   workoutSetExerciseId: number,
   results: readonly { param1?: number | string; param2?: number | string }[],
+  mode: SetWriteMode,
 ): Record<string, unknown> {
   if (results.length > MAX_PARAM_SLOTS) {
     throw new Error(
       `At most ${MAX_PARAM_SLOTS} sets are supported per exercise; got ${results.length}.`,
     );
   }
+  const performed = mode === "log";
+  const hasData = results.some((s) => s.param1 !== undefined || s.param2 !== undefined);
   const body: Record<string, unknown> = {
     id: savedWorkoutSetExerciseId,
     saved_workout_set_id: savedWorkoutSetId,
     workout_set_exercise_id: workoutSetExerciseId,
-    completed: results.some((s) => s.param1 !== undefined || s.param2 !== undefined) ? 1 : 0,
+    completed: performed && hasData ? 1 : 0,
   };
   for (let i = 1; i <= MAX_PARAM_SLOTS; i += 1) {
     const slot = results[i - 1];
     const p1 = slot?.param1 !== undefined ? String(slot.param1) : "";
     const p2 = slot?.param2 !== undefined ? String(slot.param2) : "";
-    body[`param_${i}_made`] = p1 !== "" || p2 !== "" ? 1 : 0;
+    body[`param_${i}_made`] = performed && (p1 !== "" || p2 !== "") ? 1 : 0;
     body[`param_1_data_${i}`] = p1;
     body[`param_2_data_${i}`] = p2;
   }
@@ -819,13 +868,15 @@ export async function logAthleteSet(
 ): Promise<{ savedWorkoutSetId: number; exercisesLogged: number }> {
   // Step 0: fetch the range to locate the set and its exercises.
   const workouts = await fetchAthleteWorkouts(client, args.date, args.date);
-  return writeSetResults(
+  const r = await writeSetResults(
     client,
     { role: "athlete" },
     workouts,
     args.savedWorkoutSetId,
     args.results,
+    "log",
   );
+  return { savedWorkoutSetId: r.savedWorkoutSetId, exercisesLogged: r.exercisesWritten };
 }
 
 /**
@@ -848,13 +899,52 @@ export async function logForAthlete(
   },
 ): Promise<{ savedWorkoutSetId: number; exercisesLogged: number }> {
   const workouts = await fetchCoachAthleteWorkouts(client, args.athleteId, args.date, args.date);
-  return writeSetResults(
+  const r = await writeSetResults(
     client,
     { role: "coach", athleteId: args.athleteId },
     workouts,
     args.savedWorkoutSetId,
     args.results,
+    "log",
   );
+  return { savedWorkoutSetId: r.savedWorkoutSetId, exercisesLogged: r.exercisesWritten };
+}
+
+/**
+ * Coach prescription override: set the prescribed reps/weight for one of a roster athlete's saved
+ * workout sets WITHOUT marking it performed — the API equivalent of the app's editing an athlete's
+ * prescribed values. Writes each exercise's per-set targets via
+ * `PUT /1.0/coach/savedworkoutsetexercise/{id}/{athleteId}` with `param_N_made = 0` /
+ * `completed = 0`, and (unlike {@link logForAthlete}) skips the set-completion step, so the set
+ * stays open for the athlete to log against.
+ *
+ * Overrides only this athlete's copy of the set; the team/program prescription is untouched, so
+ * other athletes on the same program keep the original targets. The write REPLACES the slot's
+ * prescribed values, so pass the full per-set prescription you want — `param1` is reps, `param2`
+ * is weight, and an omitted param is written empty (clearing it), not left as-is.
+ *
+ * NOTE: TrainHeroic's seeded *demo* athletes are read-only and return 401/403; real (invited)
+ * athletes accept it.
+ */
+export async function prescribeForAthlete(
+  client: TrainHeroicClient,
+  args: {
+    athleteId: number;
+    date: string;
+    savedWorkoutSetId: number;
+    results: readonly SetResult[];
+  },
+): Promise<{ savedWorkoutSetId: number; exercisesPrescribed: number }> {
+  const workouts = await fetchCoachAthleteWorkouts(client, args.athleteId, args.date, args.date);
+  const r = await writeSetResults(
+    client,
+    { role: "coach", athleteId: args.athleteId },
+    workouts,
+    args.savedWorkoutSetId,
+    args.results,
+    "prescribe",
+  );
+  return { savedWorkoutSetId: r.savedWorkoutSetId, exercisesPrescribed: r.exercisesWritten };
 }
 
 /** Outcome of a per-athlete exercise swap: the slot that changed and what it changed to/from. */
@@ -923,12 +1013,16 @@ export async function swapAthleteExercise(
 type LogTarget = { role: "athlete" } | { role: "coach"; athleteId: number };
 
 /**
- * Shared two-step set-log write behind {@link logAthleteSet} and {@link logForAthlete}.
- * `target` selects the surface: `athlete` writes `/1.0/athlete/...`; `coach` writes
- * `/1.0/coach/...{athleteId}` and stamps `athleteId` into each body. Step 1 PUTs each
- * exercise's entered data to its own endpoint (the only path that actually stores reps and
- * weight). Step 2 marks the set completed; that body needs the app's camelCase in-memory
- * shape and the full list of savedWorkoutSetExercise IDs in the set (not only the logged ones).
+ * Shared set-write behind {@link logAthleteSet}, {@link logForAthlete}, and
+ * {@link prescribeForAthlete}. `target` selects the surface: `athlete` writes `/1.0/athlete/...`;
+ * `coach` writes `/1.0/coach/...{athleteId}` and stamps `athleteId` into each body.
+ *
+ * Step 1 PUTs each exercise's per-set values to its own endpoint (the only path that actually
+ * stores reps and weight). `mode` decides what those values mean: `"log"` records them as a
+ * performed result and runs Step 2, which marks the set completed (that body needs the app's
+ * camelCase in-memory shape and the full list of savedWorkoutSetExercise IDs in the set, not only
+ * the written ones); `"prescribe"` writes them as a prescription and skips Step 2, leaving the set
+ * open.
  */
 async function writeSetResults(
   client: TrainHeroicClient,
@@ -936,13 +1030,14 @@ async function writeSetResults(
   workouts: readonly ProgramWorkout[],
   savedWorkoutSetId: number,
   results: readonly SetResult[],
-): Promise<{ savedWorkoutSetId: number; exercisesLogged: number }> {
+  mode: SetWriteMode,
+): Promise<{ savedWorkoutSetId: number; exercisesWritten: number }> {
   const { exercises, rawSet } = findSavedWorkoutSet(workouts, savedWorkoutSetId);
   const suffix = target.role === "coach" ? `/${target.athleteId}` : "";
   const extra = target.role === "coach" ? { athleteId: target.athleteId } : {};
 
   // Step 1: PUT each exercise's data to its own endpoint.
-  let exercisesLogged = 0;
+  let exercisesWritten = 0;
   for (const result of results) {
     const ex = exercises.find((e) => coerceInt(e.id) === result.savedWorkoutSetExerciseId);
     if (!ex) {
@@ -968,11 +1063,12 @@ async function writeSetResults(
       );
     }
     const body = {
-      ...buildExerciseLogPayload(
+      ...buildExerciseSetPayload(
         result.savedWorkoutSetExerciseId,
         savedWorkoutSetId,
         workoutSetExerciseId,
         result.sets,
+        mode,
       ),
       ...extra,
     };
@@ -984,34 +1080,37 @@ async function writeSetResults(
     if (!res.ok) {
       const readOnly =
         target.role === "coach" && (res.status === 401 || res.status === 403)
-          ? ` Athlete ${target.athleteId} appears to be read-only for results — TrainHeroic's ` +
-            `seeded demo/sample athletes return ${res.status} here; results only persist for real ` +
+          ? ` Athlete ${target.athleteId} appears to be read-only for changes — TrainHeroic's ` +
+            `seeded demo/sample athletes return ${res.status} here; writes only persist for real ` +
             `(invited) athletes.`
           : "";
       throw new Error(
-        `Failed to log exercise ${result.savedWorkoutSetExerciseId} (HTTP ${res.status}).${readOnly}`,
+        `Failed to write exercise ${result.savedWorkoutSetExerciseId} (HTTP ${res.status}).${readOnly}`,
       );
     }
-    exercisesLogged += 1;
+    exercisesWritten += 1;
   }
 
-  // Step 2: mark the set as completed on the set-level endpoint.
-  const allExerciseIds = exercises
-    .map((e) => coerceInt(e.id))
-    .filter((n): n is number => n !== null);
-  const setBody = { ...buildSetCompletePayload(rawSet, allExerciseIds, true), ...extra };
-  const setRes = await client.request(
-    "PUT",
-    `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`,
-    { body: setBody },
-  );
-  if (!setRes.ok) {
-    throw new Error(
-      `Failed to mark workout set ${savedWorkoutSetId} completed (HTTP ${setRes.status}).`,
+  // Step 2: mark the set completed — only when logging a performed result. A prescription leaves
+  // the set open, so it is skipped (the app sends no set-completion PUT when editing targets).
+  if (mode === "log") {
+    const allExerciseIds = exercises
+      .map((e) => coerceInt(e.id))
+      .filter((n): n is number => n !== null);
+    const setBody = { ...buildSetCompletePayload(rawSet, allExerciseIds, true), ...extra };
+    const setRes = await client.request(
+      "PUT",
+      `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`,
+      { body: setBody },
     );
+    if (!setRes.ok) {
+      throw new Error(
+        `Failed to mark workout set ${savedWorkoutSetId} completed (HTTP ${setRes.status}).`,
+      );
+    }
   }
 
-  return { savedWorkoutSetId, exercisesLogged };
+  return { savedWorkoutSetId, exercisesWritten };
 }
 
 export type PersonalWorkoutCreated = {

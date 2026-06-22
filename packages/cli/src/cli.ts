@@ -8,6 +8,7 @@ import type { ZodType } from "zod";
 import {
   coachLogSessionArgsSchema,
   coachLogSetArgsSchema,
+  coachPrescribeSetArgsSchema,
   exerciseCreateSchema,
   logSessionArgsSchema,
   logSetArgsSchema,
@@ -47,6 +48,8 @@ import {
   logAthleteSet,
   logForAthlete,
   logSessionForAthlete,
+  prescribeForAthlete,
+  toSetResults,
   type SessionExercise,
   teamVolume,
   mapPool,
@@ -103,6 +106,7 @@ Coach — manage a roster (needs a coach account):
   coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes
       --date is the workout's SCHEDULED date (not necessarily today); get --set (savedWorkoutSetId)
       and each result's savedWorkoutSetExerciseId from 'coach athlete-workouts ... --log-ids'
+      resultsJson: [{"savedWorkoutSetExerciseId":N,"sets":[{"param1":reps,"param2":weight}, ...]}, ...]
   coach log-session --athlete <id> --date Y-M-D <exercisesJson>|--file f --yes
       log by exercise instead of by set id: each exercise (exerciseId + sets) is matched to a set
       already on the athlete's calendar that day. The API can't put an off-plan session on an
@@ -112,6 +116,14 @@ Coach — manage a roster (needs a coach account):
       swap one exercise in the athlete's scheduled workout for a different one, that athlete only
       (the team prescription stays put). Get --set-exercise from 'coach athlete-workouts ... --log-ids'
       and --exercise from 'coach exercise resolve/search'.
+
+  prescribe weights/reps for an athlete (set their targets WITHOUT marking the set done; that athlete only):
+  coach prescribe-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes
+      set the prescribed values on a scheduled set; the set stays open for the athlete to log against,
+      and the team prescription is untouched. param1 is reps, param2 is weight; one sets[] entry per
+      prescribed set, and the write REPLACES the slot's prescription (an omitted param clears it).
+      resultsJson: [{"savedWorkoutSetExerciseId":N,"sets":[{"param1":reps,"param2":weight}, ...]}, ...]
+      Same ids as log-set, from 'coach athlete-workouts ... --log-ids'. Use log-set to record a set as PERFORMED.
 
   roster management:
   coach athlete-invite --team <id> --emails a@x,b@y [--message "..."] --yes
@@ -612,19 +624,13 @@ async function cmdAthleteLogSet(client: TrainHeroicClient, a: string[]): Promise
   const args = validate(logSetArgsSchema, { date, savedWorkoutSetId, results }, "log-set args");
   if (values.yes !== true)
     fail(`logging to set ${savedWorkoutSetId} writes to your coach-visible log; add --yes.`);
-  const mapped = args.results.map((r) => ({
-    savedWorkoutSetExerciseId: toInt(
-      String(r.savedWorkoutSetExerciseId),
-      "savedWorkoutSetExerciseId",
-    ),
-    sets: r.sets.map((s) => {
-      const slot: { param1?: number | string; param2?: number | string } = {};
-      if (s.param1 !== undefined) slot.param1 = s.param1;
-      if (s.param2 !== undefined) slot.param2 = s.param2;
-      return slot;
+  return out(
+    await logAthleteSet(client, {
+      date: args.date,
+      savedWorkoutSetId,
+      results: toSetResults(args.results),
     }),
-  }));
-  return out(await logAthleteSet(client, { date: args.date, savedWorkoutSetId, results: mapped }));
+  );
 }
 
 const LOG_SESSION_USAGE = "athlete log-session --date Y-M-D <exercisesJson>|--file f --yes";
@@ -835,7 +841,7 @@ async function cmdInstallSkill(): Promise<void> {
 }
 
 const COACH_USAGE =
-  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|roster-activity|team-volume|athlete-training|athlete-lift-history|athlete-workouts|log-set|log-session|swap-exercise|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|analytics-query|exercise|workout|message>";
+  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|roster-activity|team-volume|athlete-training|athlete-lift-history|athlete-workouts|log-set|log-session|prescribe-set|swap-exercise|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|analytics-query|exercise|workout|message>";
 
 const COACH_LOG_SET_USAGE =
   "coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson> --yes";
@@ -869,20 +875,59 @@ async function cmdCoachLogSet(client: TrainHeroicClient, a: string[]): Promise<v
     fail(
       `logging to athlete ${athleteId}'s set ${savedWorkoutSetId} writes to their training log; add --yes.`,
     );
-  const mapped = args.results.map((r) => ({
-    savedWorkoutSetExerciseId: toInt(
-      String(r.savedWorkoutSetExerciseId),
-      "savedWorkoutSetExerciseId",
-    ),
-    sets: r.sets.map((s) => {
-      const slot: { param1?: number | string; param2?: number | string } = {};
-      if (s.param1 !== undefined) slot.param1 = s.param1;
-      if (s.param2 !== undefined) slot.param2 = s.param2;
-      return slot;
-    }),
-  }));
   return out(
-    await logForAthlete(client, { athleteId, date: args.date, savedWorkoutSetId, results: mapped }),
+    await logForAthlete(client, {
+      athleteId,
+      date: args.date,
+      savedWorkoutSetId,
+      results: toSetResults(args.results),
+    }),
+  );
+}
+
+const COACH_PRESCRIBE_SET_USAGE =
+  "coach prescribe-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes";
+
+// Coach prescription override: set an athlete's prescribed reps/weight for one saved set WITHOUT
+// marking it done (the set stays open to log against). Mirrors `coach log-set` but writes targets,
+// not results; param1 is reps, param2 is weight, and the write replaces the slot's prescription.
+async function cmdCoachPrescribeSet(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values, positionals } = parse(a, {
+    athlete: { type: "string" },
+    date: { type: "string" },
+    set: { type: "string" },
+    file: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const athleteId = toInt(
+    need(values.athlete as string | undefined, COACH_PRESCRIBE_SET_USAGE),
+    "--athlete",
+  );
+  const date = isoDate(
+    need(values.date as string | undefined, COACH_PRESCRIBE_SET_USAGE),
+    "--date",
+  );
+  const savedWorkoutSetId = toInt(
+    need(values.set as string | undefined, COACH_PRESCRIBE_SET_USAGE),
+    "--set",
+  );
+  const results = await jsonInput(positionals[0], values.file as string | undefined);
+  const args = validate(
+    coachPrescribeSetArgsSchema,
+    { athleteId, date, savedWorkoutSetId, results },
+    "coach prescribe-set args",
+  );
+  if (values.yes !== true)
+    fail(
+      `prescribing to athlete ${athleteId}'s set ${savedWorkoutSetId} changes their plan; add --yes.`,
+    );
+  return out(
+    await prescribeForAthlete(client, {
+      athleteId,
+      date: args.date,
+      savedWorkoutSetId,
+      results: toSetResults(args.results),
+    }),
   );
 }
 
@@ -1282,6 +1327,8 @@ async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void
       return cmdCoachLogSet(client, a);
     case "log-session":
       return cmdCoachLogSession(client, a);
+    case "prescribe-set":
+      return cmdCoachPrescribeSet(client, a);
     case "swap-exercise":
       return cmdCoachSwapExercise(client, a);
     case "athlete-invite":
