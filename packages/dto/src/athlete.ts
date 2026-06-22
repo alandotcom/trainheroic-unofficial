@@ -207,6 +207,19 @@ export const coachLogSetArgsSchema = logSetArgsSchema.extend({ athleteId: idArgS
 export type CoachLogSetArgs = z.infer<typeof coachLogSetArgsSchema>;
 
 /**
+ * Args for the coach per-athlete exercise swap: replace the exercise prescribed in one of a
+ * roster athlete's saved-workout slots with a different exercise, the API equivalent of the
+ * app's per-athlete "swap exercise". `savedWorkoutSetExerciseId` is that athlete's own slot id
+ * (the same id `coachLogSetArgsSchema` uses, read off athlete_saved_workouts raw);
+ * `exerciseId` is the replacement exercise. The team/program prescription is left untouched.
+ */
+export const swapAthleteExerciseArgsSchema = z.object({
+  savedWorkoutSetExerciseId: idArgSchema,
+  exerciseId: idArgSchema,
+});
+export type SwapAthleteExerciseArgs = z.infer<typeof swapAthleteExerciseArgsSchema>;
+
+/**
  * Args for logging a whole session by exercise (rather than by saved-workout-set id). Each
  * exercise carries its entered sets and an optional 1-based `order`. The athlete path creates
  * or reuses a personal session for the date and logs against it; the coach path resolves each

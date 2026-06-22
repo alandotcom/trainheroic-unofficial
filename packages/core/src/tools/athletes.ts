@@ -4,6 +4,7 @@ import {
   coachLogSessionArgsSchema,
   coachLogSetArgsSchema,
   dateString,
+  swapAthleteExerciseArgsSchema,
 } from "@trainheroic-unofficial/dto";
 import {
   definedProps,
@@ -12,6 +13,7 @@ import {
   logForAthlete,
   logSessionForAthlete,
   presentAthleteWorkouts,
+  swapAthleteExercise,
 } from "@trainheroic-unofficial/js";
 import { mapSessionExercises } from "./athlete-training";
 import { confirmGate, NOT_CONFIRMED } from "../confirm";
@@ -125,6 +127,7 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
   );
 
   registerAthleteLogTools(server, ctx);
+  registerAthleteSwapTool(server, ctx);
 }
 
 /**
@@ -248,6 +251,48 @@ function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
             athleteId: aId,
             date,
             exercises: mapSessionExercises(exercises),
+          }),
+        );
+      }),
+  );
+}
+
+/**
+ * Coach per-athlete exercise swap, kept in its own function so registerAthleteLogTools stays
+ * under the oxlint max-lines-per-function cap.
+ */
+function registerAthleteSwapTool(server: McpServer, ctx: ToolContext): void {
+  server.registerTool(
+    "swap_athlete_exercise",
+    {
+      title: "Swap one exercise in a roster athlete's prescribed workout",
+      description:
+        "Coach-facing write: replace one exercise in a roster athlete's scheduled workout with a " +
+        "different one, for that athlete only — the API equivalent of the app's per-athlete " +
+        '"swap exercise". The team/program prescription is left untouched, so other athletes on ' +
+        "the same program keep the original exercise. Give savedWorkoutSetExerciseId (the " +
+        "athlete's own slot, from athlete_saved_workouts with raw:true) and exerciseId (the " +
+        "replacement, from exercise_resolve / exercise_search). Seeded demo athletes are " +
+        "read-only and will fail; use a real (invited) athlete. Requires confirmation " +
+        "(elicitation or confirm:true).",
+      inputSchema: { ...swapAthleteExerciseArgsSchema.shape, confirm: z.boolean().optional() },
+      annotations: DESTRUCTIVE,
+    },
+    ({ savedWorkoutSetExerciseId, exerciseId, confirm }, extra) =>
+      attempt(async () => {
+        const sweId = toId(savedWorkoutSetExerciseId);
+        const exId = toId(exerciseId);
+        const ok = await confirmGate(
+          server,
+          extra.requestId,
+          `Swap the exercise in saved workout slot ${sweId} to exercise ${exId}? This changes what this athlete is prescribed (their copy only).`,
+          confirm,
+        );
+        if (!ok) return errorResult(NOT_CONFIRMED);
+        return jsonResult(
+          await swapAthleteExercise(ctx.client, {
+            savedWorkoutSetExerciseId: sweId,
+            exerciseId: exId,
           }),
         );
       }),

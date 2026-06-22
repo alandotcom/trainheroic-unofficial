@@ -11,6 +11,7 @@ import {
   exerciseCreateSchema,
   logSessionArgsSchema,
   logSetArgsSchema,
+  swapAthleteExerciseArgsSchema,
   workoutSpecSchema,
 } from "@trainheroic-unofficial/dto";
 import {
@@ -57,6 +58,7 @@ import {
   publishSession,
   selectWorkouts,
   summarizeAthleteWorkouts,
+  swapAthleteExercise,
   readLive,
   readSession,
   removeSession,
@@ -106,6 +108,10 @@ Coach — manage a roster (needs a coach account):
       already on the athlete's calendar that day. The API can't put an off-plan session on an
       athlete's calendar, so an unprescribed exercise fails (it names what IS prescribed).
       JSON is the exercises array: [{"exerciseId":N,"sets":[{"param1":reps,"param2":weight}, ...]}, ...]
+  coach swap-exercise --set-exercise <savedWorkoutSetExerciseId> --exercise <exerciseId> --yes
+      swap one exercise in the athlete's scheduled workout for a different one, that athlete only
+      (the team prescription stays put). Get --set-exercise from 'coach athlete-workouts ... --log-ids'
+      and --exercise from 'coach exercise resolve/search'.
 
   roster management:
   coach athlete-invite --team <id> --emails a@x,b@y [--message "..."] --yes
@@ -829,7 +835,7 @@ async function cmdInstallSkill(): Promise<void> {
 }
 
 const COACH_USAGE =
-  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|roster-activity|team-volume|athlete-training|athlete-lift-history|athlete-workouts|log-set|log-session|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|analytics-query|exercise|workout|message>";
+  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|roster-activity|team-volume|athlete-training|athlete-lift-history|athlete-workouts|log-set|log-session|swap-exercise|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|analytics-query|exercise|workout|message>";
 
 const COACH_LOG_SET_USAGE =
   "coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson> --yes";
@@ -912,6 +918,38 @@ async function cmdCoachLogSession(client: TrainHeroicClient, a: string[]): Promi
       exercises: toSessionExercises(args.exercises),
     }),
   );
+}
+
+const COACH_SWAP_EXERCISE_USAGE =
+  "coach swap-exercise --set-exercise <savedWorkoutSetExerciseId> --exercise <exerciseId> --yes";
+
+// Per-athlete exercise swap: replace one exercise in a roster athlete's scheduled workout with
+// a different one, for that athlete only (the team prescription is untouched). The slot id comes
+// from `coach athlete-workouts --log-ids`; demo/seeded athletes are read-only and 401.
+async function cmdCoachSwapExercise(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values } = parse(a, {
+    "set-exercise": { type: "string" },
+    exercise: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const savedWorkoutSetExerciseId = toInt(
+    need(values["set-exercise"] as string | undefined, COACH_SWAP_EXERCISE_USAGE),
+    "--set-exercise",
+  );
+  const exerciseId = toInt(
+    need(values.exercise as string | undefined, COACH_SWAP_EXERCISE_USAGE),
+    "--exercise",
+  );
+  validate(
+    swapAthleteExerciseArgsSchema,
+    { savedWorkoutSetExerciseId, exerciseId },
+    "coach swap-exercise args",
+  );
+  if (values.yes !== true)
+    fail(
+      `swapping slot ${savedWorkoutSetExerciseId} changes what the athlete is prescribed; add --yes.`,
+    );
+  return out(await swapAthleteExercise(client, { savedWorkoutSetExerciseId, exerciseId }));
 }
 
 // Team-wide training volume scoped to a date window: pass --team (roster resolved) or --athletes.
@@ -1244,6 +1282,8 @@ async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void
       return cmdCoachLogSet(client, a);
     case "log-session":
       return cmdCoachLogSession(client, a);
+    case "swap-exercise":
+      return cmdCoachSwapExercise(client, a);
     case "athlete-invite":
       return cmdCoachAthleteInvite(client, a);
     case "athlete-archive":

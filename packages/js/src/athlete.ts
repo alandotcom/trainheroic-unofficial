@@ -857,6 +857,68 @@ export async function logForAthlete(
   );
 }
 
+/** Outcome of a per-athlete exercise swap: the slot that changed and what it changed to/from. */
+export type SwapExerciseResult = {
+  savedWorkoutSetExerciseId: number;
+  /** The athlete who owns the slot (`user_id` off the updated row), when the API returns it. */
+  athleteId: number | null;
+  /** The exercise now scheduled in the slot. */
+  newExerciseId: number;
+  newExerciseTitle: string | null;
+  /** The team/program's original prescription, left untouched (`workout_set_exercise.exercise_id`). */
+  originalTeamExerciseId: number | null;
+};
+
+/**
+ * Swap the exercise prescribed in one of an athlete's saved-workout slots for a different
+ * exercise — the API equivalent of the app's per-athlete "swap exercise":
+ * `PUT /v5/savedWorkoutSetExercises/{savedWorkoutSetExerciseId}?exerciseId={exerciseId}` with an
+ * empty body. The new exercise rides in the query string, not the body.
+ *
+ * This overrides only this athlete's copy of the slot; the underlying team/program prescription
+ * (`workout_set_exercise.exercise_id`) is untouched, so other athletes on the same program keep
+ * the original exercise. A coach's session token may write another user's row because the row
+ * already carries its owner's `user_id`.
+ *
+ * `savedWorkoutSetExerciseId` is the same id {@link logForAthlete}/{@link logAthleteSet} use,
+ * read off the athlete's saved workouts (the raw view). `exerciseId` is any exercise id the org
+ * can use (resolve one via the exercise index).
+ *
+ * NOTE: as with logging, TrainHeroic's seeded *demo* athletes are read-only and return 401/403;
+ * real (invited) athletes accept the swap.
+ */
+export async function swapAthleteExercise(
+  client: TrainHeroicClient,
+  args: { savedWorkoutSetExerciseId: number; exerciseId: number },
+): Promise<SwapExerciseResult> {
+  const res = await client.request<unknown>(
+    "PUT",
+    `/v5/savedWorkoutSetExercises/${args.savedWorkoutSetExerciseId}?exerciseId=${args.exerciseId}`,
+  );
+  if (!res.ok) {
+    const readOnly =
+      res.status === 401 || res.status === 403
+        ? ` Athlete may be read-only for changes — TrainHeroic's seeded demo/sample athletes ` +
+          `return ${res.status} here; swaps only persist for real (invited) athletes.`
+        : "";
+    throw new Error(
+      `Swap failed (HTTP ${res.status}) for savedWorkoutSetExercise ${args.savedWorkoutSetExerciseId}.${readOnly}`,
+    );
+  }
+  const row = isRecord(res.data) ? res.data : {};
+  const template = isRecord(row.workout_set_exercise) ? row.workout_set_exercise : {};
+  const exercise = isRecord(row.exercise) ? row.exercise : {};
+  return {
+    savedWorkoutSetExerciseId: args.savedWorkoutSetExerciseId,
+    athleteId: coerceInt(row.user_id),
+    // A 2xx always echoes the swapped row; fall back to the requested id only for resilience to
+    // a malformed success, not because the field is genuinely optional.
+    newExerciseId: coerceInt(row.exercise_id) ?? args.exerciseId,
+    newExerciseTitle: str(exercise.title),
+    originalTeamExerciseId: coerceInt(template.exercise_id),
+  };
+}
+
 /** Which API surface a set-log write targets: the athlete's own, or a coach acting on a roster athlete. */
 type LogTarget = { role: "athlete" } | { role: "coach"; athleteId: number };
 
