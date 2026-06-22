@@ -138,7 +138,6 @@ OAuth's `localhost` redirect can't reach a remote box. Options:
 
 - **Local server** — use the stdio example above with credentials in the environment.
 - **Web IDE** (Codespaces, VS Code Remote) — `localhost` is auto-forwarded; `mcp-remote` works as-is.
-- **SSH** — `ssh -L 3334:localhost:3334 user@host`, then sign in.
 - **Token** — `--header "Authorization: Bearer …"`.
 
 </details>
