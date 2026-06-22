@@ -33,7 +33,10 @@
       "binding": "TH_DB",
       "database_name": "trainheroic",
       "database_id": "7fb17862-31b9-4013-b601-18bff355038b",
-      "migrations_dir": "migrations"
+      // Single source of truth for the warehouse schema, shared with the local node:sqlite
+      // adapter (@trainheroic-unofficial/db). wrangler applies these to D1; the local runner
+      // (db/sqlite applyMigrations) applies the same files to a local SQLite db.
+      "migrations_dir": "../db/migrations"
     }
   ],
   "ratelimits": [

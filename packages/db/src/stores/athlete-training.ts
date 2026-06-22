@@ -7,9 +7,9 @@ import {
   fetchExerciseHistoryList,
   fetchWorkingMaxes,
 } from "@trainheroic-unofficial/js";
-import { AthleteScopedStore } from "./base";
-import { type BatchStmt, mapPool, runBatches, runGroups } from "./d1";
-import { athleteExercise, athleteExerciseSession, athletePr, athleteWorkingMax } from "./schema";
+import { AthleteScopedStore } from "../base";
+import { type BatchStmt, mapPool } from "../runner";
+import { athleteExercise, athleteExerciseSession, athletePr, athleteWorkingMax } from "../schema";
 
 // Bound the per-exercise history fan-out so a sync doesn't burst the host or blow the Worker
 // subrequest budget. History is drained in batches (sessions_synced_at watermark per exercise).
@@ -69,7 +69,7 @@ export class AthleteTrainingStore extends AthleteScopedStore {
           }),
       );
     }
-    await runBatches(this.db, stmts);
+    await this.runBatches(stmts);
     return stmts.length;
   }
 
@@ -107,7 +107,7 @@ export class AthleteTrainingStore extends AthleteScopedStore {
           }),
       );
     }
-    await runBatches(this.db, stmts);
+    await this.runBatches(stmts);
     return stmts.length;
   }
 
@@ -180,7 +180,7 @@ export class AthleteTrainingStore extends AthleteScopedStore {
         .set({ sessionsSyncedAt: Date.now() })
         .where(and(eq(athleteExercise.userId, user), eq(athleteExercise.id, exerciseId))),
     );
-    await runGroups(this.db, [group]);
+    await this.runGroups([group]);
     return { exerciseId, sessions, prs };
   }
 

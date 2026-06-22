@@ -1,9 +1,9 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import schema1 from "../migrations/0001_init.sql?raw";
-import schema2 from "../migrations/0002_warehouse.sql?raw";
-import { MessagingStore } from "../src/store/messaging";
-import { ProgrammingStore } from "../src/store/programming";
+import schema1 from "../../db/migrations/0001_init.sql?raw";
+import schema2 from "../../db/migrations/0002_warehouse.sql?raw";
+import { MessagingStore, ProgrammingStore } from "@trainheroic-unofficial/db";
+import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
 
 function json(obj: unknown, status = 200): Response {
@@ -95,7 +95,7 @@ describe("ProgrammingStore", () => {
   });
 
   it("syncs a calendar into sessions, blocks, and sets", async () => {
-    const store = new ProgrammingStore(env.TH_DB, client(), 7);
+    const store = new ProgrammingStore(makeD1Warehouse(env.TH_DB), client(), 7);
     const result = await store.syncCalendar(111, "Prog A");
     expect(result).toMatchObject({ sessions: 1, blocks: 1, prescribed_sets: 2 });
 
@@ -109,7 +109,7 @@ describe("ProgrammingStore", () => {
   });
 
   it("is idempotent: re-sync rebuilds sets without duplicating", async () => {
-    const store = new ProgrammingStore(env.TH_DB, client(), 7);
+    const store = new ProgrammingStore(makeD1Warehouse(env.TH_DB), client(), 7);
     await store.syncCalendar(111, "Prog A");
     await store.syncCalendar(111, "Prog A");
     const detail = (await store.getSession(9001)) as { blocks: Array<{ sets: unknown[] }> };
@@ -146,7 +146,7 @@ describe("ProgrammingStore", () => {
         return json({});
       }),
     );
-    const store = new ProgrammingStore(env.TH_DB, client(), 7);
+    const store = new ProgrammingStore(makeD1Warehouse(env.TH_DB), client(), 7);
     const result = await store.syncCalendar(111, "Prog A");
     expect(result.sessions).toBe(2);
     expect((await store.getProgramSessions(111)).length).toBe(2);
@@ -190,7 +190,7 @@ describe("MessagingStore", () => {
 
   it("syncs streams and flattens replies, then reads history", async () => {
     stubMessaging();
-    const store = new MessagingStore(env.TH_DB, client(), 7);
+    const store = new MessagingStore(makeD1Warehouse(env.TH_DB), client(), 7);
     const results = await store.syncAll();
     expect(results).toHaveLength(2);
     expect(results.reduce((a, r) => a + r.new, 0)).toBe(2);
@@ -202,7 +202,7 @@ describe("MessagingStore", () => {
 
   it("is incremental: a second sync past the cursor adds nothing", async () => {
     stubMessaging();
-    const store = new MessagingStore(env.TH_DB, client(), 7);
+    const store = new MessagingStore(makeD1Warehouse(env.TH_DB), client(), 7);
     await store.syncAll();
     const again = await store.syncStream({ id: 700, title: "Team", teamId: 10 }, "team", false);
     expect(again.new).toBe(0);
@@ -211,7 +211,7 @@ describe("MessagingStore", () => {
 
   it("full=true re-reads from the beginning past an existing cursor", async () => {
     stubMessaging();
-    const store = new MessagingStore(env.TH_DB, client(), 7);
+    const store = new MessagingStore(makeD1Warehouse(env.TH_DB), client(), 7);
     // First sync establishes a cursor for stream 700.
     await store.syncAll();
     const again = await store.syncStream({ id: 700, title: "Team", teamId: 10 }, "team", true);

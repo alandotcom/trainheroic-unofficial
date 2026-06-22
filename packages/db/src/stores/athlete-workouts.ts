@@ -1,9 +1,9 @@
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { coerceInt, fetchAthleteWorkouts, presentAthleteWorkout } from "@trainheroic-unofficial/js";
 import type { ProgramWorkout } from "@trainheroic-unofficial/js";
-import { AthleteScopedStore } from "./base";
-import { type BatchStmt, athleteCursorUpsertStmt, runGroups } from "./d1";
-import { athleteWorkout, athleteWorkoutExercise } from "./schema";
+import { AthleteScopedStore } from "../base";
+import { type BatchStmt, athleteCursorUpsertStmt } from "../runner";
+import { athleteWorkout, athleteWorkoutExercise } from "../schema";
 
 export type WorkoutSyncResult = {
   workouts: number;
@@ -91,7 +91,7 @@ export class AthleteWorkoutStore extends AthleteScopedStore {
     groups.push([
       athleteCursorUpsertStmt(this.db, user, "workouts", 0, `${startDate}..${endDate}`),
     ]);
-    await runGroups(this.db, groups);
+    await this.runGroups(groups);
     return { workouts: workouts.length, exercises, from: startDate, to: endDate };
   }
 

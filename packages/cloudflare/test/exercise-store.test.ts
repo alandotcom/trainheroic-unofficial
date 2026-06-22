@@ -1,7 +1,8 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import schemaSql from "../migrations/0001_init.sql?raw";
-import { ExerciseStore } from "../src/store/exercises";
+import schemaSql from "../../db/migrations/0001_init.sql?raw";
+import { ExerciseStore } from "@trainheroic-unofficial/db";
+import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
 
 function json(obj: unknown, status = 200): Response {
@@ -25,7 +26,7 @@ function mockApi(library: unknown): void {
 }
 
 function newStore(org = 7): ExerciseStore {
-  return new ExerciseStore(env.TH_DB, new TrainHeroicClient("a@b.com", "pw"), org);
+  return new ExerciseStore(makeD1Warehouse(env.TH_DB), new TrainHeroicClient("a@b.com", "pw"), org);
 }
 
 async function applySchema(): Promise<void> {

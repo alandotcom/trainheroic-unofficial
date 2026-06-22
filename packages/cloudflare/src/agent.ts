@@ -2,8 +2,8 @@ import * as Sentry from "@sentry/cloudflare";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { McpAgent } from "agents/mcp";
 import type { Connection } from "agents";
-import { ExerciseStore } from "./store/exercises";
-import { resolveOrgId } from "./store/d1";
+import { ExerciseStore, resolveOrgId } from "@trainheroic-unofficial/db";
+import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { resolveAthleteUserId } from "@trainheroic-unofficial/js";
 import type { Props } from "./types";
@@ -13,6 +13,7 @@ import { registerAnalyticsTools } from "@trainheroic-unofficial/core";
 import { registerAthleteTools } from "@trainheroic-unofficial/core";
 import { registerAthleteTrainingTools } from "@trainheroic-unofficial/core";
 import { registerExerciseTools } from "@trainheroic-unofficial/core";
+import { registerMainLiftTools } from "@trainheroic-unofficial/core";
 import { registerMessagingTools } from "@trainheroic-unofficial/core";
 import { registerReadTools } from "@trainheroic-unofficial/core";
 import { SERVER_INSTRUCTIONS } from "@trainheroic-unofficial/core";
@@ -41,8 +42,9 @@ async function registerAthleteSurface(
   } catch {
     /* leave null; the warehouse stores resolve it lazily */
   }
+  const warehouse = makeD1Warehouse(env.TH_DB, { instrument: Sentry.instrumentD1WithSentry });
   registerAthleteTrainingTools(server, { client });
-  registerAthleteSyncTools(server, env.TH_DB, client, userId);
+  registerAthleteSyncTools(server, warehouse, client, userId);
 }
 
 /** The coaching surface: roster/teams/programs/exercises/messaging plus the coach warehouse. */
@@ -57,8 +59,10 @@ async function registerCoachSurface(
   } catch {
     /* leave null; stores resolve lazily and throw if still unresolvable */
   }
-  const ctx: ToolContext = { client, index: new ExerciseStore(env.TH_DB, client, orgId) };
+  const warehouse = makeD1Warehouse(env.TH_DB, { instrument: Sentry.instrumentD1WithSentry });
+  const ctx: ToolContext = { client, index: new ExerciseStore(warehouse, client, orgId) };
   registerReadTools(server, ctx);
+  registerMainLiftTools(server, ctx);
   registerAthleteTools(server, ctx);
   registerTeamTools(server, ctx);
   registerAnalyticsTools(server, ctx);
@@ -66,7 +70,7 @@ async function registerCoachSurface(
   registerWorkoutTools(server, ctx);
   registerMessagingTools(server, ctx);
   // Warehouse syncs persist to D1 (hosted only).
-  registerSyncTools(server, env.TH_DB, client, orgId);
+  registerSyncTools(server, warehouse, client, orgId);
 }
 
 /** Which tool surfaces a server variant exposes. See the three concrete classes below. */

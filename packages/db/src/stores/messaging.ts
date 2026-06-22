@@ -1,8 +1,8 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { fetchStreams } from "@trainheroic-unofficial/js";
-import { OrgScopedStore } from "./base";
-import { type BatchStmt, cursorUpsertStmt, runBatches } from "./d1";
-import { messageComment, messageStream, syncState } from "./schema";
+import { OrgScopedStore } from "../base";
+import { type BatchStmt, cursorUpsertStmt } from "../runner";
+import { messageComment, messageStream, syncState } from "../schema";
 import { coerceInt, isRecord } from "@trainheroic-unofficial/js";
 
 export type StreamSyncResult = {
@@ -123,7 +123,7 @@ export class MessagingStore extends OrgScopedStore {
       `/v5/messaging/streams/${sid}/comments?lastCommentId=${encodeURIComponent(cursor)}`,
     );
     if (!res.ok || !Array.isArray(res.data)) {
-      await runBatches(this.db, stmts);
+      await this.runBatches(stmts);
       const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data ?? "");
       return {
         stream: sid,
@@ -149,7 +149,7 @@ export class MessagingStore extends OrgScopedStore {
     if (high > 0) {
       stmts.push(cursorUpsertStmt(this.db, org, "messaging", sid, { cursor: String(high) }));
     }
-    await runBatches(this.db, stmts);
+    await this.runBatches(stmts);
     return { stream: sid, title, kind, new: count };
   }
 

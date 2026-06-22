@@ -1436,6 +1436,7 @@ export function presentExerciseHistory(detail: ExerciseHistoryDetail): Presented
     description: p.description ?? null,
     reps: p.reps ?? null,
     weight: p.weight ?? null,
+    units: p.units ?? null,
     date: p.dateCompleted ?? null,
   }));
   const sessions = (detail.history ?? []).map((h) => ({

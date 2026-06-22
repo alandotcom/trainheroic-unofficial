@@ -6,7 +6,8 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { sql } from "drizzle-orm";
 import { loginTrainHeroic } from "@trainheroic-unofficial/js";
-import { account, makeDb } from "../store/schema";
+import { account } from "@trainheroic-unofficial/db";
+import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import type { Props } from "../types";
 import { randomToken, safeEqual, signPayload, verifyPayload } from "./crypto";
 import { renderLoginPage } from "./login-page";
@@ -179,8 +180,8 @@ app.post("/authorize", async (c) => {
   const now = Date.now();
   let isNewAccount = false;
   try {
-    const row = await makeDb(c.env.TH_DB)
-      .insert(account)
+    const row = await makeD1Warehouse(c.env.TH_DB, { instrument: Sentry.instrumentD1WithSentry })
+      .db.insert(account)
       .values({
         thUserId: session.thUserId,
         orgId: null,

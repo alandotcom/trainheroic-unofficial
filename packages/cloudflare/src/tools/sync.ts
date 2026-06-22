@@ -1,8 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { coerceInt } from "@trainheroic-unofficial/js";
-import { MessagingStore } from "../store/messaging";
-import { ProgrammingStore } from "../store/programming";
+import { MessagingStore, ProgrammingStore, type Warehouse } from "@trainheroic-unofficial/db";
 import type { TrainHeroicClient } from "@trainheroic-unofficial/js";
 import {
   attempt,
@@ -24,12 +23,12 @@ import {
  */
 export function registerSyncTools(
   server: McpServer,
-  db: D1Database,
+  warehouse: Warehouse,
   client: TrainHeroicClient,
   orgId: number | null = null,
 ): void {
-  const programming = new ProgrammingStore(db, client, orgId);
-  const messaging = new MessagingStore(db, client, orgId);
+  const programming = new ProgrammingStore(warehouse, client, orgId);
+  const messaging = new MessagingStore(warehouse, client, orgId);
 
   server.registerTool(
     "programming_sync",

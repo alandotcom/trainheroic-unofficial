@@ -416,6 +416,7 @@ export type PresentedExerciseHistory = {
     description: string | null;
     reps: number | null;
     weight: number | null;
+    units: string | null;
     date: string | null;
   }>;
   sessions: PresentedExerciseSession[];

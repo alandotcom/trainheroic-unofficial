@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveOrgId } from "../src/store/d1";
+import { resolveOrgId } from "@trainheroic-unofficial/db";
 
 type Request = Parameters<typeof resolveOrgId>[0];
 
