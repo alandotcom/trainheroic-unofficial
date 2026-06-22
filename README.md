@@ -134,32 +134,12 @@ For the athlete server, swap the package name to `@trainheroic-unofficial/athlet
 
 <br>
 
-OAuth redirects to `localhost`, which on a remote box is your machine, not the box. Pick one:
+OAuth's `localhost` redirect can't reach a remote box. Options:
 
-**1. Local server.** Use the Claude Code or stdio examples above with credentials in the environment.
-
-**2. Web IDE (Codespaces, VS Code Remote, code-server).** `localhost` is forwarded automatically, so [`mcp-remote`](https://github.com/geelen/mcp-remote) works as-is:
-
-```jsonc
-{
-  "mcpServers": {
-    "trainheroic": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.trainheroic-unofficial.com/mcp", "--transport", "http-only"]
-    }
-  }
-}
-```
-
-**3. Paste the redirect back.** Open the authorize URL in any browser, approve, copy the `localhost/callback?code=…` URL it lands on, paste it into the terminal. Needs a bridge with out-of-band support, e.g. Hermes' `--manual-paste`.
-
-**4. SSH.** Forward the callback port, then sign in from your browser:
-
-```bash
-ssh -L 3334:localhost:3334 user@remote-host
-```
-
-Already have a token? Pass `--header "Authorization: Bearer …"`.
+- **Local server** — use the stdio example above with credentials in the environment.
+- **Web IDE** (Codespaces, VS Code Remote) — `localhost` is auto-forwarded; `mcp-remote` works as-is.
+- **SSH** — `ssh -L 3334:localhost:3334 user@host`, then sign in.
+- **Token** — `--header "Authorization: Bearer …"`.
 
 </details>
 
