@@ -108,13 +108,30 @@ jobs:
           git push origin HEAD:main
           git push origin "v$version"
 
-      # Let GitHub auto-generate the release notes from the commits/PRs since the last tag.
+      # Build release notes from the commit log since the previous tag (this repo ships direct to
+      # main with no PRs, so GitHub's PR-based --generate-notes comes out empty). chore(release)
+      # bump commits are filtered out.
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          repo: ${{ github.repository }}
         run: |
           version="${{ steps.version.outputs.version }}"
-          gh release create "v$version" --title "v$version" --generate-notes --latest
+          tag="v$version"
+          prev="$(git tag --sort=-version:refname | grep -vFx "$tag" | head -n1 || true)"
+          if [ -n "$prev" ]; then range="$prev..$tag"; else range="$tag"; fi
+          {
+            echo "## What's changed"
+            echo
+            git log --no-merges --pretty='- %s' "$range" | grep -vE '^- chore\(release\):' || echo "- Initial release"
+            echo
+            if [ -n "$prev" ]; then
+              echo "**Full Changelog**: https://github.com/$repo/compare/$prev...$tag"
+            else
+              echo "**Full Changelog**: https://github.com/$repo/commits/$tag"
+            fi
+          } > /tmp/relnotes.md
+          gh release create "$tag" --title "$tag" --notes-file /tmp/relnotes.md --latest
 
   # Migrate + deploy the worker at the release tag, before publishing, so the hosted worker and
   # the published SDK/CLI match. deploy.yml authenticates with Cloudflare API-token secrets
