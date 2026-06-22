@@ -16,7 +16,7 @@
   "city": null,
   "state": null,
   "country": null,
-  "name_first": "Alan",
+  "name_first": "Test",
   "name_last": "Athlete",
   "use_metric": false,
   "username": "athlete@example.com",
@@ -26,7 +26,7 @@
   },
   "commitment_description": "",
   "track_athlete_onboarding": {
-    "id": 334999,
+    "id": 200002,
     "user_id": 100001,
     "mobile_app_onboarding_flow_started_at": "2021-06-24 18:41:15",
     "mobile_app_rating_given_at": null,
