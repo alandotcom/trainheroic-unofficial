@@ -19,9 +19,13 @@ publishing.
 Versioning and publishing happen in CI through two workflows:
 
 - **`.github/workflows/release.yml`** is **manually triggered** and is the only thing you run
-  to cut a release. It gates on `pnpm check`, applies the pending changesets
-  (`pnpm version-packages`), commits the bump to `main`, tags it `vX.Y.Z`, creates the GitHub
-  release from the core changelog, then dispatches `publish.yml` against that tag.
+  to cut a release. It runs three sequenced jobs: `release` (gate on `pnpm check`, apply the
+  pending changesets via `pnpm version-packages`, commit the bump to `main`, tag `vX.Y.Z`,
+  create the GitHub release), then `deploy` (calls `deploy.yml` against the tag), then `publish`
+  (dispatches `publish.yml` against the tag). Order is version → deploy worker → publish npm.
+- **`.github/workflows/deploy.yml`** migrates remote D1 and deploys the worker. It runs **only
+  as part of a release** (called by `release.yml` via `workflow_call`), not on every push to
+  `main`. It is also `workflow_dispatch`-runnable for an emergency redeploy of a given ref.
 - **`.github/workflows/publish.yml`** does the npm publish (`pnpm run release` = build +
   `changeset publish`). It is dispatched by `release.yml`; you do not push a tag by hand for a
   normal release. Auth is **npm OIDC trusted publishing** (no `NPM_TOKEN`): npm trusts this
@@ -51,9 +55,10 @@ every commit carries a changeset). They sit on `main` until you choose to releas
 1. **Trigger `release.yml`.** From the repo: `gh workflow run release.yml` (or the Actions tab,
    "Release" → "Run workflow", on `main`). No inputs.
 
-2. **Watch it.** `gh run watch` (or `gh run list --workflow=release.yml`). The job runs
+2. **Watch it.** `gh run watch` (or `gh run list --workflow=release.yml`). The run gates on
    `pnpm check`, versions the packages, commits `chore(release): version packages to <x.y.z>`,
-   pushes `main`, tags `v<x.y.z>`, creates the GitHub release, and dispatches `publish.yml`.
+   pushes `main`, tags `v<x.y.z>`, creates the GitHub release, then deploys the worker, then
+   dispatches `publish.yml`.
 
 3. **Watch the publish.** `gh run list --workflow=publish.yml` then `gh run watch <id>`. It
    builds and runs `changeset publish` (idempotent; skips versions already on the registry;
@@ -65,13 +70,14 @@ every commit carries a changeset). They sit on `main` until you choose to releas
 
 ## The worker deploy
 
-`deploy.yml` deploys the worker on every push to `main` after CI passes, so the hosted worker
-tracks `main` continuously from your feature commits. The release bump commit is pushed by the
-Actions bot using `GITHUB_TOKEN`, which by design does **not** trigger CI (and therefore not
-`deploy.yml`). That is fine: the bump commit only edits `package.json`/`CHANGELOG.md`, so the
-worker's running code already matches the release; only the version string lags. If you ever
-need the worker redeployed at the exact release SHA, re-run `deploy.yml` for that commit or push
-a trivial follow-up commit.
+The worker deploys **only as part of a release**, not on every push to `main`. The `deploy` job
+in `release.yml` calls `deploy.yml` against the release tag (after versioning, before the npm
+publish), so the hosted worker and the published packages move together. Between releases the
+worker keeps running the last released code, even as `main` advances. To redeploy the worker
+outside a release (e.g. a hotfix to the worker, or a re-deploy after a transient failure), run
+`deploy.yml` manually: `gh workflow run deploy.yml -f ref=<sha-or-tag>` (omit `ref` to deploy
+the dispatched ref). Pending D1 migrations likewise apply at release time, so a migration added
+in a feature commit goes live on the next release.
 
 ## One-time repo config
 
@@ -80,9 +86,10 @@ a trivial follow-up commit.
 - An npm trusted publisher per package, pointing at repo `alandotcom/trainheroic-unofficial`,
   workflow **`publish.yml`**. If publishing is ever moved to a different workflow file, every
   package's trusted publisher must be re-pointed in the npmjs.com UI or the publish 403s.
-- `release.yml` needs `actions: write` (to dispatch `publish.yml`) and `contents: write` (to
-  push the bump and tag); both are declared in the workflow. `main` must remain pushable by the
-  Actions bot (the branch is currently unprotected).
+- `release.yml` grants `contents: write` (push the bump and tag, cut the GitHub release) at the
+  workflow level and `actions: write` (dispatch `publish.yml`) on its `publish` job; both are
+  declared in the workflow. `main` must remain pushable by the Actions bot (the branch is
+  currently unprotected).
 
 ### Manual fallback (only if CI is unavailable)
 

@@ -1,15 +1,23 @@
 name: Deploy
 
-# Deploy the hosted Cloudflare Worker on every merge to main, but only after the CI
-# workflow has gone green for that commit. Triggering on CI completion (rather than the
-# raw push) keeps a failing build from shipping. Pull-request CI runs are ignored via the
-# branch filter and the event check below.
+# Deploy the hosted Cloudflare Worker. This runs only as part of a release: release.yml calls
+# it (workflow_call) against the release tag, after versioning, so the worker updates in lockstep
+# with the published packages instead of on every push to main. It is also runnable on its own
+# (workflow_dispatch) for an emergency redeploy of a specific commit or tag.
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to deploy (the release tag).'
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to deploy (commit SHA or tag). Defaults to the ref the run was dispatched on.'
+        type: string
+        required: false
 
 # Never run two deploys at once; let an in-progress deploy finish rather than cancelling it.
 concurrency:
@@ -21,14 +29,13 @@ permissions:
 
 jobs:
   deploy:
-    # Only when CI passed for an actual push to main (not a PR run that happened to be on main).
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
-          # Deploy exactly the commit CI validated, not whatever is newest on main.
-          ref: ${{ github.event.workflow_run.head_sha }}
+          # The release tag when called by release.yml, an explicit ref when dispatched manually,
+          # otherwise whatever ref the dispatch ran on.
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: pnpm/action-setup@v6
         with:

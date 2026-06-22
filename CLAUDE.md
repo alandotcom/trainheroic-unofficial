@@ -45,17 +45,18 @@ pnpm changeset            # author a changeset on a normal commit (fixed group â
 gh workflow run release.yml   # when ready to ship: versions, tags vX.Y.Z, dispatches publish.yml
 ```
 
-CI ownership (`.github/workflows/`): **`release.yml`** is manually triggered (`workflow_dispatch`);
-it gates on `pnpm check`, runs `pnpm version-packages`, commits + pushes the bump to `main`, tags
-`vX.Y.Z`, cuts the GitHub release, then dispatches `publish.yml`. **`publish.yml`** runs
-`changeset publish` (build + publish), authenticated by **npm OIDC trusted publishing** (no
+CI ownership (`.github/workflows/`): **`release.yml`** is manually triggered (`workflow_dispatch`)
+and runs three sequenced jobs â€” `release` (gate on `pnpm check`, `pnpm version-packages`, commit +
+push the bump to `main`, tag `vX.Y.Z`, cut the GitHub release), `deploy` (call `deploy.yml` against
+the tag), then `publish` (dispatch `publish.yml`). **`deploy.yml`** applies remote D1 migrations and
+deploys the Worker; it runs **only as part of a release** (via `workflow_call`), not on pushes to
+`main`, so the worker moves in lockstep with the published packages rather than tracking every
+feature commit. It is also `workflow_dispatch`-runnable for an emergency redeploy. **`publish.yml`**
+runs `changeset publish` (build + publish), authenticated by **npm OIDC trusted publishing** (no
 `NPM_TOKEN`, no interactive 2FA); the publish step stays in this file so the npm trusted-publisher
 binding (tied to the `publish.yml` path) holds. `changeset publish` only publishes versions not
 already on the registry, so re-runs are safe; the private `cloudflare` worker is excluded
-(`private: true`). **`deploy.yml`** applies remote D1 migrations and deploys the Worker after `CI`
-goes green on `main`, so the worker tracks `main` from feature commits; the release bump commit is
-pushed by the Actions bot (`GITHUB_TOKEN`), which does not re-trigger CI/deploy (the bump carries no
-worker code change). The six publishable packages are `dto`, `js`, `core`, `cli`, `coach-mcp`, and
+(`private: true`). The six publishable packages are `dto`, `js`, `core`, `cli`, `coach-mcp`, and
 `athlete-mcp`. The local sequence in the `release` skill is the manual fallback when CI is
 unavailable.
 
