@@ -19,8 +19,10 @@ Two orthogonal axes:
 
 The real test accounts are sparse. To reproduce failures that only show up at scale — a roster of
 hundreds, dozens of programs, an athlete on many programs at once, ambiguous program names — the
-harness serves **simulated** data from `src/datasets.ts` over a local HTTP server
-(`src/fake-backend.ts`). The spawned MCP server / CLI reaches it because the SDK client honors
+harness serves **simulated** data from `src/datasets.ts` over a local **Hono** app
+(`src/fake-backend.ts`, declarative route table + a notFound→501 handler that records routing gaps).
+Response shapes are typed builders in `src/shapes.ts`, reused by the datasets and the backend so a
+shape lives in one place. The spawned MCP server / CLI reaches the app because the SDK client honors
 `TH_COACH_BASE` / `TH_APIS_BASE` / `TH_AUTH_URL` env overrides (a process-crossing seam a
 `vi.stubGlobal` can't provide).
 

@@ -6,6 +6,13 @@
 
 import { historyCorpus } from "./history";
 import type { HistoryCorpus } from "./history";
+import {
+  calendarSession,
+  libraryExercise,
+  profileSummary,
+  programWorkout,
+  userSimple,
+} from "./shapes";
 
 export type AthleteRow = Record<string, unknown> & { id: number; groups: number[] };
 export type TeamRow = Record<string, unknown> & { id: number; group_program: number };
@@ -82,7 +89,7 @@ function defaultExerciseLibrary(): Array<Record<string, unknown>> {
     "Overhead Press",
     "Barbell Curl",
   ];
-  return names.map((title, e) => ({ id: 900000 + e, title, param_1_type: 1, param_2_type: 2 }));
+  return names.map((title, e) => libraryExercise(900000 + e, title));
 }
 
 const COACH_ID = 700000;
@@ -163,14 +170,12 @@ function makeProfileSummary(userId: number): Record<string, unknown> {
   const i = userId - ATHLETE_BASE;
   const sessions = i % 7 === 0 ? 0 : 10 + (i % 90);
   const day = 1 + (i % 27);
-  return {
-    user_id: userId,
-    sessions_count: sessions,
-    first_logged_date: sessions > 0 ? "2026-01-05" : "1970-01-01",
-    last_logged_date: sessions > 0 ? `2026-06-${pad(day, 2)}` : "1970-01-01",
-    reps_sum: sessions * 120,
-    volume_sum: sessions * 14500,
-  };
+  return profileSummary({
+    userId,
+    sessions,
+    firstDate: "2026-01-05",
+    lastDate: `2026-06-${pad(day, 2)}`,
+  });
 }
 
 /** One month of logged sessions for an athlete, in the calendar-summary shape the coach view reads. */
@@ -181,39 +186,27 @@ function makeCalendar(athleteId: number, year: number, month: number, title: str
   const count = 1 + (i % 3);
   const rows = [];
   for (let s = 0; s < count; s += 1) {
-    rows.push({
-      athleteName: `Athlete${pad(i)} Lastname${pad(i)}`,
-      workout_id: athleteId * 100 + s,
-      saved_workout_id: athleteId * 1000 + s,
-      workout_title: `${title} — Day ${s + 1}`,
-      logged: 1,
-      completed: 1,
-      rpe: 6 + (s % 3),
-      session_duration: 45 + s * 5,
-      notes: s === 0 ? "Felt strong today." : "",
-      sets: [
-        {
-          exercises: [
-            { exercise_id: 900001, title: "Back Squat", abr: "5 x 3 @ 225 lb", completed: 1 },
-            { exercise_id: 900002, title: "Bench Press", abr: "5 x 5 @ 185 lb", completed: 1 },
-          ],
-        },
-      ],
-    });
+    rows.push(
+      calendarSession({
+        athleteName: `Athlete${pad(i)} Lastname${pad(i)}`,
+        workoutId: athleteId * 100 + s,
+        savedWorkoutId: athleteId * 1000 + s,
+        workoutTitle: `${title} — Day ${s + 1}`,
+        rpe: 6 + (s % 3),
+        durationMin: 45 + s * 5,
+        notes: s === 0 ? "Felt strong today." : "",
+        exercises: [
+          { exerciseId: 900001, title: "Back Squat", abr: "5 x 3 @ 225 lb" },
+          { exerciseId: 900002, title: "Bench Press", abr: "5 x 5 @ 185 lb" },
+        ],
+      }),
+    );
   }
   return rows;
 }
 
 function baseUserSimple(): Record<string, unknown> {
-  return {
-    id: COACH_ID,
-    org_id: 4242,
-    name: "Coach Casey",
-    first_name: "Casey",
-    last_name: "Coach",
-    roles: ["coach"],
-    trial_days_remaining: 0,
-  };
+  return userSimple({ id: COACH_ID, roles: ["coach"], nameFirst: "Casey", nameLast: "Coach" });
 }
 
 type OrgOptions = {
@@ -414,42 +407,30 @@ export const HIGH_ENROLLMENT = {
 function makeCoachWorkout(t: number, date: string): unknown {
   const title = HE_PROGRAM_TITLES[t] ?? `Program ${t}`;
   const named = ["Back Squat", "Bench Press", "Deadlift", "Row", "Press", "Curl"];
-  const exercises = [];
   // Enough exercises that the RAW range across all programs exceeds the MCP result budget (so it
   // truncates, per #18) while the compact log-targets view stays well under it.
-  for (let e = 0; e < 24; e += 1) {
-    exercises.push({
-      id: HE_SAVED_EX_BASE + t * 100 + e,
-      exercise_id: 900000 + e,
-      exercise_title: named[e] ?? `Exercise ${e + 1}`,
-      param_1_type: "reps",
-      param_2_type: "lb",
-      instruction: `${title} — perform set ${e + 1} with controlled tempo through a full range of motion, resting as prescribed.`,
-      param_1_data_1: "5",
-      param_2_data_1: "185",
-      param_1_data_2: "5",
-      param_2_data_2: "195",
-      param_1_data_3: "5",
-      param_2_data_3: "205",
-    });
-  }
-  return {
+  const exercises = Array.from({ length: 24 }, (_unused, e) => ({
+    id: HE_SAVED_EX_BASE + t * 100 + e,
+    exerciseId: 900000 + e,
+    title: named[e] ?? `Exercise ${e + 1}`,
+    instruction: `${title} — perform set ${e + 1} with controlled tempo through a full range of motion, resting as prescribed.`,
+    sets: [
+      { reps: "5", weight: "185" },
+      { reps: "5", weight: "195" },
+      { reps: "5", weight: "205" },
+    ],
+  }));
+  return programWorkout({
     id: 149000000 + t,
     date,
-    workout_title: `${title} — Day 1`,
-    program_id: PROGRAM_BASE + t,
-    program_title: title,
-    team_id: TEAM_BASE + t,
-    team_title: title,
-    summarizedSavedWorkout: {
-      saved_workout: {
-        id: 148000000 + t,
-        workoutSets: [
-          { id: HE_SAVED_SET_BASE + t, title: "Main", order: 0, workoutSetExercises: exercises },
-        ],
-      },
-    },
-  };
+    workoutTitle: `${title} — Day 1`,
+    programId: PROGRAM_BASE + t,
+    programTitle: title,
+    teamId: TEAM_BASE + t,
+    savedWorkoutId: 148000000 + t,
+    savedWorkoutSetId: HE_SAVED_SET_BASE + t,
+    exercises,
+  });
 }
 
 /**
@@ -520,21 +501,21 @@ export function historyAthleteSelf(): { dataset: Dataset; info: HistoryAthleteIn
   const dataset: Dataset = {
     ...coachView,
     name: "historyAthleteSelf(2yr)",
-    userSimple: {
+    userSimple: userSimple({
       id: info.athleteId,
-      name_first: "Athlete001",
-      name_last: "Lastname001",
       roles: ["athlete"],
-      org_id: 4242,
-    },
-    getProfileSummary: () => ({
-      user_id: info.athleteId,
-      sessions_count: corpus.sessionCount,
-      first_logged_date: corpus.firstDate,
-      last_logged_date: corpus.lastDate,
-      reps_sum: corpus.sessionCount * 140,
-      volume_sum: corpus.sessionCount * 16000,
+      nameFirst: "Athlete001",
+      nameLast: "Lastname001",
     }),
+    getProfileSummary: () =>
+      profileSummary({
+        userId: info.athleteId,
+        sessions: corpus.sessionCount,
+        firstDate: corpus.firstDate,
+        lastDate: corpus.lastDate,
+        reps: corpus.sessionCount * 140,
+        volume: corpus.sessionCount * 16000,
+      }),
     athlete: {
       ...emptyAthleteEndpoints(),
       exercisesList: corpus.exerciseLibrary.map((e) => ({

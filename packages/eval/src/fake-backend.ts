@@ -1,12 +1,14 @@
-// A fake TrainHeroic HTTP backend. It runs in the harness process and answers the exact routes the
-// SDK calls, from an in-memory Dataset. The spawned MCP server reaches it over real TCP via the
-// client's base-URL overrides (a vi.stubGlobal can't cross a process boundary). Coach and apis
-// hosts collapse onto one server. Any unmatched route returns 501 and is recorded, so a missing or
-// misrouted call fails loudly instead of silently degrading into empty data.
+// A fake TrainHeroic HTTP backend, as a Hono app. It runs in the harness process and answers the
+// exact routes the SDK calls, from an in-memory Dataset; the spawned MCP server / CLI reaches it
+// over real TCP via the client's base-URL overrides (a vi.stubGlobal can't cross a process
+// boundary). Coach and apis hosts collapse onto one server. Middleware records every request, and
+// the notFound handler returns 501 + records the path, so a missing/misrouted call fails loudly
+// instead of silently degrading. Response shapes come from src/shapes.ts (datasets supply the data).
 
-import { createServer } from "node:http";
-import type { IncomingMessage, Server, ServerResponse } from "node:http";
+import { serve } from "@hono/node-server";
+import { Hono } from "hono";
 import type { Dataset } from "./datasets";
+import { authResponse, headCoach, notificationCounts } from "./shapes";
 
 export type BackendHandle = {
   url: string;
@@ -18,271 +20,127 @@ export type BackendHandle = {
   close: () => Promise<void>;
 };
 
-const SESSION_ID = "s".repeat(48);
-
-type Resolved = { status: number; body: unknown };
-
-function num(v: string | null): number | null {
-  if (v === null) return null;
-  const n = Number(v);
+function intParam(value: string | undefined): number | null {
+  if (value === undefined) return null;
+  const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
 
-function route(
-  dataset: Dataset,
-  method: string,
-  pathname: string,
-  search: URLSearchParams,
-  body: unknown,
-): Resolved | null {
-  if (method === "POST" && pathname === "/auth") {
-    return {
-      status: 200,
-      body: { id: 700000, session_id: SESSION_ID, scope: "coach", role: "coach" },
-    };
-  }
-  if (method === "GET") {
-    const seg = pathname.split("/").filter((s) => s.length > 0);
-    return routeGet(dataset, pathname, search, seg);
-  }
-  if (method === "POST") return routePost(dataset, pathname, body);
-  return null;
-}
+function buildApp(dataset: Dataset, requests: string[], unmatched: string[]): Hono {
+  const app = new Hono();
 
-function routeGet(
-  dataset: Dataset,
-  pathname: string,
-  search: URLSearchParams,
-  seg: string[],
-): Resolved | null {
-  if (pathname === "/user/simple") return { status: 200, body: dataset.userSimple };
-  if (pathname === "/v5/headCoach") {
-    return { status: 200, body: { id: 700000, org_id: 4242, license: "active", trial: false } };
-  }
-  if (pathname === "/1.0/coach/programs") return { status: 200, body: dataset.programs };
-  if (pathname === "/v5/notifications/counts") {
-    return { status: 200, body: { countMessagingNotViewed: 0, countNotificationsNotViewed: 0 } };
-  }
-  if (pathname === "/v5/analytics") return { status: 200, body: [] };
-  if (pathname === "/v5/exerciseLibrary/all") return { status: 200, body: dataset.exerciseLibrary };
-  if (pathname === "/v5/athletes") return { status: 200, body: dataset.athletes };
+  app.use("*", async (c, next) => {
+    requests.push(`${c.req.method} ${new URL(c.req.url).pathname}`);
+    await next();
+  });
 
-  if (pathname === "/1.0/coach/teams") {
-    const q = search.get("q");
-    const page = num(search.get("page"));
-    const pageSize = num(search.get("pageSize"));
+  // --- auth + coach roster reads ---
+  app.post("/auth", (c) => c.json(authResponse()));
+  app.get("/user/simple", (c) => c.json(dataset.userSimple));
+  app.get("/v5/headCoach", (c) => c.json(headCoach()));
+  app.get("/1.0/coach/programs", (c) => c.json(dataset.programs));
+  app.get("/v5/notifications/counts", (c) => c.json(notificationCounts()));
+  app.get("/v5/analytics", (c) => c.json([]));
+  app.get("/v5/exerciseLibrary/all", (c) => c.json(dataset.exerciseLibrary));
+  app.get("/v5/athletes", (c) => c.json(dataset.athletes));
+
+  app.get("/1.0/coach/teams", (c) => {
+    const q = c.req.query("q");
+    const page = intParam(c.req.query("page"));
+    const pageSize = intParam(c.req.query("pageSize"));
     let teams = dataset.teams;
     if (q && q.length > 0) {
       const needle = q.toLowerCase();
       teams = teams.filter((t) => JSON.stringify(t).toLowerCase().includes(needle));
     }
     if (page !== null && pageSize !== null && pageSize > 0) {
-      const start = (page - 1) * pageSize;
-      teams = teams.slice(start, start + pageSize);
+      teams = teams.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
     }
-    return { status: 200, body: teams };
-  }
+    return c.json(teams);
+  });
 
-  // /v5/teams/:id and /v5/teams/:id/teamCodes
-  if (seg[0] === "v5" && seg[1] === "teams" && seg[2] !== undefined) {
-    const teamId = num(seg[2]);
-    if (teamId === null) return { status: 400, body: { error: "bad team id" } };
-    if (seg[3] === "teamCodes") return { status: 200, body: [] };
-    if (seg[3] === undefined) return { status: 200, body: dataset.getTeam(teamId) ?? {} };
-  }
-
-  // /3.0/coach/program/:id
-  if (seg[0] === "3.0" && seg[1] === "coach" && seg[2] === "program" && seg[3] !== undefined) {
-    const programId = num(seg[3]);
-    if (programId === null) return { status: 400, body: { error: "bad program id" } };
-    const program = dataset.getProgram(programId);
-    return program === null
-      ? { status: 404, body: { error: `no program ${programId}` } }
-      : { status: 200, body: program };
-  }
-
-  // /v5/exercises/:id/history?userId= (coach athlete_lift_history)
-  if (seg[0] === "v5" && seg[1] === "exercises" && seg[3] === "history") {
-    const exerciseId = num(seg[2] ?? null);
-    const athleteId = num(search.get("userId"));
-    if (exerciseId === null) return { status: 400, body: { error: "bad exercise id" } };
-    return { status: 200, body: dataset.getExerciseHistory(exerciseId, athleteId ?? 0) };
-  }
-
-  // /2.0/coach/athlete/calendar/summary/:athleteId/:year/:month/:n
-  if (
-    seg[0] === "2.0" &&
-    seg[1] === "coach" &&
-    seg[2] === "athlete" &&
-    seg[3] === "calendar" &&
-    seg[4] === "summary"
-  ) {
-    const athleteId = num(seg[5] ?? null);
-    const year = num(seg[6] ?? null);
-    const month = num(seg[7] ?? null);
-    if (athleteId === null || year === null || month === null) {
-      return { status: 400, body: { error: "bad calendar args" } };
-    }
-    return { status: 200, body: dataset.getCalendarSummary(athleteId, year, month) };
-  }
-
-  // /v5/athleteProfile/summary?user_id=
-  if (pathname === "/v5/athleteProfile/summary") {
-    const userId = num(search.get("user_id"));
-    if (userId === null) return { status: 400, body: { error: "missing user_id" } };
+  // --- coach entity reads ---
+  app.get("/v5/teams/:id", (c) => c.json(dataset.getTeam(Number(c.req.param("id"))) ?? {}));
+  app.get("/v5/teams/:id/teamCodes", (c) => c.json([]));
+  app.get("/3.0/coach/program/:id", (c) => {
+    const program = dataset.getProgram(Number(c.req.param("id")));
+    return program === null ? c.json({ error: "no program" }, 404) : c.json(program);
+  });
+  app.get("/v5/exercises/:id/history", (c) => {
+    const exerciseId = Number(c.req.param("id"));
+    const athleteId = intParam(c.req.query("userId")) ?? 0;
+    return c.json(dataset.getExerciseHistory(exerciseId, athleteId));
+  });
+  app.get("/2.0/coach/athlete/calendar/summary/:athleteId/:year/:month/:n", (c) => {
+    const athleteId = Number(c.req.param("athleteId"));
+    const year = Number(c.req.param("year"));
+    const month = Number(c.req.param("month"));
+    return c.json(dataset.getCalendarSummary(athleteId, year, month));
+  });
+  app.get("/v5/athleteProfile/summary", (c) => {
+    const userId = intParam(c.req.query("user_id"));
+    if (userId === null) return c.json({ error: "missing user_id" }, 400);
     const summary = dataset.getProfileSummary(userId);
-    return summary === null
-      ? { status: 404, body: { error: `no athlete ${userId}` } }
-      : { status: 200, body: summary };
-  }
-
-  const athleteRoute = routeAthleteGet(dataset, pathname, search, seg);
-  if (athleteRoute !== null) return athleteRoute;
-
-  // /v5/users/:id
-  if (seg[0] === "v5" && seg[1] === "users" && seg[2] !== undefined) {
-    const userId = num(seg[2]);
-    return { status: 200, body: { id: userId } };
-  }
-
-  // /3.0/coach/athlete/programworkout/range/:athleteId
-  if (
-    seg[0] === "3.0" &&
-    seg[1] === "coach" &&
-    seg[2] === "athlete" &&
-    seg[3] === "programworkout" &&
-    seg[4] === "range" &&
-    seg[5] !== undefined
-  ) {
-    const athleteId = num(seg[5]);
-    if (athleteId === null) return { status: 400, body: { error: "bad athlete id" } };
-    return {
-      status: 200,
-      body: dataset.getCoachAthleteRange(
+    return summary === null ? c.json({ error: `no athlete ${userId}` }, 404) : c.json(summary);
+  });
+  app.get("/3.0/coach/athlete/programworkout/range/:athleteId", (c) => {
+    const athleteId = Number(c.req.param("athleteId"));
+    return c.json(
+      dataset.getCoachAthleteRange(
         athleteId,
-        search.get("startDate") ?? "",
-        search.get("endDate") ?? "",
+        c.req.query("startDate") ?? "",
+        c.req.query("endDate") ?? "",
       ),
-    };
-  }
-  return null;
-}
-
-/** Athlete-surface reads (the logged-in athlete's own training). Split out to keep routeGet small. */
-function routeAthleteGet(
-  dataset: Dataset,
-  pathname: string,
-  search: URLSearchParams,
-  seg: string[],
-): Resolved | null {
-  if (pathname === "/v5/users/exercises/history") {
-    return { status: 200, body: dataset.athlete.exercisesList };
-  }
-  if (pathname === "/3.0/athlete/programworkout/range") {
-    return {
-      status: 200,
-      body: dataset.athlete.range(search.get("startDate") ?? "", search.get("endDate") ?? ""),
-    };
-  }
-  if (pathname === "/2.0/athlete/workingMax") {
-    return { status: 200, body: dataset.athlete.workingMaxes };
-  }
-  if (pathname === "/1.0/athlete/prefs") return { status: 200, body: dataset.athlete.prefs };
-  if (seg[0] === "v5" && seg[1] === "exercises" && seg[3] === "personalRecords") {
-    const exerciseId = num(seg[2] ?? null);
-    if (exerciseId === null) return { status: 400, body: { error: "bad exercise id" } };
-    return { status: 200, body: dataset.athlete.getPersonalRecords(exerciseId) };
-  }
-  if (seg[0] === "v5" && seg[1] === "exercises" && seg[3] === "stats") {
-    const exerciseId = num(seg[2] ?? null);
-    if (exerciseId === null) return { status: 400, body: { error: "bad exercise id" } };
-    return { status: 200, body: dataset.athlete.getExerciseStats(exerciseId) };
-  }
-  if (
-    seg[0] === "3.0" &&
-    seg[1] === "athlete" &&
-    seg[2] === "leaderboard" &&
-    seg[3] !== undefined
-  ) {
-    return { status: 200, body: { entries: [] } };
-  }
-  return null;
-}
-
-function routePost(dataset: Dataset, pathname: string, body: unknown): Resolved | null {
-  if (pathname === "/v5/analytics/training-summary/users") {
-    const rec = (body ?? {}) as Record<string, unknown>;
-    const userIds = Array.isArray(rec.user_ids) ? rec.user_ids.map((u) => Number(u)) : [];
-    const dateStart = typeof rec.dateStart === "string" ? rec.dateStart : "";
-    const dateEnd = typeof rec.dateEnd === "string" ? rec.dateEnd : "";
-    return { status: 200, body: dataset.getTrainingSummary(userIds, dateStart, dateEnd) };
-  }
-  // Other analytics metrics (readiness, compliance, ...) return an empty report rather than 501,
-  // so an exploratory analytics_query doesn't error out the run.
-  if (pathname.startsWith("/v5/analytics/")) return { status: 200, body: { rows: [] } };
-  return null;
-}
-
-function readBody(req: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (c: Buffer) => chunks.push(c));
-    req.on("end", () => {
-      const raw = Buffer.concat(chunks).toString("utf8");
-      if (raw.length === 0) return resolve(null);
-      try {
-        resolve(JSON.parse(raw));
-      } catch {
-        resolve(raw);
-      }
-    });
-    req.on("error", () => resolve(null));
+    );
   });
-}
 
-function send(res: ServerResponse, status: number, body: unknown): void {
-  const text = typeof body === "string" ? body : JSON.stringify(body ?? null);
-  res.writeHead(status, { "content-type": "application/json" });
-  res.end(text);
-}
+  // --- athlete-surface reads (the logged-in athlete's own training) ---
+  app.get("/v5/users/exercises/history", (c) => c.json(dataset.athlete.exercisesList));
+  app.get("/3.0/athlete/programworkout/range", (c) =>
+    c.json(dataset.athlete.range(c.req.query("startDate") ?? "", c.req.query("endDate") ?? "")),
+  );
+  app.get("/2.0/athlete/workingMax", (c) => c.json(dataset.athlete.workingMaxes));
+  app.get("/1.0/athlete/prefs", (c) => c.json(dataset.athlete.prefs));
+  app.get("/v5/exercises/:id/personalRecords", (c) =>
+    c.json(dataset.athlete.getPersonalRecords(Number(c.req.param("id")))),
+  );
+  app.get("/v5/exercises/:id/stats", (c) =>
+    c.json(dataset.athlete.getExerciseStats(Number(c.req.param("id")))),
+  );
+  app.get("/3.0/athlete/leaderboard/:id", (c) => c.json({ entries: [] }));
+  app.get("/v5/users/:id", (c) => c.json({ id: Number(c.req.param("id")) }));
 
-function createServerFor(dataset: Dataset, requests: string[], unmatched: string[]): Server {
-  return createServer((req, res) => {
-    void (async () => {
-      const method = (req.method ?? "GET").toUpperCase();
-      const url = new URL(req.url ?? "/", "http://127.0.0.1");
-      requests.push(`${method} ${url.pathname}`);
-      const body = method === "POST" || method === "PUT" ? await readBody(req) : undefined;
-      const resolved = route(dataset, method, url.pathname, url.searchParams, body);
-      if (resolved === null) {
-        unmatched.push(`${method} ${url.pathname}`);
-        process.stderr.write(`[fake-backend] unmatched ${method} ${url.pathname}\n`);
-        return send(res, 501, { error: `unmatched route: ${method} ${url.pathname}` });
-      }
-      send(res, resolved.status, resolved.body);
-    })();
+  // --- analytics (POST reports) ---
+  app.post("/v5/analytics/training-summary/users", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const userIds = Array.isArray(body.user_ids) ? body.user_ids.map((u) => Number(u)) : [];
+    const dateStart = typeof body.dateStart === "string" ? body.dateStart : "";
+    const dateEnd = typeof body.dateEnd === "string" ? body.dateEnd : "";
+    return c.json(dataset.getTrainingSummary(userIds, dateStart, dateEnd));
   });
+  // Other analytics metrics return an empty report rather than 501.
+  app.post("/v5/analytics/*", (c) => c.json({ rows: [] }));
+
+  app.notFound((c) => {
+    const path = new URL(c.req.url).pathname;
+    unmatched.push(`${c.req.method} ${path}`);
+    process.stderr.write(`[fake-backend] unmatched ${c.req.method} ${path}\n`);
+    return c.json({ error: `unmatched route: ${c.req.method} ${path}` }, 501);
+  });
+
+  return app;
 }
 
 /** Boot the fake backend on an ephemeral port and return a handle the harness drives runs against. */
 export function startBackend(dataset: Dataset): Promise<BackendHandle> {
   const requests: string[] = [];
   const unmatched: string[] = [];
-  const server = createServerFor(dataset, requests, unmatched);
+  const app = buildApp(dataset, requests, unmatched);
   return new Promise((resolve, reject) => {
-    const onError = (err: Error): void => reject(err);
-    server.once("error", onError);
-    server.listen(0, "127.0.0.1", () => {
-      // Bound successfully — drop the error listener so it can't settle the promise again.
-      server.removeListener("error", onError);
-      const addr = server.address();
-      if (addr === null || typeof addr === "string") {
-        reject(new Error("fake backend failed to bind a port"));
-        return;
-      }
+    const server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 0 }, (info) => {
       resolve({
-        url: `http://127.0.0.1:${addr.port}`,
-        port: addr.port,
+        url: `http://127.0.0.1:${info.port}`,
+        port: info.port,
         requests,
         unmatched,
         close: () =>
@@ -294,5 +152,6 @@ export function startBackend(dataset: Dataset): Promise<BackendHandle> {
           }),
       });
     });
+    server.on?.("error", reject);
   });
 }

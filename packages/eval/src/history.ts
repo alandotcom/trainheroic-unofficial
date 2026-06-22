@@ -12,6 +12,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { calendarSession, historyEntry, libraryExercise, liftPR } from "./shapes";
 
 export type ExportExercise = {
   exercise: string;
@@ -111,27 +112,20 @@ function buildCalendarSummary(
   month: number,
 ): unknown[] {
   const workouts = c.byMonth.get(monthKey(year, month)) ?? [];
-  return workouts.map((w, i) => ({
-    athleteName,
-    workout_id: Number(`${year}${String(month).padStart(2, "0")}${String(i).padStart(2, "0")}`),
-    saved_workout_id: 148000000 + i,
-    workout_title: w.title ?? "Session",
-    logged: 1,
-    completed: 1,
-    rpe: 7,
-    session_duration: 55,
-    notes: w.workoutInstruction ?? "",
-    sets: [
-      {
-        exercises: (w.exercises ?? []).map((e) => ({
-          exercise_id: c.exerciseIdByName.get(e.exercise) ?? 0,
-          title: e.exercise,
-          abr: abr(e.prescribed),
-          completed: 1,
-        })),
-      },
-    ],
-  }));
+  return workouts.map((w, i) =>
+    calendarSession({
+      athleteName,
+      workoutId: Number(`${year}${String(month).padStart(2, "0")}${String(i).padStart(2, "0")}`),
+      savedWorkoutId: 148000000 + i,
+      workoutTitle: w.title ?? "Session",
+      notes: w.workoutInstruction ?? "",
+      exercises: (w.exercises ?? []).map((e) => ({
+        exerciseId: c.exerciseIdByName.get(e.exercise) ?? 0,
+        title: e.exercise,
+        abr: abr(e.prescribed),
+      })),
+    }),
+  );
 }
 
 function buildExerciseHistory(c: NonNullable<typeof cache>, exerciseId: number): unknown {
@@ -145,30 +139,22 @@ function buildExerciseHistory(c: NonNullable<typeof cache>, exerciseId: number):
   const history = dated.map((w, i) => {
     const ex = (w.exercises ?? []).find((e) => e.exercise === name);
     const reps = Number((ex?.prescribed ?? [])[0] ?? 5) || 5;
-    const weight = synthWeight(exerciseId, i);
-    return {
-      dateCompleted: w.date,
-      abr: `${reps} x ${weight} lb`,
-      bestEstimated1RM: Math.round(weight * (1 + reps / 30)),
-      sets: [{ setNumber: 1, formattedValue: `${reps} @ ${weight} lb` }],
-    };
+    return historyEntry({ date: w.date, reps, weight: synthWeight(exerciseId, i) });
   });
 
   // The PR board: the heaviest (latest, since weights progress) session.
-  const last = history.at(-1);
   const lastWorkout = dated.at(-1);
-  const liftPRs = last
+  const liftPRs = lastWorkout
     ? [
-        {
+        liftPR({
           description: "Heaviest",
           reps:
             Number(
-              (lastWorkout?.exercises?.find((e) => e.exercise === name)?.prescribed ?? [])[0] ?? 5,
+              (lastWorkout.exercises?.find((e) => e.exercise === name)?.prescribed ?? [])[0] ?? 5,
             ) || 5,
           weight: synthWeight(exerciseId, history.length - 1),
-          dateCompleted: last.dateCompleted,
-          units: "lb",
-        },
+          date: lastWorkout.date,
+        }),
       ]
     : [];
   return { liftPRs, history };
@@ -204,11 +190,6 @@ export function historyCorpus(athleteName: string): HistoryCorpus {
     topExercise: { id: c.exerciseIdByName.get(topName) ?? 0, name: topName, sessions: topCount },
     getCalendarSummary: (year, month) => buildCalendarSummary(c, athleteName, year, month),
     getExerciseHistory: (exerciseId) => buildExerciseHistory(c, exerciseId),
-    exerciseLibrary: [...c.exerciseIdByName].map(([title, id]) => ({
-      id,
-      title,
-      param_1_type: 1,
-      param_2_type: 2,
-    })),
+    exerciseLibrary: [...c.exerciseIdByName].map(([title, id]) => libraryExercise(id, title)),
   };
 }
