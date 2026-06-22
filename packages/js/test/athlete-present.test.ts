@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  buildExerciseLogPayload,
+  buildExerciseSetPayload,
   buildSetCompletePayload,
   findSavedWorkoutSet,
   fetchRosterActivity,
@@ -319,10 +319,16 @@ describe("presentExerciseHistory", () => {
   });
 });
 
-describe("buildExerciseLogPayload", () => {
+describe('buildExerciseSetPayload (mode "log")', () => {
   it("fills entered results into the per-exercise PUT body", () => {
     // savedWorkoutSetExerciseId=1863781876, savedWorkoutSetId=111, workoutSetExerciseId=739137899
-    const body = buildExerciseLogPayload(1863781876, 111, 739137899, [{ param1: 5, param2: 185 }]);
+    const body = buildExerciseSetPayload(
+      1863781876,
+      111,
+      739137899,
+      [{ param1: 5, param2: 185 }],
+      "log",
+    );
     expect(body.id).toBe(1863781876);
     expect(body.saved_workout_set_id).toBe(111);
     expect(body.workout_set_exercise_id).toBe(739137899);
@@ -333,7 +339,7 @@ describe("buildExerciseLogPayload", () => {
   });
 
   it("marks completed=0 when all result slots are empty", () => {
-    const body = buildExerciseLogPayload(1, 2, 3, [{}]);
+    const body = buildExerciseSetPayload(1, 2, 3, [{}], "log");
     expect(body.completed).toBe(0);
     expect(body.param_1_made).toBe(0);
     expect(body.param_1_data_1).toBe("");
@@ -341,7 +347,7 @@ describe("buildExerciseLogPayload", () => {
   });
 
   it("emits all 10 slots; unfilled ones get empty strings and made=0", () => {
-    const body = buildExerciseLogPayload(1, 2, 3, [{ param1: 3, param2: 95 }]);
+    const body = buildExerciseSetPayload(1, 2, 3, [{ param1: 3, param2: 95 }], "log");
     // First slot filled
     expect(body.param_1_made).toBe(1);
     expect(body.param_1_data_1).toBe("3");
@@ -356,13 +362,45 @@ describe("buildExerciseLogPayload", () => {
 
   it("throws when more than 10 sets are provided", () => {
     const sets = Array.from({ length: 11 }, () => ({ param1: 5 }));
-    expect(() => buildExerciseLogPayload(1, 2, 3, sets)).toThrow(/at most 10/iu);
+    expect(() => buildExerciseSetPayload(1, 2, 3, sets, "log")).toThrow(/at most 10/iu);
   });
 
   it("coerces numeric param values to strings", () => {
-    const body = buildExerciseLogPayload(1, 2, 3, [{ param1: 8, param2: 225 }]);
+    const body = buildExerciseSetPayload(1, 2, 3, [{ param1: 8, param2: 225 }], "log");
     expect(body.param_1_data_1).toBe("8");
     expect(body.param_2_data_1).toBe("225");
+  });
+});
+
+describe('buildExerciseSetPayload (mode "prescribe")', () => {
+  it("writes the targets but leaves every made/completed flag at 0", () => {
+    // A coach prescribing 4 sets of 100 lb — the case the mitmproxy capture showed: data in the
+    // slots, but param_N_made=0 and completed=0 so the set is not marked done.
+    const body = buildExerciseSetPayload(
+      2714543746,
+      222,
+      1187781610,
+      [
+        { param1: 10, param2: 100 },
+        { param1: 10, param2: 100 },
+        { param1: 8, param2: 100 },
+        { param1: 8, param2: 100 },
+      ],
+      "prescribe",
+    );
+    expect(body.completed).toBe(0);
+    expect(body.param_1_data_1).toBe("10");
+    expect(body.param_2_data_1).toBe("100");
+    expect(body.param_1_data_3).toBe("8");
+    for (let i = 1; i <= 4; i += 1) expect(body[`param_${i}_made`]).toBe(0);
+  });
+
+  it("writes a weight-only prescription with reps slots left empty", () => {
+    const body = buildExerciseSetPayload(1, 2, 3, [{ param2: 135 }], "prescribe");
+    expect(body.completed).toBe(0);
+    expect(body.param_1_made).toBe(0);
+    expect(body.param_1_data_1).toBe("");
+    expect(body.param_2_data_1).toBe("135");
   });
 });
 

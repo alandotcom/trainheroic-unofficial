@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   coachLogSessionArgsSchema,
   coachLogSetArgsSchema,
+  coachPrescribeSetArgsSchema,
   dateString,
   swapAthleteExerciseArgsSchema,
 } from "@trainheroic-unofficial/dto";
@@ -12,6 +13,8 @@ import {
   inviteAthletes,
   logForAthlete,
   logSessionForAthlete,
+  prescribeForAthlete,
+  toSetResults,
   presentAthleteWorkouts,
   swapAthleteExercise,
 } from "@trainheroic-unofficial/js";
@@ -128,6 +131,7 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
 
   registerAthleteLogTools(server, ctx);
   registerAthleteSwapTool(server, ctx);
+  registerAthletePrescribeTool(server, ctx);
 }
 
 /**
@@ -200,21 +204,12 @@ function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
           confirm,
         );
         if (!ok) return errorResult(NOT_CONFIRMED);
-        const mapped = results.map((r) => ({
-          savedWorkoutSetExerciseId: toId(r.savedWorkoutSetExerciseId),
-          sets: r.sets.map((s) => {
-            const slot: { param1?: number | string; param2?: number | string } = {};
-            if (s.param1 !== undefined) slot.param1 = s.param1;
-            if (s.param2 !== undefined) slot.param2 = s.param2;
-            return slot;
-          }),
-        }));
         return jsonResult(
           await logForAthlete(ctx.client, {
             athleteId: aId,
             date,
             savedWorkoutSetId: toId(savedWorkoutSetId),
-            results: mapped,
+            results: toSetResults(results),
           }),
         );
       }),
@@ -293,6 +288,54 @@ function registerAthleteSwapTool(server: McpServer, ctx: ToolContext): void {
           await swapAthleteExercise(ctx.client, {
             savedWorkoutSetExerciseId: sweId,
             exerciseId: exId,
+          }),
+        );
+      }),
+  );
+}
+
+/**
+ * Coach prescription override, kept in its own function so registerAthleteTools stays under the
+ * oxlint max-lines-per-function cap. Lets a coach set the prescribed reps/weight for one of a
+ * roster athlete's saved workout sets without marking it done — "prescribe weights for an athlete".
+ */
+function registerAthletePrescribeTool(server: McpServer, ctx: ToolContext): void {
+  server.registerTool(
+    "prescribe_athlete_set",
+    {
+      title: "Prescribe reps/weight for a roster athlete's set",
+      description:
+        "Coach-facing write: set the prescribed reps and/or weight for one of a roster athlete's " +
+        "scheduled workout sets, for that athlete only, WITHOUT marking it done — the API " +
+        "equivalent of the app's editing an athlete's prescribed values (\"prescribe weights for " +
+        'an athlete"). The set stays open for the athlete to log against, and the team/program ' +
+        "prescription is left untouched, so other athletes keep the original targets. param1 is " +
+        "reps, param2 is weight; pass one sets[] entry per prescribed set. The write REPLACES the " +
+        "slot's prescribed values (the sets you pass become the whole prescription, and an omitted " +
+        "param is cleared), so give the full per-set prescription you want. Get athleteId from " +
+        "list_athletes; get savedWorkoutSetId + savedWorkoutSetExerciseId from " +
+        "athlete_saved_workouts (raw:true) for that athlete/day. To record a set as PERFORMED " +
+        "instead, use log_athlete_set. Seeded demo athletes are read-only and will fail; use a " +
+        "real (invited) athlete. Requires confirmation (elicitation or confirm:true).",
+      inputSchema: { ...coachPrescribeSetArgsSchema.shape, confirm: z.boolean().optional() },
+      annotations: DESTRUCTIVE,
+    },
+    ({ athleteId, date, savedWorkoutSetId, results, confirm }, extra) =>
+      attempt(async () => {
+        const aId = toId(athleteId);
+        const ok = await confirmGate(
+          server,
+          extra.requestId,
+          `Set prescribed values on athlete ${aId}'s saved workout set ${toId(savedWorkoutSetId)} on ${date}? This changes what this athlete is prescribed (their copy only); it does not mark the set done.`,
+          confirm,
+        );
+        if (!ok) return errorResult(NOT_CONFIRMED);
+        return jsonResult(
+          await prescribeForAthlete(ctx.client, {
+            athleteId: aId,
+            date,
+            savedWorkoutSetId: toId(savedWorkoutSetId),
+            results: toSetResults(results),
           }),
         );
       }),

@@ -48,7 +48,7 @@ case "$ROLE" in
     SERVER="trainheroic-local-coach"
     PREFIX="mcp__trainheroic-local-coach__"
     READS="whoami head_coach list_programs notifications analytics_categories list_athletes list_teams get_team list_team_codes get_program athlete_lift_history athlete_training athlete_saved_workouts roster_activity team_volume analytics_query exercise_resolve exercise_search exercise_get store_stats messaging_conversations messaging_read message_draft"
-    WRITES="message_send message_delete athlete_invite athlete_archive athlete_restore team_create team_update team_delete team_code_create team_code_delete exercise_create exercise_forget exercise_sync session_copy session_remove session_unpublish session_save_as_template workout_build workout_publish log_athlete_set coach_log_session"
+    WRITES="message_send message_delete athlete_invite athlete_archive athlete_restore team_create team_update team_delete team_code_create team_code_delete exercise_create exercise_forget exercise_sync session_copy session_remove session_unpublish session_save_as_template workout_build workout_publish log_athlete_set coach_log_session swap_athlete_exercise prescribe_athlete_set"
     ;;
   *)
     echo "mcp-eval: unknown role '$ROLE' (use athlete|coach)" >&2
@@ -67,7 +67,13 @@ esac
 # would let it crib tool semantics from source instead of from the tool descriptions.
 ALLOWED=()
 for t in $READS; do ALLOWED+=("${PREFIX}${t}"); done
-DENIED=()
+# Hard-deny every built-in tool in BOTH modes. The allow-list only PRE-APPROVES the MCP tools; the
+# built-ins (Bash, Read, ToolSearch, …) stay in the model's toolset and under permission-mode
+# default would prompt (and stall headless) instead of failing closed. Denying them outright keeps
+# the eval on the MCP surface: the subagent can't shell out to the `trainheroic` CLI, read source
+# for tool semantics, or burn turns on a deferred-tool ToolSearch. (`--tools ""` would also drop the
+# MCP tools and leave the model with nothing, so it hallucinates — deny the built-ins by name.)
+DENIED=(Bash Read Edit Write NotebookEdit Glob Grep WebFetch WebSearch Task TodoWrite ToolSearch)
 if [ -n "${WRITES_ENABLED:-${WRITES:-}}" ] && [ "${WRITES_ENABLED:-${WRITES:-}}" != "0" ]; then
   WRITE_MODE=1
   for t in $WRITES; do ALLOWED+=("${PREFIX}${t}"); done
@@ -135,17 +141,18 @@ Be brutally honest in the report — its purpose is to find MCP usability proble
 PROMPT_EOF
 
 cd "$ROOT"
+# --setting-sources user keeps the project CLAUDE.md (which documents the CLI and these very eval
+# scripts) out of context, so the model can't "know the CLI exists" and shell out to it. The MCP
+# server still loads — it comes from --mcp-config + --strict-mcp-config, not from settings.
 CLAUDE_ARGS=(
   -p "$PROMPT"
   --model "$MODEL"
   --strict-mcp-config
   --mcp-config "$CONFIG"
+  --setting-sources user
   --permission-mode default
   --allowed-tools "${ALLOWED[@]}"
+  --disallowed-tools "${DENIED[@]}"
   --output-format text
 )
-# Only pass --disallowed-tools when there is something to deny (write mode leaves it empty).
-if [ "${#DENIED[@]}" -gt 0 ]; then
-  CLAUDE_ARGS+=(--disallowed-tools "${DENIED[@]}")
-fi
 exec claude "${CLAUDE_ARGS[@]}"
