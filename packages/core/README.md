@@ -1,7 +1,7 @@
 # @trainheroic-unofficial/core
 
 The shared [MCP](https://modelcontextprotocol.io) (Model Context Protocol) tool layer for
-TrainHeroic. Each tool — a function an AI assistant can call — is defined once here and reused
+TrainHeroic. Each tool (a function an AI assistant can call) is defined once here and reused
 by both servers: the local stdio server (`@trainheroic-unofficial/coach-mcp`) and the hosted
 Cloudflare worker (`@trainheroic-unofficial/cloudflare`). You only need this package if you
 are building your own MCP server; to _use_ the tools, run one of those servers.
@@ -20,8 +20,8 @@ A server builds a `ToolContext` and passes it, along with its MCP server instanc
 `registerXxxTools(server, ctx)` functions (the `register*` names below are the real exports;
 `registerXxxTools` is shorthand for all of them). `ToolContext` is `{ client, index }`: an
 authenticated `TrainHeroicClient` (from `@trainheroic-unofficial/js`) and anything implementing
-the `ExerciseIndex` interface — the in-memory `ExerciseLibrary` here, or the hosted worker's
-D1-backed store.
+the `ExerciseIndex` interface (the in-memory `ExerciseLibrary` here, or the hosted worker's
+D1-backed store).
 
 Install it alongside the MCP SDK and the `js` client (both peers you construct from):
 
@@ -66,26 +66,24 @@ Each `register*` function registers a group of tools, and the individual tool na
 sees are snake_case (e.g. `analytics_query`, `exercise_resolve`). The groups:
 
 - coach reads (profile, athletes, teams, programs, notifications, analytics catalog)
-- athlete management (`registerAthleteTools` — the coach's _roster_ view: invite, archive, restore)
+- athlete management (`registerAthleteTools`, the coach's _roster_ view: invite, archive, restore)
 - team management (create, rename, delete, join codes)
 - analytics report pulls (`analytics_query`: readiness, 1RM (one-rep max) and working-max history, training summary, compliance, lift progress)
 - exercise library operations (resolve, search, get, sync, create, forget, stats)
 - the workout/session lifecycle (build a draft, read it back, publish, unpublish, copy, save as template, remove)
 - messaging (list, read, draft, send, delete)
 
-There is no raw-request escape hatch; every endpoint reaches the model through a typed tool.
+Every endpoint reaches the model through a typed tool; the surface has no raw-request escape hatch.
 (`registerAthleteTools` here is the coach's roster view, distinct from the athlete's own
 training tools that the athlete server registers.)
 
 Tools return their result in-band. A failure comes back as an error result the model can read
-and correct, not a thrown exception. Reads are annotated read-only. Athlete-facing or
+and self-correct from. Reads are annotated read-only. Athlete-facing or
 destructive actions (publish, unpublish, remove, send, delete, archive, team/code delete) pass
-through a confirmation gate: it asks the client to confirm via MCP elicitation, falls back to
-an explicit `confirm: true` argument when the client cannot prompt, and fails closed if neither
-is satisfied.
+through a confirmation gate. The gate prefers MCP elicitation; when the client cannot elicit,
+it accepts an explicit `confirm: true` argument. It fails closed if neither condition is met.
 
-The D1-backed warehouse sync tools are not here; they live in the `cloudflare` package
-because they depend on its storage.
+The D1-backed warehouse sync tools live in the `cloudflare` package because they depend on its storage.
 
 ## Develop
 

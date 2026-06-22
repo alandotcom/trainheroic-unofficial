@@ -1,10 +1,10 @@
 # @trainheroic-unofficial/athlete-mcp
 
-Local single-user [MCP](https://modelcontextprotocol.io) server for a TrainHeroic **athlete** — it exposes one [TrainHeroic](https://www.trainheroic.com) athlete's own training to an AI assistant (Claude Code, Claude Desktop, or any MCP client) as callable tools. It runs on your machine and speaks the MCP stdio transport, so the assistant launches it as a subprocess.
+Local single-user [MCP](https://modelcontextprotocol.io) server for a TrainHeroic **athlete**, exposing one [TrainHeroic](https://www.trainheroic.com) athlete's own training to any MCP-capable AI assistant as callable tools. It runs on your machine and speaks the MCP stdio transport, so the assistant launches it as a subprocess.
 
-It reads two required environment variables, `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD` — your existing TrainHeroic login. These are your real credentials in plaintext; the config below puts them in a file or shell history, so treat them as secrets.
+It reads two required environment variables, `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD` (your existing TrainHeroic login). These are real credentials in plaintext; the config below puts them in a file or shell history, so treat them as secrets.
 
-It exposes the logged-in athlete's own training — scheduled and completed workouts, per-exercise history, PRs (personal records), working maxes, and lifetime totals — plus one confirmation-gated write that logs a completed set. For coaching (rosters, teams, programs, messaging), use [`@trainheroic-unofficial/coach-mcp`](../coach-mcp). For a hosted version that holds credentials server-side behind OAuth and gives a coach login both the athlete and coaching tools, see the [root README](../../README.md).
+It exposes the logged-in athlete's own training: scheduled and completed workouts, per-exercise history, PRs (personal records), working maxes, and lifetime totals, plus one confirmation-gated write that logs a completed set. Coaching capabilities (rosters, teams, programs, messaging) are available through [`@trainheroic-unofficial/coach-mcp`](../coach-mcp). A hosted version that holds credentials server-side behind OAuth and gives a coach login both the athlete and coaching tools is described in the [root README](../../README.md).
 
 ---
 
@@ -23,7 +23,7 @@ claude mcp add trainheroic-athlete \
 
 ### Claude Desktop / `.mcp.json` / other stdio clients
 
-Put this in your client's MCP config — for Claude Desktop that's `claude_desktop_config.json`
+Put this in your client's MCP config. For Claude Desktop that's `claude_desktop_config.json`
 (macOS: `~/Library/Application Support/Claude/`; Windows: `%APPDATA%\Claude\`); for a
 project-scoped Claude Code setup it's `.mcp.json` at the repo root.
 
@@ -51,20 +51,20 @@ A coach account works here too: a TrainHeroic coach account also has its own ath
 All read-only except `athlete_log_set`. The assistant fills in each tool's parameters (dates
 are `YYYY-MM-DD`); your MCP client shows the full schema for each.
 
-- `athlete_whoami` — identity (id, name, roles)
-- `athlete_profile` — lifetime totals + profile
-- `athlete_prefs` — notification/display preferences
-- `athlete_workouts` — scheduled + completed workouts in a date range, flattened into one list
-- `athlete_exercises` — search the exercises you've logged
-- `athlete_exercise_history` — per-exercise PRs + dated session history
-- `athlete_personal_records` — exercise personal records
-- `athlete_exercise_stats` — last performance + PR as of a date
-- `athlete_working_maxes` — working max per exercise
-- `athlete_leaderboard` — benchmark/test workout leaderboard
+- `athlete_whoami`: identity (id, name, roles)
+- `athlete_profile`: lifetime totals + profile
+- `athlete_prefs`: notification/display preferences
+- `athlete_workouts`: scheduled + completed workouts in a date range, flattened into one list
+- `athlete_exercises`: search the exercises you've logged
+- `athlete_exercise_history`: per-exercise PRs + dated session history
+- `athlete_personal_records`: exercise personal records
+- `athlete_exercise_stats`: last performance + PR as of a date
+- `athlete_working_maxes`: working max per exercise
+- `athlete_leaderboard`: benchmark/test workout leaderboard
 
 **Write (confirmation-gated):**
 
-- `athlete_log_set` — logs completed set results to your training log. This is a real write
+- `athlete_log_set`: logs completed set results to your training log. This is a real write
   that your coach can see. It confirms before running: the server asks the client to confirm,
   falling back to an explicit `confirm: true` argument when the client can't prompt.
 

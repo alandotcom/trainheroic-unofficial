@@ -22,7 +22,7 @@ Needs Node >= 18 and an existing TrainHeroic account.
 
 ## Usage
 
-Set your TrainHeroic login in the environment (stored in plaintext and shell history — treat
+Set your TrainHeroic login in the environment (stored in plaintext and shell history, so treat
 it as a secret), then run a command. Every command prints JSON to stdout.
 
 ```bash
@@ -33,24 +33,24 @@ trainheroic whoami                                # confirm auth; prints your ac
 trainheroic coach exercise resolve "Back Squat"   # name -> exercise (id, units)
 ```
 
-**Driving this from an AI agent?** Run `trainheroic skill` first — it prints the full
+**Driving this from an AI agent?** Run `trainheroic skill` first. It prints the full
 workflow guide (with copy-paste workout-spec examples) to stdout, version-matched to the
-binary; `trainheroic skill --full` adds the API and workout-creation reference docs. It's the
-fastest way to get the spec shapes right instead of guessing from flags.
+binary. `trainheroic skill --full` adds the API and workout-creation reference docs, which is
+the quickest path to getting spec shapes right.
 
-Commands split into three groups. `whoami` and `request` are **shared** (role-agnostic).
-Everything for managing a roster lives under **`coach`** — reads (`coach athletes`,
-`coach programs`, `coach teams`, `coach program <id>`, …), the exercise library
+`whoami` and `request` are role-agnostic shared commands. Roster management lives under
+**`coach`**, covering reads (`coach athletes`, `coach programs`, `coach teams`,
+`coach program <id>`, …), the exercise library
 (`coach exercise resolve|search|get|sync|create|forget|stats`), the workout lifecycle
 (`coach workout build|read|publish|remove`), and messaging
-(`coach message list|read|draft|send|delete`). Your own training lives under **`athlete`**.
+(`coach message list|read|draft|send|delete`). Your own training data lives under **`athlete`**.
 Run `trainheroic` with no command for the full reference. Dates are `Y-M-D` with a 1-based
 month, e.g. `2026-6-22` or `2026-06-22` for 22 June 2026.
 
 ### Building a workout
 
-`coach workout build` reads a workout spec — a JSON file (`--file`), an inline argument, or
-stdin — and writes it into a program on a date. `--program` is a program id (find it in the
+`coach workout build` reads a workout spec (a JSON file via `--file`, an inline argument, or
+stdin) and writes it into a program on a date. `--program` is a program id (find it in the
 program's URL in the TrainHeroic web app, or run `trainheroic coach programs`). The spec is
 `{ blocks, instruction? }` (a bare blocks array is also accepted). Each exercise's `id` is a
 library id; get one with `coach exercise resolve`. `reps` and `weight` take a scalar or a
@@ -58,7 +58,7 @@ per-set array (`"reps": [5, 5, 3]`); loads use the exercise's configured unit. T
 is `WorkoutSpec` in [`@trainheroic-unofficial/dto`](../dto).
 
 ```jsonc
-// day.json — one block with one exercise (id 41822 is a library exercise id)
+// day.json: one block with one exercise (id 41822 is a library exercise id)
 {
   "instruction": "Warm up first.",
   "blocks": [

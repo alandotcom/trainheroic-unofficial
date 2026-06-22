@@ -1,9 +1,9 @@
 # @trainheroic-unofficial/js
 
-An unofficial TypeScript SDK for the TrainHeroic coaching API. It handles auth and session
-renewal, talks to both TrainHeroic hosts, keeps a searchable exercise library, encodes
-workouts into the API's payload format, and wraps messaging. It runs in any modern
-JavaScript runtime, including Cloudflare workerd.
+An unofficial TypeScript SDK for the TrainHeroic coaching API. The client covers auth and
+session renewal across both TrainHeroic hosts, a searchable exercise library, workout
+encoding, and messaging. It runs in any modern JavaScript runtime, including Cloudflare
+workerd.
 
 Part of the [trainheroic-unofficial](../../README.md) workspace.
 
@@ -73,7 +73,7 @@ const created = await client.request("POST", "/2.0/coach/exercise/create", {
 });
 ```
 
-There is no enumerated endpoint catalog; the paths are the ones the TrainHeroic web app calls.
+The paths are the ones the TrainHeroic web app calls.
 Most are reachable through the typed helpers below, so you rarely call `request` directly. The
 request and response shapes those helpers use live in
 [`@trainheroic-unofficial/dto`](../dto) as zod schemas and types.
@@ -86,7 +86,7 @@ life of the process, so a fresh process logs in again. To skip that login, read 
 one client and hand it to the next via the third constructor argument.
 
 After a request has run, `client.sessionId` holds the active token, typed `string | null` (it
-is `null` only before the first login). Persist it with your own storage — `saveToken` and
+is `null` only before the first login). Persist it with your own storage; `saveToken` and
 `loadToken` below stand in for whatever you use (a file, a KV store, an env var):
 
 ```ts
@@ -130,16 +130,17 @@ The `.` entry imports no `node:*` modules. Anything that touches the filesystem 
   client hit by concurrent requests performs a single shared login. `RequestOptions.base`
   selects the host (`coach` for `api.trainheroic.com`, `apis` for `apis.trainheroic.com`).
 - **Exercises.** `ExerciseIndex` is the interface the rest of the system codes against;
-  `ExerciseLibrary` is the in-memory implementation that resolves names to ids, ranks
-  fuzzy search, and persists through a `LibraryCache` (in-memory by default, JSON file via
-  `./node`). The hosted server supplies a D1-backed implementation of the same interface.
-- **Workouts.** A session builder (create, save blocks and exercises, optionally publish),
-  read-back, instruction editing, and removal, plus the encoder that turns a
-  `WorkoutSpec` into the API's payload.
-- **Athlete training.** Functions for the logged-in account's own training: scheduled and
-  completed workouts, per-exercise history, personal records, and working maxes.
-- **Messaging.** Listing conversation streams, reading a stream, and building, sending, or
-  deleting a comment.
+  `ExerciseLibrary` is the in-memory implementation, handling name-to-id resolution,
+  fuzzy search ranking, and persistence through a `LibraryCache` (in-memory by default,
+  JSON file via `./node`). The hosted server supplies a D1-backed implementation of the
+  same interface.
+- **Workouts.** A session builder that creates a session, saves blocks and exercises,
+  and optionally publishes, along with read-back, instruction editing, and removal.
+  Includes the encoder that turns a `WorkoutSpec` into the API's payload.
+- **Athlete training.** Functions for the logged-in account's own training, covering
+  scheduled and completed workouts, per-exercise history, personal records, and working maxes.
+- **Messaging.** Tools for conversation streams: listing them, reading a stream, and
+  building or sending or deleting a comment.
 
 ## Working with exercises
 
@@ -171,8 +172,8 @@ if (!match) {
 
 `buildSession` writes one session into a program on a given day: it creates the session, saves
 the blocks and exercises, and optionally publishes. `programId` identifies one of your
-TrainHeroic programs — find it in the program's URL in the web app, or from a programs read
-(`client.request("GET", ...)`). Exercise ids come from the library.
+TrainHeroic programs (find it in the program's URL in the web app, or from a programs read
+via `client.request("GET", ...)`). Exercise ids come from the library.
 
 ```ts
 import { buildSession, type BlockSpec } from "@trainheroic-unofficial/js";
@@ -203,13 +204,13 @@ Each exercise needs an `id`; `sets`, `reps`, `weight`, `rpe`, and a per-exercise
 optional. `reps` and `weight` take a scalar (broadcast across every set) or a per-set array
 like `reps: [5, 5, 3]`. The full field list is `ExerciseSpec` / `BlockSpec` in
 [`@trainheroic-unofficial/dto`](../dto). Loads are in whatever unit the exercise is configured
-for in TrainHeroic; a mismatch becomes an advisory rather than a silent change (below).
+for in TrainHeroic; a mismatch becomes an advisory collected separately (see below).
 
-`buildSession` returns `{ pwId, workoutId }`: `pwId` is the program-workout id (the placement
-of the session in the program — this is the handle the other calls take), and `workoutId` is
-the underlying workout id. Read it back with `readSession(client, programId, date, pwId)`,
-publish later with `publishSession(client, pwId)`, or remove it with
-`removeSession(client, programId, pwId)`.
+`buildSession` returns `{ pwId, workoutId }`: `pwId` is the program-workout id (the
+placement of the session in the program, which is the handle subsequent calls take), and
+`workoutId` is the underlying workout id. Use `pwId` with `readSession(client, programId, date, pwId)`
+to read the session back. `publishSession(client, pwId)` publishes it later;
+`removeSession(client, programId, pwId)` deletes it.
 
 ## Reading athlete training
 
@@ -228,13 +229,12 @@ scope.
 `buildSession` calls the encoder for you; you only deal with it directly to preview warnings.
 TrainHeroic's exercise payload expects every parameter slot present, so the encoder fills all
 of them (empty slots included) to avoid an HTTP 500. A scalar prescription is broadcast across
-the set count, RPE is routed into the instruction text rather than a numeric slot (the API
-would otherwise coerce it to load), and unit mismatches between a spec and the exercise's fixed
-parameter types are collected as advisories rather than silently dropped.
+the set count. RPE goes into the instruction text because the API coerces a numeric slot to
+load. Unit mismatches between a spec and the exercise's fixed parameter types surface as
+advisories preserved in the return value of `collectAdvisories`.
 
-Those advisories are not part of the `buildSession` result; read them before building by
-calling `collectAdvisories(blocks, index)` (the `index` is an `ExerciseLibrary`), which returns
-the unit notes and warnings for a set of blocks.
+Call `collectAdvisories(blocks, index)` before building (the `index` is an `ExerciseLibrary`)
+to get the unit notes and warnings for a set of blocks.
 
 ## Develop
 

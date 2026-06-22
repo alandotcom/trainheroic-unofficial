@@ -1,12 +1,12 @@
 # @trainheroic-unofficial/coach-mcp
 
-Local single-user [MCP](https://modelcontextprotocol.io) server for a TrainHeroic coach — it exposes a [TrainHeroic](https://www.trainheroic.com) coaching account to an AI assistant (Claude Code, Claude Desktop, or any MCP client) as a set of callable tools. It runs on your machine and speaks the MCP stdio transport, so the assistant launches it as a subprocess.
+Local single-user [MCP](https://modelcontextprotocol.io) server for a TrainHeroic coach. It exposes a [TrainHeroic](https://www.trainheroic.com) coaching account to an AI assistant (Claude Code, Claude Desktop, or any MCP client) as a set of callable tools. It runs on your machine and speaks the MCP stdio transport, so the assistant launches it as a subprocess.
 
 It reads two environment variables, both required:
 
-- `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD` — your existing TrainHeroic login.
+- `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD`: your existing TrainHeroic login.
 
-These are your real credentials in plaintext; the config examples below put them in a file or in shell history, so treat them as secrets. For a version that holds credentials server-side behind OAuth, use the hosted server in the [root README](../../README.md).
+These are your real credentials in plaintext; the config examples below put them in a file or in shell history, so treat them as secrets. The hosted server in the [root README](../../README.md) stores credentials server-side behind OAuth if you prefer that model.
 
 ---
 
@@ -26,7 +26,7 @@ claude mcp add trainheroic \
 
 ### Claude Desktop / `.mcp.json` / other stdio clients
 
-Put this in your client's MCP config — for Claude Desktop that's `claude_desktop_config.json`
+Put this in your client's MCP config. For Claude Desktop that's `claude_desktop_config.json`
 (macOS: `~/Library/Application Support/Claude/`; Windows: `%APPDATA%\Claude\`); for a
 project-scoped Claude Code setup it's `.mcp.json` at the repo root.
 
@@ -53,13 +53,13 @@ After it connects, ask the assistant something like "list my athletes" to confir
 
 The full coaching surface, grouped by area:
 
-- **Reads** — profile, athletes, teams, programs, notifications, analytics catalog
-- **Athletes** — invite, archive, restore
-- **Teams** — create, rename, delete, manage join codes
-- **Analytics** — readiness, 1RM and working-max history, training summary, compliance, lift progress
-- **Exercise library** — resolve, search, get, sync, create, forget, stats
-- **Workouts** — build a draft, read it back, publish, unpublish, copy, save as template, remove
-- **Messaging** — list streams, read, draft, send, delete
+- **Reads**: profile, athletes, teams, programs, notifications, analytics catalog
+- **Athletes**: invite, archive, restore
+- **Teams**: create, rename, delete, manage join codes
+- **Analytics**: readiness, 1RM and working-max history, training summary, compliance, lift progress
+- **Exercise library**: resolve, search, get, sync, create, forget, stats
+- **Workouts**: build a draft, read it back, publish, unpublish, copy, save as template, remove
+- **Messaging**: list streams, read, draft, send, delete
 
 A TrainHeroic coach account also has its own athlete-side data, so the athlete training tools (history, workouts, PRs, working maxes) are available here too. Destructive or athlete-facing actions (publish, remove, send, delete, archive) confirm before they run: the server asks the client to confirm, falling back to an explicit `confirm: true` tool argument when the client can't prompt.
 

@@ -1,8 +1,8 @@
 # @trainheroic-unofficial/cloudflare
 
-The hosted, multi-tenant [TrainHeroic](https://www.trainheroic.com) [MCP](https://modelcontextprotocol.io) server on [Cloudflare Workers](https://developers.cloudflare.com/workers/). It serves the same tools as the local servers, but for many users at once: each user signs in with their own TrainHeroic credentials through an OAuth flow, so credentials are held server-side instead of in a local config. Per-tenant data (the exercise mirror and the training warehouse) lives in [D1](https://developers.cloudflare.com/d1/), Cloudflare's SQLite database, scoped by account.
+The hosted, multi-tenant [TrainHeroic](https://www.trainheroic.com) [MCP](https://modelcontextprotocol.io) server on [Cloudflare Workers](https://developers.cloudflare.com/workers/). It runs the same tools as the local servers and supports many users concurrently, with each user signing in through an OAuth flow so their TrainHeroic credentials are held server-side. Per-tenant data (the exercise mirror and the training warehouse) lives in [D1](https://developers.cloudflare.com/d1/), Cloudflare's SQLite database, scoped by account.
 
-**To use the public hosted server**, see the [root README](../../README.md) — no deployment needed.
+**To use the public hosted server**, see the [root README](../../README.md); it connects directly from your MCP client.
 
 **To self-host your own instance**, follow [DEPLOY.md](./DEPLOY.md). You need a Cloudflare account on the Workers Paid plan, which this server requires for [Durable Objects](https://developers.cloudflare.com/durable-objects/) (one per session, holding the MCP agent), D1, and a [cron trigger](https://developers.cloudflare.com/workers/configuration/cron-triggers/) (a scheduled purge job).
 
@@ -13,9 +13,9 @@ The hosted, multi-tenant [TrainHeroic](https://www.trainheroic.com) [MCP](https:
 This runs the worker locally with no Cloudflare account, using Miniflare (a local Workers runtime) and a local D1 file. First run `pnpm install` once at the repo root (Node >= 24, pnpm 11), then from `packages/cloudflare`:
 
 1. Create a `.dev.vars` file (wrangler's local-secrets file). The full set of variables:
-   - `COOKIE_ENCRYPTION_KEY` (**required**) — signs the OAuth/CSRF round-trip values. Generate one with `openssl rand -hex 32` and paste the output as the value.
-   - `ALLOWED_EMAILS` (optional) — comma-separated allowlist of TrainHeroic emails permitted to register; empty or unset allows any.
-   - `SENTRY_DSN` (optional) — enables error reporting, aggregate usage metrics (auth + per tool call), and per-session tracing; unset disables all of it. The traces sample rate is the `SENTRY_TRACES_SAMPLE_RATE` var (default `1`, in `wrangler.jsonc`), dialable from the Cloudflare dashboard without a redeploy.
+   - `COOKIE_ENCRYPTION_KEY` (**required**): signs the OAuth/CSRF round-trip values. Generate one with `openssl rand -hex 32` and paste the output as the value.
+   - `ALLOWED_EMAILS` (optional): comma-separated allowlist of TrainHeroic emails permitted to register; empty or unset allows any.
+   - `SENTRY_DSN` (optional): enables error reporting, aggregate usage metrics (auth + per tool call), and per-session tracing; unset disables all of it. The traces sample rate is the `SENTRY_TRACES_SAMPLE_RATE` var (default `1`, in `wrangler.jsonc`), adjustable from the Cloudflare dashboard at runtime.
 
    ```
    COOKIE_ENCRYPTION_KEY=2f1c...your-generated-hex
@@ -30,13 +30,13 @@ This runs the worker locally with no Cloudflare account, using Miniflare (a loca
    pnpm dev                 # wrangler dev on http://localhost:8787
    ```
 
-3. With `pnpm dev` running, launch the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) (the official MCP debugging UI), point it at `http://localhost:8787/mcp`, and complete the OAuth + TrainHeroic login flow. Two extra paths expose one tool set, for separate accounts or a connection scoped to one role — `http://localhost:8787/mcp/coach` (coaching tools only) and `http://localhost:8787/mcp/athlete` (athlete tools only):
+3. With `pnpm dev` running, launch the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) (the official MCP debugging UI), point it at `http://localhost:8787/mcp`, and complete the OAuth + TrainHeroic login flow. Two extra paths expose a single tool set for separate accounts or a connection scoped to one role: `http://localhost:8787/mcp/coach` (coaching tools only) and `http://localhost:8787/mcp/athlete` (athlete tools only):
 
    ```bash
-   pnpm inspect             # fetches and opens the Inspector UI via npx (nothing to install)
+   pnpm inspect             # fetches and opens the Inspector UI via npx
    ```
 
-Typecheck and tests run locally, no Cloudflare account needed:
+Typecheck and tests run locally with no Cloudflare account:
 
 ```bash
 pnpm typecheck

@@ -1,8 +1,8 @@
 # @trainheroic-unofficial/dto
 
 Domain DTOs and zod schemas for the TrainHeroic API. This package is the single source of
-truth for request and response shapes; the SDK, the MCP tool layer, and the CLI all import
-their types from here instead of redefining them.
+truth for request and response shapes. The SDK, the MCP tool layer, and the CLI all import
+their types from here.
 
 Part of the [trainheroic-unofficial](../../README.md) workspace.
 
@@ -32,7 +32,7 @@ import { workoutSpecSchema, type WorkoutSpec } from "@trainheroic-unofficial/dto
 const spec: WorkoutSpec = workoutSpecSchema.parse(input);
 ```
 
-It imports no `node:*` and touches no filesystem, so it runs anywhere — Node, browsers, and
+It imports no `node:*` and touches no filesystem, so it runs in Node, browsers, and
 Cloudflare workerd.
 
 ## What's inside
@@ -57,7 +57,7 @@ re-exported through `index.ts`. The central pieces:
   warnings the encoder emits (for example, a prescription whose unit does not match the
   exercise's parameter type).
 - The `responses` module holds the tolerant schemas the SDK uses to sanity-check an API
-  response before trusting it, without rejecting unknown fields.
+  response before trusting it; these schemas accept unknown fields.
 
 ## Develop
 

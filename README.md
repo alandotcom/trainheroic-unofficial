@@ -7,11 +7,11 @@
 [![athlete-mcp](https://img.shields.io/npm/v/@trainheroic-unofficial/athlete-mcp?label=athlete-mcp)](https://www.npmjs.com/package/@trainheroic-unofficial/athlete-mcp)
 [![cli](https://img.shields.io/npm/v/@trainheroic-unofficial/cli?label=cli)](https://www.npmjs.com/package/@trainheroic-unofficial/cli)
 
-> Drive the TrainHeroic coaching API from Claude and other AI assistants — or from your own scripts.
+> Drive the TrainHeroic coaching API from Claude and other AI assistants, or from your own scripts.
 
-[TrainHeroic](https://www.trainheroic.com) is a strength-and-conditioning platform: a coach programs workouts for a roster of athletes, and each athlete logs their training. This project wraps its (undocumented) API as a Claude Code skill, [MCP](https://modelcontextprotocol.io) servers (Model Context Protocol — the standard Claude and other assistants use to call external tools), and a CLI. You sign in with an existing TrainHeroic account; this does not create one.
+[TrainHeroic](https://www.trainheroic.com) is a strength-and-conditioning platform: a coach programs workouts for a roster of athletes, and each athlete logs their training. This project wraps its (undocumented) API as a Claude Code skill, [MCP](https://modelcontextprotocol.io) servers (Model Context Protocol, the standard Claude and other assistants use to call external tools), and a CLI. You sign in with an existing TrainHeroic account; this does not create one.
 
-> **Credentials:** every entry point below authenticates with your real TrainHeroic email and password. Wherever you put them — a shell `export`, an MCP config file, a `claude mcp add -e` flag — they are stored in plaintext and may land in shell history. Treat them like any other secret. The hosted server is the one exception: it holds credentials server-side behind OAuth.
+> **Credentials:** every entry point below authenticates with your real TrainHeroic email and password. Wherever you put them (a shell `export`, an MCP config file, a `claude mcp add -e` flag), they are stored in plaintext and may land in shell history. Treat them like any other secret. The hosted server holds credentials server-side behind OAuth.
 
 ## Contents
 
@@ -50,7 +50,7 @@ Then type `/trainheroic-unofficial` in a Claude Code session to activate it. The
 
 ## MCP server
 
-Connect a hosted server (OAuth login, nothing to install) or a local one (runs on your machine, credentials from your environment).
+Connect a hosted server (OAuth login, runs in the cloud) or a local one (runs on your machine, credentials from your environment).
 
 The hosted URL is:
 
@@ -83,7 +83,7 @@ claude mcp add trainheroic --transport http \
   https://mcp.trainheroic-unofficial.com/mcp
 ```
 
-**Local — coach** (full coaching surface, plus your own athlete training)
+**Local: coach** (full coaching surface, plus your own athlete training)
 
 ```bash
 claude mcp add trainheroic \
@@ -92,7 +92,7 @@ claude mcp add trainheroic \
   -- npx -y @trainheroic-unofficial/coach-mcp
 ```
 
-**Local — athlete** (history, workouts, PRs, working maxes)
+**Local: athlete** (history, workouts, PRs, working maxes)
 
 ```bash
 claude mcp add trainheroic-athlete \
@@ -148,7 +148,7 @@ trainheroic help
 
 | Package | Description |
 | --- | --- |
-| [`@trainheroic-unofficial/dto`](packages/dto) | zod schemas and types — the source of truth for API shapes |
+| [`@trainheroic-unofficial/dto`](packages/dto) | zod schemas and types, the source of truth for API shapes |
 | [`@trainheroic-unofficial/js`](packages/js) | the runtime-agnostic SDK (client, auth, encoder, exercise library) |
 | [`@trainheroic-unofficial/core`](packages/core) | the shared MCP tool layer, reused by every server |
 | [`@trainheroic-unofficial/coach-mcp`](packages/coach-mcp) | local stdio MCP server for a coach |
