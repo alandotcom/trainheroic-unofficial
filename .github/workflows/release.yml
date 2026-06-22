@@ -1,0 +1,120 @@
+name: Release
+
+# Manual release trigger. Changesets accumulate as normal `.changeset/*.md` files on main
+# (every commit carries one); when you decide to ship, run this workflow from the Actions tab
+# (or `gh workflow run release.yml`). It applies the pending changesets, commits and tags the
+# bump, then hands off to publish.yml for the npm publish.
+#
+# Why a separate workflow instead of changesets/action's auto-PR flow: we want an explicit,
+# human-pulled trigger for *when* a release happens, not an always-open bot PR that publishes
+# whenever it merges. publish.yml stays the publisher, so npm's OIDC trusted-publisher binding
+# (which is tied to the publish.yml file path) is preserved untouched — no npm reconfiguration.
+#
+# How the publish hand-off works without a PAT: this job dispatches publish.yml via
+# `gh workflow run` (a workflow_dispatch event). workflow_dispatch is the documented exception
+# to GitHub's rule that the default GITHUB_TOKEN cannot trigger further workflow runs, so the
+# built-in token is enough — no personal access token or extra secret needed.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # push the bump commit + tag, create the GitHub release
+  actions: write # dispatch publish.yml (workflow_dispatch)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history so changelog generation and tag listing work; persisted credentials
+          # let us push the bump commit and tag back to main.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.8.0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # Gate the release on the same checks CI runs (fmt + lint + typecheck + test +
+      # version-parity), so a red main can never be tagged or published. Mirrors the old manual
+      # precondition "pnpm check is green".
+      - name: Generate Cloudflare types
+        run: pnpm --filter @trainheroic-unofficial/cloudflare cf-typegen
+
+      - name: Check
+        run: pnpm run check
+
+      # Nothing to release if no changesets are queued (config.json and README.md don't count).
+      # Fail loudly so a misfired trigger is obvious rather than silently producing an empty bump.
+      - name: Ensure changesets are pending
+        run: |
+          count=$(find .changeset -name '*.md' ! -iname 'readme.md' | wc -l | tr -d ' ')
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No changesets pending — author one with 'pnpm changeset' before releasing."
+            exit 1
+          fi
+          echo "Found $count pending changeset(s)."
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # Apply the pending changesets: bump every package to the same new version (fixed group),
+      # write CHANGELOGs, rewrite internal ranges (they stay workspace:*), and delete the
+      # consumed changeset files. Internal deps are workspace:*, so the lockfile is unaffected.
+      - name: Version packages
+        run: pnpm version-packages
+
+      # The version-parity guard (scripts/check-versions.mjs) must still see one version across
+      # the whole suite after the bump.
+      - name: Verify version parity
+        run: pnpm run check:versions
+
+      - name: Read new version
+        id: version
+        run: |
+          version=$(node -p "require('./packages/core/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$version"
+
+      - name: Commit, tag, and push
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          git add -A
+          git commit -m "chore(release): version packages to $version"
+          git tag -a "v$version" -m "v$version"
+          git push origin HEAD:main
+          git push origin "v$version"
+
+      # GitHub release notes = this version's section of the core changelog.
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          awk -v v="## $version" '$0==v{f=1;next} /^## /{if(f)exit} f{print}' \
+            packages/core/CHANGELOG.md > /tmp/relnotes.md
+          gh release create "v$version" --title "v$version" --notes-file /tmp/relnotes.md --latest
+
+      # Hand off to publish.yml against the new tag. The tag points at the bump commit, so
+      # publish.yml checks it out, builds, and runs `changeset publish` (idempotent; skips
+      # versions already on the registry; excludes the private worker). npm OIDC trusted
+      # publishing authenticates it — publish.yml is unchanged, so its trust binding holds.
+      - name: Dispatch publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run publish.yml --ref "v${{ steps.version.outputs.version }}"

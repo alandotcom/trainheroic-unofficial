@@ -1,20 +1,26 @@
 name: Publish
 
-# Publish the public packages to npm on a version tag (vX.Y.Z). Versioning stays local:
-# the release skill bumps with changesets, commits, pushes main, then pushes the tag — this
-# workflow only builds and publishes whatever versions that tag carries.
+# Publish the public packages to npm for a version tag (vX.Y.Z). This workflow only builds and
+# publishes whatever versions the tag carries; it does not bump versions. In the normal flow,
+# release.yml (manually triggered) applies the changesets, tags the bump, and then dispatches
+# this workflow against that tag via `gh workflow run` — so the usual entry point is
+# workflow_dispatch, not the tag-push trigger.
 #
 # Auth is npm OIDC trusted publishing (no NPM_TOKEN): npm trusts this repo's `publish.yml`
-# workflow, and pnpm (>= 10.12) performs the OIDC token exchange automatically when
-# `id-token: write` is granted. Provenance is attached automatically.
+# workflow file path, and pnpm (>= 10.12) performs the OIDC token exchange automatically when
+# `id-token: write` is granted. Provenance is attached automatically. Keeping the publish step
+# in this file (rather than moving it into release.yml) is what preserves that trust binding.
 
 on:
+  # release.yml dispatches this with `--ref vX.Y.Z`; checkout then defaults to that tag.
+  # Also the manual recovery path: `gh workflow run publish.yml --ref vX.Y.Z` re-publishes a
+  # tag's versions (idempotent — skips anything already on the registry).
+  workflow_dispatch:
+  # Fallback trigger for a tag pushed by a human from their laptop (an Actions-pushed tag does
+  # not fire this — GITHUB_TOKEN pushes don't trigger further workflows, which is why release.yml
+  # uses workflow_dispatch instead).
   push:
     tags: ['v*']
-  # Manual re-run / recovery: `gh workflow run publish.yml --ref vX.Y.Z` publishes that tag's
-  # versions (idempotent — skips anything already on the registry). Useful for a tag that was
-  # pushed before this workflow existed.
-  workflow_dispatch:
 
 concurrency:
   group: publish-${{ github.ref }}

@@ -34,25 +34,30 @@ pnpm check        # fmt:check + lint + typecheck + test; run this before conside
 
 ## Releasing
 
-Versioning is local with [Changesets](https://github.com/changesets/changesets) (configured in
+Versioning uses [Changesets](https://github.com/changesets/changesets) (configured in
 `.changeset/config.json`: `access: public`, `baseBranch: main`, and a `fixed` group so the whole
-suite shares one version). Deploy and publish are automated in CI — use the `release` skill,
-which encodes the full flow and its footguns.
+suite shares one version). Versioning and publishing both run in CI behind a manual trigger — use
+the `release` skill, which encodes the full flow and its footguns.
 
 ```bash
-pnpm changeset          # author a changeset: bump type + summary line (fixed group → whole suite)
-pnpm version-packages   # apply pending changesets: bump versions + changelogs, rewrite
-                        #   internal workspace:* ranges, delete the consumed changeset files
-# then: commit, push main, tag vX.Y.Z, push the tag — CI does the rest.
+pnpm changeset            # author a changeset on a normal commit (fixed group → whole suite bumps)
+# ...changesets accumulate on main from everyday commits...
+gh workflow run release.yml   # when ready to ship: versions, tags vX.Y.Z, dispatches publish.yml
 ```
 
-CI ownership (`.github/workflows/`): **`deploy.yml`** applies remote D1 migrations and deploys
-the Worker after `CI` goes green on `main`; **`publish.yml`** runs `changeset publish` on a `v*`
-tag, authenticated by **npm OIDC trusted publishing** (no `NPM_TOKEN`, no interactive 2FA).
-`changeset publish` only publishes versions not already on the registry, so re-runs are safe; the
-private `cloudflare` worker is excluded (`private: true`). The six publishable packages are `dto`,
-`js`, `core`, `cli`, `coach-mcp`, and `athlete-mcp`. `pnpm release` (build + `changeset publish`)
-remains the manual fallback when CI is unavailable.
+CI ownership (`.github/workflows/`): **`release.yml`** is manually triggered (`workflow_dispatch`);
+it gates on `pnpm check`, runs `pnpm version-packages`, commits + pushes the bump to `main`, tags
+`vX.Y.Z`, cuts the GitHub release, then dispatches `publish.yml`. **`publish.yml`** runs
+`changeset publish` (build + publish), authenticated by **npm OIDC trusted publishing** (no
+`NPM_TOKEN`, no interactive 2FA); the publish step stays in this file so the npm trusted-publisher
+binding (tied to the `publish.yml` path) holds. `changeset publish` only publishes versions not
+already on the registry, so re-runs are safe; the private `cloudflare` worker is excluded
+(`private: true`). **`deploy.yml`** applies remote D1 migrations and deploys the Worker after `CI`
+goes green on `main`, so the worker tracks `main` from feature commits; the release bump commit is
+pushed by the Actions bot (`GITHUB_TOKEN`), which does not re-trigger CI/deploy (the bump carries no
+worker code change). The six publishable packages are `dto`, `js`, `core`, `cli`, `coach-mcp`, and
+`athlete-mcp`. The local sequence in the `release` skill is the manual fallback when CI is
+unavailable.
 
 `dev`, `start`, `deploy`, `cf-typegen`, and the D1 migration scripts do not exist at the
 workspace root. They are per-package, so run them with a filter or from inside the package
