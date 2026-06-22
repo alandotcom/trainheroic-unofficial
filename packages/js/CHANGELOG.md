@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/js
 
+## 1.1.1
+
+### Patch Changes
+
+- bb0b826: docs: revise all package READMEs for a direct prose style (remove em dashes and rhetorical framing)
+- Updated dependencies [bb0b826]
+  - @trainheroic-unofficial/dto@1.1.1
+
 ## 1.1.0
 
 ### Patch Changes
