@@ -134,22 +134,20 @@ For the athlete server, swap the package name to `@trainheroic-unofficial/athlet
 
 <br>
 
-Run the local server with credentials in the environment — no OAuth, no browser:
+Bridge the hosted server with [`mcp-remote`](https://github.com/geelen/mcp-remote):
 
 ```jsonc
 {
   "mcpServers": {
     "trainheroic": {
       "command": "npx",
-      "args": ["-y", "@trainheroic-unofficial/coach-mcp"],
-      "env": {
-        "TRAINHEROIC_EMAIL": "coach@example.com",
-        "TRAINHEROIC_PASSWORD": "yourpassword"
-      }
+      "args": ["-y", "mcp-remote", "https://mcp.trainheroic-unofficial.com/mcp", "--transport", "http-only"]
     }
   }
 }
 ```
+
+First run opens OAuth in a browser and caches the token under `~/.mcp-auth`. In a web IDE (Codespaces, VS Code Remote) `localhost` is auto-forwarded, so the callback completes without extra setup.
 
 </details>
 
