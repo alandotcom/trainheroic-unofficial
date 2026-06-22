@@ -101,11 +101,8 @@ needs the `mcp-remote` bridge with `--transport http-only`:
 }
 ```
 
-On a box with no browser (SSH, container, CI), SSH is not required: run a local stdio server
-(no OAuth at all), rely on a web IDE's automatic `localhost` forwarding, or paste the redirect
-URL back into the terminal. The worker speaks the standard authorization-code flow, not the
-device grant (RFC 8628). See the root README's "Headless / no-browser environments" section
-for the full recipe and trade-offs.
+For browser-less boxes (SSH, container, CI), see the root README's "Headless / no-browser
+environments" section.
 
 ## Notes
 

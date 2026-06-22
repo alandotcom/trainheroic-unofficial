@@ -134,11 +134,11 @@ For the athlete server, swap the package name to `@trainheroic-unofficial/athlet
 
 <br>
 
-OAuth needs a browser once, and the catch on a remote box is that the sign-in redirect targets `http://localhost:<port>`, which resolves to *your* machine, not the box. SSH port-forwarding is one way to bridge that gap, but it is **not** required — here are the options, simplest first.
+OAuth redirects to `http://localhost:<port>`, which on a remote box resolves to your machine, not the box. Pick whichever fits:
 
-**1. Run a local server — no OAuth, no browser, no SSH.** The local `coach-mcp` / `athlete-mcp` servers read your TrainHeroic credentials from the environment and talk to TrainHeroic directly, so there is no interactive sign-in to complete at all. If you can place credentials on the box, this is the cleanest headless path — use the Claude Code or stdio examples above. (Mind the plaintext-credentials caveat at the top of this README.)
+**1. Run a local server.** Use the Claude Code or stdio examples above with your credentials in the environment.
 
-**2. Hosted server in a web dev environment (Codespaces, VS Code Remote, code-server).** These forward `localhost` back to your browser automatically, so the [`mcp-remote`](https://github.com/geelen/mcp-remote) bridge completes the OAuth callback with **no manual SSH**:
+**2. Hosted server in a web IDE (Codespaces, VS Code Remote, code-server).** These forward `localhost` automatically, so [`mcp-remote`](https://github.com/geelen/mcp-remote) just works:
 
 ```jsonc
 {
@@ -151,19 +151,17 @@ OAuth needs a browser once, and the catch on a remote box is that the sign-in re
 }
 ```
 
-`mcp-remote` runs the full OAuth flow (dynamic registration + PKCE) against the hosted server and caches the token under `~/.mcp-auth`, so a stdio-only client never has to understand OAuth.
+**3. Hosted server, paste the redirect back.** Open the authorize URL in any browser, approve, then copy the `http://localhost:…/callback?code=…` URL it lands on (it will fail to load) and paste it into the terminal. Needs a bridge with out-of-band support, e.g. Hermes' `--manual-paste`.
 
-**3. Hosted server, paste the redirect back (no tunnel).** Open the authorize URL in a browser on any device, approve, and copy the full `http://localhost:…/callback?code=…` URL the browser fails to load — then paste it into the terminal. The bridge extracts the code and finishes the exchange. This needs a bridge that supports out-of-band paste-back (e.g. Hermes' `--manual-paste`); plain `mcp-remote` does not.
-
-**4. Hosted server over bare SSH.** Only if none of the above fit, forward the callback port once and sign in from your local browser:
+**4. Hosted server over SSH.** Forward the callback port once, then sign in from your local browser:
 
 ```bash
 ssh -L 3334:localhost:3334 user@remote-host
 ```
 
-The token caches under `~/.mcp-auth`, so the tunnel is needed only for the first login.
+The token caches under `~/.mcp-auth` after the first login.
 
-A client that already holds a bearer token can skip OAuth entirely with `--header "Authorization: Bearer …"`. (The hosted server speaks the standard authorization-code flow; it does **not** implement the OAuth device grant — RFC 8628 — so device-code bridges will not work against it. Tracking: #13.)
+Already have a token? Pass `--header "Authorization: Bearer …"` and skip OAuth. (Device grant / RFC 8628 isn't supported — tracking: #13.)
 
 </details>
 
