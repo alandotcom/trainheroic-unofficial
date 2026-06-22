@@ -45,21 +45,42 @@ runner sidesteps that). It prints the model's answer followed by the `===EVAL RE
   interactive prompt headless), and should reverse its own test writes (unpublish/delete/restore)
   where it can.
 
-Fan out a whole bank by backgrounding several at once and collecting their stdout:
+Fan out a bank **per `(role, model, mode)` cache group**: warm the shared prefix with one
+throwaway run, then burst the real queries so they read it instead of each re-writing it.
+Each run is a fresh `claude -p`, but Claude Code caches its system prompt + the role's tool
+schemas, and that prefix is served across processes for ~5 min (refreshed on each read).
+Same role/model/mode/cwd → byte-identical cached prefix. Backgrounding the whole bank at
+once is the worst case: every process starts before any has written the prefix, so they all
+miss and each pays the ~1.25× cache-write premium. The warm-up query text is arbitrary —
+only the launch config decides the cached prefix — so use something that finishes in one
+shot and calls no tools, and discard its output.
 
 ```bash
-scripts/mcp-eval.sh athlete "Did I record anything this week?" > /tmp/e1.txt 2>/dev/null &
-scripts/mcp-eval.sh athlete "What are my working maxes right now?" > /tmp/e2.txt 2>/dev/null &
+role=athlete model=sonnet   # one cache group (read mode shown; write mode = WRITES=1 below)
+WARM="Warm-up only: reply with OK, then output the eval report with ANSWER_REACHED: no and CONFUSION_SCORE: 1. Do not call any tools."
+
+scripts/mcp-eval.sh "$role" "$WARM" "" "$model" >/dev/null 2>&1   # primes + warms the prefix; ~10-25s
+
+# now burst the real bank — every run reads the warmed prefix
+scripts/mcp-eval.sh "$role" "Did I record anything this week?"     "" "$model" > /tmp/e1.txt 2>/dev/null &
+scripts/mcp-eval.sh "$role" "What are my working maxes right now?" "" "$model" > /tmp/e2.txt 2>/dev/null &
 wait
 ```
 
-Compare models — same query under each, tag the file with the model:
+Write mode is its own cache group — prefix `WRITES=1` on the warm-up **and** every bank line
+of that group (the warm-up calls no tools, so it's a no-op even on a test account). Skip the
+warm-up when a group has only **one** query — there is no second reader to amortize the write.
+
+Compare models — same bank under each, tag the file with the model. Each model is a separate
+cache group, so warm once per model inside the loop:
 
 ```bash
 for m in sonnet haiku; do
-  scripts/mcp-eval.sh athlete "Did I record anything this week?" "" "$m" > "/tmp/e1.$m.txt" 2>/dev/null &
+  scripts/mcp-eval.sh athlete "$WARM" "" "$m" >/dev/null 2>&1
+  scripts/mcp-eval.sh athlete "Did I record anything this week?"     "" "$m" > "/tmp/e1.$m.txt" 2>/dev/null &
+  scripts/mcp-eval.sh athlete "What are my working maxes right now?" "" "$m" > "/tmp/e2.$m.txt" 2>/dev/null &
+  wait
 done
-wait
 ```
 
 Write eval (TEST account only) — tag the file with the mode too:
@@ -104,9 +125,15 @@ defaults the date to today.
 
 ## Step 3 — fan out and collect
 
-Run one invocation per (query, model, mode), backgrounded, each to its own tagged stdout file
-(e.g. `/tmp/eval-<role>-<model>-<mode>-<n>.txt`). `wait`, then read the `===EVAL REPORT===` block
-out of each file. The report format the runner emits:
+Group the matrix by `(role, model, mode)` — that is the cache-sharing unit. For each group:
+one throwaway warm-up run (see the prime-then-burst pattern above), wait for it to exit, then
+background every real query in the group to its own tagged stdout file (e.g.
+`/tmp/eval-<role>-<model>-<mode>-<n>.txt`) and `wait`. Keep a group's burst within ~5 min of
+its warm-up — each burst read refreshes the TTL, so a group that drains under 5 min stays hot.
+Groups don't share cache, so their order doesn't matter. Step 1's creds sanity-check already
+warms the `(role, sonnet, read)` prefix — if the bank starts within the TTL, that group can
+skip its own warm-up. Then read the `===EVAL REPORT===` block out of each file. The report
+format the runner emits:
 
 ```
 ===EVAL REPORT===

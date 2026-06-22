@@ -44,21 +44,44 @@ Per run, the runner isolates the CLI's session and library caches to a temp dir
 (`TRAINHEROIC_SESSION_FILE`/`TRAINHEROIC_CACHE_FILE`), so concurrent fan-out never clobbers and
 the eval never touches your real `~/.trainheroic`.
 
-Fan out a bank by backgrounding several at once:
+Fan out a bank **per `(role, model, mode)` cache group**: warm the shared prefix with one
+throwaway run, then burst the real queries so they read it instead of each re-writing it.
+Each run is a fresh `claude -p`, but Claude Code caches its system prompt + the tool surface,
+and that prefix is served across processes for ~5 min (refreshed on each read). Same
+role/model/mode/cwd → byte-identical cached prefix. Backgrounding the whole bank at once is
+the worst case: every process starts before any has written the prefix, so they all miss and
+each pays the ~1.25× cache-write premium. The warm-up query text is arbitrary — only the
+launch config decides the cached prefix — so use something that finishes in one shot and runs
+no commands, and discard its output. (The CLI surface exposes only `Bash(trainheroic:*)`, so
+the cached prefix is mostly Claude Code's own system prompt; cross-run savings are smaller
+here than on mcp-eval's large tool block, but still real.)
 
 ```bash
-scripts/cli-eval.sh athlete "Did I record anything this week?" > /tmp/c1.txt 2>/dev/null &
-scripts/cli-eval.sh coach   "Who's on my roster?"             > /tmp/c2.txt 2>/dev/null &
+role=coach model=sonnet   # one cache group (read mode shown; write mode = WRITES=1 below)
+WARM="Warm-up only: reply with OK, then output the eval report with ANSWER_REACHED: no and CONFUSION_SCORE: 1. Do not run any commands."
+
+scripts/cli-eval.sh "$role" "$WARM" "" "$model" >/dev/null 2>&1   # primes + warms the prefix; ~10-25s
+
+# now burst the real bank — every run reads the warmed prefix
+scripts/cli-eval.sh "$role" "Who's on my roster?"            "" "$model" > /tmp/c1.txt 2>/dev/null &
+scripts/cli-eval.sh "$role" "Who did the most work this week?" "" "$model" > /tmp/c2.txt 2>/dev/null &
 wait
 ```
 
-Compare models — same query under each, tag the file with the model:
+Write mode is its own cache group — prefix `WRITES=1` on the warm-up **and** every bank line
+of that group (the warm-up runs no commands, so it's a no-op even on a test account). Skip the
+warm-up when a group has only **one** query — there is no second reader to amortize the write.
+
+Compare models — same bank under each, tag the file with the model. Each model is a separate
+cache group, so warm once per model inside the loop:
 
 ```bash
 for m in sonnet haiku; do
-  scripts/cli-eval.sh coach "Who's on my roster?" "" "$m" > "/tmp/c-roster.$m.txt" 2>/dev/null &
+  scripts/cli-eval.sh coach "$WARM" "" "$m" >/dev/null 2>&1
+  scripts/cli-eval.sh coach "Who's on my roster?"            "" "$m" > "/tmp/c-roster.$m.txt" 2>/dev/null &
+  scripts/cli-eval.sh coach "Who did the most work this week?" "" "$m" > "/tmp/c-work.$m.txt" 2>/dev/null &
+  wait
 done
-wait
 ```
 
 Write eval (TEST account only):
@@ -98,9 +121,15 @@ reason about "this week" and date ranges.
 
 ## Step 3 — fan out and collect
 
-Run one invocation per (query, model, mode), backgrounded, each to its own tagged stdout file
-(e.g. `/tmp/cli-eval-<role>-<model>-<mode>-<n>.txt`). `wait`, then read the `===EVAL REPORT===`
-block out of each file. The report format the runner emits:
+Group the matrix by `(role, model, mode)` — that is the cache-sharing unit. For each group:
+one throwaway warm-up run (see the prime-then-burst pattern above), wait for it to exit, then
+background every real query in the group to its own tagged stdout file (e.g.
+`/tmp/cli-eval-<role>-<model>-<mode>-<n>.txt`) and `wait`. Keep a group's burst within ~5 min
+of its warm-up — each burst read refreshes the TTL, so a group that drains under 5 min stays
+hot. Groups don't share cache, so their order doesn't matter. Step 1's creds sanity-check
+already warms the `(role, sonnet, read)` prefix — if the bank starts within the TTL, that
+group can skip its own warm-up. Then read the `===EVAL REPORT===` block out of each file. The
+report format the runner emits:
 
 ```
 ===EVAL REPORT===
