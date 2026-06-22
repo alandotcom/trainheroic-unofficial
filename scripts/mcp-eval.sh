@@ -33,18 +33,22 @@ fi
 
 # One stdio server per role, plus the role's read whitelist and write denylist. The denylist is
 # belt-and-suspenders on top of the whitelist so a write can never run even if the list drifts.
+# KEEP IN SYNC with the tools registered in packages/core/src/tools/: a tool missing from BOTH
+# READS and WRITES is denied in every mode, so the eval silently can't exercise it (read tools
+# vanish from read mode; write tools never fire under WRITES=1). When you add a core tool, add it
+# to the matching list here — `claude --print` only allows what is listed.
 case "$ROLE" in
   athlete)
     SERVER="trainheroic-local"
     PREFIX="mcp__trainheroic-local__"
     READS="athlete_whoami athlete_profile athlete_prefs athlete_working_maxes athlete_leaderboard athlete_workouts athlete_exercises athlete_exercise_history athlete_personal_records athlete_exercise_stats"
-    WRITES="athlete_log_set athlete_session_create athlete_session_add_exercises"
+    WRITES="athlete_log_set athlete_log_session athlete_session_create athlete_session_add_exercises"
     ;;
   coach)
     SERVER="trainheroic-local-coach"
     PREFIX="mcp__trainheroic-local-coach__"
-    READS="whoami head_coach list_programs notifications analytics_categories list_athletes list_teams get_team list_team_codes get_program athlete_lift_history athlete_training roster_activity analytics_query exercise_resolve exercise_search exercise_get store_stats messaging_conversations messaging_read message_draft"
-    WRITES="message_send message_delete athlete_invite athlete_archive athlete_restore team_create team_update team_delete team_code_create team_code_delete exercise_create exercise_forget exercise_sync session_copy session_remove session_unpublish session_save_as_template workout_build workout_publish"
+    READS="whoami head_coach list_programs notifications analytics_categories list_athletes list_teams get_team list_team_codes get_program athlete_lift_history athlete_training athlete_saved_workouts roster_activity team_volume analytics_query exercise_resolve exercise_search exercise_get store_stats messaging_conversations messaging_read message_draft"
+    WRITES="message_send message_delete athlete_invite athlete_archive athlete_restore team_create team_update team_delete team_code_create team_code_delete exercise_create exercise_forget exercise_sync session_copy session_remove session_unpublish session_save_as_template workout_build workout_publish log_athlete_set coach_log_session"
     ;;
   *)
     echo "mcp-eval: unknown role '$ROLE' (use athlete|coach)" >&2

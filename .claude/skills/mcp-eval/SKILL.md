@@ -55,6 +55,18 @@ miss and each pays the ~1.25× cache-write premium. The warm-up query text is ar
 only the launch config decides the cached prefix — so use something that finishes in one
 shot and calls no tools, and discard its output.
 
+**Decision rule (apply before you launch — do not skip silently):**
+1. Bucket every run by its cache group: `(role, model, mode)` (write mode is its own group).
+   Only runs in the SAME bucket share a cached prefix; nothing carries across buckets.
+2. Bucket has **≥2 queries** → warm once, `wait` for it to exit, THEN background the rest.
+3. Bucket has **exactly 1 query** → no warm-up (no second reader to amortize it).
+4. **Anti-pattern:** do not inflate the matrix to one-query-per-bucket to dodge the warm-up —
+   that just thins coverage. A real eval puts several queries in each bucket, which is exactly
+   what makes the warm-up pay off. If you find every bucket is a singleton, add more queries.
+5. Never background a whole multi-bucket bank at once expecting a cache win — caching is
+   per-bucket, so cross-bucket runs all miss (the worst case named above). State which rule
+   applied in your plan so the choice is visible, not silent.
+
 ```bash
 role=athlete model=sonnet   # one cache group (read mode shown; write mode = WRITES=1 below)
 WARM="Warm-up only: reply with OK, then output the eval report with ANSWER_REACHED: no and CONFUSION_SCORE: 1. Do not call any tools."
