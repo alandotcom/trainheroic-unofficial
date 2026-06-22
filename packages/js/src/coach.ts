@@ -5,6 +5,7 @@
 // behavior to centralize there.
 
 import { parseWorkoutDate } from "@trainheroic-unofficial/dto";
+import type { TeamVolumeAthlete, TeamVolumeReport } from "@trainheroic-unofficial/dto";
 import type { TrainHeroicClient } from "./client";
 
 export const DEFAULT_INVITE_MESSAGE = "Follow these steps and you'll be set up and ready to go!";
@@ -232,4 +233,117 @@ export async function queryAnalytics(
   const res = await client.request("POST", spec.path, { body });
   if (!res.ok) throw new Error(`Analytics ${args.metric} failed (HTTP ${res.status}).`);
   return res.data;
+}
+
+/**
+ * Resolve a team's roster to athlete user ids. `/v5/athletes` is the org-wide roster and the only
+ * place per-team membership lives (each row's `groups` holds the team/group ids it belongs to);
+ * there is no per-team roster endpoint. Returns the ids of athletes whose `groups` include the
+ * given id, matched as a string. Throws when the roster fetch fails.
+ */
+export async function fetchTeamAthleteIds(
+  client: TrainHeroicClient,
+  teamId: number,
+): Promise<number[]> {
+  const res = await client.request<unknown>("GET", "/v5/athletes");
+  if (!res.ok) throw new Error(`List athletes failed (HTTP ${res.status}).`);
+  const rows = Array.isArray(res.data) ? res.data : [];
+  const want = String(teamId);
+  const ids: number[] = [];
+  for (const row of rows) {
+    if (row === null || typeof row !== "object") continue;
+    const rec = row as { id?: number | string; groups?: unknown };
+    const groups = Array.isArray(rec.groups) ? rec.groups.map((g) => String(g)) : [];
+    if (!groups.includes(want)) continue;
+    const id = typeof rec.id === "string" ? Number(rec.id) : rec.id;
+    if (typeof id === "number" && Number.isFinite(id)) ids.push(id);
+  }
+  return ids;
+}
+
+/** One row of the `training-summary-athlete` report — a single logged session. */
+type TrainingSummaryRow = {
+  user_id?: number | string;
+  name_first?: string;
+  name_last?: string;
+  date_completed?: string;
+  reps?: number | string;
+  volume?: number | string;
+};
+
+function toNum(v: unknown): number {
+  const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Team-wide training volume over an inclusive date window. The `training-summary-athlete`
+ * analytics report already returns the team in one call — one row per logged session across all
+ * `athleteIds` — so this fans nothing out: it queries once, groups rows by athlete (summing
+ * volume/reps and counting sessions), and rolls the athletes up into a team total. Athletes who
+ * logged nothing in range simply have no rows and are omitted. The windowed counterpart to the
+ * all-time `fetchRosterActivity` snapshot, which has no date range.
+ */
+export async function teamVolume(
+  client: TrainHeroicClient,
+  args: { athleteIds: readonly number[]; dateStart: string; dateEnd: string },
+): Promise<TeamVolumeReport> {
+  if (args.athleteIds.length === 0) throw new Error("teamVolume needs at least one athleteId.");
+  const report = await queryAnalytics(client, {
+    metric: "training-summary-athlete",
+    userIds: args.athleteIds,
+    dateStart: args.dateStart,
+    dateEnd: args.dateEnd,
+  });
+  const rows: TrainingSummaryRow[] =
+    report !== null &&
+    typeof report === "object" &&
+    Array.isArray((report as { rows?: unknown }).rows)
+      ? (report as { rows: TrainingSummaryRow[] }).rows
+      : [];
+
+  const byAthlete = new Map<number, TeamVolumeAthlete>();
+  for (const row of rows) {
+    const athleteId = toNum(row.user_id);
+    if (athleteId === 0) continue;
+    const date = typeof row.date_completed === "string" ? row.date_completed.slice(0, 10) : null;
+    const name =
+      [row.name_first, row.name_last].filter((s) => typeof s === "string" && s !== "").join(" ") ||
+      null;
+    const existing = byAthlete.get(athleteId);
+    if (existing) {
+      existing.sessions += 1;
+      existing.reps += toNum(row.reps);
+      existing.volume += toNum(row.volume);
+      if (date !== null) {
+        if (existing.firstLoggedDate === null || date < existing.firstLoggedDate)
+          existing.firstLoggedDate = date;
+        if (existing.lastLoggedDate === null || date > existing.lastLoggedDate)
+          existing.lastLoggedDate = date;
+      }
+    } else {
+      byAthlete.set(athleteId, {
+        athleteId,
+        name,
+        sessions: 1,
+        reps: toNum(row.reps),
+        volume: toNum(row.volume),
+        firstLoggedDate: date,
+        lastLoggedDate: date,
+      });
+    }
+  }
+
+  const athletes = [...byAthlete.values()].sort((a, b) => b.volume - a.volume);
+  const totals = athletes.reduce(
+    (acc, a) => ({
+      athletes: acc.athletes + 1,
+      sessions: acc.sessions + a.sessions,
+      reps: acc.reps + a.reps,
+      volume: acc.volume + a.volume,
+    }),
+    { athletes: 0, sessions: 0, reps: 0, volume: 0 },
+  );
+
+  return { window: { start: args.dateStart, end: args.dateEnd }, athletes, totals };
 }

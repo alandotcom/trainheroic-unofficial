@@ -1017,6 +1017,258 @@ export async function addExercisesToWorkout(
   return res.data;
 }
 
+// --- Ad-hoc / by-exercise session logging ---
+
+/** One exercise's entered sets, keyed by the exercise id rather than a saved-set id. */
+export type SessionExercise = {
+  exerciseId: number;
+  order?: number;
+  sets: ReadonlyArray<{ param1?: number | string; param2?: number | string }>;
+};
+
+/** Result of logging a session by exercise: which sets were written, and (athlete) whether a
+ * new personal session had to be created for the date. */
+export type LogSessionResult = {
+  date: string;
+  created: boolean;
+  sets: Array<{ savedWorkoutSetId: number; exercisesLogged: number }>;
+};
+
+/** A saved-set target for one requested exercise, resolved from the API. */
+type ResolvedExercise = {
+  exerciseId: number;
+  savedWorkoutSetId: number;
+  savedWorkoutSetExerciseId: number;
+  sets: ReadonlyArray<{ param1?: number | string; param2?: number | string }>;
+};
+
+/**
+ * Find a personal-calendar session already on the given day. The range marks these with
+ * `personal_cal === true`; the addable id is the program workout's `workout_id`. Returns the
+ * first one's workoutId, or null when the day has no personal session.
+ */
+function findPersonalSessionWorkoutId(workouts: readonly ProgramWorkout[]): number | null {
+  for (const pw of workouts) {
+    const rec = pw as Record<string, unknown>;
+    if (rec.personal_cal === true) {
+      const workoutId = coerceInt(rec.workout_id);
+      if (workoutId !== null) return workoutId;
+    }
+  }
+  return null;
+}
+
+/**
+ * Map the `addExercisesToWorkout` response (an array of saved sets) to per-exercise saved ids.
+ * Each set's `id` is a savedWorkoutSetId; each `savedWorkoutSetExercises[].id` is a
+ * savedWorkoutSetExerciseId and `.exerciseId` is the catalog exercise id that was added.
+ */
+function indexAddedExercises(
+  added: unknown,
+): Array<{ exerciseId: number; savedWorkoutSetId: number; savedWorkoutSetExerciseId: number }> {
+  const out: Array<{
+    exerciseId: number;
+    savedWorkoutSetId: number;
+    savedWorkoutSetExerciseId: number;
+  }> = [];
+  const sets = Array.isArray(added) ? added : [];
+  for (const s of sets) {
+    if (!isRecord(s)) continue;
+    const savedWorkoutSetId = coerceInt(s.id);
+    if (savedWorkoutSetId === null) continue;
+    const exercises = Array.isArray(s.savedWorkoutSetExercises) ? s.savedWorkoutSetExercises : [];
+    for (const ex of exercises) {
+      if (!isRecord(ex)) continue;
+      const savedWorkoutSetExerciseId = coerceInt(ex.id);
+      const exerciseId = coerceInt(ex.exerciseId ?? ex.exercise_id);
+      if (savedWorkoutSetExerciseId === null || exerciseId === null) continue;
+      out.push({ exerciseId, savedWorkoutSetId, savedWorkoutSetExerciseId });
+    }
+  }
+  return out;
+}
+
+/** Flatten a day's prescribed saved sets into `{ savedWorkoutSetId, ex }` rows (both set keys). */
+function eachPrescribedExercise(
+  workouts: readonly ProgramWorkout[],
+): Array<{ savedWorkoutSetId: number; ex: Record<string, unknown> }> {
+  const rows: Array<{ savedWorkoutSetId: number; ex: Record<string, unknown> }> = [];
+  for (const pw of workouts) {
+    const rec = pw as Record<string, unknown>;
+    const ssw = isRecord(rec.summarizedSavedWorkout) ? rec.summarizedSavedWorkout : {};
+    const sw = isRecord(ssw.saved_workout) ? ssw.saved_workout : null;
+    if (!sw) continue;
+    const sets = [
+      ...(Array.isArray(sw.workoutSets) ? sw.workoutSets : []),
+      ...(Array.isArray(sw.addedWorkoutSets) ? sw.addedWorkoutSets : []),
+    ];
+    for (const s of sets) {
+      if (!isRecord(s)) continue;
+      const savedWorkoutSetId = coerceInt(s.id);
+      if (savedWorkoutSetId === null) continue;
+      const exercises = Array.isArray(s.workoutSetExercises) ? s.workoutSetExercises : [];
+      for (const ex of exercises) if (isRecord(ex)) rows.push({ savedWorkoutSetId, ex });
+    }
+  }
+  return rows;
+}
+
+/**
+ * Locate a single prescribed exercise on the given day's workouts, returning the saved set it
+ * belongs to and its saved-set-exercise id. Used by the coach path, which can only log against
+ * what is already on the athlete's calendar. Returns null when the exercise is not prescribed
+ * that day.
+ */
+function findPrescribedExercise(
+  workouts: readonly ProgramWorkout[],
+  exerciseId: number,
+  used: ReadonlySet<number>,
+): { savedWorkoutSetId: number; savedWorkoutSetExerciseId: number } | null {
+  for (const { savedWorkoutSetId, ex } of eachPrescribedExercise(workouts)) {
+    const sweId = coerceInt(ex.id);
+    if (sweId === null || used.has(sweId)) continue;
+    if (coerceInt(ex.exercise_id) === exerciseId) {
+      return { savedWorkoutSetId, savedWorkoutSetExerciseId: sweId };
+    }
+  }
+  return null;
+}
+
+/** List the prescribed exercises on a day as `id (title)` labels, for not-found errors. */
+function prescribedExerciseLabels(workouts: readonly ProgramWorkout[]): string[] {
+  const labels: string[] = [];
+  for (const { ex } of eachPrescribedExercise(workouts)) {
+    const id = coerceInt(ex.exercise_id);
+    if (id === null) continue;
+    const title =
+      (typeof ex.exercise_title === "string" && ex.exercise_title) ||
+      (typeof ex.title === "string" && ex.title) ||
+      "exercise";
+    labels.push(`${id} (${title})`);
+  }
+  return labels;
+}
+
+/** Group resolved exercises by saved set and write each set via the given log target. */
+async function logResolvedExercises(
+  client: TrainHeroicClient,
+  target: LogTarget,
+  date: string,
+  resolved: readonly ResolvedExercise[],
+): Promise<Array<{ savedWorkoutSetId: number; exercisesLogged: number }>> {
+  const bySet = new Map<number, SetResult[]>();
+  for (const r of resolved) {
+    const list = bySet.get(r.savedWorkoutSetId) ?? [];
+    list.push({ savedWorkoutSetExerciseId: r.savedWorkoutSetExerciseId, sets: [...r.sets] });
+    bySet.set(r.savedWorkoutSetId, list);
+  }
+  const out: Array<{ savedWorkoutSetId: number; exercisesLogged: number }> = [];
+  for (const [savedWorkoutSetId, results] of bySet) {
+    const written =
+      target.role === "coach"
+        ? await logForAthlete(client, {
+            athleteId: target.athleteId,
+            date,
+            savedWorkoutSetId,
+            results,
+          })
+        : await logAthleteSet(client, { date, savedWorkoutSetId, results });
+    out.push(written);
+  }
+  return out;
+}
+
+/**
+ * Log a whole session for the logged-in athlete by exercise, with no pre-existing prescription
+ * required. Reuses a personal session already on the date when one exists (the API marks these
+ * `personal_cal`), otherwise creates one; then adds the exercises and logs their entered sets.
+ * This is the "log whatever I just did" path — extra accessory work, a makeup lift, an off-plan
+ * gym session.
+ */
+export async function logAdHocSession(
+  client: TrainHeroicClient,
+  args: { date: string; exercises: readonly SessionExercise[] },
+): Promise<LogSessionResult> {
+  if (args.exercises.length === 0) throw new Error("Provide at least one exercise to log.");
+  const day = await fetchAthleteWorkouts(client, args.date, args.date);
+  const existing = findPersonalSessionWorkoutId(day);
+  const created = existing === null;
+  const workoutId = existing ?? (await createPersonalWorkout(client, args.date)).workoutId;
+
+  const withOrder = args.exercises.map((e, i) => ({ ...e, order: e.order ?? i + 1 }));
+  const added = await addExercisesToWorkout(
+    client,
+    workoutId,
+    withOrder.map((e) => ({ exerciseId: e.exerciseId, order: e.order })),
+  );
+  const index = indexAddedExercises(added);
+
+  const consumed = new Set<number>();
+  const resolved: ResolvedExercise[] = withOrder.map((e) => {
+    const hit = index.find(
+      (m) => m.exerciseId === e.exerciseId && !consumed.has(m.savedWorkoutSetExerciseId),
+    );
+    if (!hit) {
+      throw new Error(
+        `Could not place exercise ${e.exerciseId} into the session after adding it. ` +
+          "The add-exercises response did not return a saved set for it.",
+      );
+    }
+    consumed.add(hit.savedWorkoutSetExerciseId);
+    return {
+      exerciseId: e.exerciseId,
+      savedWorkoutSetId: hit.savedWorkoutSetId,
+      savedWorkoutSetExerciseId: hit.savedWorkoutSetExerciseId,
+      sets: e.sets,
+    };
+  });
+
+  const sets = await logResolvedExercises(client, { role: "athlete" }, args.date, resolved);
+  return { date: args.date, created, sets };
+}
+
+/**
+ * Coach "log a session for a roster athlete" by exercise. The API offers no way to put an
+ * off-plan session on another user's calendar (the personal-calendar endpoints are self-scoped),
+ * so this logs against the session the athlete already has on that date: each requested exercise
+ * is resolved to a prescribed saved set and its results are written via the coach "Log for
+ * Athlete" surface. Throws a readable error naming the prescribed exercises when one is missing.
+ */
+export async function logSessionForAthlete(
+  client: TrainHeroicClient,
+  args: { athleteId: number; date: string; exercises: readonly SessionExercise[] },
+): Promise<LogSessionResult> {
+  if (args.exercises.length === 0) throw new Error("Provide at least one exercise to log.");
+  const day = await fetchCoachAthleteWorkouts(client, args.athleteId, args.date, args.date);
+
+  const used = new Set<number>();
+  const resolved: ResolvedExercise[] = args.exercises.map((e) => {
+    const hit = findPrescribedExercise(day, e.exerciseId, used);
+    if (!hit) {
+      const labels = prescribedExerciseLabels(day);
+      const present =
+        labels.length > 0
+          ? `Prescribed on ${args.date}: ${labels.join(", ")}.`
+          : `Nothing is prescribed for athlete ${args.athleteId} on ${args.date}.`;
+      throw new Error(
+        `Exercise ${e.exerciseId} is not on athlete ${args.athleteId}'s calendar for ${args.date}, ` +
+          `so there is no set to log it against. ${present} A coach can only log against an existing ` +
+          "session; build/publish a session for the athlete first if it is missing.",
+      );
+    }
+    used.add(hit.savedWorkoutSetExerciseId);
+    return { exerciseId: e.exerciseId, ...hit, sets: e.sets };
+  });
+
+  const sets = await logResolvedExercises(
+    client,
+    { role: "coach", athleteId: args.athleteId },
+    args.date,
+    resolved,
+  );
+  return { date: args.date, created: false, sets };
+}
+
 /** Flatten `/v5/exercises/{id}/history` into PRs + a session time-series. */
 export function presentExerciseHistory(detail: ExerciseHistoryDetail): PresentedExerciseHistory {
   const liftPRs = (detail.liftPRs ?? []).map((p) => ({

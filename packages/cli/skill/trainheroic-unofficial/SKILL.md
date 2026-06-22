@@ -86,17 +86,18 @@ response shape, or an area not covered here.
 
 ## What you can do
 
-| Area                | How                                                                                                                              |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Athletes            | `$TH coach athletes`; `coach athlete-invite\|athlete-archive\|athlete-restore`                                                   |
-| Teams / join codes  | `$TH coach teams\|team <id>\|team-codes <id>`; `coach team-create\|team-update\|team-delete\|team-code-create\|team-code-delete` |
-| Programs            | `$TH coach programs`, `$TH coach program <id>`                                                                                   |
-| Exercises           | `$TH coach exercise resolve\|search\|get\|sync\|create\|forget\|stats` (below)                                                   |
-| Sessions / workouts | `$TH coach workout build\|read\|publish\|remove`; `coach session-copy\|session-unpublish\|session-save-template`                 |
-| Roster training     | `$TH coach roster-activity\|athlete-training\|athlete-lift-history\|athlete-workouts` (read another athlete's training)          |
-| Log for an athlete  | `$TH coach log-set` — record a roster athlete's reps/weights (real athletes only; see below)                                     |
-| Messaging           | `$TH coach message list\|read\|draft\|send\|delete` (below)                                                                      |
-| Analytics           | `$TH coach analytics` (category list); `$TH coach analytics-query --metric <key> ...` (the report)                               |
+| Area                   | How                                                                                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Athletes               | `$TH coach athletes`; `coach athlete-invite\|athlete-archive\|athlete-restore`                                                                |
+| Teams / join codes     | `$TH coach teams\|team <id>\|team-codes <id>`; `coach team-create\|team-update\|team-delete\|team-code-create\|team-code-delete`              |
+| Programs               | `$TH coach programs`, `$TH coach program <id>`                                                                                                |
+| Exercises              | `$TH coach exercise resolve\|search\|get\|sync\|create\|forget\|stats` (below)                                                                |
+| Sessions / workouts    | `$TH coach workout build\|read\|publish\|remove`; `coach session-copy\|session-unpublish\|session-save-template`                              |
+| Roster training        | `$TH coach roster-activity\|athlete-training\|athlete-lift-history\|athlete-workouts` (read another athlete's training)                       |
+| Team volume (windowed) | `$TH coach team-volume --team <id>\|--athletes <ids> --start Y-M-D --end Y-M-D` — date-scoped team volume (roster-activity is all-time)       |
+| Log for an athlete     | `$TH coach log-set` (by set id) or `coach log-session` (by exercise) — record a roster athlete's reps/weights (real athletes only; see below) |
+| Messaging              | `$TH coach message list\|read\|draft\|send\|delete` (below)                                                                                   |
+| Analytics              | `$TH coach analytics` (category list); `$TH coach analytics-query --metric <key> ...` (the report)                                            |
 
 ## Resolving exercises
 
@@ -187,6 +188,16 @@ $TH coach athlete-workouts --athlete 200004 --start 2026-06-22 --end 2026-06-22 
 # 2) log it (results JSON = one entry per exercise; each set is param1=reps, param2=weight):
 $TH coach log-set --athlete 200004 --date 2026-06-22 --set 1594558978 --yes \
   '[{"savedWorkoutSetExerciseId":2714543789,"sets":[{"param1":"10","param2":"225"},{"param1":"10","param2":"225"}]}]'
+```
+
+To skip the id-hunting step, `coach log-session` logs by exerciseId instead: each exercise is
+matched to a set already on the athlete's calendar for that date. The API has no way to put an
+off-plan session on another athlete's calendar, so an exercise that is not prescribed that day
+fails (the error names what is prescribed) — build/publish a session first if it is missing.
+
+```bash
+$TH coach log-session --athlete 200004 --date 2026-06-22 --yes \
+  '[{"exerciseId":1,"sets":[{"param1":10,"param2":225},{"param1":10,"param2":225}]}]'
 ```
 
 **Only works for real (invited) athletes.** TrainHeroic's seeded _demo_ athletes are

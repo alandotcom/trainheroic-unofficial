@@ -52,18 +52,19 @@ on a 401/403. Start with `$TH athlete whoami` to confirm auth and get your `id`.
 
 ## What you can do
 
-| Goal                                  | Command                                                              |
-| ------------------------------------- | -------------------------------------------------------------------- |
-| Lifetime totals + profile             | `$TH athlete profile [--metric]`                                     |
-| Scheduled / completed workouts        | `$TH athlete workouts --start Y-M-D --end Y-M-D [--raw] [--summary]` |
-| Find an exercise you've logged        | `$TH athlete exercises [--q <text>] [--limit N]`                     |
-| One lift's PRs + history over time    | `$TH athlete history <exerciseId> [--raw]`                           |
-| Personal records for a lift           | `$TH athlete prs <exerciseId>`                                       |
-| Last performance + PR as of a date    | `$TH athlete stats <exerciseId> --date Y-M-D`                        |
-| Working maxes (drive % prescriptions) | `$TH athlete working-maxes`                                          |
-| Benchmark leaderboard                 | `$TH athlete leaderboard <workoutId>`                                |
-| Download all historicals to JSON      | `$TH athlete export [--out dir] [--full]`                            |
-| Log completed set results (gated)     | `$TH athlete log-set --date Y-M-D --set <id> ... --yes`              |
+| Goal                                  | Command                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------ |
+| Lifetime totals + profile             | `$TH athlete profile [--metric]`                                               |
+| Scheduled / completed workouts        | `$TH athlete workouts --start Y-M-D --end Y-M-D [--raw] [--summary]`           |
+| Find an exercise you've logged        | `$TH athlete exercises [--q <text>] [--limit N]`                               |
+| One lift's PRs + history over time    | `$TH athlete history <exerciseId> [--raw]`                                     |
+| Personal records for a lift           | `$TH athlete prs <exerciseId>`                                                 |
+| Last performance + PR as of a date    | `$TH athlete stats <exerciseId> --date Y-M-D`                                  |
+| Working maxes (drive % prescriptions) | `$TH athlete working-maxes`                                                    |
+| Benchmark leaderboard                 | `$TH athlete leaderboard <workoutId>`                                          |
+| Download all historicals to JSON      | `$TH athlete export [--out dir] [--full]`                                      |
+| Log completed set results (gated)     | `$TH athlete log-set --date Y-M-D --set <id> ... --yes`                        |
+| Log an off-plan session (gated)       | `$TH athlete log-session --date Y-M-D '[{"exerciseId":N,"sets":[...]}]' --yes` |
 
 ## Reading training
 
@@ -125,6 +126,21 @@ $TH athlete log-set --date 2026-06-01 --set 1593305783 --yes \
 `--yes` is required. Confirm with the user before running it, and re-read the workout to
 check the result landed as intended. `param1`/`param2` are the entered values by entry slot
 (check the exercise's positional units first).
+
+### Logging an off-plan session
+
+When you trained something a coach never scheduled (accessory work, a makeup lift, an
+unplanned gym session), `log-set` has no set to target. Use `log-session` instead — it
+creates (or reuses) a personal session for the date, adds the exercises, and logs them in one
+call. Pass the exercises array directly; get each `exerciseId` from `$TH athlete exercises`:
+
+```bash
+$TH athlete log-session --date 2026-06-21 --yes \
+  '[{"exerciseId": 1, "sets": [{"param1": 5, "param2": 185}, {"param1": 5, "param2": 185}]}]'
+```
+
+Same coach-visible write and the same `--yes` gate as `log-set`. For a workout the coach
+already scheduled, prefer `log-set` so it attaches to the prescription.
 
 ## Gotchas
 

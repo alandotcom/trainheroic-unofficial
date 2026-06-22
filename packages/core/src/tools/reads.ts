@@ -5,8 +5,10 @@ import {
   fetchCoachAthleteCalendarSummary,
   fetchExerciseHistoryDetail,
   fetchRosterActivity,
+  fetchTeamAthleteIds,
   presentCoachAthleteTraining,
   presentExerciseHistory,
+  teamVolume,
 } from "@trainheroic-unofficial/js";
 import { apiCall, attempt, idParam, jsonResult, READ, toId } from "../context";
 import type { ToolContext } from "../context";
@@ -311,7 +313,50 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
 }
 
 /** Read-only coach/athlete queries. Exercise lookups live in the exercise store tools. */
+/** The windowed team-volume read — its own function so registerEntityReads stays under the cap. */
+function registerTeamVolume(server: McpServer, ctx: ToolContext): void {
+  server.registerTool(
+    "team_volume",
+    {
+      title: "Team training volume over a date window",
+      description:
+        "Team-wide training volume (and reps/sessions) scoped to an inclusive YYYY-MM-DD window — " +
+        "the date-ranged answer to 'how much did the team train over the last two weeks'. Pass " +
+        "either teamId (its roster is resolved automatically) or an explicit athleteIds list (from " +
+        "list_athletes); dateStart and dateEnd are required. Returns one row per athlete who logged " +
+        "in range plus the rolled-up team totals (volume is in lb). For an all-time, undated " +
+        "snapshot use roster_activity instead.",
+      inputSchema: {
+        teamId: idParam.optional(),
+        athleteIds: z.array(idParam).optional(),
+        dateStart: dateString,
+        dateEnd: dateString,
+      },
+      annotations: READ,
+    },
+    ({ teamId, athleteIds, dateStart, dateEnd }) =>
+      attempt(async () => {
+        const ids =
+          athleteIds !== undefined && athleteIds.length > 0
+            ? athleteIds.map(toId)
+            : teamId !== undefined
+              ? await fetchTeamAthleteIds(ctx.client, toId(teamId))
+              : [];
+        if (ids.length === 0) {
+          throw new Error(
+            "Provide athleteIds, or a teamId whose roster has athletes. " +
+              "No athletes resolved for this team — pass athleteIds from list_athletes instead.",
+          );
+        }
+        return jsonResult(await teamVolume(ctx.client, { athleteIds: ids, dateStart, dateEnd }), {
+          hint: "Rows cover only athletes who logged in range; totals roll them up. Narrow the window or athletes to shrink.",
+        });
+      }),
+  );
+}
+
 export function registerReadTools(server: McpServer, ctx: ToolContext): void {
   registerRosterReads(server, ctx);
   registerEntityReads(server, ctx);
+  registerTeamVolume(server, ctx);
 }

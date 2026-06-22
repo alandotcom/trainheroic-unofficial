@@ -6,8 +6,10 @@ import process from "node:process";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import type { ZodType } from "zod";
 import {
+  coachLogSessionArgsSchema,
   coachLogSetArgsSchema,
   exerciseCreateSchema,
+  logSessionArgsSchema,
   logSetArgsSchema,
   workoutSpecSchema,
 } from "@trainheroic-unofficial/dto";
@@ -37,10 +39,15 @@ import {
   fetchPersonalRecords,
   fetchRosterActivity,
   fetchStreams,
+  fetchTeamAthleteIds,
   fetchWorkingMaxes,
   inviteAthletes,
+  logAdHocSession,
   logAthleteSet,
   logForAthlete,
+  logSessionForAthlete,
+  type SessionExercise,
+  teamVolume,
   mapPool,
   queryAnalytics,
   presentAthleteWorkouts,
@@ -84,7 +91,8 @@ Coach — manage a roster (needs a coach account):
   coach program <id> | team <id> | team-codes <id>
 
   roster athlete reads (three lenses — pick by the question):
-  coach roster-activity --athletes <id,id,...> [--metric]                  rank roster by recency; --metric adds session count + training volume (team-volume questions live HERE, not analytics-query). All-time snapshot, no date range. Get the full id list from 'coach athletes'.
+  coach roster-activity --athletes <id,id,...> [--metric]                  rank roster by recency; --metric adds session count + training volume. All-time snapshot, NO date range — for a windowed total use 'coach team-volume'. Get the full id list from 'coach athletes'.
+  coach team-volume (--team <id> | --athletes <id,id,...>) --start Y-M-D --end Y-M-D   team training volume scoped to a date window: per-athlete rows (only those who logged in range) + rolled-up totals (volume in lb). --team resolves the roster; --athletes passes ids directly.
   coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--logged-only] [--summary] [--raw|--log-ids]   prescribed + logged work over a date range; --logged-only/--summary narrow it to what was actually logged; --log-ids prints just the savedWorkoutSetId + savedWorkoutSetExerciseId per set that log-set needs
   coach athlete-training --athlete <id> --year <YYYY> --month <1-12>        sessions the athlete LOGGED in one month (empty = nothing logged that month, not an error)
   coach athlete-lift-history --athlete <id> --exercise <id> [--since Y-M-D] [--until Y-M-D] [--raw]   one exercise's logged history + PRs
@@ -93,6 +101,11 @@ Coach — manage a roster (needs a coach account):
   coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes
       --date is the workout's SCHEDULED date (not necessarily today); get --set (savedWorkoutSetId)
       and each result's savedWorkoutSetExerciseId from 'coach athlete-workouts ... --log-ids'
+  coach log-session --athlete <id> --date Y-M-D <exercisesJson>|--file f --yes
+      log by exercise instead of by set id: each exercise (exerciseId + sets) is matched to a set
+      already on the athlete's calendar that day. The API can't put an off-plan session on an
+      athlete's calendar, so an unprescribed exercise fails (it names what IS prescribed).
+      JSON is the exercises array: [{"exerciseId":N,"sets":[{"param1":reps,"param2":weight}, ...]}, ...]
 
   roster management:
   coach athlete-invite --team <id> --emails a@x,b@y [--message "..."] --yes
@@ -148,7 +161,9 @@ Athlete — the logged-in user's own training (a coach account works too):
   athlete stats <exerciseId> --date Y-M-D
   athlete leaderboard <workoutId> [--page N] [--page-size N] [--gender N]
   athlete export [--out dir] [--start Y-M-D] [--end Y-M-D] [--full]
-  athlete log-set --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes   (logs to a PRESCRIBED workout on that date — no ad-hoc sessions; ids from 'athlete workouts ... --log-ids')
+  athlete log-set --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes   (logs to a PRESCRIBED workout on that date; ids from 'athlete workouts ... --log-ids')
+  athlete log-session --date Y-M-D <exercisesJson>|--file f --yes   (log OFF-PLAN work with no prescription — creates/reuses a personal session for the date, then logs it; exerciseIds from 'athlete exercises')
+      JSON is the exercises array: [{"exerciseId":N,"sets":[{"param1":reps,"param2":weight}, ...]}, ...]
 `;
 
 function out(value: unknown): void {
@@ -606,6 +621,53 @@ async function cmdAthleteLogSet(client: TrainHeroicClient, a: string[]): Promise
   return out(await logAthleteSet(client, { date: args.date, savedWorkoutSetId, results: mapped }));
 }
 
+const LOG_SESSION_USAGE = "athlete log-session --date Y-M-D <exercisesJson>|--file f --yes";
+
+/** Map validated logSession exercises to the SDK's SessionExercise[] (ids coerced, slots trimmed). */
+function toSessionExercises(
+  exercises: ReadonlyArray<{
+    exerciseId: number | string;
+    order?: number | undefined;
+    sets: ReadonlyArray<{
+      param1?: number | string | undefined;
+      param2?: number | string | undefined;
+    }>;
+  }>,
+): SessionExercise[] {
+  return exercises.map((e) => {
+    const sets = e.sets.map((s) => {
+      const slot: { param1?: number | string; param2?: number | string } = {};
+      if (s.param1 !== undefined) slot.param1 = s.param1;
+      if (s.param2 !== undefined) slot.param2 = s.param2;
+      return slot;
+    });
+    const mapped: SessionExercise = { exerciseId: toInt(String(e.exerciseId), "exerciseId"), sets };
+    if (e.order !== undefined) mapped.order = e.order;
+    return mapped;
+  });
+}
+
+// Log an off-plan session for the logged-in athlete: create-or-reuse a personal session for the
+// date, then add the exercises and log their sets. No coach-scheduled workout required.
+async function cmdAthleteLogSession(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values, positionals } = parse(a, {
+    date: { type: "string" },
+    file: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const date = isoDate(need(values.date as string | undefined, LOG_SESSION_USAGE), "--date");
+  const exercises = await jsonInput(positionals[0], values.file as string | undefined);
+  const args = validate(logSessionArgsSchema, { date, exercises }, "log-session args");
+  if (values.yes !== true)
+    fail(`logging a session on ${date} writes to your coach-visible log; add --yes.`);
+  return out(
+    await logAdHocSession(client, {
+      date: args.date,
+      exercises: toSessionExercises(args.exercises),
+    }),
+  );
+}
+
 async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<void> {
   const [sub, ...a] = rest;
   switch (sub) {
@@ -706,9 +768,11 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
       return cmdAthleteExport(client, a);
     case "log-set":
       return cmdAthleteLogSet(client, a);
+    case "log-session":
+      return cmdAthleteLogSession(client, a);
     default:
       return fail(
-        "usage: trainheroic athlete <whoami|profile|prefs|workouts|exercises|history|prs|stats|working-maxes|leaderboard|export|log-set>",
+        "usage: trainheroic athlete <whoami|profile|prefs|workouts|exercises|history|prs|stats|working-maxes|leaderboard|export|log-set|log-session>",
       );
   }
 }
@@ -765,7 +829,7 @@ async function cmdInstallSkill(): Promise<void> {
 }
 
 const COACH_USAGE =
-  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|roster-activity|athlete-training|athlete-lift-history|athlete-workouts|log-set|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|analytics-query|exercise|workout|message>";
+  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|roster-activity|team-volume|athlete-training|athlete-lift-history|athlete-workouts|log-set|log-session|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|analytics-query|exercise|workout|message>";
 
 const COACH_LOG_SET_USAGE =
   "coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson> --yes";
@@ -814,6 +878,66 @@ async function cmdCoachLogSet(client: TrainHeroicClient, a: string[]): Promise<v
   return out(
     await logForAthlete(client, { athleteId, date: args.date, savedWorkoutSetId, results: mapped }),
   );
+}
+
+const COACH_LOG_SESSION_USAGE =
+  "coach log-session --athlete <id> --date Y-M-D <exercisesJson>|--file f --yes";
+
+// Log a roster athlete's session by exercise. The API can only log against a session the athlete
+// already has on that date, so each exercise must be prescribed; ad-hoc-for-athlete is not possible.
+async function cmdCoachLogSession(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values, positionals } = parse(a, {
+    athlete: { type: "string" },
+    date: { type: "string" },
+    file: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const athleteId = toInt(
+    need(values.athlete as string | undefined, COACH_LOG_SESSION_USAGE),
+    "--athlete",
+  );
+  const date = isoDate(need(values.date as string | undefined, COACH_LOG_SESSION_USAGE), "--date");
+  const exercises = await jsonInput(positionals[0], values.file as string | undefined);
+  const args = validate(
+    coachLogSessionArgsSchema,
+    { athleteId, date, exercises },
+    "coach log-session args",
+  );
+  if (values.yes !== true)
+    fail(`logging a session for athlete ${athleteId} writes to their training log; add --yes.`);
+  return out(
+    await logSessionForAthlete(client, {
+      athleteId,
+      date: args.date,
+      exercises: toSessionExercises(args.exercises),
+    }),
+  );
+}
+
+// Team-wide training volume scoped to a date window: pass --team (roster resolved) or --athletes.
+async function cmdCoachTeamVolume(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage =
+    "coach team-volume (--team <id> | --athletes <id,id,...>) --start Y-M-D --end Y-M-D";
+  const { values } = parse(a, {
+    team: { type: "string" },
+    athletes: { type: "string" },
+    start: { type: "string" },
+    end: { type: "string" },
+  });
+  const dateStart = isoDate(need(values.start as string | undefined, usage), "--start");
+  const dateEnd = isoDate(need(values.end as string | undefined, usage), "--end");
+  const athleteIds =
+    values.athletes !== undefined
+      ? idList(values.athletes as string, "--athletes")
+      : await fetchTeamAthleteIds(
+          client,
+          toInt(need(values.team as string | undefined, usage), "--team"),
+        );
+  if (athleteIds.length === 0)
+    fail(
+      "no athletes resolved — pass --athletes <id,id,...> or a --team whose roster has athletes.",
+    );
+  return out(await teamVolume(client, { athleteIds, dateStart, dateEnd }));
 }
 
 // A roster athlete's saved workouts in a date window. raw exposes the savedWorkoutSetId +
@@ -1108,6 +1232,8 @@ async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void
       );
     case "roster-activity":
       return cmdCoachRosterActivity(client, a);
+    case "team-volume":
+      return cmdCoachTeamVolume(client, a);
     case "athlete-training":
       return cmdCoachAthleteTraining(client, a);
     case "athlete-lift-history":
@@ -1116,6 +1242,8 @@ async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void
       return cmdCoachAthleteWorkouts(client, a);
     case "log-set":
       return cmdCoachLogSet(client, a);
+    case "log-session":
+      return cmdCoachLogSession(client, a);
     case "athlete-invite":
       return cmdCoachAthleteInvite(client, a);
     case "athlete-archive":

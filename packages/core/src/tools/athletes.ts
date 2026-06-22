@@ -1,13 +1,19 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { coachLogSetArgsSchema, dateString } from "@trainheroic-unofficial/dto";
+import {
+  coachLogSessionArgsSchema,
+  coachLogSetArgsSchema,
+  dateString,
+} from "@trainheroic-unofficial/dto";
 import {
   definedProps,
   fetchCoachAthleteWorkouts,
   inviteAthletes,
   logForAthlete,
+  logSessionForAthlete,
   presentAthleteWorkouts,
 } from "@trainheroic-unofficial/js";
+import { mapSessionExercises } from "./athlete-training";
 import { confirmGate, NOT_CONFIRMED } from "../confirm";
 import {
   apiCall,
@@ -206,6 +212,42 @@ function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
             date,
             savedWorkoutSetId: toId(savedWorkoutSetId),
             results: mapped,
+          }),
+        );
+      }),
+  );
+
+  server.registerTool(
+    "coach_log_session",
+    {
+      title: "Log a roster athlete's session by exercise",
+      description:
+        "Coach-facing write: log results for a roster athlete by exercise on a given day, without " +
+        "hunting for saved-set ids. Give athleteId, a YYYY-MM-DD date, and a list of exercises " +
+        "(each with its entered sets), and each is matched to a set already on that athlete's " +
+        "calendar for the date. The API has no way to put an off-plan session on an athlete's " +
+        "calendar, so this only logs against an EXISTING session — if an exercise is not " +
+        "prescribed that day the call fails and names what is. Get athleteId from list_athletes " +
+        "and exerciseIds from athlete_saved_workouts. Seeded demo athletes are read-only. " +
+        "Requires confirmation (elicitation or confirm:true).",
+      inputSchema: { ...coachLogSessionArgsSchema.shape, confirm: z.boolean().optional() },
+      annotations: DESTRUCTIVE,
+    },
+    ({ athleteId, date, exercises, confirm }, extra) =>
+      attempt(async () => {
+        const aId = toId(athleteId);
+        const ok = await confirmGate(
+          server,
+          extra.requestId,
+          `Log a session of ${exercises.length} exercise(s) for athlete ${aId} on ${date}? This writes to their coach-visible training log.`,
+          confirm,
+        );
+        if (!ok) return errorResult(NOT_CONFIRMED);
+        return jsonResult(
+          await logSessionForAthlete(ctx.client, {
+            athleteId: aId,
+            date,
+            exercises: mapSessionExercises(exercises),
           }),
         );
       }),

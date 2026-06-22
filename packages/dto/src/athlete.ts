@@ -172,6 +172,15 @@ export const athleteWorkoutRangeArgsSchema = z.object({
 export type AthleteWorkoutRangeArgs = z.infer<typeof athleteWorkoutRangeArgsSchema>;
 
 /**
+ * One entered set: the value of each parameter slot (param 1 / param 2 — e.g. reps / weight).
+ * Shared by every logging write so the per-set shape is defined once.
+ */
+export const loggedSetSchema = z.object({
+  param1: z.union([z.number(), z.string()]).optional(),
+  param2: z.union([z.number(), z.string()]).optional(),
+});
+
+/**
  * Args for the set-logging write. `date` (the workout's day) locates the saved
  * workout via the range endpoint; `savedWorkoutSetId` picks the set to complete; `results`
  * gives, per exercise in it, the entered value of each set (param 1 / param 2 by entry slot).
@@ -183,14 +192,7 @@ export const logSetArgsSchema = z.object({
     .array(
       z.object({
         savedWorkoutSetExerciseId: idArgSchema,
-        sets: z
-          .array(
-            z.object({
-              param1: z.union([z.number(), z.string()]).optional(),
-              param2: z.union([z.number(), z.string()]).optional(),
-            }),
-          )
-          .min(1),
+        sets: z.array(loggedSetSchema).min(1),
       }),
     )
     .min(1),
@@ -203,6 +205,33 @@ export type LogSetArgs = z.infer<typeof logSetArgsSchema>;
  */
 export const coachLogSetArgsSchema = logSetArgsSchema.extend({ athleteId: idArgSchema });
 export type CoachLogSetArgs = z.infer<typeof coachLogSetArgsSchema>;
+
+/**
+ * Args for logging a whole session by exercise (rather than by saved-workout-set id). Each
+ * exercise carries its entered sets and an optional 1-based `order`. The athlete path creates
+ * or reuses a personal session for the date and logs against it; the coach path resolves each
+ * exercise to a set already prescribed on that date and logs against that.
+ */
+export const logSessionArgsSchema = z.object({
+  date: dateString,
+  exercises: z
+    .array(
+      z.object({
+        exerciseId: idArgSchema,
+        order: z.number().int().positive().optional(),
+        sets: z.array(loggedSetSchema).min(1),
+      }),
+    )
+    .min(1),
+});
+export type LogSessionArgs = z.infer<typeof logSessionArgsSchema>;
+
+/**
+ * Args for the coach variant of {@link logSessionArgsSchema}: the same shape plus the roster
+ * `athleteId` whose session is being logged on their behalf.
+ */
+export const coachLogSessionArgsSchema = logSessionArgsSchema.extend({ athleteId: idArgSchema });
+export type CoachLogSessionArgs = z.infer<typeof coachLogSessionArgsSchema>;
 
 // --- Presented (model-friendly) view types, produced by the `js` presenters ---
 
@@ -322,6 +351,31 @@ export type RosterActivityRow = {
   lastLoggedDate: string | null;
   totalReps: number | null;
   totalVolume: number | null;
+};
+
+/**
+ * One athlete's logged volume over a date window, aggregated from the `training-summary-athlete`
+ * analytics report (which returns one row per logged session). `volume` is in pounds.
+ */
+export type TeamVolumeAthlete = {
+  athleteId: number;
+  name: string | null;
+  sessions: number;
+  reps: number;
+  volume: number;
+  firstLoggedDate: string | null;
+  lastLoggedDate: string | null;
+};
+
+/**
+ * A coach's team-wide training volume over an inclusive `YYYY-MM-DD` window: per-athlete rows
+ * (only athletes who logged in range appear) plus the rolled-up team totals. The windowed
+ * counterpart to the all-time {@link RosterActivityRow} snapshot.
+ */
+export type TeamVolumeReport = {
+  window: { start: string; end: string };
+  athletes: TeamVolumeAthlete[];
+  totals: { athletes: number; sessions: number; reps: number; volume: number };
 };
 
 /** One performed session in a presented exercise history. */

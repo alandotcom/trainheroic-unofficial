@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { dateString, logSetArgsSchema } from "@trainheroic-unofficial/dto";
+import { dateString, logSessionArgsSchema, logSetArgsSchema } from "@trainheroic-unofficial/dto";
 import {
   addExercisesToWorkout,
   coerceInt,
@@ -17,6 +17,7 @@ import {
   fetchPersonalRecords,
   fetchWorkingMaxes,
   isRecord,
+  logAdHocSession,
   logAthleteSet,
   presentAthleteWorkouts,
   presentExerciseHistory,
@@ -24,7 +25,7 @@ import {
   selectWorkouts,
   summarizeAthleteWorkouts,
 } from "@trainheroic-unofficial/js";
-import type { TrainHeroicClient } from "@trainheroic-unofficial/js";
+import type { SessionExercise, TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { confirmGate, NOT_CONFIRMED } from "../confirm";
 import { attempt, DESTRUCTIVE, errorResult, idParam, jsonResult, READ, toId } from "../context";
 import { historyInRange } from "../history";
@@ -362,8 +363,62 @@ function registerSessionTools(server: McpServer, ctx: AthleteContext): void {
   );
 }
 
-/** The gated set-logging write. */
+/** Map validated logSession exercises to the SDK's SessionExercise[] (ids coerced, slots trimmed). */
+export function mapSessionExercises(
+  exercises: ReadonlyArray<{
+    exerciseId: number | string;
+    order?: number | undefined;
+    sets: ReadonlyArray<{
+      param1?: number | string | undefined;
+      param2?: number | string | undefined;
+    }>;
+  }>,
+): SessionExercise[] {
+  return exercises.map((e) => {
+    const sets = e.sets.map((s) => {
+      const slot: { param1?: number | string; param2?: number | string } = {};
+      if (s.param1 !== undefined) slot.param1 = s.param1;
+      if (s.param2 !== undefined) slot.param2 = s.param2;
+      return slot;
+    });
+    const mapped: SessionExercise = { exerciseId: toId(e.exerciseId), sets };
+    if (e.order !== undefined) mapped.order = e.order;
+    return mapped;
+  });
+}
+
+/** The gated set-logging writes (by saved-set id, and the by-exercise ad-hoc session). */
 function registerLogTool(server: McpServer, ctx: AthleteContext): void {
+  server.registerTool(
+    "athlete_log_session",
+    {
+      title: "Log a whole session by exercise",
+      description:
+        "Athlete-facing write for logging what you actually did, with NO coach-scheduled workout " +
+        "required — use this for off-plan training (accessory work, a makeup lift, an unplanned " +
+        "gym session). Give a YYYY-MM-DD date and a list of exercises, each with its entered sets " +
+        "(param1/param2, e.g. reps/weight). It reuses a personal session already on that date or " +
+        "creates one, then logs the sets. Get each exerciseId from athlete_exercises. To log " +
+        "against a workout a coach already scheduled, use athlete_log_set instead. Requires " +
+        "confirmation (elicitation or confirm:true).",
+      inputSchema: { ...logSessionArgsSchema.shape, confirm: z.boolean().optional() },
+      annotations: DESTRUCTIVE,
+    },
+    ({ date, exercises, confirm }, extra) =>
+      attempt(async () => {
+        const ok = await confirmGate(
+          server,
+          extra.requestId,
+          `Log a session of ${exercises.length} exercise(s) on ${date}? This writes to your coach-visible training log.`,
+          confirm,
+        );
+        if (!ok) return errorResult(NOT_CONFIRMED);
+        return jsonResult(
+          await logAdHocSession(ctx.client, { date, exercises: mapSessionExercises(exercises) }),
+        );
+      }),
+  );
+
   server.registerTool(
     "athlete_log_set",
     {
