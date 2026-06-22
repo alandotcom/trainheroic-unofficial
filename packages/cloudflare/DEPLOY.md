@@ -101,6 +101,11 @@ needs the `mcp-remote` bridge with `--transport http-only`:
 }
 ```
 
+On a box with no browser (SSH, container, CI), the same `mcp-remote` bridge works once you
+forward its OAuth callback port (`ssh -L 3334:localhost:3334 …`); the worker speaks the
+standard authorization-code flow, not the device grant (RFC 8628). See the root README's
+"Headless / no-browser environments" section for the full recipe and alternatives.
+
 ## Notes
 
 - **Custom domain.** The library derives the protected-resource `resource` from the

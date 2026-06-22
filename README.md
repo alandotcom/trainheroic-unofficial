@@ -129,6 +129,42 @@ For the athlete server, swap the package name to `@trainheroic-unofficial/athlet
 
 </details>
 
+<details>
+<summary><b>Headless / no-browser environments (SSH, containers, CI)</b></summary>
+
+<br>
+
+The hosted server signs you in with OAuth, which needs a browser **once**. On a machine with no browser, you have three options, simplest first.
+
+**1. Run a local server instead — no OAuth at all.** The local `coach-mcp` / `athlete-mcp` servers read your TrainHeroic credentials from the environment and never open a browser, so there is nothing to authenticate interactively. If you can place credentials on the box, this is the path of least resistance — use the Claude Code or stdio examples above. (Mind the plaintext-credentials caveat at the top of this README.)
+
+**2. Bridge the hosted server with `mcp-remote`, forwarding the callback over SSH.** [`mcp-remote`](https://github.com/geelen/mcp-remote) runs the full OAuth flow (dynamic registration + PKCE) against the hosted server and caches the token, so a stdio-only client never has to understand OAuth:
+
+```jsonc
+{
+  "mcpServers": {
+    "trainheroic": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.trainheroic-unofficial.com/mcp", "--transport", "http-only"]
+    }
+  }
+}
+```
+
+`mcp-remote` listens on `http://localhost:3334` for the OAuth redirect. Forward that port from your laptop and complete the sign-in in your local browser:
+
+```bash
+ssh -L 3334:localhost:3334 user@remote-host
+```
+
+The token is cached under `~/.mcp-auth` on the remote box, so the tunnel is only needed for the first login.
+
+**3. Use a bridge that prints the sign-in URL.** If you cannot forward a port, use a bridge that prints the authorize URL to the terminal instead of launching a browser — e.g. [`hyper-mcp-remote`](https://github.com/hyper-mcp-rs/hyper-mcp-remote) (prints the URL; `--callback-host` / `--callback-port` if you still need to tunnel the redirect). Open the printed URL on any device with a browser, sign in, and let the bridge receive the callback. (The hosted server uses the standard authorization-code flow; it does **not** implement the OAuth device grant — RFC 8628 — so device-code bridges such as `mcp-stdio --oauth-device` will not work against it.)
+
+A client that already has a bearer token can also skip OAuth entirely by presenting it with `--header "Authorization: Bearer …"`.
+
+</details>
+
 ## CLI
 
 A command-line tool (installed as a global npm package) for scripting and automation:
