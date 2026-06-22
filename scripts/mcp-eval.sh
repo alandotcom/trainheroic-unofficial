@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 # Standalone MCP eval runner.
 #
-#   scripts/mcp-eval.sh <athlete|coach> "<query>" [YYYY-MM-DD]
+#   scripts/mcp-eval.sh <athlete|coach> "<query>" [YYYY-MM-DD] [model]
 #
 # Runs ONE realistic user question through the local TrainHeroic MCP using a fresh, headless
 # `claude -p` subprocess. That subprocess spawns its OWN stdio server (via .mcp.json), so it
 # always loads the CURRENT source — no reconnect, no dependency on the parent session's pinned
-# MCP connection. Strictly read-only: only read/query tools are whitelisted; every write tool
-# is explicitly denied. Prints the model's answer followed by a delimited ===EVAL REPORT===.
+# MCP connection. Prints the model's answer followed by a delimited ===EVAL REPORT===.
+#
+# The model defaults to sonnet; pass a 4th arg (or set MODEL=) to eval a different one, e.g.
+# `scripts/mcp-eval.sh athlete "..." "" haiku`. Running the same query under both sonnet and
+# haiku and comparing how a weaker model copes with the tool surface is the usability signal.
+#
+# Read-only by default (write tools whitelisted out AND denied). Set WRITES=1 to ALSO eval the
+# write tools — ONLY against a TEST account, because the destructive tools really fire:
+# `WRITES=1 scripts/mcp-eval.sh coach "Log today's session for athlete X" "" haiku`.
 #
 # Fan out by calling this once per query (background several for a full bank). It needs the
 # `claude` CLI on PATH and the repo .env (coach/athlete creds) that .mcp.json's launcher reads.
@@ -17,9 +24,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROLE="${1:-}"
 QUERY="${2:-}"
 TODAY="${3:-$(date +%F)}"
+MODEL="${4:-${MODEL:-sonnet}}"
 
 if [ -z "$ROLE" ] || [ -z "$QUERY" ]; then
-  echo "usage: scripts/mcp-eval.sh <athlete|coach> \"<query>\" [YYYY-MM-DD]" >&2
+  echo "usage: scripts/mcp-eval.sh <athlete|coach> \"<query>\" [YYYY-MM-DD] [model]" >&2
   exit 2
 fi
 
@@ -44,11 +52,20 @@ case "$ROLE" in
     ;;
 esac
 
-# Build the allow/deny tool argument lists (prefixed, plus Read/Bash for parsing large results).
+# Read-only by default. Set WRITES=1 to ALSO eval the write tools — only ever against a TEST
+# account (the destructive tools really fire). In write mode the write tools are allowed and
+# nothing is denied; otherwise writes are whitelisted out AND explicitly denied (belt and
+# suspenders, so a write can never run even if a list drifts).
 ALLOWED=("Read" "Bash")
 for t in $READS; do ALLOWED+=("${PREFIX}${t}"); done
 DENIED=()
-for t in $WRITES; do DENIED+=("${PREFIX}${t}"); done
+if [ -n "${WRITES_ENABLED:-${WRITES:-}}" ] && [ "${WRITES_ENABLED:-${WRITES:-}}" != "0" ]; then
+  WRITE_MODE=1
+  for t in $WRITES; do ALLOWED+=("${PREFIX}${t}"); done
+else
+  WRITE_MODE=0
+  for t in $WRITES; do DENIED+=("${PREFIX}${t}"); done
+fi
 
 # A single-server MCP config so the headless run spawns only the role's server.
 CONFIG="$(mktemp -t mcp-eval-XXXXXX.json)"
@@ -64,16 +81,28 @@ cat >"$CONFIG" <<JSON
 }
 JSON
 
+if [ "$WRITE_MODE" = "1" ]; then
+  CONSTRAINTS="MODE — write eval against a TEST account: you MAY use write tools (log, create,
+build, publish, send, update, delete, etc.) to actually carry out the task. The account is
+disposable, so perform the action for real rather than describing it. If a tool asks for
+confirmation, pass its confirm argument (e.g. confirm:true) — there is no interactive prompt
+here. Where a tool you called supports an undo (unpublish, delete, restore), prefer to reverse
+your own test writes once you've confirmed they worked, but completing the task matters more
+than cleanup. Do NOT touch data you did not create unless the task requires editing it."
+else
+  CONSTRAINTS="HARD CONSTRAINTS — this is a read-only evaluation:
+- Never call a tool that writes, logs, creates, modifies, deletes, sends, publishes, archives,
+  or confirms anything. Only read/query/list operations are allowed. If answering would require
+  a write, do not do it — note that in your report instead."
+fi
+
 read -r -d '' PROMPT <<PROMPT_EOF || true
 You are role-playing a general AI assistant connected to the TrainHeroic MCP. Its tools are
 named ${PREFIX}* . Use whatever TrainHeroic tools you need.
 
 CONTEXT: Today's date is ${TODAY}. Answer as if for the account owner.
 
-HARD CONSTRAINTS — this is an evaluation, stay strictly read-only:
-- Never call a tool that writes, logs, creates, modifies, deletes, sends, publishes, archives,
-  or confirms anything. Only read/query/list operations are allowed. If answering would require
-  a write, do not do it — note that in your report instead.
+${CONSTRAINTS}
 
 YOUR TASK: Answer this question as naturally and correctly as you can, grounded in real tool
 results. Work like a real assistant — explore, recover from dead ends, do not give up early:
@@ -97,11 +126,17 @@ Be brutally honest in the report — its purpose is to find MCP usability proble
 PROMPT_EOF
 
 cd "$ROOT"
-exec claude -p "$PROMPT" \
-  --model sonnet \
-  --strict-mcp-config \
-  --mcp-config "$CONFIG" \
-  --permission-mode default \
-  --allowed-tools "${ALLOWED[@]}" \
-  --disallowed-tools "${DENIED[@]}" \
+CLAUDE_ARGS=(
+  -p "$PROMPT"
+  --model "$MODEL"
+  --strict-mcp-config
+  --mcp-config "$CONFIG"
+  --permission-mode default
+  --allowed-tools "${ALLOWED[@]}"
   --output-format text
+)
+# Only pass --disallowed-tools when there is something to deny (write mode leaves it empty).
+if [ "${#DENIED[@]}" -gt 0 ]; then
+  CLAUDE_ARGS+=(--disallowed-tools "${DENIED[@]}")
+fi
+exec claude "${CLAUDE_ARGS[@]}"

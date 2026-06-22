@@ -1,27 +1,49 @@
 ---
 name: mcp-eval
-description: Evaluate the TrainHeroic MCP's usability by having Sonnet subagents answer real athlete/coach questions through the tools, then synthesize where they got confused or burned turns. Use when asked to eval/benchmark/stress-test the MCP, check how an agent navigates the tools, or measure turns/confusion for tool-description tuning. Targets the local stdio server by default.
+description: Evaluate the TrainHeroic MCP's usability by having subagents (Sonnet or Haiku) answer real athlete/coach questions through the tools across every surface and tool — reads and, on a test account, writes — then synthesize where they got confused or burned turns. Use when asked to eval/benchmark/stress-test the MCP, check how an agent navigates the tools, compare models, or measure turns/confusion for tool-description tuning. Defaults to the local stdio servers.
 ---
 
 # MCP eval
 
-Measure how well a model navigates the TrainHeroic MCP. Each run spawns Sonnet subagents that
-answer realistic questions using only the MCP tools, report their tool trace and confusion in a
-fixed format, then a synthesis pass turns that into prioritized tool-description/shape fixes.
+Measure how well a model navigates the TrainHeroic MCP. Each run answers a realistic question
+using only the MCP tools, reports its tool trace and confusion in a fixed format, then a
+synthesis pass turns that into prioritized tool-description/shape fixes.
 
-The tools are defined once in `packages/core` and reused by every server, so an eval against the
-**local** stdio server exercises the same surface a user hits on the hosted worker, without a
-deploy. Default to local.
+Two axes to sweep:
 
-## Fastest path: the standalone runner (`scripts/mcp-eval.sh`)
+- **Model.** Default is **Sonnet**; also run **Haiku**. A weaker model leans harder on the tool
+  names and descriptions, so where Haiku stumbles but Sonnet sails through is exactly the wording
+  the descriptions need to carry. Diffing the same bank across both models is the strongest
+  signal for description tuning.
+- **Surface + tools.** Eval **every surface** (local athlete, local coach, hosted) and **every
+  tool, not just reads**. Reads are the default; write evals run against a TEST account (see
+  Write mode), where logging, building, publishing, and messaging really fire — that exercises
+  the half of the tool surface a read-only eval never touches. (The CLI is a fourth surface,
+  evaluated by the planned `cli-eval` skill — build it once the CLI command surface settles.)
 
-Prefer this. `scripts/mcp-eval.sh <athlete|coach> "<query>" [YYYY-MM-DD]` runs ONE query through a
-fresh headless `claude -p` subprocess that spawns its OWN stdio server from `.mcp.json`. Because
-each run is a new process, it always loads the CURRENT source — no reconnect, and no dependency on
-this session's pinned MCP connection (the running stdio servers cache the code they booted with, so
-in-session edits are invisible to them until restart; the standalone runner sidesteps that). It is
-read-only by construction: only read/query tools are whitelisted and every write tool is denied.
-It prints the model's answer followed by the `===EVAL REPORT===` block.
+The tools are defined once in `packages/core` and reused by every server, so a local eval
+exercises the same tool surface a user hits on the hosted worker, without a deploy. Default to
+local; reach for hosted to catch worker-only behavior (the D1 sync tools, OAuth-scoped role
+gating) the local servers don't have.
+
+## The runner: `scripts/mcp-eval.sh`
+
+This is the path. `scripts/mcp-eval.sh <athlete|coach> "<query>" [YYYY-MM-DD] [model]` runs ONE
+query through a fresh headless `claude -p` subprocess that spawns its OWN stdio server from a
+generated config. Because each run is a new process, it always loads the CURRENT source — no
+reconnect, and no dependency on this session's pinned MCP connection (the running stdio servers
+cache the code they booted with, so in-session edits are invisible to them until restart; the
+runner sidesteps that). It prints the model's answer followed by the `===EVAL REPORT===` block.
+
+- **Model:** 4th arg (default `sonnet`); `MODEL=` env works too. Pass an empty date to keep
+  today and still set the model: `scripts/mcp-eval.sh athlete "..." "" haiku`.
+- **Read-only (default):** read/query tools are whitelisted; every write tool is whitelisted out
+  and explicitly denied. Safe to run against any account.
+- **Write mode:** set `WRITES=1` to ALSO allow the write tools. Use this ONLY on a TEST account —
+  the destructive tools really fire. The subagent is told it's a disposable account, may carry
+  out the task for real, should pass `confirm:true` where a tool gates on it (there is no
+  interactive prompt headless), and should reverse its own test writes (unpublish/delete/restore)
+  where it can.
 
 Fan out a whole bank by backgrounding several at once and collecting their stdout:
 
@@ -31,72 +53,87 @@ scripts/mcp-eval.sh athlete "What are my working maxes right now?" > /tmp/e2.txt
 wait
 ```
 
-Then synthesize from the report blocks exactly as in Step 4. Use the in-session subagent path
-below only when you specifically want to measure the harness's own tool surface (deferred-tool
-loading, ToolSearch friction) rather than the cleanest navigation of the tools themselves.
+Compare models — same query under each, tag the file with the model:
+
+```bash
+for m in sonnet haiku; do
+  scripts/mcp-eval.sh athlete "Did I record anything this week?" "" "$m" > "/tmp/e1.$m.txt" 2>/dev/null &
+done
+wait
+```
+
+Write eval (TEST account only) — tag the file with the mode too:
+
+```bash
+WRITES=1 scripts/mcp-eval.sh coach "Log 5x5 at 185 for athlete 12345 on today's session" "" haiku \
+  > /tmp/w1.haiku.txt 2>/dev/null
+```
+
+The runner needs the `claude` CLI on PATH and the repo `.env` (coach/athlete creds) that the
+generated config's launcher (`scripts/mcp-eval-server.sh`) reads. That launcher maps
+`TRAINHEROIC_ATHLETE_*` to the athlete server, so point those at your test athlete account.
 
 ## Inputs (from the skill args, all optional)
-- **target**: `local` (default) or `hosted`. `local` uses the project's stdio servers;
-  `hosted` uses the deployed worker's `mcp__claude_ai_Trainheroic__*` tools.
-- **role**: `athlete` (default) or `coach`. Selects which local server and which queries.
-- **queries**: one or more questions to test. When none are given, use the bank in
-  [queries.md](queries.md) for the chosen role.
-- **count/scale**: how thorough. Default is the full default bank for the role; "quick" means
-  3–4 queries.
+- **role**: `athlete`, `coach`, or `both` (default: sweep both for a full eval; a quick check
+  can pick one). Selects which server(s) and query bank(s).
+- **model**: `sonnet` (default) or `haiku`, or both to compare. The runner's 4th arg.
+- **mode**: `read` (default) or `write` (`WRITES=1`, TEST account only).
+- **target**: `local` (default) or `hosted`. Hosted has no runner — see "Hosted / in-session".
+- **queries**: one or more questions. When none are given, use the bank in
+  [queries.md](queries.md) for the role(s).
+- **count/scale**: how thorough. Default is the full bank per role; "quick" means 3–4 queries.
 
-## Step 1 — get the target connected
+## Step 1 — sanity-check creds
 
-Resolve the tool prefix first with `ToolSearch` (query `trainheroic`). The prefix depends on
-target and role:
-- **local + athlete**: `mcp__trainheroic-local__athlete_*`.
-- **local + coach**: `mcp__trainheroic-local-coach__*` (the coach surface — `list_athletes`,
-  teams, programming, analytics, exercise resolution, messaging — has no `athlete_` prefix).
-- **hosted**: `mcp__claude_ai_Trainheroic__*` (role-aware; a coach account also exposes the
-  coach tools).
+A run with no live tools (or wrong creds) is worthless. Before fanning out, do one cheap read to
+confirm the account resolves:
 
-If the chosen target's tools are not present:
-- **local**: the repo ships `.mcp.json` with two servers — `trainheroic-local` (athlete) and
-  `trainheroic-local-coach` (coach) — both via `scripts/mcp-eval-server.sh`, which reads creds
-  from `.env` (or the environment) and maps `TRAINHEROIC_ATHLETE_*` to the athlete server.
-  Claude Code only connects a project MCP server after the user trusts it, so tell the user to
-  approve the relevant server (the trust prompt, `/mcp`, or a session restart), then re-invoke.
-  Do not try to spawn the server yourself — subagents can only reach servers the session has
-  connected.
-- **hosted**: confirm the claude.ai TrainHeroic integration is connected; if not, ask the user
-  to connect it.
+```bash
+scripts/mcp-eval.sh athlete "Who is the logged-in account?" 2>/dev/null | head -40
+```
 
-Stop here if the target cannot be reached. A run with no live tools is worthless.
-
-Sanity-check the connection with one cheap read (`athlete_whoami`) before fanning out, so a
-broken session fails fast instead of failing across every subagent.
+For coach, ask "Who am I and how many athletes are on my roster?". For write mode, also confirm
+you are pointed at the TEST account, not a real one, before setting `WRITES=1`.
 
 ## Step 2 — assemble the query set
 
-Take the caller's queries, or the role's default bank. Note the real current date (from the
-environment) — the subagents need it to reason about "this week" and date ranges.
+Take the caller's queries, or the role's default bank from [queries.md](queries.md). For a full
+eval, run the matrix you were asked for: each role × each model × each mode you're covering. Note
+the real current date — the queries reason about "this week" and date ranges, and the runner
+defaults the date to today.
 
-## Step 3 — fan out, one subagent per query
+## Step 3 — fan out and collect
 
-Spawn the subagents in a single message so they run in parallel. Prefer
-`subagent_type: mcp-eval-runner` — that custom agent bakes in `model: sonnet`, the read-only
-rules, and the EVAL REPORT format, so the per-query prompt only needs three lines:
+Run one invocation per (query, model, mode), backgrounded, each to its own tagged stdout file
+(e.g. `/tmp/eval-<role>-<model>-<mode>-<n>.txt`). `wait`, then read the `===EVAL REPORT===` block
+out of each file. The report format the runner emits:
 
 ```
-TOOL PREFIX: {TOOL_PREFIX}     (e.g. mcp__trainheroic-local__ or mcp__trainheroic-local-coach__)
-TODAY'S DATE: {TODAY}
-QUERY: "{QUERY}"
+===EVAL REPORT===
+QUERY: "<the query>"
+FINAL_ANSWER: <one-paragraph summary of what was concluded / done>
+ANSWER_REACHED: yes | partial | no
+TOOL_CALLS (in order, one per line): <n>. <tool_name> | args: <key args> | outcome: <useful / empty / error / wrong-direction>
+TOTAL_TOOL_CALLS: <number>
+DEAD_ENDS_AND_BACKTRACKS: <each unhelpful call / wrong tool / reconsideration and why>
+CONFUSION_POINTS: <ambiguous or misleading tool names/descriptions>
+WHAT_WOULD_HAVE_HELPED: <concrete tool name/description/param changes that would have been faster>
+CONFUSION_SCORE: <1=effortless to 5=very confusing>
+===END EVAL REPORT===
 ```
 
-Run them in the background (`run_in_background: true`) when there are several, so completions
-notify as they finish and you can work in parallel; collect and synthesize once they are all in.
+### Hosted / in-session variant
 
-If `mcp-eval-runner` is not available (e.g. it was just created and the session hasn't picked it
-up), fall back to `subagent_type: general-purpose`, `model: sonnet`, and send the full template
-below instead — substitute the tool prefix, the real current date, and the question. Either way
-the read-only constraints are mandatory: the servers expose live write tools and this eval must
-never write to a real account.
+The runner only spawns local stdio servers. To eval the **hosted** worker, or to measure this
+session's own deferred-tool / ToolSearch friction, spawn an in-session subagent instead:
+`subagent_type: general-purpose`, set its `model` to the model under test, and send the prompt
+template below (substitute the tool prefix, the real date, the query, and read-vs-write
+constraints). Hosted tools are `mcp__claude_ai_Trainheroic__*` (role-aware; a coach account also
+exposes the coach tools); confirm the claude.ai TrainHeroic integration is connected first.
+There is no dedicated eval subagent — a plain `general-purpose` agent takes any model and either
+mode, which the old pinned `mcp-eval-runner` (sonnet + read-only only) could not.
 
-### Subagent prompt template (fallback)
+#### In-session prompt template
 
 ```
 You are role-playing a general AI assistant connected to the TrainHeroic MCP. Its tools are
@@ -106,58 +143,56 @@ TrainHeroic tools you need.
 
 CONTEXT: Today's date is {TODAY}. Answer as if for the account owner.
 
-HARD CONSTRAINTS — this is an evaluation, stay strictly read-only:
-- Never call a tool that writes, logs, creates, modifies, deletes, sends, publishes, archives,
-  or confirms anything. Athlete write tools include athlete_log_set, athlete_session_create,
-  athlete_session_add_exercises. Coach write tools include anything that creates/renames a
-  team, athlete, exercise, or workout; publishes/unpublishes; sends or deletes a message; or
-  archives/removes. If answering would require a write, do not do it — note that in your report
-  instead.
-- Only read/query/list operations are allowed.
+{CONSTRAINTS}
+  read mode  -> HARD CONSTRAINTS — read-only: never call a tool that writes, logs, creates,
+                modifies, deletes, sends, publishes, archives, or confirms anything. Only
+                read/query/list ops. If answering would need a write, note it in the report
+                instead of doing it.
+  write mode -> MODE — write eval against a TEST account: you MAY use write tools to carry out
+                the task for real. Pass confirm:true where a tool gates on it. Reverse your own
+                test writes (unpublish/delete/restore) where you can. Do not touch data you did
+                not create unless the task requires editing it.
 
-YOUR TASK: Answer this question as naturally and correctly as you can, grounded in real tool
-results. Work like a real assistant — explore, recover from dead ends, do not give up early:
+YOUR TASK: Answer/do this as naturally and correctly as you can, grounded in real tool results.
+Work like a real assistant — explore, recover from dead ends, do not give up early:
 "{QUERY}"
 
-Then output a delimited report for the MCP developer in EXACTLY this format:
-
-===EVAL REPORT===
-QUERY: "{QUERY}"
-FINAL_ANSWER: <one-paragraph summary of what you concluded for the user>
-ANSWER_REACHED: yes | partial | no
-TOOL_CALLS (in order, one per line): <n>. <tool_name> | args: <key args> | outcome: <useful / empty / error / wrong-direction>
-TOTAL_TOOL_CALLS: <number>
-DEAD_ENDS_AND_BACKTRACKS: <each tool call that did not help, wrong tool picked, or reconsideration — and why>
-CONFUSION_POINTS: <where tool names/descriptions were ambiguous or misleading>
-WHAT_WOULD_HAVE_HELPED: <concrete tool name/description/param changes that would have been faster>
-CONFUSION_SCORE: <1=effortless to 5=very confusing>
-===END EVAL REPORT===
-
-Be brutally honest in the report — its purpose is to find MCP usability problems.
+Then output a delimited report in EXACTLY the ===EVAL REPORT=== format above. Be brutally
+honest — its purpose is to find MCP usability problems. Name tools, params, and ids freely in
+the report (that section is for the developer); keep the FINAL_ANSWER paragraph in plain app
+language.
 ```
 
 ## Step 4 — synthesize
 
 Collect every report and produce:
-- A table: query, total tool calls, confusion score, answer reached.
-- Recurring confusion themes (group the same complaint across queries — that is the real
-  signal, more than any single run).
+- A table keyed by query, with columns for role, model, mode, total tool calls, confusion score,
+  and answer reached — one row per run so every cell of the matrix is visible.
+- **Model delta:** where Haiku stumbled but Sonnet did not (more turns, lower answer-reached,
+  extra confusion). Those gaps are the descriptions a weaker model could not lean on — the
+  highest-value wording fixes. A spot where even Sonnet struggled is a structural/shape problem,
+  not just wording.
+- **Mode/surface delta:** confusion that only shows up in write mode (e.g. ambiguous confirm
+  gating, unclear required params on create/build/publish) or only on the hosted surface (the D1
+  sync tools). Read-only evals never surface these.
+- Recurring confusion themes — the same complaint across queries is the real signal, more than
+  any single run.
 - The worst runs (high turns or confusion) with their root cause.
 - A prioritized fix list. Map each fix to a concrete place: a tool description in
   `packages/core/src/tools/`, the hosted sync tools in `packages/cloudflare/src/tools/`, a
-  presenter in `packages/js/src/athlete.ts`, or a missing tool. Separate cheap description
-  edits from shape/new-tool work.
-- If a tool repeatedly forces `raw:true` to get at data, treat that as a presenter gap to fix
-  in `js`, not a description tweak.
+  presenter in `packages/js/src/athlete.ts`, or a missing tool. Separate cheap description edits
+  from shape/new-tool work. If a tool repeatedly forces `raw:true` to get at data, that is a
+  presenter gap to fix in `js`, not a description tweak.
 
-Offer to save the synthesis to `docs/mcp-evals/<YYYY-MM-DD>.md` so runs can be compared over
-time, and offer to implement the cheap fixes.
+Offer to save the synthesis to `docs/mcp-evals/<YYYY-MM-DD>.md` so runs compare over time, and
+offer to implement the cheap fixes.
 
 ## Notes
-- The subagents speak to the user in app terms and hide tool names, per the server
-  instructions — but the EVAL REPORT section is for the developer, so it names tools and ids
-  freely. That split is intended.
-- Reads only. If a query genuinely needs a write to answer, the run should report that as a
-  gap, never perform it.
-- Scale to the ask: a quick check is 3–4 queries with single-pass synthesis; a thorough audit
-  is the full bank plus a second round of queries aimed at whatever the first round flagged.
+- The subagents speak to the user in app terms and hide tool names, per the server instructions —
+  but the EVAL REPORT section is for the developer, so it names tools and ids freely. That split
+  is intended.
+- Write mode is for TEST accounts only and the runner gates it behind `WRITES=1`. Never enable it
+  against a real account; confirm the account first.
+- Scale to the ask: a quick check is 3–4 queries, one role/model/mode, single-pass synthesis; a
+  thorough audit is the full bank across both roles, both models, and both modes, plus a second
+  round aimed at whatever the first round flagged.

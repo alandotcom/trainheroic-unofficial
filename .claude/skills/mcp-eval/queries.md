@@ -54,3 +54,19 @@ roster is empty, the run should report how cleanly the model handles the empty r
 
 ### Messaging
 - Have any of my athletes messaged me recently?
+
+## Write tasks (write mode only — TEST account)
+Used only when the eval runs in write mode (`WRITES=1` for the standalone runners, or the
+write-mode prompt for the in-session path). Each requires actually performing a write, so it is
+never used in a read-only run. The destructive ones really fire — TEST account only. Several need
+a resolve first (an athlete, an exercise, or a program id); that chaining is part of the eval.
+
+### Athlete (role=athlete)
+- Log today's session: I did 5 sets of 5 back squats at 185.
+- Record that I hit a 225 bench for 3 today.
+
+### Coach (role=coach)
+- Log a result for one of my athletes: they did 3x8 at 135 on bench today.
+- Build a simple workout — 3 sets of 5 back squats — in one of my programs for tomorrow, and publish it.
+- Send one of my athletes a quick "great work this week" message.
+- Create a custom exercise called "Eval Test Sled Push" (then clean it up).
