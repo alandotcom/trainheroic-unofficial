@@ -1,5 +1,16 @@
 # @trainheroic-unofficial/cli
 
+## 0.6.5
+
+### Patch Changes
+
+- 9d31d0e: feat(cli): full coach-command parity with the MCP tools, plus a shared SDK layer. New `coach` commands: `roster-activity`, `athlete-training`, `athlete-lift-history`, `athlete-workouts`, `log-set`, `athlete-invite`/`athlete-archive`/`athlete-restore`, `team-create`/`team-update`/`team-delete`, `team-code-create`/`team-code-delete`, `session-copy`/`session-unpublish`/`session-save-template`, and `analytics-query`; plus `athlete workouts --summary`. The logic-bearing operations (two-step athlete invite, session-copy date math, the analytics metric catalog) now live in the SDK (`@trainheroic-unofficial/js`: `inviteAthletes`, `copySession`, `queryAnalytics`/`ANALYTICS_METRIC_KEYS`) and are shared by both the MCP tools and the CLI; adds a `definedProps` helper to drop undefined keys under exactOptionalPropertyTypes. Skill docs updated.
+- d0770f1: fix(cli,js): eval-driven usability fixes for the coach/athlete write surface. `log-set`'s "set not found on this date" error now lists the `savedWorkoutSetId`s and exercise ids actually present on that date (the dominant Haiku confusion — agents could not tell which raw id maps to `--set`), and a coach write that 401s now names the demo/seeded read-only cause. New `--log-ids` projection on `coach athlete-workouts` / `athlete workouts` (`presentLogTargets` in `js`) prints just the `savedWorkoutSetId` + `savedWorkoutSetExerciseId` log-set needs, instead of grepping the full `--raw` payload. `coach athlete-workouts` gains `--logged-only`/`--summary` (parity with `athlete workouts`); `analytics-query` with no `--metric` prints a metric catalog (scope + required params) via `analyticsMetricCatalog`, and HELP signposts that team training volume lives in `roster-activity --metric`. Empty `athlete-training`/`athlete-lift-history` results carry an explanatory note, and the help text frames the three athlete-data reads as distinct lenses. Drove mean Haiku confusion from 2.45 to ~1.7 (see `docs/cli-evals/2026-06-21.md`).
+  </content>
+- Updated dependencies [d0770f1]
+  - @trainheroic-unofficial/js@0.6.5
+  - @trainheroic-unofficial/dto@0.6.5
+
 ## 0.6.4
 
 ### Patch Changes
