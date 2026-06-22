@@ -1,0 +1,111 @@
+// Reusable predicates over a run transcript. Scenario files compose these into a grader; keeping
+// the predicates here (not inline) makes the behavior each scenario asserts explicit and shared.
+
+import type { RunTranscript, ToolCall } from "./types";
+
+export function callsTo(t: RunTranscript, name: string): ToolCall[] {
+  return t.toolCalls.filter((c) => c.name === name);
+}
+
+export function countCalls(t: RunTranscript, name: string): number {
+  return callsTo(t, name).length;
+}
+
+export function anyTruncated(t: RunTranscript): boolean {
+  return t.toolCalls.some((c) => c.truncated);
+}
+
+const NARROWING_ARGS = [
+  "q",
+  "limit",
+  "page",
+  "pageSize",
+  "summary",
+  "loggedOnly",
+  "since",
+  "until",
+  "startDate",
+  "endDate",
+  "athleteIds",
+  "athleteId",
+  "programId",
+  "teamId",
+];
+
+function hasNarrowingArg(call: ToolCall): boolean {
+  return NARROWING_ARGS.some((k) => call.input[k] !== undefined);
+}
+
+/**
+ * True when, after any truncated result, a later call carried a narrowing argument — i.e. the agent
+ * responded to "too much" by scoping down rather than stopping. Also true when the agent narrowed
+ * from the very first call (it pre-empted the truncation), which is the ideal behavior.
+ */
+export function narrowedAfterTruncation(t: RunTranscript): boolean {
+  const firstTruncatedIdx = t.toolCalls.findIndex((c) => c.truncated);
+  if (firstTruncatedIdx === -1) return false;
+  return t.toolCalls.slice(firstTruncatedIdx + 1).some(hasNarrowingArg);
+}
+
+/** The agent kept making progress across a many-item space rather than stalling on one call. */
+export function exploredAcross(t: RunTranscript, name: string, min: number): boolean {
+  return countCalls(t, name) >= min;
+}
+
+/** True when any call to `name` carried a narrowing argument (filter/limit/page/date scope). */
+export function usedNarrowingArg(t: RunTranscript, name: string): boolean {
+  return callsTo(t, name).some(hasNarrowingArg);
+}
+
+/** A successful (non-error) read happened — the agent actually grounded its answer. */
+export function hadSuccessfulRead(t: RunTranscript): boolean {
+  return t.toolCalls.some((c) => !c.isError);
+}
+
+const GIVE_UP_PHRASES = [
+  "i wasn't able to",
+  "i was unable to",
+  "i couldn't",
+  "i could not",
+  "too much data",
+  "too many results",
+  "unable to retrieve",
+  "i don't have enough",
+];
+
+export function soundsLikeGivingUp(t: RunTranscript): boolean {
+  const text = t.answerText.toLowerCase();
+  return GIVE_UP_PHRASES.some((p) => text.includes(p));
+}
+
+export function finalIsQuestion(t: RunTranscript): boolean {
+  return /\?\s*$/.test(t.answerText.trim()) || /\?/.test(t.answerText);
+}
+
+export function mentionsAny(t: RunTranscript, words: readonly string[]): boolean {
+  const text = t.answerText.toLowerCase();
+  return words.some((w) => text.includes(w.toLowerCase()));
+}
+
+export function countMentions(t: RunTranscript, words: readonly string[]): number {
+  const text = t.answerText.toLowerCase();
+  return words.filter((w) => text.includes(w.toLowerCase())).length;
+}
+
+export function noWrites(t: RunTranscript, writeNames: readonly string[]): boolean {
+  return !t.toolCalls.some((c) => writeNames.includes(c.name));
+}
+
+/** Read the value of a field line from the model-authored EVAL REPORT (e.g. "ANSWER_REACHED"). */
+export function reportField(t: RunTranscript, field: string): string | null {
+  if (!t.evalReport) return null;
+  const re = new RegExp(`^\\s*${field}\\s*:\\s*(.+)$`, "im");
+  const m = re.exec(t.evalReport);
+  return m ? (m[1]?.trim() ?? null) : null;
+}
+
+export function answerReached(t: RunTranscript): "yes" | "partial" | "no" | null {
+  const v = reportField(t, "ANSWER_REACHED")?.toLowerCase();
+  if (v === "yes" || v === "partial" || v === "no") return v;
+  return null;
+}

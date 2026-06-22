@@ -14,8 +14,9 @@ import {
   logForAthlete,
   logSessionForAthlete,
   prescribeForAthlete,
+  presentLogTargets,
+  selectWorkoutsByProgram,
   toSetResults,
-  presentAthleteWorkouts,
   swapAthleteExercise,
 } from "@trainheroic-unofficial/js";
 import { mapSessionExercises } from "./athlete-training";
@@ -140,44 +141,60 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
  * "Log for Athlete" flow. Kept in its own function so registerAthleteTools stays under the
  * oxlint max-lines-per-function cap.
  */
-function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
+function registerAthleteSavedWorkouts(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "athlete_saved_workouts",
     {
       title: "Roster athlete's saved workouts (with log ids)",
       description:
         "A roster athlete's scheduled/logged workouts in an inclusive YYYY-MM-DD window — the " +
-        "coach-side view that carries the savedWorkoutSetId and savedWorkoutSetExerciseId that " +
-        "log_athlete_set needs. Get athleteId from list_athletes. Defaults to a presented view; " +
-        "set raw:true for the untouched API objects that expose those ids (each set's id is the " +
-        "savedWorkoutSetId; each savedWorkoutSetExercises[].id is the savedWorkoutSetExerciseId). " +
-        "athlete_training gives a whole-month overview but not these ids.",
+        "coach-side source of the savedWorkoutSetId and savedWorkoutSetExerciseId that " +
+        "log_athlete_set, prescribe_athlete_set, and swap_athlete_exercise need. Get athleteId " +
+        "from list_athletes. The default view is COMPACT: one row per saved set, each carrying its " +
+        "program/programId, the savedWorkoutSetId, and every exercise's savedWorkoutSetExerciseId " +
+        "with prescribed/performed values — so you read those ids straight off it, no raw needed. " +
+        "An athlete enrolled in many programs returns one row per program; pass programId (or " +
+        "teamId) to target just one program's session (read the programId off this same view, or " +
+        "from a team's group_program). raw:true returns the untouched API objects, but that blob " +
+        "is large and can be truncated for a high-enrollment athlete — prefer programId + the " +
+        "default view. athlete_training gives a whole-month overview but not these ids.",
       inputSchema: {
         athleteId: idParam,
         startDate: dateString,
         endDate: dateString,
+        programId: idParam.optional(),
+        teamId: idParam.optional(),
         raw: z.boolean().optional(),
       },
       annotations: READ,
     },
-    ({ athleteId, startDate, endDate, raw }) =>
+    ({ athleteId, startDate, endDate, programId, teamId, raw }) =>
       attempt(async () => {
-        const workouts = await fetchCoachAthleteWorkouts(
+        const all = await fetchCoachAthleteWorkouts(
           ctx.client,
           toId(athleteId),
           startDate,
           endDate,
         );
+        const filter = definedProps({
+          programId: programId === undefined ? undefined : toId(programId),
+          teamId: teamId === undefined ? undefined : toId(teamId),
+        });
+        const workouts = selectWorkoutsByProgram(all, filter);
         if (raw === true) {
           return jsonResult(workouts, {
-            hint: "Each set's id is the savedWorkoutSetId; each savedWorkoutSetExercises[].id is the savedWorkoutSetExerciseId. Pass both to log_athlete_set. Narrow the dates to shrink this.",
+            hint: "Each set's id is the savedWorkoutSetId; each savedWorkoutSetExercises[].id is the savedWorkoutSetExerciseId. This raw blob is large — if truncated, pass programId to target one program, or use the default (compact) view which carries the same ids.",
           });
         }
-        return jsonResult(presentAthleteWorkouts(workouts), {
-          hint: "Set raw:true to get savedWorkoutSetId + savedWorkoutSetExerciseId for log_athlete_set.",
+        return jsonResult(presentLogTargets(workouts), {
+          hint: "One row per saved set: savedWorkoutSetId plus each savedWorkoutSetExerciseId, with the program it belongs to. Pass both ids to log_athlete_set / prescribe_athlete_set. Filter with programId/teamId if the athlete is on several programs.",
         });
       }),
   );
+}
+
+function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
+  registerAthleteSavedWorkouts(server, ctx);
 
   server.registerTool(
     "log_athlete_set",
@@ -188,7 +205,8 @@ function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
         "athlete's saved workout sets on a given day, marking the set completed — the API " +
         "equivalent of the app's \"Log for Athlete\". Writes to that athlete's training log and " +
         "shows in their history. Get athleteId from list_athletes; get savedWorkoutSetId + " +
-        "savedWorkoutSetExerciseId from athlete_saved_workouts (raw:true) for that athlete/day. " +
+        "savedWorkoutSetExerciseId from athlete_saved_workouts for that athlete/day (its default " +
+        "view carries both — pass programId there if the athlete is on several programs). " +
         "Seeded demo athletes are read-only and will fail; use a real (invited) athlete. " +
         "Requires confirmation (elicitation or confirm:true).",
       inputSchema: { ...coachLogSetArgsSchema.shape, confirm: z.boolean().optional() },
@@ -266,8 +284,9 @@ function registerAthleteSwapTool(server: McpServer, ctx: ToolContext): void {
         "different one, for that athlete only — the API equivalent of the app's per-athlete " +
         '"swap exercise". The team/program prescription is left untouched, so other athletes on ' +
         "the same program keep the original exercise. Give savedWorkoutSetExerciseId (the " +
-        "athlete's own slot, from athlete_saved_workouts with raw:true) and exerciseId (the " +
-        "replacement, from exercise_resolve / exercise_search). Seeded demo athletes are " +
+        "athlete's own slot, from athlete_saved_workouts — its default view lists it per program) " +
+        "and exerciseId (the replacement, from exercise_resolve / exercise_search). Seeded demo " +
+        "athletes are " +
         "read-only and will fail; use a real (invited) athlete. Requires confirmation " +
         "(elicitation or confirm:true).",
       inputSchema: { ...swapAthleteExerciseArgsSchema.shape, confirm: z.boolean().optional() },
@@ -314,7 +333,8 @@ function registerAthletePrescribeTool(server: McpServer, ctx: ToolContext): void
         "slot's prescribed values (the sets you pass become the whole prescription, and an omitted " +
         "param is cleared), so give the full per-set prescription you want. Get athleteId from " +
         "list_athletes; get savedWorkoutSetId + savedWorkoutSetExerciseId from " +
-        "athlete_saved_workouts (raw:true) for that athlete/day. To record a set as PERFORMED " +
+        "athlete_saved_workouts for that athlete/day — its default view lists both per program, so " +
+        "pass programId there if the athlete is on several. To record a set as PERFORMED " +
         "instead, use log_athlete_set. Seeded demo athletes are read-only and will fail; use a " +
         "real (invited) athlete. Requires confirmation (elicitation or confirm:true).",
       inputSchema: { ...coachPrescribeSetArgsSchema.shape, confirm: z.boolean().optional() },

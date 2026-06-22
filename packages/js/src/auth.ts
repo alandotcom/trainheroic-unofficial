@@ -1,4 +1,19 @@
-const AUTH_URL = "https://apis.trainheroic.com/auth";
+const DEFAULT_AUTH_URL = "https://apis.trainheroic.com/auth";
+
+/**
+ * The login endpoint, allowing an env override so a test harness can authenticate against a local
+ * fake backend. Precedence: an explicit `TH_AUTH_URL`, else `${TH_APIS_BASE}/auth` (login lives on
+ * the apis host, so it follows that base), else the real endpoint. Read via `globalThis.process`
+ * (no `import process`) to keep this module workerd-safe, and per call so a child-env override wins.
+ */
+function authUrl(): string {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env;
+  if (env?.TH_AUTH_URL && env.TH_AUTH_URL.length > 0) return env.TH_AUTH_URL;
+  const apis = env?.TH_APIS_BASE;
+  if (apis && apis.length > 0) return `${apis.replace(/\/$/, "")}/auth`;
+  return DEFAULT_AUTH_URL;
+}
 
 export type TrainHeroicSession = {
   thUserId: number;
@@ -24,7 +39,7 @@ export async function loginTrainHeroic(
   email: string,
   password: string,
 ): Promise<TrainHeroicSession | null> {
-  const res = await fetch(AUTH_URL, {
+  const res = await fetch(authUrl(), {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
