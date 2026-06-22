@@ -147,5 +147,5 @@ exec claude -p "$PROMPT" \
   --strict-mcp-config \
   --mcp-config "$WORK/mcp.json" \
   --permission-mode default \
-  --allowed-tools "Bash(trainheroic:*)" "Read" \
+  --allowed-tools "Bash(trainheroic:*)" \
   --output-format text

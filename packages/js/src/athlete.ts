@@ -473,6 +473,76 @@ export function presentAthleteWorkouts(list: readonly ProgramWorkout[]): Athlete
   return list.map(presentAthleteWorkout);
 }
 
+/** The minimal id scaffold `log-set` / `logForAthlete` needs for one saved workout set. */
+export type LogSetTarget = {
+  date: string;
+  workoutTitle: string;
+  /** The id for `--set` (logAthleteSet/logForAthlete `savedWorkoutSetId`). */
+  savedWorkoutSetId: number;
+  setTitle: string | null;
+  exercises: Array<{
+    /** The id for each result's `savedWorkoutSetExerciseId`. */
+    savedWorkoutSetExerciseId: number;
+    title: string;
+    units: ReturnType<typeof exerciseUnits>;
+    prescribed: string[];
+    performed: string[];
+  }>;
+};
+
+/**
+ * Project a workout range to just the ids a set-log write needs, read from the SAME saved-copy
+ * location {@link findSavedWorkoutSet} matches against (`summarizedSavedWorkout.saved_workout`).
+ * This is the self-service path for logging: instead of grepping the multi-KB `--raw` blob for
+ * which of several id fields maps to `--set`, callers read `savedWorkoutSetId` and each
+ * `savedWorkoutSetExerciseId` straight off these rows. One row per saved set, dropping any set
+ * with no resolvable id.
+ */
+export function presentLogTargets(list: readonly ProgramWorkout[]): LogSetTarget[] {
+  const targets: LogSetTarget[] = [];
+  for (const pw of list) {
+    const rec = pw as Record<string, unknown>;
+    const ssw = isRecord(rec.summarizedSavedWorkout) ? rec.summarizedSavedWorkout : {};
+    const saved = isRecord(ssw.saved_workout) ? ssw.saved_workout : null;
+    if (!saved) continue;
+    const date = str(rec.date) ?? "";
+    const workoutTitle = str(rec.workout_title) ?? "";
+    const sets = Array.isArray(saved.workoutSets) ? saved.workoutSets : [];
+    for (const s of sets) {
+      if (!isRecord(s)) continue;
+      const savedWorkoutSetId = coerceInt(s.id);
+      if (savedWorkoutSetId === null) continue;
+      const exRecords = (Array.isArray(s.workoutSetExercises) ? s.workoutSetExercises : []).filter(
+        isRecord,
+      );
+      const exercises = exRecords
+        .map((ex) => {
+          const id = coerceInt(ex.id);
+          if (id === null) return null;
+          return {
+            savedWorkoutSetExerciseId: id,
+            title:
+              (typeof ex.exercise_title === "string" && ex.exercise_title) ||
+              (typeof ex.title === "string" && ex.title) ||
+              "",
+            units: exerciseUnits(ex.param_1_type, ex.param_2_type),
+            prescribed: prescribedSets(ex),
+            performed: performedSets(ex),
+          };
+        })
+        .filter((e): e is NonNullable<typeof e> => e !== null);
+      targets.push({
+        date,
+        workoutTitle,
+        savedWorkoutSetId,
+        setTitle: str(s.title),
+        exercises,
+      });
+    }
+  }
+  return targets;
+}
+
 /**
  * Narrow a presented workout list for the common "what did I actually do" reads. `loggedOnly`
  * keeps only workouts the athlete logged a set on (the reliable signal, not the API's
@@ -637,6 +707,9 @@ export function findSavedWorkoutSet(
   exercises: Record<string, unknown>[];
   rawSet: Record<string, unknown>;
 } {
+  // Collected as we scan, so a miss can show the caller the ids that ARE on this date — the
+  // single biggest log-set confusion is picking the wrong id field for --set.
+  const available: string[] = [];
   for (const pw of workouts) {
     const rec = pw as Record<string, unknown>;
     const ssw = isRecord(rec.summarizedSavedWorkout) ? rec.summarizedSavedWorkout : {};
@@ -645,17 +718,38 @@ export function findSavedWorkoutSet(
     const sets = Array.isArray(sw.workoutSets) ? sw.workoutSets : [];
     for (const s of sets) {
       if (!isRecord(s)) continue;
+      const exercises = Array.isArray(s.workoutSetExercises)
+        ? (s.workoutSetExercises as unknown[]).filter(isRecord)
+        : [];
       if (coerceInt(s.id) === savedWorkoutSetId) {
         const savedWorkoutId = coerceInt(sw.id);
         if (!savedWorkoutId) continue;
-        const exercises = Array.isArray(s.workoutSetExercises)
-          ? (s.workoutSetExercises as unknown[]).filter(isRecord)
-          : [];
         return { savedWorkoutId, exercises, rawSet: s };
+      }
+      const setId = coerceInt(s.id);
+      if (setId !== null) {
+        const exLabels = exercises
+          .map((ex) => {
+            const exId = coerceInt(ex.id);
+            const title =
+              (typeof ex.exercise_title === "string" && ex.exercise_title) ||
+              (typeof ex.title === "string" && ex.title) ||
+              "exercise";
+            return exId === null ? null : `${exId} (${title})`;
+          })
+          .filter((x): x is string => x !== null);
+        available.push(`set ${setId} → exercise ids: ${exLabels.join(", ") || "none"}`);
       }
     }
   }
-  throw new Error(`Saved workout set ${savedWorkoutSetId} not found on this date.`);
+  const hint =
+    available.length > 0
+      ? ` Saved workout sets present on this date: ${available.join("; ")}. ` +
+        `Pass a "set N" id to --set (the savedWorkoutSetId), and the matching "exercise id" as ` +
+        `savedWorkoutSetExerciseId in the results.`
+      : ` No saved workout is scheduled on this date — log against a date that has a workout (find ` +
+        `it via athlete-workouts / coach athlete-workouts).`;
+  throw new Error(`Saved workout set ${savedWorkoutSetId} not found on this date.${hint}`);
 }
 
 /**
@@ -790,8 +884,19 @@ async function writeSetResults(
   for (const result of results) {
     const ex = exercises.find((e) => coerceInt(e.id) === result.savedWorkoutSetExerciseId);
     if (!ex) {
+      const valid = exercises
+        .map((e) => {
+          const id = coerceInt(e.id);
+          const title =
+            (typeof e.exercise_title === "string" && e.exercise_title) ||
+            (typeof e.title === "string" && e.title) ||
+            "exercise";
+          return id === null ? null : `${id} (${title})`;
+        })
+        .filter((x): x is string => x !== null);
       throw new Error(
-        `savedWorkoutSetExerciseId ${result.savedWorkoutSetExerciseId} not found in saved workout set ${savedWorkoutSetId}.`,
+        `savedWorkoutSetExerciseId ${result.savedWorkoutSetExerciseId} not found in saved workout set ` +
+          `${savedWorkoutSetId}. Exercises in this set: ${valid.join(", ") || "none"}.`,
       );
     }
     const workoutSetExerciseId = coerceInt(ex.workout_set_exercise_id);
@@ -815,8 +920,14 @@ async function writeSetResults(
       { body },
     );
     if (!res.ok) {
+      const readOnly =
+        target.role === "coach" && (res.status === 401 || res.status === 403)
+          ? ` Athlete ${target.athleteId} appears to be read-only for results — TrainHeroic's ` +
+            `seeded demo/sample athletes return ${res.status} here; results only persist for real ` +
+            `(invited) athletes.`
+          : "";
       throw new Error(
-        `Failed to log exercise ${result.savedWorkoutSetExerciseId} (HTTP ${res.status}).`,
+        `Failed to log exercise ${result.savedWorkoutSetExerciseId} (HTTP ${res.status}).${readOnly}`,
       );
     }
     exercisesLogged += 1;

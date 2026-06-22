@@ -56,7 +56,12 @@ esac
 # account (the destructive tools really fire). In write mode the write tools are allowed and
 # nothing is denied; otherwise writes are whitelisted out AND explicitly denied (belt and
 # suspenders, so a write can never run even if a list drifts).
-ALLOWED=("Read" "Bash")
+#
+# The allow-list is the MCP tools ONLY — no bare Bash, no Read. This is what keeps the eval
+# measuring the MCP surface: without it the subagent can shell out to the `trainheroic` CLI (or
+# pnpm/tsx) and answer there, which is exactly the cross-surface leak we don't want, and Read
+# would let it crib tool semantics from source instead of from the tool descriptions.
+ALLOWED=()
 for t in $READS; do ALLOWED+=("${PREFIX}${t}"); done
 DENIED=()
 if [ -n "${WRITES_ENABLED:-${WRITES:-}}" ] && [ "${WRITES_ENABLED:-${WRITES:-}}" != "0" ]; then

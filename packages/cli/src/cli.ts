@@ -13,6 +13,7 @@ import {
 } from "@trainheroic-unofficial/dto";
 import {
   ANALYTICS_METRIC_KEYS,
+  analyticsMetricCatalog,
   type AnalyticsMetric,
   type ApiBase,
   buildSession,
@@ -44,6 +45,7 @@ import {
   queryAnalytics,
   presentAthleteWorkouts,
   presentCoachAthleteTraining,
+  presentLogTargets,
   presentExerciseHistory,
   publishSession,
   selectWorkouts,
@@ -81,14 +83,16 @@ Coach — manage a roster (needs a coach account):
   coach head-coach | athletes | programs | teams | notifications | analytics
   coach program <id> | team <id> | team-codes <id>
 
-  roster athlete reads:
-  coach roster-activity --athletes <id,id,...> [--metric]                  rank by training recency
-  coach athlete-training --athlete <id> --year <YYYY> --month <1-12>        a logged month
-  coach athlete-lift-history --athlete <id> --exercise <id> [--since Y-M-D] [--until Y-M-D] [--raw]
+  roster athlete reads (three lenses — pick by the question):
+  coach roster-activity --athletes <id,id,...> [--metric]                  rank roster by recency; --metric adds session count + training volume (team-volume questions live HERE, not analytics-query). All-time snapshot, no date range. Get the full id list from 'coach athletes'.
+  coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--logged-only] [--summary] [--raw|--log-ids]   prescribed + logged work over a date range; --logged-only/--summary narrow it to what was actually logged; --log-ids prints just the savedWorkoutSetId + savedWorkoutSetExerciseId per set that log-set needs
+  coach athlete-training --athlete <id> --year <YYYY> --month <1-12>        sessions the athlete LOGGED in one month (empty = nothing logged that month, not an error)
+  coach athlete-lift-history --athlete <id> --exercise <id> [--since Y-M-D] [--until Y-M-D] [--raw]   one exercise's logged history + PRs
 
-  log for an athlete (record their reps/weights; real athletes only — demo/seeded ones 401):
-  coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--raw]   (--raw exposes the set ids)
+  log for an athlete (record their reps/weights; real invited athletes only — demo/seeded ones 401):
   coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes
+      --date is the workout's SCHEDULED date (not necessarily today); get --set (savedWorkoutSetId)
+      and each result's savedWorkoutSetExerciseId from 'coach athlete-workouts ... --log-ids'
 
   roster management:
   coach athlete-invite --team <id> --emails a@x,b@y [--message "..."] --yes
@@ -100,15 +104,17 @@ Coach — manage a roster (needs a coach account):
   coach team-update --team <id> --title "..."
   coach team-delete --team <id> --yes
   coach team-code-create --team <id> [--type N]
-  coach team-code-delete --code <id> --yes
+  coach team-code-delete --code <id> --yes        (--code is the id from team-code-create, not the join-code number)
 
   session lifecycle:
   coach session-copy --to-program <id> --pw <id> --to-date Y-M-D
   coach session-unpublish --pw <id> --yes
   coach session-save-template --workout <id>
 
-  analytics:
-  coach analytics-query --metric <key> [--team <id>] [--users id,id] [--exercise <id>] [--date|--start|--end Y-M-D] [--use-metric]
+  analytics (curated metrics; for team training volume/recency use roster-activity --metric instead):
+  coach analytics-query [--metric <key>] [--team <id>] [--users id,id] [--exercise <id>] [--date|--start|--end Y-M-D] [--use-metric]
+      run with no --metric to list the valid keys + each one's scope and required params
+      (these keys are curated and differ from the raw 'coach analytics' categories)
 
   exercise library (cached at ~/.trainheroic/library.json):
   coach exercise resolve <name>
@@ -135,14 +141,14 @@ Coach — manage a roster (needs a coach account):
 
 Athlete — the logged-in user's own training (a coach account works too):
   athlete whoami | profile [--metric] | prefs | working-maxes
-  athlete workouts --start Y-M-D --end Y-M-D [--raw] [--logged-only] [--limit N] [--summary]
+  athlete workouts --start Y-M-D --end Y-M-D [--raw] [--log-ids] [--logged-only] [--limit N] [--summary]   (--log-ids: the savedWorkoutSetId + savedWorkoutSetExerciseId log-set needs)
   athlete exercises [--q <text>] [--limit N]
   athlete history <exerciseId> [--raw]
   athlete prs <exerciseId>
   athlete stats <exerciseId> --date Y-M-D
   athlete leaderboard <workoutId> [--page N] [--page-size N] [--gender N]
   athlete export [--out dir] [--start Y-M-D] [--end Y-M-D] [--full]
-  athlete log-set --date Y-M-D --set <id> <resultsJson>|--file f --yes   (writes to your live log)
+  athlete log-set --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes   (logs to a PRESCRIBED workout on that date — no ad-hoc sessions; ids from 'athlete workouts ... --log-ids')
 `;
 
 function out(value: unknown): void {
@@ -621,6 +627,7 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
         start: { type: "string" },
         end: { type: "string" },
         raw: { type: "boolean" },
+        "log-ids": { type: "boolean" },
         "logged-only": { type: "boolean" },
         limit: { type: "string" },
         summary: { type: "boolean" },
@@ -634,6 +641,7 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
         "--end",
       );
       const workouts = await fetchAthleteWorkouts(client, start, end);
+      if (values["log-ids"] === true) return out(presentLogTargets(workouts));
       if (values.raw === true) return out(workouts);
       const opts: { loggedOnly?: boolean; limit?: number } = {};
       if (values["logged-only"] === true) opts.loggedOnly = true;
@@ -811,18 +819,31 @@ async function cmdCoachLogSet(client: TrainHeroicClient, a: string[]): Promise<v
 // A roster athlete's saved workouts in a date window. raw exposes the savedWorkoutSetId +
 // savedWorkoutSetExerciseId that `coach log-set` needs.
 async function cmdCoachAthleteWorkouts(client: TrainHeroicClient, a: string[]): Promise<void> {
-  const usage = "coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--raw]";
+  const usage =
+    "coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--raw|--log-ids] [--logged-only] [--limit N] [--summary]";
   const { values } = parse(a, {
     athlete: { type: "string" },
     start: { type: "string" },
     end: { type: "string" },
     raw: { type: "boolean" },
+    "log-ids": { type: "boolean" },
+    "logged-only": { type: "boolean" },
+    limit: { type: "string" },
+    summary: { type: "boolean" },
   });
   const athleteId = toInt(need(values.athlete as string | undefined, usage), "--athlete");
   const start = isoDate(need(values.start as string | undefined, usage), "--start");
   const end = isoDate(need(values.end as string | undefined, usage), "--end");
   const workouts = await fetchCoachAthleteWorkouts(client, athleteId, start, end);
-  return out(values.raw === true ? workouts : presentAthleteWorkouts(workouts));
+  if (values["log-ids"] === true) return out(presentLogTargets(workouts));
+  if (values.raw === true) return out(workouts);
+  // Same logged-only/limit/summary post-filters as `athlete workouts`, so a coach can narrow a
+  // roster athlete's range to just what they logged instead of scanning every prescribed session.
+  const opts: { loggedOnly?: boolean; limit?: number } = {};
+  if (values["logged-only"] === true) opts.loggedOnly = true;
+  if (values.limit !== undefined) opts.limit = toInt(values.limit as string, "--limit");
+  const selected = selectWorkouts(presentAthleteWorkouts(workouts), opts);
+  return out(values.summary === true ? summarizeAthleteWorkouts(selected) : selected);
 }
 
 // Rank roster athletes by training recency (most-recently-active first).
@@ -954,7 +975,6 @@ async function cmdCoachSessionSaveTemplate(client: TrainHeroicClient, a: string[
 }
 
 async function cmdCoachAnalyticsQuery(client: TrainHeroicClient, a: string[]): Promise<void> {
-  const usage = `coach analytics-query --metric <${ANALYTICS_METRIC_KEYS.join("|")}> [--team <id>] [--users id,id] [--exercise <id>] [--date Y-M-D] [--start Y-M-D] [--end Y-M-D] [--use-metric]`;
   const { values } = parse(a, {
     metric: { type: "string" },
     team: { type: "string" },
@@ -965,9 +985,20 @@ async function cmdCoachAnalyticsQuery(client: TrainHeroicClient, a: string[]): P
     end: { type: "string" },
     "use-metric": { type: "boolean" },
   });
-  const metric = need(values.metric as string | undefined, usage);
+  // No --metric: print the metric catalog (scope + required/optional params) so the caller can
+  // pick a valid one without guessing. These keys are NOT the raw `coach analytics` categories.
+  if (values.metric === undefined) {
+    return out({
+      note: "Pick a --metric from this catalog (these keys differ from the raw 'coach analytics' categories). 'requires'/'optional' are the flags each metric takes.",
+      metrics: analyticsMetricCatalog(),
+    });
+  }
+  const metric = values.metric as string;
   if (!(ANALYTICS_METRIC_KEYS as readonly string[]).includes(metric))
-    fail(`--metric must be one of: ${ANALYTICS_METRIC_KEYS.join(", ")}.`);
+    fail(
+      `--metric "${metric}" is not valid. Choose one of: ${ANALYTICS_METRIC_KEYS.join(", ")}. ` +
+        `Run 'coach analytics-query' with no --metric for each one's scope and required params.`,
+    );
   return out(
     await queryAnalytics(
       client,
@@ -1001,7 +1032,14 @@ async function cmdCoachAthleteTraining(client: TrainHeroicClient, a: string[]): 
   const year = toInt(need(values.year as string | undefined, usage), "--year");
   const month = toInt(need(values.month as string | undefined, usage), "--month");
   const raw = await fetchCoachAthleteCalendarSummary(client, athleteId, year, month);
-  return out(presentCoachAthleteTraining(raw, athleteId, year, month));
+  const view = presentCoachAthleteTraining(raw, athleteId, year, month);
+  if (view.sessions.length === 0) {
+    return out({
+      ...view,
+      note: `No logged sessions for athlete ${athleteId} in ${year}-${String(month).padStart(2, "0")}. This is a per-month view of sessions the athlete actually logged (not prescribed work) — an empty list means nothing was logged that month, not an error. Try another month, or use 'coach athlete-workouts --athlete <id> --start <date> --end <date>' to see prescribed + logged work over a date range.`,
+    });
+  }
+  return out(view);
 }
 
 // A roster athlete's lift history + PRs for one exercise; --since/--until (YYYY-M-D) filter sessions.
@@ -1025,6 +1063,13 @@ async function cmdCoachAthleteLiftHistory(client: TrainHeroicClient, a: string[]
   const sessions = presented.sessions.filter(
     (s) => (since === undefined || s.date >= since) && (until === undefined || s.date <= until),
   );
+  if (sessions.length === 0 && presented.liftPRs.length === 0) {
+    return out({
+      ...presented,
+      sessions,
+      note: `No logged history for exercise ${exerciseId} for athlete ${athleteId}${since !== undefined || until !== undefined ? " in this date window" : ""}. This view only shows sessions where the athlete logged this exact exercise — an empty result means none were logged, not an error. Confirm the exercise id (via 'coach exercise resolve <name>') and widen --since/--until.`,
+    });
+  }
   return out({ ...presented, sessions });
 }
 

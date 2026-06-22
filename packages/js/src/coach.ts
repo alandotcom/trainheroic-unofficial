@@ -150,6 +150,32 @@ const ANALYTICS_METRICS: Record<AnalyticsMetric, MetricSpec> = {
   },
 };
 
+/**
+ * A serializable description of every analytics metric: its scope (does it need a `teamId` or
+ * `userIds`) and which date/exercise inputs it requires vs. optionally accepts. The CLI/MCP
+ * surface this so an agent picks a valid `metric` + params up front, instead of discovering the
+ * shape by trial and error. These curated keys are deliberately NOT the raw category names from
+ * `GET /v5/analytics`; this catalog is the source of truth for `analytics-query`.
+ */
+export function analyticsMetricCatalog(): Array<{
+  metric: AnalyticsMetric;
+  scope: "team" | "user";
+  scopeParam: "teamId" | "userIds";
+  requires: string[];
+  optional: string[];
+}> {
+  return ANALYTICS_METRIC_KEYS.map((metric) => {
+    const spec = ANALYTICS_METRICS[metric];
+    return {
+      metric,
+      scope: spec.scope,
+      scopeParam: spec.scope === "team" ? "teamId" : "userIds",
+      requires: [...spec.requires],
+      optional: spec.inputs.filter((i) => !spec.requires.includes(i)),
+    };
+  });
+}
+
 const ANALYTICS_BODY_KEY: Record<AnalyticsInput, string> = {
   date: "date",
   dateStart: "date_start",
