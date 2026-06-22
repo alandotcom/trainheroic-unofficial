@@ -147,7 +147,7 @@ Bridge the hosted server with [`mcp-remote`](https://github.com/geelen/mcp-remot
 }
 ```
 
-First run opens OAuth in a browser and caches the token under `~/.mcp-auth`. In a web IDE (Codespaces, VS Code Remote) `localhost` is auto-forwarded, so the callback completes without extra setup.
+First run opens OAuth in a browser and caches the token under `~/.mcp-auth`. A web IDE like Codespaces or VS Code Remote auto-forwards `localhost`, so the callback lands back in the session on its own.
 
 </details>
 
