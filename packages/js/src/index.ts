@@ -4,6 +4,8 @@ export * from "./client";
 export * from "./response-check";
 export * from "./exercise-util";
 export * from "./athlete";
+export * from "./coach";
+export * from "./util";
 export * from "./workout-encode";
 export * from "./workout-session";
 export * from "./messaging";

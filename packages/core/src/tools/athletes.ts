@@ -2,7 +2,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { coachLogSetArgsSchema, dateString } from "@trainheroic-unofficial/dto";
 import {
+  definedProps,
   fetchCoachAthleteWorkouts,
+  inviteAthletes,
   logForAthlete,
   presentAthleteWorkouts,
 } from "@trainheroic-unofficial/js";
@@ -18,8 +20,6 @@ import {
   toId,
 } from "../context";
 import type { ToolContext } from "../context";
-
-const DEFAULT_INVITE_MESSAGE = "Follow these steps and you'll be set up and ready to go!";
 
 /** Normalize one-or-many emails into a deduped, trimmed list. */
 function asEmailList(emails: string | string[]): string[] {
@@ -67,38 +67,11 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
         );
         if (!ok) return errorResult(NOT_CONFIRMED);
 
-        // 1) Validate. The endpoint echoes back the addresses it considers valid.
-        const validation = await ctx.client.request("POST", "/v5/emails/validate", {
-          body: { emails: list.join(",") },
-        });
-        if (!validation.ok) {
-          const detail =
-            typeof validation.data === "string" ? validation.data : JSON.stringify(validation.data);
-          return errorResult(`Email validation failed (HTTP ${validation.status}): ${detail}`);
-        }
-        const valid = Array.isArray(validation.data) ? (validation.data as string[]) : list;
-        if (valid.length === 0) {
-          return errorResult(
-            `No valid addresses among: ${list.join(", ")}. They may be malformed or already on the team.`,
-          );
-        }
-
-        // 2) Invite the validated addresses to the team.
-        const invite = await ctx.client.request("POST", "/v5/athletes/inviteToTeam", {
-          body: {
-            teamType: 0,
-            teamId: id,
-            orgId: null,
-            emails: valid,
-            message: message ?? DEFAULT_INVITE_MESSAGE,
-          },
-        });
-        if (!invite.ok) {
-          const detail =
-            typeof invite.data === "string" ? invite.data : JSON.stringify(invite.data);
-          return errorResult(`Invite failed (HTTP ${invite.status}): ${detail}`);
-        }
-        return jsonResult({ invited: true, teamId: id, result: invite.data });
+        const res = await inviteAthletes(
+          ctx.client,
+          definedProps({ teamId: id, emails: list, message }),
+        );
+        return jsonResult({ invited: true, teamId: id, result: res.result });
       }),
   );
 

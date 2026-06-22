@@ -5,6 +5,7 @@ import {
   buildSession,
   type BuildOptions,
   collectAdvisories,
+  copySession,
   publishSession,
   readSession,
   removeSession,
@@ -166,18 +167,7 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     ({ toProgramId, pwId, toDate }) =>
-      attempt(async () => {
-        const [year, month, day] = parseWorkoutDate(toDate);
-        const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-        const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        return apiCall(ctx, "POST", "/2.0/coach/calendar/copyProgramWorkout", {
-          body: {
-            toProgramId,
-            pwId,
-            toDate: { date: iso, day, month, year, dayOfWeek, isToday: false },
-          },
-        });
-      }),
+      attempt(async () => jsonResult(await copySession(ctx.client, { toProgramId, pwId, toDate }))),
   );
 
   server.registerTool(

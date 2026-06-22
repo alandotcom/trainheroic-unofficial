@@ -86,15 +86,17 @@ response shape, or an area not covered here.
 
 ## What you can do
 
-| Area                | How                                                                                                                                         |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Athletes            | `$TH coach athletes`; invite/archive/restore via `$TH request ...`                                                                          |
-| Teams               | `$TH coach teams`, `$TH coach team <id>`, `$TH coach team-codes <id>`; create via `$TH request POST /1.0/coach/team/createWithTitleAndCode` |
-| Programs            | `$TH coach programs`, `$TH coach program <id>`                                                                                              |
-| Exercises           | `$TH coach exercise resolve\|search\|get\|sync\|create\|forget\|stats` (below)                                                              |
-| Sessions / workouts | `$TH coach workout build\|read\|publish\|remove` (below)                                                                                    |
-| Messaging           | `$TH coach message list\|read\|draft\|send\|delete` (below)                                                                                 |
-| Analytics           | `$TH coach analytics`, then `$TH request POST /v5/analytics/*`                                                                              |
+| Area                | How                                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Athletes            | `$TH coach athletes`; `coach athlete-invite\|athlete-archive\|athlete-restore`                                                   |
+| Teams / join codes  | `$TH coach teams\|team <id>\|team-codes <id>`; `coach team-create\|team-update\|team-delete\|team-code-create\|team-code-delete` |
+| Programs            | `$TH coach programs`, `$TH coach program <id>`                                                                                   |
+| Exercises           | `$TH coach exercise resolve\|search\|get\|sync\|create\|forget\|stats` (below)                                                   |
+| Sessions / workouts | `$TH coach workout build\|read\|publish\|remove`; `coach session-copy\|session-unpublish\|session-save-template`                 |
+| Roster training     | `$TH coach roster-activity\|athlete-training\|athlete-lift-history\|athlete-workouts` (read another athlete's training)          |
+| Log for an athlete  | `$TH coach log-set` — record a roster athlete's reps/weights (real athletes only; see below)                                     |
+| Messaging           | `$TH coach message list\|read\|draft\|send\|delete` (below)                                                                      |
+| Analytics           | `$TH coach analytics` (category list); `$TH coach analytics-query --metric <key> ...` (the report)                               |
 
 ## Resolving exercises
 
@@ -171,6 +173,28 @@ Load `references/workout-creation.md` before building manually or for something 
 does not cover (drop sets, pyramids, %-of-max, the raw field list, or the parameter-type
 table).
 
+## Logging for an athlete ("Log for Athlete")
+
+A coach can record an athlete's actual reps/weights on their behalf — the API equivalent of
+the mobile app's "Log for Athlete". It is a two-step write the SDK handles in one call: the
+per-exercise data PUT (`/1.0/coach/savedworkoutsetexercise/{id}/{athleteId}`, the only call
+that stores reps/weight) then the block-completion PUT. **Athlete-facing — gate behind
+`--yes`.**
+
+```bash
+# 1) find the set + exercise ids for the athlete's day (raw exposes the ids):
+$TH coach athlete-workouts --athlete 200004 --start 2026-06-22 --end 2026-06-22 --raw
+# 2) log it (results JSON = one entry per exercise; each set is param1=reps, param2=weight):
+$TH coach log-set --athlete 200004 --date 2026-06-22 --set 1594558978 --yes \
+  '[{"savedWorkoutSetExerciseId":2714543789,"sets":[{"param1":"10","param2":"225"},{"param1":"10","param2":"225"}]}]'
+```
+
+**Only works for real (invited) athletes.** TrainHeroic's seeded _demo_ athletes are
+read-only for results: the data-write returns `401` and the change never persists (the app
+shows it optimistically but it is not saved). The official app hits the same 401 on demo
+athletes. Read another athlete's training with `coach roster-activity`, `coach
+athlete-training` (a logged month), `coach athlete-lift-history`, or `coach athlete-workouts`.
+
 ## Messaging
 
 A **stream** is a conversation (a team, or a 1:1 with an athlete); a **comment** is a
@@ -237,8 +261,10 @@ Environment-specific facts that defy reasonable assumptions:
      `$TH request DELETE /v5/teamCodes/874586`) or the UI steps.
 
   The CLI enforces a `--yes` flag on `coach message send`/`coach message delete`,
-  `coach workout publish`, `coach workout remove`, and `coach exercise forget`, but the gate
-  above still applies: confirm in the moment before adding `--yes`.
+  `coach workout publish`, `coach workout remove`, `coach exercise forget`, `coach
+athlete-invite`, `coach athlete-archive`, `coach team-delete`, `coach team-code-delete`,
+  `coach session-unpublish`, and `coach log-set`, but the gate above still applies: confirm
+  in the moment before adding `--yes`.
 
 ## Beyond the CLI
 

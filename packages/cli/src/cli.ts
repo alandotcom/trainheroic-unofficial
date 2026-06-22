@@ -12,32 +12,42 @@ import {
   workoutSpecSchema,
 } from "@trainheroic-unofficial/dto";
 import {
+  ANALYTICS_METRIC_KEYS,
+  type AnalyticsMetric,
   type ApiBase,
   buildSession,
   type BuildOptions,
   buildCommentPayload,
   collectAdvisories,
+  copySession,
+  definedProps,
   deleteComment,
   ExerciseLibrary,
   fetchAthletePrefs,
   fetchAthleteProfileSummary,
   fetchAthleteUser,
   fetchAthleteWorkouts,
+  fetchCoachAthleteCalendarSummary,
   fetchCoachAthleteWorkouts,
   fetchExerciseHistoryDetail,
   fetchExerciseHistoryList,
   fetchExerciseStats,
   fetchLeaderboard,
   fetchPersonalRecords,
+  fetchRosterActivity,
   fetchStreams,
   fetchWorkingMaxes,
+  inviteAthletes,
   logAthleteSet,
   logForAthlete,
   mapPool,
+  queryAnalytics,
   presentAthleteWorkouts,
+  presentCoachAthleteTraining,
   presentExerciseHistory,
   publishSession,
   selectWorkouts,
+  summarizeAthleteWorkouts,
   readLive,
   readSession,
   removeSession,
@@ -71,9 +81,34 @@ Coach — manage a roster (needs a coach account):
   coach head-coach | athletes | programs | teams | notifications | analytics
   coach program <id> | team <id> | team-codes <id>
 
+  roster athlete reads:
+  coach roster-activity --athletes <id,id,...> [--metric]                  rank by training recency
+  coach athlete-training --athlete <id> --year <YYYY> --month <1-12>        a logged month
+  coach athlete-lift-history --athlete <id> --exercise <id> [--since Y-M-D] [--until Y-M-D] [--raw]
+
   log for an athlete (record their reps/weights; real athletes only — demo/seeded ones 401):
   coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--raw]   (--raw exposes the set ids)
   coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes
+
+  roster management:
+  coach athlete-invite --team <id> --emails a@x,b@y [--message "..."] --yes
+  coach athlete-archive --athletes <id,id,...> --yes
+  coach athlete-restore --athletes <id,id,...>
+
+  teams & join codes:
+  coach team-create --title "..."
+  coach team-update --team <id> --title "..."
+  coach team-delete --team <id> --yes
+  coach team-code-create --team <id> [--type N]
+  coach team-code-delete --code <id> --yes
+
+  session lifecycle:
+  coach session-copy --to-program <id> --pw <id> --to-date Y-M-D
+  coach session-unpublish --pw <id> --yes
+  coach session-save-template --workout <id>
+
+  analytics:
+  coach analytics-query --metric <key> [--team <id>] [--users id,id] [--exercise <id>] [--date|--start|--end Y-M-D] [--use-metric]
 
   exercise library (cached at ~/.trainheroic/library.json):
   coach exercise resolve <name>
@@ -100,7 +135,7 @@ Coach — manage a roster (needs a coach account):
 
 Athlete — the logged-in user's own training (a coach account works too):
   athlete whoami | profile [--metric] | prefs | working-maxes
-  athlete workouts --start Y-M-D --end Y-M-D [--raw] [--logged-only] [--limit N]
+  athlete workouts --start Y-M-D --end Y-M-D [--raw] [--logged-only] [--limit N] [--summary]
   athlete exercises [--q <text>] [--limit N]
   athlete history <exerciseId> [--raw]
   athlete prs <exerciseId>
@@ -177,6 +212,23 @@ async function get(client: TrainHeroicClient, path: string, base?: ApiBase): Pro
   const res = await client.request("GET", path, base ? { base } : {});
   if (!res.ok) fail(`GET ${path} failed (HTTP ${res.status}).`);
   return res.data;
+}
+
+/** A thin write request (POST/PUT/DELETE) that fails on a non-2xx and returns the body. */
+async function mutate(
+  client: TrainHeroicClient,
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<unknown> {
+  const res = await client.request(method, path, body !== undefined ? { body } : {});
+  if (!res.ok) fail(`${method} ${path} failed (HTTP ${res.status}).`);
+  return res.data;
+}
+
+/** Parse a comma-separated id list ("1,2,3") into numbers. */
+function idList(value: string, label: string): number[] {
+  return value.split(",").map((s) => toInt(s.trim(), label));
 }
 
 function library(client: TrainHeroicClient): ExerciseLibrary {
@@ -571,6 +623,7 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
         raw: { type: "boolean" },
         "logged-only": { type: "boolean" },
         limit: { type: "string" },
+        summary: { type: "boolean" },
       });
       const start = isoDate(
         need(values.start as string | undefined, "athlete workouts --start Y-M-D --end Y-M-D"),
@@ -585,7 +638,8 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
       const opts: { loggedOnly?: boolean; limit?: number } = {};
       if (values["logged-only"] === true) opts.loggedOnly = true;
       if (values.limit !== undefined) opts.limit = toInt(values.limit as string, "--limit");
-      return out(selectWorkouts(presentAthleteWorkouts(workouts), opts));
+      const selected = selectWorkouts(presentAthleteWorkouts(workouts), opts);
+      return out(values.summary === true ? summarizeAthleteWorkouts(selected) : selected);
     }
     case "exercises": {
       const { values } = parse(a, { q: { type: "string" }, limit: { type: "string" } });
@@ -703,7 +757,7 @@ async function cmdInstallSkill(): Promise<void> {
 }
 
 const COACH_USAGE =
-  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|athlete-workouts|log-set|exercise|workout|message>";
+  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|roster-activity|athlete-training|athlete-lift-history|athlete-workouts|log-set|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|analytics-query|exercise|workout|message>";
 
 const COACH_LOG_SET_USAGE =
   "coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson> --yes";
@@ -771,6 +825,209 @@ async function cmdCoachAthleteWorkouts(client: TrainHeroicClient, a: string[]): 
   return out(values.raw === true ? workouts : presentAthleteWorkouts(workouts));
 }
 
+// Rank roster athletes by training recency (most-recently-active first).
+async function cmdCoachRosterActivity(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = "coach roster-activity --athletes <id,id,...> [--metric]";
+  const { values } = parse(a, { athletes: { type: "string" }, metric: { type: "boolean" } });
+  const ids = idList(need(values.athletes as string | undefined, usage), "--athletes");
+  return out(await fetchRosterActivity(client, ids, values.metric === true));
+}
+
+// Invite athletes to a team (the two-step validate + invite "create athlete" flow).
+async function cmdCoachAthleteInvite(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = 'coach athlete-invite --team <id> --emails a@x,b@y [--message "..."] --yes';
+  const { values } = parse(a, {
+    team: { type: "string" },
+    emails: { type: "string" },
+    message: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const teamId = toInt(need(values.team as string | undefined, usage), "--team");
+  const emails = need(values.emails as string | undefined, usage)
+    .split(",")
+    .map((e) => e.trim())
+    .filter((e) => e.length > 0);
+  if (values.yes !== true)
+    fail(`inviting ${emails.join(", ")} emails them a real invitation; add --yes.`);
+  return out(
+    await inviteAthletes(
+      client,
+      definedProps({ teamId, emails, message: values.message as string | undefined }),
+    ),
+  );
+}
+
+// Archive (remove from active roster; restorable) one or more athletes.
+async function cmdCoachAthleteArchive(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = "coach athlete-archive --athletes <id,id,...> --yes";
+  const { values } = parse(a, { athletes: { type: "string" }, yes: { type: "boolean" } });
+  const athleteIds = idList(need(values.athletes as string | undefined, usage), "--athletes");
+  if (values.yes !== true)
+    fail(
+      `archiving athlete(s) ${athleteIds.join(", ")} removes them from the active roster; add --yes.`,
+    );
+  return out(await mutate(client, "PUT", "/v5/athletes/archive", { athleteIds }));
+}
+
+async function cmdCoachAthleteRestore(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = "coach athlete-restore --athletes <id,id,...>";
+  const { values } = parse(a, { athletes: { type: "string" } });
+  const athleteIds = idList(need(values.athletes as string | undefined, usage), "--athletes");
+  return out(await mutate(client, "PUT", "/v5/athletes/restore", { athleteIds }));
+}
+
+async function cmdCoachTeamCreate(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values } = parse(a, { title: { type: "string" } });
+  const title = need(values.title as string | undefined, 'coach team-create --title "..."');
+  return out(await mutate(client, "POST", "/1.0/coach/team/createWithTitleAndCode", { title }));
+}
+
+async function cmdCoachTeamUpdate(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = 'coach team-update --team <id> --title "..."';
+  const { values } = parse(a, { team: { type: "string" }, title: { type: "string" } });
+  const teamId = toInt(need(values.team as string | undefined, usage), "--team");
+  const title = need(values.title as string | undefined, usage);
+  return out(await mutate(client, "PUT", `/v5/teams/${teamId}`, { title }));
+}
+
+async function cmdCoachTeamDelete(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = "coach team-delete --team <id> --yes";
+  const { values } = parse(a, { team: { type: "string" }, yes: { type: "boolean" } });
+  const teamId = toInt(need(values.team as string | undefined, usage), "--team");
+  if (values.yes !== true) fail(`deleting team ${teamId} removes it and its calendar; add --yes.`);
+  return out(await mutate(client, "DELETE", `/v5/teams/${teamId}`));
+}
+
+async function cmdCoachTeamCodeCreate(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = "coach team-code-create --team <id> [--type N]";
+  const { values } = parse(a, { team: { type: "string" }, type: { type: "string" } });
+  const teamId = toInt(need(values.team as string | undefined, usage), "--team");
+  const type = values.type !== undefined ? toInt(values.type as string, "--type") : 2;
+  return out(await mutate(client, "POST", `/v5/teams/${teamId}/teamCodes`, { type }));
+}
+
+async function cmdCoachTeamCodeDelete(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = "coach team-code-delete --code <id> --yes";
+  const { values } = parse(a, { code: { type: "string" }, yes: { type: "boolean" } });
+  const codeId = toInt(need(values.code as string | undefined, usage), "--code");
+  if (values.yes !== true)
+    fail(`deleting team code ${codeId} stops athletes joining with it; add --yes.`);
+  return out(await mutate(client, "DELETE", `/v5/teamCodes/${codeId}`));
+}
+
+async function cmdCoachSessionCopy(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = "coach session-copy --to-program <id> --pw <id> --to-date Y-M-D";
+  const { values } = parse(a, {
+    "to-program": { type: "string" },
+    pw: { type: "string" },
+    "to-date": { type: "string" },
+  });
+  const toProgramId = toInt(
+    need(values["to-program"] as string | undefined, usage),
+    "--to-program",
+  );
+  const pwId = toInt(need(values.pw as string | undefined, usage), "--pw");
+  const toDate = need(values["to-date"] as string | undefined, usage);
+  return out(await copySession(client, { toProgramId, pwId, toDate }));
+}
+
+async function cmdCoachSessionUnpublish(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = "coach session-unpublish --pw <id> --yes";
+  const { values } = parse(a, { pw: { type: "string" }, yes: { type: "boolean" } });
+  const pwId = toInt(need(values.pw as string | undefined, usage), "--pw");
+  if (values.yes !== true)
+    fail(`unpublishing session ${pwId} hides it from the athlete; add --yes.`);
+  return out(await mutate(client, "POST", `/2.0/coach/calendar/programWorkout/unPublish/${pwId}`));
+}
+
+async function cmdCoachSessionSaveTemplate(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = "coach session-save-template --workout <id>";
+  const { values } = parse(a, { workout: { type: "string" } });
+  const workoutId = toInt(need(values.workout as string | undefined, usage), "--workout");
+  return out(
+    await mutate(
+      client,
+      "POST",
+      `/2.0/coach/calendar/programWorkout/saveWorkoutAsTemplate/${workoutId}`,
+    ),
+  );
+}
+
+async function cmdCoachAnalyticsQuery(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = `coach analytics-query --metric <${ANALYTICS_METRIC_KEYS.join("|")}> [--team <id>] [--users id,id] [--exercise <id>] [--date Y-M-D] [--start Y-M-D] [--end Y-M-D] [--use-metric]`;
+  const { values } = parse(a, {
+    metric: { type: "string" },
+    team: { type: "string" },
+    users: { type: "string" },
+    exercise: { type: "string" },
+    date: { type: "string" },
+    start: { type: "string" },
+    end: { type: "string" },
+    "use-metric": { type: "boolean" },
+  });
+  const metric = need(values.metric as string | undefined, usage);
+  if (!(ANALYTICS_METRIC_KEYS as readonly string[]).includes(metric))
+    fail(`--metric must be one of: ${ANALYTICS_METRIC_KEYS.join(", ")}.`);
+  return out(
+    await queryAnalytics(
+      client,
+      definedProps({
+        metric: metric as AnalyticsMetric,
+        teamId: values.team !== undefined ? toInt(values.team as string, "--team") : undefined,
+        userIds: values.users !== undefined ? idList(values.users as string, "--users") : undefined,
+        exerciseId:
+          values.exercise !== undefined
+            ? toInt(values.exercise as string, "--exercise")
+            : undefined,
+        date: values.date !== undefined ? isoDate(values.date as string, "--date") : undefined,
+        dateStart:
+          values.start !== undefined ? isoDate(values.start as string, "--start") : undefined,
+        dateEnd: values.end !== undefined ? isoDate(values.end as string, "--end") : undefined,
+        useMetric: values["use-metric"] === true ? true : undefined,
+      }),
+    ),
+  );
+}
+
+// A roster athlete's logged sessions for a calendar month (one row per session).
+async function cmdCoachAthleteTraining(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = "coach athlete-training --athlete <id> --year <YYYY> --month <1-12>";
+  const { values } = parse(a, {
+    athlete: { type: "string" },
+    year: { type: "string" },
+    month: { type: "string" },
+  });
+  const athleteId = toInt(need(values.athlete as string | undefined, usage), "--athlete");
+  const year = toInt(need(values.year as string | undefined, usage), "--year");
+  const month = toInt(need(values.month as string | undefined, usage), "--month");
+  const raw = await fetchCoachAthleteCalendarSummary(client, athleteId, year, month);
+  return out(presentCoachAthleteTraining(raw, athleteId, year, month));
+}
+
+// A roster athlete's lift history + PRs for one exercise; --since/--until (YYYY-M-D) filter sessions.
+async function cmdCoachAthleteLiftHistory(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage =
+    "coach athlete-lift-history --athlete <id> --exercise <id> [--since Y-M-D] [--until Y-M-D] [--raw]";
+  const { values } = parse(a, {
+    athlete: { type: "string" },
+    exercise: { type: "string" },
+    since: { type: "string" },
+    until: { type: "string" },
+    raw: { type: "boolean" },
+  });
+  const athleteId = toInt(need(values.athlete as string | undefined, usage), "--athlete");
+  const exerciseId = toInt(need(values.exercise as string | undefined, usage), "--exercise");
+  const detail = await fetchExerciseHistoryDetail(client, exerciseId, athleteId);
+  if (values.raw === true) return out(detail);
+  const presented = presentExerciseHistory(detail);
+  const since = values.since !== undefined ? isoDate(values.since as string, "--since") : undefined;
+  const until = values.until !== undefined ? isoDate(values.until as string, "--until") : undefined;
+  const sessions = presented.sessions.filter(
+    (s) => (since === undefined || s.date >= since) && (until === undefined || s.date <= until),
+  );
+  return out({ ...presented, sessions });
+}
+
 async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void> {
   const [sub, ...a] = rest;
   switch (sub) {
@@ -804,10 +1061,40 @@ async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void
           `/v5/teams/${encodeURIComponent(need(a[0], "coach team-codes <id>"))}/teamCodes`,
         ),
       );
+    case "roster-activity":
+      return cmdCoachRosterActivity(client, a);
+    case "athlete-training":
+      return cmdCoachAthleteTraining(client, a);
+    case "athlete-lift-history":
+      return cmdCoachAthleteLiftHistory(client, a);
     case "athlete-workouts":
       return cmdCoachAthleteWorkouts(client, a);
     case "log-set":
       return cmdCoachLogSet(client, a);
+    case "athlete-invite":
+      return cmdCoachAthleteInvite(client, a);
+    case "athlete-archive":
+      return cmdCoachAthleteArchive(client, a);
+    case "athlete-restore":
+      return cmdCoachAthleteRestore(client, a);
+    case "team-create":
+      return cmdCoachTeamCreate(client, a);
+    case "team-update":
+      return cmdCoachTeamUpdate(client, a);
+    case "team-delete":
+      return cmdCoachTeamDelete(client, a);
+    case "team-code-create":
+      return cmdCoachTeamCodeCreate(client, a);
+    case "team-code-delete":
+      return cmdCoachTeamCodeDelete(client, a);
+    case "session-copy":
+      return cmdCoachSessionCopy(client, a);
+    case "session-unpublish":
+      return cmdCoachSessionUnpublish(client, a);
+    case "session-save-template":
+      return cmdCoachSessionSaveTemplate(client, a);
+    case "analytics-query":
+      return cmdCoachAnalyticsQuery(client, a);
     case "exercise":
       return cmdExercise(client, a);
     case "workout":

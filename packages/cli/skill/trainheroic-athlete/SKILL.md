@@ -52,18 +52,18 @@ on a 401/403. Start with `$TH athlete whoami` to confirm auth and get your `id`.
 
 ## What you can do
 
-| Goal                                  | Command                                                  |
-| ------------------------------------- | -------------------------------------------------------- |
-| Lifetime totals + profile             | `$TH athlete profile [--metric]`                         |
-| Scheduled / completed workouts        | `$TH athlete workouts --start Y-M-D --end Y-M-D [--raw]` |
-| Find an exercise you've logged        | `$TH athlete exercises [--q <text>] [--limit N]`         |
-| One lift's PRs + history over time    | `$TH athlete history <exerciseId> [--raw]`               |
-| Personal records for a lift           | `$TH athlete prs <exerciseId>`                           |
-| Last performance + PR as of a date    | `$TH athlete stats <exerciseId> --date Y-M-D`            |
-| Working maxes (drive % prescriptions) | `$TH athlete working-maxes`                              |
-| Benchmark leaderboard                 | `$TH athlete leaderboard <workoutId>`                    |
-| Download all historicals to JSON      | `$TH athlete export [--out dir] [--full]`                |
-| Log completed set results (gated)     | `$TH athlete log-set --date Y-M-D --set <id> ... --yes`  |
+| Goal                                  | Command                                                              |
+| ------------------------------------- | -------------------------------------------------------------------- |
+| Lifetime totals + profile             | `$TH athlete profile [--metric]`                                     |
+| Scheduled / completed workouts        | `$TH athlete workouts --start Y-M-D --end Y-M-D [--raw] [--summary]` |
+| Find an exercise you've logged        | `$TH athlete exercises [--q <text>] [--limit N]`                     |
+| One lift's PRs + history over time    | `$TH athlete history <exerciseId> [--raw]`                           |
+| Personal records for a lift           | `$TH athlete prs <exerciseId>`                                       |
+| Last performance + PR as of a date    | `$TH athlete stats <exerciseId> --date Y-M-D`                        |
+| Working maxes (drive % prescriptions) | `$TH athlete working-maxes`                                          |
+| Benchmark leaderboard                 | `$TH athlete leaderboard <workoutId>`                                |
+| Download all historicals to JSON      | `$TH athlete export [--out dir] [--full]`                            |
+| Log completed set results (gated)     | `$TH athlete log-set --date Y-M-D --set <id> ... --yes`              |
 
 ## Reading training
 
@@ -84,6 +84,11 @@ positional units:
 ```bash
 $TH athlete workouts --start 2026-06-01 --end 2026-06-14
 ```
+
+Add `--summary` for one compact row per session (date, title, logged flag, exercise/performed
+counts) instead of every set — use it to scan a multi-week window, then re-query a single day
+without it to see that day's sets. `--logged-only` keeps only sessions with logged sets;
+`--limit N` returns the most recent N.
 
 `profile` returns lifetime totals (reps, volume, sessions, first/last logged, hours) plus
 the profile. Pass `--metric` for kg/metric totals.
