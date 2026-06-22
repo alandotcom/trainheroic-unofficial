@@ -130,15 +130,15 @@ For the athlete server, swap the package name to `@trainheroic-unofficial/athlet
 </details>
 
 <details>
-<summary><b>Headless / no-browser environments (SSH, containers, CI)</b></summary>
+<summary><b>Headless / no-browser environments (SSH, containers, CI, web IDEs)</b></summary>
 
 <br>
 
-The hosted server signs you in with OAuth, which needs a browser **once**. On a machine with no browser, you have three options, simplest first.
+OAuth needs a browser once, and the catch on a remote box is that the sign-in redirect targets `http://localhost:<port>`, which resolves to *your* machine, not the box. SSH port-forwarding is one way to bridge that gap, but it is **not** required — here are the options, simplest first.
 
-**1. Run a local server instead — no OAuth at all.** The local `coach-mcp` / `athlete-mcp` servers read your TrainHeroic credentials from the environment and never open a browser, so there is nothing to authenticate interactively. If you can place credentials on the box, this is the path of least resistance — use the Claude Code or stdio examples above. (Mind the plaintext-credentials caveat at the top of this README.)
+**1. Run a local server — no OAuth, no browser, no SSH.** The local `coach-mcp` / `athlete-mcp` servers read your TrainHeroic credentials from the environment and talk to TrainHeroic directly, so there is no interactive sign-in to complete at all. If you can place credentials on the box, this is the cleanest headless path — use the Claude Code or stdio examples above. (Mind the plaintext-credentials caveat at the top of this README.)
 
-**2. Bridge the hosted server with `mcp-remote`, forwarding the callback over SSH.** [`mcp-remote`](https://github.com/geelen/mcp-remote) runs the full OAuth flow (dynamic registration + PKCE) against the hosted server and caches the token, so a stdio-only client never has to understand OAuth:
+**2. Hosted server in a web dev environment (Codespaces, VS Code Remote, code-server).** These forward `localhost` back to your browser automatically, so the [`mcp-remote`](https://github.com/geelen/mcp-remote) bridge completes the OAuth callback with **no manual SSH**:
 
 ```jsonc
 {
@@ -151,17 +151,19 @@ The hosted server signs you in with OAuth, which needs a browser **once**. On a 
 }
 ```
 
-`mcp-remote` listens on `http://localhost:3334` for the OAuth redirect. Forward that port from your laptop and complete the sign-in in your local browser:
+`mcp-remote` runs the full OAuth flow (dynamic registration + PKCE) against the hosted server and caches the token under `~/.mcp-auth`, so a stdio-only client never has to understand OAuth.
+
+**3. Hosted server, paste the redirect back (no tunnel).** Open the authorize URL in a browser on any device, approve, and copy the full `http://localhost:…/callback?code=…` URL the browser fails to load — then paste it into the terminal. The bridge extracts the code and finishes the exchange. This needs a bridge that supports out-of-band paste-back (e.g. Hermes' `--manual-paste`); plain `mcp-remote` does not.
+
+**4. Hosted server over bare SSH.** Only if none of the above fit, forward the callback port once and sign in from your local browser:
 
 ```bash
 ssh -L 3334:localhost:3334 user@remote-host
 ```
 
-The token is cached under `~/.mcp-auth` on the remote box, so the tunnel is only needed for the first login.
+The token caches under `~/.mcp-auth`, so the tunnel is needed only for the first login.
 
-**3. Use a bridge that prints the sign-in URL.** If you cannot forward a port, use a bridge that prints the authorize URL to the terminal instead of launching a browser — e.g. [`hyper-mcp-remote`](https://github.com/hyper-mcp-rs/hyper-mcp-remote) (prints the URL; `--callback-host` / `--callback-port` if you still need to tunnel the redirect). Open the printed URL on any device with a browser, sign in, and let the bridge receive the callback. (The hosted server uses the standard authorization-code flow; it does **not** implement the OAuth device grant — RFC 8628 — so device-code bridges such as `mcp-stdio --oauth-device` will not work against it.)
-
-A client that already has a bearer token can also skip OAuth entirely by presenting it with `--header "Authorization: Bearer …"`.
+A client that already holds a bearer token can skip OAuth entirely with `--header "Authorization: Bearer …"`. (The hosted server speaks the standard authorization-code flow; it does **not** implement the OAuth device grant — RFC 8628 — so device-code bridges will not work against it. Tracking: #13.)
 
 </details>
 
