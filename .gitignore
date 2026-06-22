@@ -33,3 +33,7 @@ session.json
 .env
 *.local
 .claude/worktrees/
+
+# mitmproxy capture dumps (large, contain live session tokens) — never commit
+flows
+flows[0-9]*

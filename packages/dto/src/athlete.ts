@@ -197,6 +197,13 @@ export const logSetArgsSchema = z.object({
 });
 export type LogSetArgs = z.infer<typeof logSetArgsSchema>;
 
+/**
+ * Args for the coach "log for athlete" write — the same shape as logSetArgsSchema plus the
+ * roster `athleteId` whose set is being logged on their behalf.
+ */
+export const coachLogSetArgsSchema = logSetArgsSchema.extend({ athleteId: idArgSchema });
+export type CoachLogSetArgs = z.infer<typeof coachLogSetArgsSchema>;
+
 // --- Presented (model-friendly) view types, produced by the `js` presenters ---
 
 /** A flattened exercise within a presented workout: prescriptions, logged results, units. */

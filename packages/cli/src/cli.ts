@@ -6,6 +6,7 @@ import process from "node:process";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import type { ZodType } from "zod";
 import {
+  coachLogSetArgsSchema,
   exerciseCreateSchema,
   logSetArgsSchema,
   workoutSpecSchema,
@@ -22,6 +23,7 @@ import {
   fetchAthleteProfileSummary,
   fetchAthleteUser,
   fetchAthleteWorkouts,
+  fetchCoachAthleteWorkouts,
   fetchExerciseHistoryDetail,
   fetchExerciseHistoryList,
   fetchExerciseStats,
@@ -30,6 +32,7 @@ import {
   fetchStreams,
   fetchWorkingMaxes,
   logAthleteSet,
+  logForAthlete,
   mapPool,
   presentAthleteWorkouts,
   presentExerciseHistory,
@@ -67,6 +70,10 @@ Shared:
 Coach — manage a roster (needs a coach account):
   coach head-coach | athletes | programs | teams | notifications | analytics
   coach program <id> | team <id> | team-codes <id>
+
+  log for an athlete (record their reps/weights; real athletes only — demo/seeded ones 401):
+  coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--raw]   (--raw exposes the set ids)
+  coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes
 
   exercise library (cached at ~/.trainheroic/library.json):
   coach exercise resolve <name>
@@ -696,7 +703,73 @@ async function cmdInstallSkill(): Promise<void> {
 }
 
 const COACH_USAGE =
-  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|exercise|workout|message>";
+  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|athlete-workouts|log-set|exercise|workout|message>";
+
+const COACH_LOG_SET_USAGE =
+  "coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson> --yes";
+
+// Coach "Log for Athlete": record a roster athlete's set results on their behalf. Mirrors
+// `athlete log-set` but targets another athlete (real, not a demo/seeded athlete — those 401).
+async function cmdCoachLogSet(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values, positionals } = parse(a, {
+    athlete: { type: "string" },
+    date: { type: "string" },
+    set: { type: "string" },
+    file: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const athleteId = toInt(
+    need(values.athlete as string | undefined, COACH_LOG_SET_USAGE),
+    "--athlete",
+  );
+  const date = isoDate(need(values.date as string | undefined, COACH_LOG_SET_USAGE), "--date");
+  const savedWorkoutSetId = toInt(
+    need(values.set as string | undefined, COACH_LOG_SET_USAGE),
+    "--set",
+  );
+  const results = await jsonInput(positionals[0], values.file as string | undefined);
+  const args = validate(
+    coachLogSetArgsSchema,
+    { athleteId, date, savedWorkoutSetId, results },
+    "coach log-set args",
+  );
+  if (values.yes !== true)
+    fail(
+      `logging to athlete ${athleteId}'s set ${savedWorkoutSetId} writes to their training log; add --yes.`,
+    );
+  const mapped = args.results.map((r) => ({
+    savedWorkoutSetExerciseId: toInt(
+      String(r.savedWorkoutSetExerciseId),
+      "savedWorkoutSetExerciseId",
+    ),
+    sets: r.sets.map((s) => {
+      const slot: { param1?: number | string; param2?: number | string } = {};
+      if (s.param1 !== undefined) slot.param1 = s.param1;
+      if (s.param2 !== undefined) slot.param2 = s.param2;
+      return slot;
+    }),
+  }));
+  return out(
+    await logForAthlete(client, { athleteId, date: args.date, savedWorkoutSetId, results: mapped }),
+  );
+}
+
+// A roster athlete's saved workouts in a date window. raw exposes the savedWorkoutSetId +
+// savedWorkoutSetExerciseId that `coach log-set` needs.
+async function cmdCoachAthleteWorkouts(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = "coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--raw]";
+  const { values } = parse(a, {
+    athlete: { type: "string" },
+    start: { type: "string" },
+    end: { type: "string" },
+    raw: { type: "boolean" },
+  });
+  const athleteId = toInt(need(values.athlete as string | undefined, usage), "--athlete");
+  const start = isoDate(need(values.start as string | undefined, usage), "--start");
+  const end = isoDate(need(values.end as string | undefined, usage), "--end");
+  const workouts = await fetchCoachAthleteWorkouts(client, athleteId, start, end);
+  return out(values.raw === true ? workouts : presentAthleteWorkouts(workouts));
+}
 
 async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void> {
   const [sub, ...a] = rest;
@@ -731,6 +804,10 @@ async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void
           `/v5/teams/${encodeURIComponent(need(a[0], "coach team-codes <id>"))}/teamCodes`,
         ),
       );
+    case "athlete-workouts":
+      return cmdCoachAthleteWorkouts(client, a);
+    case "log-set":
+      return cmdCoachLogSet(client, a);
     case "exercise":
       return cmdExercise(client, a);
     case "workout":

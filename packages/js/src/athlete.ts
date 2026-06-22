@@ -212,6 +212,25 @@ export function fetchAthleteWorkouts(
 }
 
 /**
+ * A coach's view of a roster athlete's scheduled + completed workouts in an inclusive
+ * YYYY-MM-DD window (`/3.0/coach/athlete/programworkout/range/{athleteId}`). Returns the same
+ * `ProgramWorkout[]` shape as `fetchAthleteWorkouts`, so the same presenters and
+ * `findSavedWorkoutSet` apply — it just reads another athlete's data through the coach surface.
+ */
+export function fetchCoachAthleteWorkouts(
+  client: TrainHeroicClient,
+  athleteId: number,
+  startDate: string,
+  endDate: string,
+): Promise<ProgramWorkout[]> {
+  return getArray(
+    client,
+    `/3.0/coach/athlete/programworkout/range/${athleteId}?startDate=${startDate}&endDate=${endDate}`,
+    "coach athlete workouts",
+  );
+}
+
+/**
  * A coach's month view of a roster athlete's logged sessions
  * (`/2.0/coach/athlete/calendar/summary`). The trailing path segment is required by the API but
  * ignored (any value returns the whole month); it mirrors the coach web app, which sends 7. The
@@ -706,15 +725,73 @@ export async function logAthleteSet(
 ): Promise<{ savedWorkoutSetId: number; exercisesLogged: number }> {
   // Step 0: fetch the range to locate the set and its exercises.
   const workouts = await fetchAthleteWorkouts(client, args.date, args.date);
-  const { exercises, rawSet } = findSavedWorkoutSet(workouts, args.savedWorkoutSetId);
+  return writeSetResults(
+    client,
+    { role: "athlete" },
+    workouts,
+    args.savedWorkoutSetId,
+    args.results,
+  );
+}
+
+/**
+ * Coach "Log for Athlete": record set results for a roster athlete on their behalf, via the
+ * coach surface — `PUT /1.0/coach/savedworkoutsetexercise/{id}/{athleteId}` (the data write)
+ * then `PUT /1.0/coach/savedworkoutset/{id}/{athleteId}` (mark complete). Same two-step
+ * contract as {@link logAthleteSet}; the bodies are identical except each is stamped with
+ * `athleteId`. The day is located through the coach range endpoint for that athlete.
+ *
+ * NOTE: TrainHeroic's seeded *demo* athletes are read-only for results and return 401 on the
+ * data-write step; real (invited) athletes accept it.
+ */
+export async function logForAthlete(
+  client: TrainHeroicClient,
+  args: {
+    athleteId: number;
+    date: string;
+    savedWorkoutSetId: number;
+    results: readonly SetResult[];
+  },
+): Promise<{ savedWorkoutSetId: number; exercisesLogged: number }> {
+  const workouts = await fetchCoachAthleteWorkouts(client, args.athleteId, args.date, args.date);
+  return writeSetResults(
+    client,
+    { role: "coach", athleteId: args.athleteId },
+    workouts,
+    args.savedWorkoutSetId,
+    args.results,
+  );
+}
+
+/** Which API surface a set-log write targets: the athlete's own, or a coach acting on a roster athlete. */
+type LogTarget = { role: "athlete" } | { role: "coach"; athleteId: number };
+
+/**
+ * Shared two-step set-log write behind {@link logAthleteSet} and {@link logForAthlete}.
+ * `target` selects the surface: `athlete` writes `/1.0/athlete/...`; `coach` writes
+ * `/1.0/coach/...{athleteId}` and stamps `athleteId` into each body. Step 1 PUTs each
+ * exercise's entered data to its own endpoint (the only path that actually stores reps and
+ * weight). Step 2 marks the set completed; that body needs the app's camelCase in-memory
+ * shape and the full list of savedWorkoutSetExercise IDs in the set (not only the logged ones).
+ */
+async function writeSetResults(
+  client: TrainHeroicClient,
+  target: LogTarget,
+  workouts: readonly ProgramWorkout[],
+  savedWorkoutSetId: number,
+  results: readonly SetResult[],
+): Promise<{ savedWorkoutSetId: number; exercisesLogged: number }> {
+  const { exercises, rawSet } = findSavedWorkoutSet(workouts, savedWorkoutSetId);
+  const suffix = target.role === "coach" ? `/${target.athleteId}` : "";
+  const extra = target.role === "coach" ? { athleteId: target.athleteId } : {};
 
   // Step 1: PUT each exercise's data to its own endpoint.
   let exercisesLogged = 0;
-  for (const result of args.results) {
+  for (const result of results) {
     const ex = exercises.find((e) => coerceInt(e.id) === result.savedWorkoutSetExerciseId);
     if (!ex) {
       throw new Error(
-        `savedWorkoutSetExerciseId ${result.savedWorkoutSetExerciseId} not found in saved workout set ${args.savedWorkoutSetId}.`,
+        `savedWorkoutSetExerciseId ${result.savedWorkoutSetExerciseId} not found in saved workout set ${savedWorkoutSetId}.`,
       );
     }
     const workoutSetExerciseId = coerceInt(ex.workout_set_exercise_id);
@@ -723,18 +800,19 @@ export async function logAthleteSet(
         `Could not resolve workout_set_exercise_id for exercise ${result.savedWorkoutSetExerciseId}.`,
       );
     }
-    const body = buildExerciseLogPayload(
-      result.savedWorkoutSetExerciseId,
-      args.savedWorkoutSetId,
-      workoutSetExerciseId,
-      result.sets,
-    );
+    const body = {
+      ...buildExerciseLogPayload(
+        result.savedWorkoutSetExerciseId,
+        savedWorkoutSetId,
+        workoutSetExerciseId,
+        result.sets,
+      ),
+      ...extra,
+    };
     const res = await client.request(
       "PUT",
-      `/1.0/athlete/savedworkoutsetexercise/${result.savedWorkoutSetExerciseId}`,
-      {
-        body,
-      },
+      `/1.0/${target.role}/savedworkoutsetexercise/${result.savedWorkoutSetExerciseId}${suffix}`,
+      { body },
     );
     if (!res.ok) {
       throw new Error(
@@ -745,25 +823,22 @@ export async function logAthleteSet(
   }
 
   // Step 2: mark the set as completed on the set-level endpoint.
-  // The API requires the app's camelCase in-memory shape, built from the raw set record.
-  // The exercises array must list all savedWorkoutSetExercise IDs in the set (not just the
-  // ones the caller logged), so we pass the full list from the live set record.
   const allExerciseIds = exercises
     .map((e) => coerceInt(e.id))
     .filter((n): n is number => n !== null);
-  const setBody = buildSetCompletePayload(rawSet, allExerciseIds, true);
+  const setBody = { ...buildSetCompletePayload(rawSet, allExerciseIds, true), ...extra };
   const setRes = await client.request(
     "PUT",
-    `/1.0/athlete/savedworkoutset/${args.savedWorkoutSetId}`,
+    `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`,
     { body: setBody },
   );
   if (!setRes.ok) {
     throw new Error(
-      `Failed to mark workout set ${args.savedWorkoutSetId} completed (HTTP ${setRes.status}).`,
+      `Failed to mark workout set ${savedWorkoutSetId} completed (HTTP ${setRes.status}).`,
     );
   }
 
-  return { savedWorkoutSetId: args.savedWorkoutSetId, exercisesLogged };
+  return { savedWorkoutSetId, exercisesLogged };
 }
 
 export type PersonalWorkoutCreated = {
