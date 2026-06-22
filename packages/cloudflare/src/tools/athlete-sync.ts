@@ -3,8 +3,11 @@ import { z } from "zod";
 import { athleteWorkoutRangeArgsSchema, dateString } from "@trainheroic-unofficial/js";
 import type { TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { attempt, idParam, jsonResult, READ, SYNC, toId } from "@trainheroic-unofficial/core";
-import { AthleteTrainingStore } from "../store/athlete-training";
-import { AthleteWorkoutStore } from "../store/athlete-workouts";
+import {
+  AthleteTrainingStore,
+  AthleteWorkoutStore,
+  type Warehouse,
+} from "@trainheroic-unofficial/db";
 
 /**
  * Athlete training warehouse: download the athlete's historicals into D1 so they can be
@@ -129,10 +132,10 @@ function registerTrainingZone(server: McpServer, training: AthleteTrainingStore)
 /** Athlete warehouse sync + query tools (D1-backed, hosted only). */
 export function registerAthleteSyncTools(
   server: McpServer,
-  db: D1Database,
+  warehouse: Warehouse,
   client: TrainHeroicClient,
   userId: number | null = null,
 ): void {
-  registerWorkoutsZone(server, new AthleteWorkoutStore(db, client, userId));
-  registerTrainingZone(server, new AthleteTrainingStore(db, client, userId));
+  registerWorkoutsZone(server, new AthleteWorkoutStore(warehouse, client, userId));
+  registerTrainingZone(server, new AthleteTrainingStore(warehouse, client, userId));
 }

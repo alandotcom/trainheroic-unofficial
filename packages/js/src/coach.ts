@@ -6,6 +6,7 @@
 
 import { parseWorkoutDate } from "@trainheroic-unofficial/dto";
 import type { TeamVolumeAthlete, TeamVolumeReport } from "@trainheroic-unofficial/dto";
+import { coerceInt } from "./exercise-util";
 import type { TrainHeroicClient } from "./client";
 
 export const DEFAULT_INVITE_MESSAGE = "Follow these steps and you'll be set up and ready to go!";
@@ -13,6 +14,46 @@ export const DEFAULT_INVITE_MESSAGE = "Follow these steps and you'll be set up a
 /** Normalize one-or-many emails into a deduped, trimmed list. */
 function emailList(emails: readonly string[]): string[] {
   return [...new Set(emails.map((e) => e.trim()).filter((e) => e.length > 0))];
+}
+
+/** A roster member as id + display name. */
+export type CoachRosterAthlete = { id: number; name: string | null };
+
+/** The display name on a /v5/athletes row: `fullName` (e.g. "Cohen, A"), else first+last. */
+function rosterName(rec: Record<string, unknown>): string | null {
+  const full = typeof rec.fullName === "string" ? rec.fullName.trim() : "";
+  if (full !== "") return full;
+  const first = typeof rec.firstName === "string" ? rec.firstName : "";
+  const last = typeof rec.lastName === "string" ? rec.lastName : "";
+  const combined = `${first} ${last}`.trim();
+  return combined !== "" ? combined : null;
+}
+
+/**
+ * The coach's roster as id + display name, from /v5/athletes. One home for the id coercion and the
+ * name-field choice (the API uses `fullName` / `firstName`+`lastName`), so the CLI, the MCP tools,
+ * and the warehouse store map the roster identically. Includes the account owner and
+ * demo/placeholder athletes (the raw roster does); pass `ids` to keep only a subset.
+ */
+export async function fetchCoachRoster(
+  client: TrainHeroicClient,
+  ids?: readonly number[],
+): Promise<CoachRosterAthlete[]> {
+  const res = await client.request<unknown>("GET", "/v5/athletes");
+  if (!res.ok || !Array.isArray(res.data)) {
+    throw new Error(`List athletes failed (HTTP ${res.status}).`);
+  }
+  const keep = ids && ids.length > 0 ? new Set(ids) : null;
+  const out: CoachRosterAthlete[] = [];
+  for (const row of res.data) {
+    if (typeof row !== "object" || row === null) continue;
+    const rec = row as Record<string, unknown>;
+    const id = coerceInt(rec.id);
+    if (id === null || id <= 0) continue;
+    if (keep && !keep.has(id)) continue;
+    out.push({ id, name: rosterName(rec) });
+  }
+  return out;
 }
 
 /**

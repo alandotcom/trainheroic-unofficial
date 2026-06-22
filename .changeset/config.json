@@ -10,7 +10,8 @@
       "@trainheroic-unofficial/cli",
       "@trainheroic-unofficial/coach-mcp",
       "@trainheroic-unofficial/athlete-mcp",
-      "@trainheroic-unofficial/cloudflare"
+      "@trainheroic-unofficial/cloudflare",
+      "@trainheroic-unofficial/db"
     ]
   ],
   "linked": [],

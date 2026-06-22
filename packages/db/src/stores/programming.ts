@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { OrgScopedStore } from "./base";
-import { type BatchStmt, cursorUpsertStmt, mapPool, runGroups } from "./d1";
-import { block, prescribedSet, program, programSession } from "./schema";
+import { OrgScopedStore } from "../base";
+import { type BatchStmt, cursorUpsertStmt, mapPool } from "../runner";
+import { block, prescribedSet, program, programSession } from "../schema";
 import {
   checkResponse,
   coerceInt,
@@ -157,7 +157,7 @@ export class ProgrammingStore extends OrgScopedStore {
       }),
     ]);
 
-    await runGroups(this.db, groups);
+    await this.runGroups(groups);
     const result: CalendarSyncResult = {
       program: calId,
       title,

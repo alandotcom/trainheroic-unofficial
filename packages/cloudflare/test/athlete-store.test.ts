@@ -1,10 +1,10 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import schema1 from "../migrations/0001_init.sql?raw";
-import schema3 from "../migrations/0003_athlete.sql?raw";
-import schema4 from "../migrations/0004_athlete_performed.sql?raw";
-import { AthleteTrainingStore } from "../src/store/athlete-training";
-import { AthleteWorkoutStore } from "../src/store/athlete-workouts";
+import schema1 from "../../db/migrations/0001_init.sql?raw";
+import schema3 from "../../db/migrations/0003_athlete.sql?raw";
+import schema4 from "../../db/migrations/0004_athlete_performed.sql?raw";
+import { AthleteTrainingStore, AthleteWorkoutStore } from "@trainheroic-unofficial/db";
+import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
 
 function json(obj: unknown, status = 200): Response {
@@ -168,7 +168,7 @@ afterEach(() => {
 
 describe("AthleteWorkoutStore", () => {
   it("syncs a window into workouts + flattened exercise rows, then reads them", async () => {
-    const store = new AthleteWorkoutStore(env.TH_DB, client(), USER);
+    const store = new AthleteWorkoutStore(makeD1Warehouse(env.TH_DB), client(), USER);
     const result = await store.sync("2026-06-01", "2026-06-07");
     expect(result).toMatchObject({ workouts: 1, exercises: 1 });
 
@@ -190,7 +190,7 @@ describe("AthleteWorkoutStore", () => {
   });
 
   it("is idempotent: re-sync rebuilds exercise rows without duplicating", async () => {
-    const store = new AthleteWorkoutStore(env.TH_DB, client(), USER);
+    const store = new AthleteWorkoutStore(makeD1Warehouse(env.TH_DB), client(), USER);
     await store.sync("2026-06-01", "2026-06-07");
     await store.sync("2026-06-01", "2026-06-07");
     expect((await store.workoutExercises(555)).length).toBe(1);
@@ -199,7 +199,7 @@ describe("AthleteWorkoutStore", () => {
 
 describe("AthleteTrainingStore", () => {
   it("syncs catalog, working maxes, and per-exercise sessions + PRs", async () => {
-    const store = new AthleteTrainingStore(env.TH_DB, client(), USER);
+    const store = new AthleteTrainingStore(makeD1Warehouse(env.TH_DB), client(), USER);
     expect(await store.syncCatalog()).toBe(1);
     expect(await store.syncWorkingMaxes()).toBe(1);
 
@@ -215,7 +215,7 @@ describe("AthleteTrainingStore", () => {
   });
 
   it("drains the batch queue incrementally and re-pulls on full reset", async () => {
-    const store = new AthleteTrainingStore(env.TH_DB, client(), USER);
+    const store = new AthleteTrainingStore(makeD1Warehouse(env.TH_DB), client(), USER);
     await store.syncCatalog();
     await store.syncNextBatch(10);
     // Watermark set, so a second batch syncs nothing.

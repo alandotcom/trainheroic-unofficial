@@ -1,14 +1,15 @@
-// Drizzle schema for the D1 warehouse. This is a typed mirror of the hand-written SQL in
-// `migrations/` — it is NOT the source of truth for the live database. Migrations stay
-// hand-written and are applied with `wrangler d1 migrations apply`; this file exists only so
-// the store query builders are type-checked against the real column shapes. When a new
-// numbered migration changes a table, update this file by hand to match (verifiable with
-// `drizzle-kit check`, see drizzle.config.ts).
+// Drizzle schema for the warehouse. This is a typed mirror of the hand-written SQL in
+// `packages/cloudflare/migrations/` — it is NOT the source of truth for the live D1 database.
+// Migrations stay hand-written and are applied with `wrangler d1 migrations apply`; this file
+// exists so the store query builders are type-checked against the real column shapes (verifiable
+// with `drizzle-kit check`, see packages/cloudflare/drizzle.config.ts, which points here). The
+// local node:sqlite adapter derives its `CREATE TABLE` DDL from the same column shapes.
 //
 // Column types deliberately mirror the SQLite affinities 1:1 (flags stay `integer` 0/1, JSON
-// blobs stay `text`) so the query rewrite preserves the existing read/write behaviour exactly.
-import * as Sentry from "@sentry/cloudflare";
-import { drizzle } from "drizzle-orm/d1";
+// blobs stay `text`) so the query behaviour is identical on D1 and node:sqlite. There is no
+// driver import here (no `drizzle-orm/d1`, no `@sentry/cloudflare`): the handle is built by the
+// adapter entry points (`./d1`, `./sqlite`), so this core stays runtime-neutral.
+import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { customType, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 // A REAL column that may hold free-text. Prescribed slot values are numeric when possible but
@@ -169,6 +170,31 @@ export const messageComment = sqliteTable(
   (t) => [primaryKey({ columns: [t.orgId, t.id] })],
 );
 
+// -- coach roster main-lift PRs (org-scoped) --------------------------------
+
+// One row per (coach org, roster athlete, lift family): the athlete's best PR for that family,
+// resolved from the lift variant they actually log. Rebuilt per athlete on each sync. A family
+// the athlete has never logged is simply absent (no row), so the read side renders "no PR yet".
+export const coachAthletePr = sqliteTable(
+  "coach_athlete_pr",
+  {
+    orgId: integer("org_id").notNull(),
+    athleteId: integer("athlete_id").notNull(),
+    athleteName: text("athlete_name"),
+    family: text("family").notNull(),
+    label: text("label"),
+    exerciseId: integer("exercise_id"),
+    exerciseTitle: text("exercise_title"),
+    weight: real("weight"),
+    reps: integer("reps"),
+    date: text("date"),
+    units: text("units"),
+    syncedAt: integer("synced_at"),
+    source: text("source").notNull().default("api"),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.athleteId, t.family] })],
+);
+
 // -- athlete warehouse (user-scoped) ----------------------------------------
 
 export const athleteSyncState = sqliteTable(
@@ -291,6 +317,7 @@ export const schema = {
   prescribedSet,
   messageStream,
   messageComment,
+  coachAthletePr,
   athleteSyncState,
   athleteWorkout,
   athleteWorkoutExercise,
@@ -301,14 +328,10 @@ export const schema = {
 };
 
 /**
- * Wrap a raw D1 binding in a Drizzle handle bound to the warehouse schema. The binding is first
- * passed through `Sentry.instrumentD1WithSentry`, so every query Drizzle issues (the stores and the
- * auth account upsert all build their handles here) emits a `db.query` span on the active trace.
- * This is the single chokepoint for D1 access, so instrumenting it once covers the whole package; it
- * is a no-op when SENTRY_DSN is unset. Sentry's Durable Object wrapper does not auto-instrument D1.
+ * The dialect-level Drizzle handle the stores query against — generalized over the result kind
+ * (`async` D1, `sync` node:sqlite) and run-result so one store body type-checks on both adapters.
+ * Each adapter builds a concrete handle (`drizzle-orm/d1` or `drizzle-orm/node-sqlite`) and widens
+ * it to this type. The only driver-specific operation — atomic batch — is injected separately as a
+ * `BatchExec` (see `./runner`), so the stores never touch a driver-only method on this handle.
  */
-export function makeDb(d1: D1Database): DrizzleDb {
-  return drizzle(Sentry.instrumentD1WithSentry(d1), { schema });
-}
-
-export type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
+export type DrizzleDb = BaseSQLiteDatabase<"sync" | "async", unknown, typeof schema>;

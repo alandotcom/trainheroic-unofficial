@@ -2,6 +2,7 @@ export * from "./context";
 export * from "./confirm";
 export * from "./instructions";
 export * from "./tools/reads";
+export * from "./tools/main-lifts";
 export * from "./tools/athlete-training";
 export * from "./tools/athletes";
 export * from "./tools/teams";

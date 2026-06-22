@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAthleteTrainingTools } from "@trainheroic-unofficial/core";
+import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { registerAthleteSyncTools } from "../src/tools/athlete-sync";
 
@@ -40,7 +41,7 @@ describe("athlete tool registration (role-aware surface)", () => {
 
   it("registerAthleteSyncTools exposes the warehouse sync/stored pairs", () => {
     const { server, names } = recordingServer();
-    registerAthleteSyncTools(server, env.TH_DB, client(), 42);
+    registerAthleteSyncTools(server, makeD1Warehouse(env.TH_DB), client(), 42);
     expect(names).toEqual(
       expect.arrayContaining([
         "athlete_workouts_sync",

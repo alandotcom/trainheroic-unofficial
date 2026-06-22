@@ -3,8 +3,8 @@ import { historyInRange, type PresentedHistory } from "../src/history";
 
 const sample: PresentedHistory = {
   liftPRs: [
-    { description: "1 Rep Max", reps: 1, weight: 350, date: "2025-11-22" },
-    { description: "5 Rep Max", reps: 5, weight: 295, date: "2025-09-08" },
+    { description: "1 Rep Max", reps: 1, weight: 350, units: "lb", date: "2025-11-22" },
+    { description: "5 Rep Max", reps: 5, weight: 295, units: "lb", date: "2025-09-08" },
   ],
   sessions: [
     { date: "2026-05-11", abr: "4 x 6 @ 275 lb", estimated1RM: 323, sets: [] },

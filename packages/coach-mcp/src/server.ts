@@ -5,6 +5,7 @@ import type { ToolContext } from "@trainheroic-unofficial/core";
 import { registerAnalyticsTools } from "@trainheroic-unofficial/core";
 import { registerAthleteTools } from "@trainheroic-unofficial/core";
 import { registerExerciseTools } from "@trainheroic-unofficial/core";
+import { registerMainLiftTools } from "@trainheroic-unofficial/core";
 import { registerMessagingTools } from "@trainheroic-unofficial/core";
 import { registerReadTools } from "@trainheroic-unofficial/core";
 import { registerTeamTools } from "@trainheroic-unofficial/core";
@@ -36,6 +37,7 @@ async function main(): Promise<void> {
     { instructions: SERVER_INSTRUCTIONS },
   );
   registerReadTools(server, ctx);
+  registerMainLiftTools(server, ctx);
   registerAthleteTools(server, ctx);
   registerTeamTools(server, ctx);
   registerAnalyticsTools(server, ctx);

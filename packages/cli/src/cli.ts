@@ -28,6 +28,8 @@ import {
   definedProps,
   deleteComment,
   ExerciseLibrary,
+  fetchAthleteMainLiftPRs,
+  fetchRosterMainLiftPRs,
   fetchAthletePrefs,
   fetchAthleteProfileSummary,
   fetchAthleteUser,
@@ -101,6 +103,7 @@ Coach — manage a roster (needs a coach account):
   coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--logged-only] [--summary] [--raw|--log-ids]   prescribed + logged work over a date range; --logged-only/--summary narrow it to what was actually logged; --log-ids prints just the savedWorkoutSetId + savedWorkoutSetExerciseId per set that log-set needs
   coach athlete-training --athlete <id> --year <YYYY> --month <1-12>        sessions the athlete LOGGED in one month (empty = nothing logged that month, not an error)
   coach athlete-lift-history --athlete <id> --exercise <id> [--since Y-M-D] [--until Y-M-D] [--raw]   one exercise's logged history + PRs
+  coach main-lift-prs [--athlete <id>] [--athletes <id,id,...>] [--months <n>]   best PRs for the main lifts (squat/bench/deadlift/overhead press/clean & jerk/snatch); auto-discovers the logged variant. With --athlete, one athlete; otherwise the whole roster (or --athletes subset)
 
   log for an athlete (record their reps/weights; real invited athletes only — demo/seeded ones 401):
   coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes
@@ -841,7 +844,7 @@ async function cmdInstallSkill(): Promise<void> {
 }
 
 const COACH_USAGE =
-  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|roster-activity|team-volume|athlete-training|athlete-lift-history|athlete-workouts|log-set|log-session|prescribe-set|swap-exercise|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|analytics-query|exercise|workout|message>";
+  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|roster-activity|team-volume|athlete-training|athlete-lift-history|main-lift-prs|athlete-workouts|log-set|log-session|prescribe-set|swap-exercise|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|analytics-query|exercise|workout|message>";
 
 const COACH_LOG_SET_USAGE =
   "coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson> --yes";
@@ -1280,6 +1283,37 @@ async function cmdCoachAthleteLiftHistory(client: TrainHeroicClient, a: string[]
   return out({ ...presented, sessions });
 }
 
+// Main-lift PRs (squat/bench/deadlift/overhead press/clean & jerk/snatch). With --athlete, one
+// athlete; without it, the whole roster (or a --athletes subset). The logged lift VARIANT is
+// auto-discovered, so no exercise ids are needed. --months sets the discovery look-back.
+async function cmdCoachMainLiftPrs(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values } = parse(a, {
+    athlete: { type: "string" },
+    athletes: { type: "string" },
+    months: { type: "string" },
+  });
+  const opts =
+    values.months !== undefined ? { months: toInt(values.months as string, "--months") } : {};
+
+  if (values.athlete !== undefined) {
+    const athleteId = toInt(values.athlete as string, "--athlete");
+    return out(await fetchAthleteMainLiftPRs(client, athleteId, opts));
+  }
+
+  const subset =
+    values.athletes !== undefined
+      ? (values.athletes as string)
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+          .map((s) => toInt(s, "--athletes"))
+      : undefined;
+
+  return out(
+    await fetchRosterMainLiftPRs(client, { ...opts, ...(subset ? { athleteIds: subset } : {}) }),
+  );
+}
+
 async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void> {
   const [sub, ...a] = rest;
   switch (sub) {
@@ -1321,6 +1355,8 @@ async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void
       return cmdCoachAthleteTraining(client, a);
     case "athlete-lift-history":
       return cmdCoachAthleteLiftHistory(client, a);
+    case "main-lift-prs":
+      return cmdCoachMainLiftPrs(client, a);
     case "athlete-workouts":
       return cmdCoachAthleteWorkouts(client, a);
     case "log-set":

@@ -1,7 +1,7 @@
 import { and, eq, like, lt, sql } from "drizzle-orm";
-import { OrgScopedStore } from "./base";
-import { type BatchStmt, cursorUpsertStmt } from "./d1";
-import { exercise, syncMeta, syncState } from "./schema";
+import { OrgScopedStore } from "../base";
+import { type BatchStmt, cursorUpsertStmt } from "../runner";
+import { exercise, syncMeta, syncState } from "../schema";
 import {
   asExerciseList,
   buildSearchText,
@@ -22,7 +22,7 @@ import {
 const LIBRARY_PATH = "/v5/exerciseLibrary/all";
 const CREATE_PATH = "/2.0/coach/exercise/create";
 const TTL_MS = 7 * 24 * 3600 * 1000;
-// After confirming freshness, trust it for this long instead of re-querying D1 on every
+// After confirming freshness, trust it for this long instead of re-querying on every
 // read (the DO instance is long-lived, so a workout build resolving many exercises would
 // otherwise pay a COUNT + meta read per exercise).
 const FRESH_CHECK_MS = 60 * 1000;
@@ -44,7 +44,7 @@ const exerciseRowCols = {
   use_count: exercise.useCount,
 };
 
-/** D1-backed mirror of the TrainHeroic exercise library (reference zone). */
+/** Warehouse-backed mirror of the TrainHeroic exercise library (reference zone). */
 export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
   #freshCheckedAt = 0;
 
@@ -100,26 +100,24 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
     checkResponse(exerciseLibraryResponseSchema, list, "exercise library");
 
     const generation = Number((await this.#meta(org, "sync_generation")) ?? "0") + 1;
-    // Commit the row upserts and the generation bump in one batch, so a crash can never
+    // Commit the row upserts and the generation bump in one atomic batch, so a crash can never
     // leave rows written at a generation the meta never recorded (which would break the
     // prune-to-match self-healing). A crash before the prune just leaves prunable rows
     // for the next run, since the generation is already durable.
-    const [firstWrite, ...restWrites] = [
+    await this.exec([
       ...chunk(list, UPSERT_CHUNK).map((c) => this.#upsertStmt(org, c, generation)),
       this.#setMetaStmt(org, "sync_generation", String(generation)),
-    ];
-    // firstWrite is always present (the meta bump), but the guard keeps the batch tuple typed.
-    if (firstWrite) await this.db.batch([firstWrite, ...restWrites]);
+    ]);
 
     let pruned = 0;
     if (list.length >= PRUNE_FLOOR) {
       const del = await this.db
         .delete(exercise)
         .where(and(eq(exercise.orgId, org), lt(exercise.generation, generation)));
-      pruned = del.meta.changes ?? 0;
+      pruned = (del as { meta?: { changes?: number } }).meta?.changes ?? 0;
     }
 
-    await this.db.batch([
+    await this.exec([
       this.#setMetaStmt(org, "last_full_sync", String(Date.now())),
       this.#setCursorStmt(org, "library", 0, generation),
     ]);
@@ -181,7 +179,7 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
     // refresh's prune (generation < newGen) cannot delete a just-created exercise that the
     // bulk library endpoint has not surfaced yet.
     const generation = Number((await this.#meta(org, "sync_generation")) ?? "0") + 1;
-    await this.#upsertStmt(org, [ex], generation);
+    await this.exec([this.#upsertStmt(org, [ex], generation)]);
   }
 
   async recordDelete(id: number): Promise<void> {
