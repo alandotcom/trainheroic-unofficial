@@ -35,7 +35,7 @@ out of the repo. Leave it unset to run with Sentry disabled (every Sentry call i
 set it to turn on error reporting. Locally, put it in `.dev.vars` (gitignored) instead.
 
 `ALLOWED_EMAILS` is a comma-separated allowlist of TrainHeroic emails permitted to authorize.
-Leaving it unset means **open registration**: any valid TrainHeroic coach can connect. The
+Leaving it unset means **open registration**: any valid TrainHeroic account, coach or athlete, can connect. The
 worker logs a warning on each such login so an unintentionally-open deployment is visible; set
 `ALLOWED_EMAILS` to lock it down. No TrainHeroic credentials are stored as secrets; each user
 enters their own at login.

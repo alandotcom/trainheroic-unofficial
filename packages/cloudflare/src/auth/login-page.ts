@@ -18,8 +18,8 @@ export type LoginPageParams = {
 
 /**
  * Renders the TrainHeroic login + consent page. The user enters their TrainHeroic
- * coach credentials, which the server validates and stores in the grant's encrypted
- * props. The page names the requesting client and its redirect URI (consent), and
+ * credentials (coach or athlete), which the server validates and stores in the grant's
+ * encrypted props. The page names the requesting client and its redirect URI (consent), and
  * carries a CSRF token plus the signed OAuth request.
  */
 export function renderLoginPage(params: LoginPageParams): string {
@@ -48,7 +48,7 @@ export function renderLoginPage(params: LoginPageParams): string {
   <h1>Connect TrainHeroic</h1>
   <div class="client">
     <strong>${escapeHtml(clientName)}</strong> is requesting access to your TrainHeroic
-    coaching account and will be able to act on your behalf.
+    account and will be able to act on your behalf.
     <div class="muted">Redirect: ${escapeHtml(redirectUri)}</div>
   </div>
   ${errorBlock}

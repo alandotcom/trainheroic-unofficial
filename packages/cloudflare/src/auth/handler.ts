@@ -131,10 +131,11 @@ app.post("/authorize", async (c) => {
 
   const allowed = allowlist(c);
   if (allowed.length === 0) {
-    // Open-registration default: an unset/empty ALLOWED_EMAILS lets any TrainHeroic coach
-    // authorize this server. Log it loudly so a private deploy notices the door is open.
+    // Open-registration default: an unset/empty ALLOWED_EMAILS lets any TrainHeroic account
+    // (coach or athlete) authorize this server. Log it loudly so a private deploy notices the
+    // door is open.
     console.warn(
-      "ALLOWED_EMAILS is empty: open registration in effect — any TrainHeroic coach can authorize this server.",
+      "ALLOWED_EMAILS is empty: open registration in effect — any TrainHeroic account can authorize this server.",
     );
   }
   if (allowed.length > 0 && !allowed.includes(email.toLowerCase())) {
