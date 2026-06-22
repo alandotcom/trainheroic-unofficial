@@ -79,6 +79,8 @@ export const DENIED_BUILTINS: readonly string[] = [
   "Task",
   "TodoWrite",
   "ToolSearch",
+  "Skill",
+  "SlashCommand",
 ];
 
 // --- Athlete surface ---

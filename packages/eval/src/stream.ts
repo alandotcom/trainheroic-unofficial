@@ -85,7 +85,7 @@ function parseEvents(
   lines: readonly string[],
   surface: Surface,
   normalize: Normalize,
-): Omit<RunTranscript, "timedOut" | "raw"> {
+): Omit<RunTranscript, "timedOut" | "raw" | "writes"> {
   const toolCalls: ToolCall[] = [];
   const byId = new Map<string, number>();
   let finalText = "";
@@ -166,8 +166,9 @@ export function spawnAndParse(spec: SpawnSpec): Promise<RunTranscript> {
       clearTimeout(timer);
       if (buf.trim().length > 0) lines.push(buf);
       const parsed = parseEvents(lines, spec.surface, spec.normalize);
+      // The harness fills `writes` from the backend after the run (the driver can't see it).
       // oxlint-disable-next-line promise/no-multiple-resolved -- guarded by `settled`
-      resolveRun({ ...parsed, timedOut, raw: lines });
+      resolveRun({ ...parsed, timedOut, writes: [], raw: lines });
     };
     child.on("close", finish);
     child.on("error", finish);

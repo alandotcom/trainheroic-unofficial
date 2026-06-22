@@ -1,14 +1,29 @@
-// The read-only driver prompt, shared by both surfaces. The only difference is the preamble that
-// names the surface (MCP tools vs the `trainheroic` CLI); the task, constraints, and EVAL REPORT
-// format are identical so the two surfaces answer the same question under the same rules.
+// The driver prompt, shared by both surfaces and both modes. The preamble names the surface (MCP
+// tools vs the `trainheroic` CLI); the constraints block flips between read-only and write; the task
+// and EVAL REPORT format are identical so every (role, surface, mode) answers under the same rules.
 
 import { EVAL_REPORT_END, EVAL_REPORT_START } from "./types";
+import type { Mode } from "./types";
 
-export function buildReadOnlyPrompt(
+const READ_CONSTRAINTS = `HARD CONSTRAINTS — this is a read-only evaluation:
+- Never take an action that writes, logs, creates, modifies, deletes, sends, or publishes
+  anything. Only read/query/list operations are allowed.
+- If the request is ambiguous (several things could match), ask a clarifying question
+  rather than guessing — that is a valid and often correct outcome.`;
+
+const WRITE_CONSTRAINTS = `MODE — write eval against a disposable TEST account:
+- You MAY use write tools (log, prescribe, create, swap, invite, etc.) to actually carry out the
+  task. The account is disposable, so perform the action for real rather than describing it.
+- If a tool asks for confirmation, pass its confirm argument (confirm:true) — there is no
+  interactive prompt here. On the CLI, pass --yes.
+- Do NOT touch data the task did not ask you to change.`;
+
+export function buildPrompt(
   query: string,
   today: string,
   surfacePreamble: string,
   role: "coach" | "athlete",
+  mode: Mode,
 ): string {
   const owner =
     role === "coach" ? "the coach who owns this account" : "the athlete (account owner)";
@@ -16,11 +31,7 @@ export function buildReadOnlyPrompt(
 
 CONTEXT: Today's date is ${today}. You are assisting ${owner}.
 
-HARD CONSTRAINTS — this is a read-only evaluation:
-- Never take an action that writes, logs, creates, modifies, deletes, sends, or publishes
-  anything. Only read/query/list operations are allowed.
-- If the request is ambiguous (several things could match), ask a clarifying question
-  rather than guessing — that is a valid and often correct outcome.
+${mode === "write" ? WRITE_CONSTRAINTS : READ_CONSTRAINTS}
 
 YOUR TASK: Answer this question as naturally and correctly as you can, grounded in real results.
 Work like a real assistant — explore, recover from dead ends, and when a result is large or

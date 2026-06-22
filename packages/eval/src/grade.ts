@@ -109,3 +109,24 @@ export function answerReached(t: RunTranscript): "yes" | "partial" | "no" | null
   if (v === "yes" || v === "partial" || v === "no") return v;
   return null;
 }
+
+// --- write-mode predicates (over the writes the fake backend recorded for this run) ---
+
+/** Writes whose path contains the given fragment (e.g. "savedworkoutsetexercise"). */
+export function writesTo(t: RunTranscript, pathFragment: string): RunTranscript["writes"] {
+  return t.writes.filter((w) => w.path.includes(pathFragment));
+}
+
+export function didWrite(t: RunTranscript, pathFragment: string): boolean {
+  return writesTo(t, pathFragment).length > 0;
+}
+
+/** True when a recorded write's JSON body (deep) contains the given value as a string or number. */
+export function writeBodyHas(
+  t: RunTranscript,
+  pathFragment: string,
+  value: string | number,
+): boolean {
+  const needle = String(value);
+  return writesTo(t, pathFragment).some((w) => JSON.stringify(w.body ?? "").includes(needle));
+}

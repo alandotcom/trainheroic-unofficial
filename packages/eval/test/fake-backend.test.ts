@@ -210,6 +210,42 @@ describe("historyAthleteSelf (athlete surface)", () => {
   });
 });
 
+describe("write routes (write-mode support)", () => {
+  it("records mutating requests and returns success for the set-write + swap paths", async () => {
+    const b = await boot(highEnrollmentAthlete());
+
+    // Coach prescribe/log data write (step 1).
+    const setWrite = await fetch(
+      `${b.url}/1.0/coach/savedworkoutsetexercise/${HIGH_ENROLLMENT.targetSavedWorkoutSetExerciseId}/${HIGH_ENROLLMENT.athleteId}`,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          param_1_data_1: "5",
+          param_2_data_1: "235",
+          athleteId: HIGH_ENROLLMENT.athleteId,
+        }),
+      },
+    );
+    expect(setWrite.ok).toBe(true);
+
+    // Per-athlete swap echoes the row the SDK reads back.
+    const swap = await fetch(`${b.url}/v5/savedWorkoutSetExercises/770500?exerciseId=900042`, {
+      method: "PUT",
+    });
+    const swapRow = (await swap.json()) as { exercise_id: number; exercise: { title: string } };
+    expect(swapRow.exercise_id).toBe(900042);
+    expect(typeof swapRow.exercise.title).toBe("string");
+
+    // Both were recorded for a grader to assert on; reads (GET) are not.
+    expect(b.writes).toHaveLength(2);
+    expect(b.writes[0]?.method).toBe("PUT");
+    expect(b.writes[0]?.path).toContain("savedworkoutsetexercise");
+    expect(JSON.stringify(b.writes[0]?.body)).toContain("235");
+    expect(b.unmatched).toHaveLength(0);
+  });
+});
+
 describe("auth + unmatched routing", () => {
   it("answers POST /auth and records nothing as unmatched for known routes", async () => {
     const b = await boot(manyPrograms(4));

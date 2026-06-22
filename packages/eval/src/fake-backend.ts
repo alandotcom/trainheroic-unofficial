@@ -7,7 +7,9 @@
 
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import type { Context } from "hono";
 import type { Dataset } from "./datasets";
+import type { WriteRecord } from "./types";
 import { authResponse, headCoach, notificationCounts } from "./shapes";
 
 export type BackendHandle = {
@@ -17,6 +19,8 @@ export type BackendHandle = {
   requests: string[];
   /** Routes that hit the 501 catch-all — a non-empty list means a real routing gap. */
   unmatched: string[];
+  /** Every mutating request, in order — what a write-mode grader asserts against. */
+  writes: WriteRecord[];
   close: () => Promise<void>;
 };
 
@@ -26,7 +30,12 @@ function intParam(value: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function buildApp(dataset: Dataset, requests: string[], unmatched: string[]): Hono {
+function buildApp(
+  dataset: Dataset,
+  requests: string[],
+  unmatched: string[],
+  writes: WriteRecord[],
+): Hono {
   const app = new Hono();
 
   app.use("*", async (c, next) => {
@@ -110,6 +119,8 @@ function buildApp(dataset: Dataset, requests: string[], unmatched: string[]): Ho
   app.get("/3.0/athlete/leaderboard/:id", (c) => c.json({ entries: [] }));
   app.get("/v5/users/:id", (c) => c.json({ id: Number(c.req.param("id")) }));
 
+  registerWrites(app, writes);
+
   // --- analytics (POST reports) ---
   app.post("/v5/analytics/training-summary/users", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -131,11 +142,93 @@ function buildApp(dataset: Dataset, requests: string[], unmatched: string[]): Ho
   return app;
 }
 
+/** Read a write's JSON body and record (method, path, body). Returns the parsed body for the route. */
+async function record(c: Context, writes: WriteRecord[]): Promise<unknown> {
+  const body = await c.req.json().catch(() => null);
+  writes.push({ method: c.req.method, path: new URL(c.req.url).pathname, body });
+  return body;
+}
+
+/**
+ * Mutating routes. Each records the write (so a grader can assert what fired and with what values)
+ * and returns a plausible success — enough for the SDK's two-step set-write, per-athlete swap, and
+ * roster/session writes to complete. State is intentionally not mutated back into the reads: a
+ * write-mode scenario asserts on the recorded writes, not read-after-write consistency.
+ */
+function registerWrites(app: Hono, writes: WriteRecord[]): void {
+  // Set-write step 1 (the data write) + step 2 (mark complete), coach (…/{athleteId}) and athlete.
+  app.put("/1.0/coach/savedworkoutsetexercise/:id/:athleteId", async (c) => {
+    await record(c, writes);
+    return c.json({ id: Number(c.req.param("id")), success: true });
+  });
+  app.put("/1.0/coach/savedworkoutset/:id/:athleteId", async (c) => {
+    await record(c, writes);
+    return c.json({ id: Number(c.req.param("id")), completed: "1" });
+  });
+  app.put("/1.0/athlete/savedworkoutsetexercise/:id", async (c) => {
+    await record(c, writes);
+    return c.json({ id: Number(c.req.param("id")), success: true });
+  });
+  app.put("/1.0/athlete/savedworkoutset/:id", async (c) => {
+    await record(c, writes);
+    return c.json({ id: Number(c.req.param("id")), completed: "1" });
+  });
+
+  // Per-athlete exercise swap — echoes the swapped row the SDK reads back.
+  app.put("/v5/savedWorkoutSetExercises/:id", async (c) => {
+    await record(c, writes);
+    const exerciseId = Number(c.req.query("exerciseId"));
+    return c.json({
+      id: Number(c.req.param("id")),
+      user_id: 100001,
+      exercise_id: exerciseId,
+      exercise: { id: exerciseId, title: "Swapped Exercise" },
+      workout_set_exercise: { exercise_id: 900000 },
+    });
+  });
+
+  // Roster writes.
+  app.post("/v5/emails/validate", async (c) => {
+    const body = (await record(c, writes)) as { emails?: string[] } | null;
+    return c.json({ valid: body?.emails ?? [], invalid: [] });
+  });
+  app.post("/v5/athletes/inviteToTeam", async (c) => {
+    await record(c, writes);
+    return c.json({ result: "invited" });
+  });
+  app.put("/v5/athletes/archive", async (c) => {
+    await record(c, writes);
+    return c.json({ success: true });
+  });
+  app.put("/v5/athletes/restore", async (c) => {
+    await record(c, writes);
+    return c.json({ success: true });
+  });
+
+  // Athlete personal-session writes (create then add exercises).
+  app.post("/v5/programWorkouts/personal", async (c) => {
+    await record(c, writes);
+    return c.json({
+      programWorkout: { id: 5550001, workoutId: 5550002, date: "2026-03-27" },
+      savedWorkout: { id: 5550003, group_id: 5550004 },
+    });
+  });
+  app.put("/v5/personalCalendar/workouts/:id/addExercises", async (c) => {
+    const body = (await record(c, writes)) as { exercises?: Array<{ exerciseId?: number }> } | null;
+    const added = (body?.exercises ?? []).map((e, i) => ({
+      id: 5560000 + i,
+      savedWorkoutSetExercises: [{ id: 5570000 + i, exerciseId: e.exerciseId }],
+    }));
+    return c.json(added);
+  });
+}
+
 /** Boot the fake backend on an ephemeral port and return a handle the harness drives runs against. */
 export function startBackend(dataset: Dataset): Promise<BackendHandle> {
   const requests: string[] = [];
   const unmatched: string[] = [];
-  const app = buildApp(dataset, requests, unmatched);
+  const writes: WriteRecord[] = [];
+  const app = buildApp(dataset, requests, unmatched, writes);
   return new Promise((resolve, reject) => {
     const server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 0 }, (info) => {
       resolve({
@@ -143,6 +236,7 @@ export function startBackend(dataset: Dataset): Promise<BackendHandle> {
         port: info.port,
         requests,
         unmatched,
+        writes,
         close: () =>
           new Promise<void>((res, rej) => {
             server.close((err) => {

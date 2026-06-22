@@ -42,11 +42,15 @@ export async function runScenario(
   const threshold =
     opts.threshold ?? (Number(process.env.EVAL_THRESHOLD) || scenario.threshold || 0.6);
 
+  const mode = scenario.mode ?? "read";
   const backend = await startBackend(scenario.dataset);
   const runs: Array<{ grade: Grade; t: RunTranscript }> = [];
   try {
     for (let i = 0; i < k; i += 1) {
-      const t = await driver.runOnce(backend.url, scenario.query, scenario.today, { model });
+      const writesBefore = backend.writes.length;
+      const t = await driver.runOnce(backend.url, scenario.query, scenario.today, { model, mode });
+      // The backend is shared across this scenario's K runs; attribute only THIS run's writes.
+      t.writes = backend.writes.slice(writesBefore);
       const grade = scenario.grade(t);
       runs.push({ grade, t });
       process.stderr.write(
@@ -106,6 +110,9 @@ function formatRun(r: { grade: Grade; t: RunTranscript }, i: number): string[] {
     ...(r.t.connected ? [] : ["  (!) surface did not connect/launch"]),
     ...(r.t.timedOut ? ["  (!) run timed out"] : []),
     `  calls: ${calls || "(none)"}`,
+    ...(r.t.writes.length > 0
+      ? [`  writes: ${r.t.writes.map((w) => `${w.method} ${w.path}`).join(" ; ")}`]
+      : []),
     r.t.evalReport ? indent(r.t.evalReport, "  ") : `  answer: ${r.t.answerText.slice(0, 280)}`,
   ];
 }

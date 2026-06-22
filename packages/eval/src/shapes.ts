@@ -93,16 +93,24 @@ export function calendarSession(opts: {
 /** A per-set prescription/result slot (param_N_data) inside a workoutSetExercise. */
 export type ParamSlot = { reps?: string; weight?: string };
 
-/** One `workoutSetExercises[]` entry — carries the savedWorkoutSetExerciseId (`id`) + param slots. */
+/**
+ * One `workoutSetExercises[]` entry — the athlete's saved copy of a prescribed exercise. `id` is the
+ * savedWorkoutSetExerciseId (what logging/prescribing targets); `workout_set_exercise_id` points
+ * back at the program's prescription template and is REQUIRED by the set-write path (the SDK reads
+ * it to address the data PUT — omitting it makes a write throw "could not resolve
+ * workout_set_exercise_id"). Defaults to a stable derived value when not given.
+ */
 export function workoutSetExercise(opts: {
   id: number;
   exerciseId: number;
   title: string;
   instruction?: string;
+  workoutSetExerciseId?: number;
   sets: ParamSlot[];
 }): Record<string, unknown> {
   const row: Record<string, unknown> = {
     id: opts.id,
+    workout_set_exercise_id: opts.workoutSetExerciseId ?? opts.id + 1_000_000,
     exercise_id: opts.exerciseId,
     exercise_title: opts.title,
     title: opts.title,
@@ -148,8 +156,12 @@ export function programWorkout(opts: {
         workoutSets: [
           {
             id: opts.savedWorkoutSetId,
+            // saved_workout_id + workout_set_id are read by the set-COMPLETE write (log mode step 2).
+            saved_workout_id: opts.savedWorkoutId,
+            workout_set_id: opts.savedWorkoutSetId + 2_000_000,
             title: opts.setTitle ?? "Main",
             order: 0,
+            unit: "lb",
             workoutSetExercises: opts.exercises.map(workoutSetExercise),
           },
         ],

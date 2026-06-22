@@ -7,6 +7,11 @@ import type { Dataset } from "./datasets";
 export type Surface = "mcp" | "cli";
 /** The account role a scenario drives. Orthogonal to surface: each (role, surface) is one run config. */
 export type Role = "coach" | "athlete";
+/** Read-only (the default, write tools denied) vs write (the fake backend records what fires). */
+export type Mode = "read" | "write";
+
+/** One mutating request the fake backend received — what a write-mode grader asserts against. */
+export type WriteRecord = { method: string; path: string; body: unknown };
 
 export type ToolCall = {
   /** Canonical capability name, normalized across surfaces (e.g. "list_teams", "athlete_saved_workouts"). */
@@ -33,11 +38,13 @@ export type RunTranscript = {
   costUsd: number;
   numTurns: number;
   timedOut: boolean;
+  /** The mutating requests this run made to the fake backend (write mode); empty in read mode. */
+  writes: WriteRecord[];
   /** Raw stream-json lines, for debugging a parse miss. */
   raw: string[];
 };
 
-export type RunOptions = { model: string; timeoutMs?: number };
+export type RunOptions = { model: string; mode: Mode; timeoutMs?: number };
 
 /**
  * A surface driver: given the fake backend URL and a question, run one headless `claude -p` and
@@ -59,6 +66,8 @@ export type Scenario = {
   grade: (t: RunTranscript) => Grade;
   /** The account role this scenario drives. Defaults to "coach". */
   role?: Role;
+  /** Read-only (default) or write. Write mode allows the write tools and records what fires. */
+  mode?: Mode;
   /** Which surfaces this scenario runs on. Defaults to both. */
   surfaces?: Surface[];
   /** Default K and threshold; overridable via EVAL_K / EVAL_THRESHOLD. */

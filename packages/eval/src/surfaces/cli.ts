@@ -9,24 +9,29 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { normalizeCliCommand } from "../canonical";
 import { pkgEntry, REPO_ROOT, tsxBin } from "../paths";
-import { buildReadOnlyPrompt, cliPreamble } from "../prompt";
+import { buildPrompt, cliPreamble } from "../prompt";
 import { spawnAndParse } from "../stream";
 import type { Normalize } from "../stream";
 import { DENIED_BUILTINS } from "../tools";
-import type { Driver, Role, RunOptions, RunTranscript } from "../types";
+import type { Driver, Mode, Role, RunOptions, RunTranscript } from "../types";
 
 const DEFAULT_TIMEOUT_MS = 180_000;
 
-function shimContents(): string {
-  return `#!/usr/bin/env bash
-set -euo pipefail
-# Read-only eval: never let a write commit.
-for a in "$@"; do
+/** In read mode the shim blocks `--yes` (every CLI write requires it), so writes fail closed even if
+ * the model tries; in write mode it passes everything through. */
+function shimContents(mode: Mode): string {
+  const guard =
+    mode === "write"
+      ? ""
+      : `for a in "$@"; do
   case "$a" in
     --yes|-y) echo "cli-eval: read-only mode — --yes is blocked" >&2; exit 64 ;;
   esac
 done
-exec "${tsxBin("cli")}" "${pkgEntry("cli", "src/cli.ts")}" "$@"
+`;
+  return `#!/usr/bin/env bash
+set -euo pipefail
+${guard}exec "${tsxBin("cli")}" "${pkgEntry("cli", "src/cli.ts")}" "$@"
 `;
 }
 
@@ -46,7 +51,7 @@ function makeRunOnce(role: Role) {
     const binDir = join(dir, "bin");
     await mkdir(binDir, { recursive: true });
     const shimPath = join(binDir, "trainheroic");
-    await writeFile(shimPath, shimContents(), "utf8");
+    await writeFile(shimPath, shimContents(opts.mode), "utf8");
     await chmod(shimPath, 0o755);
 
     // Empty MCP config so --strict-mcp-config loads no servers — this is a pure CLI run.
@@ -55,7 +60,7 @@ function makeRunOnce(role: Role) {
 
     const args = [
       "-p",
-      buildReadOnlyPrompt(query, today, cliPreamble(role), role),
+      buildPrompt(query, today, cliPreamble(role), role, opts.mode),
       "--model",
       opts.model,
       "--strict-mcp-config",

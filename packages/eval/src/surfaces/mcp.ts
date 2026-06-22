@@ -6,7 +6,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pkgEntry, REPO_ROOT, tsxBin } from "../paths";
-import { buildReadOnlyPrompt, mcpPreamble } from "../prompt";
+import { buildPrompt, mcpPreamble } from "../prompt";
 import { spawnAndParse } from "../stream";
 import type { Normalize } from "../stream";
 import { DENIED_BUILTINS, prefixed, ROLE_TOOLS } from "../tools";
@@ -47,9 +47,13 @@ function makeRunOnce(role: Role) {
     };
     await writeFile(cfgPath, JSON.stringify(config), "utf8");
 
+    // In write mode the write tools are allowed; in read mode they are denied (belt and suspenders
+    // with the read-only prompt) so a write can never fire even if the model tries.
+    const writeAllow = opts.mode === "write" ? prefixed(cfg.prefix, cfg.writeTools) : [];
+    const writeDeny = opts.mode === "write" ? [] : prefixed(cfg.prefix, cfg.writeTools);
     const args = [
       "-p",
-      buildReadOnlyPrompt(query, today, mcpPreamble(cfg.prefix), role),
+      buildPrompt(query, today, mcpPreamble(cfg.prefix), role, opts.mode),
       "--model",
       opts.model,
       "--strict-mcp-config",
@@ -61,10 +65,11 @@ function makeRunOnce(role: Role) {
       "default",
       "--allowed-tools",
       ...prefixed(cfg.prefix, cfg.readTools),
+      ...writeAllow,
       "--disallowed-tools",
       ...DENIED_BUILTINS,
       "Bash",
-      ...prefixed(cfg.prefix, cfg.writeTools),
+      ...writeDeny,
       "--output-format",
       "stream-json",
       "--verbose",
