@@ -134,11 +134,22 @@ For the athlete server, swap the package name to `@trainheroic-unofficial/athlet
 
 <br>
 
-OAuth's `localhost` redirect can't reach a remote box. Options:
+Run the local server with credentials in the environment — no OAuth, no browser:
 
-- **Local server** — use the stdio example above with credentials in the environment.
-- **Web IDE** (Codespaces, VS Code Remote) — `localhost` is auto-forwarded; `mcp-remote` works as-is.
-- **Token** — `--header "Authorization: Bearer …"`.
+```jsonc
+{
+  "mcpServers": {
+    "trainheroic": {
+      "command": "npx",
+      "args": ["-y", "@trainheroic-unofficial/coach-mcp"],
+      "env": {
+        "TRAINHEROIC_EMAIL": "coach@example.com",
+        "TRAINHEROIC_PASSWORD": "yourpassword"
+      }
+    }
+  }
+}
+```
 
 </details>
 
