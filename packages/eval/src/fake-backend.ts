@@ -136,6 +136,9 @@ function routeGet(
       : { status: 200, body: summary };
   }
 
+  const athleteRoute = routeAthleteGet(dataset, pathname, search, seg);
+  if (athleteRoute !== null) return athleteRoute;
+
   // /v5/users/:id
   if (seg[0] === "v5" && seg[1] === "users" && seg[2] !== undefined) {
     const userId = num(seg[2]);
@@ -161,6 +164,47 @@ function routeGet(
         search.get("endDate") ?? "",
       ),
     };
+  }
+  return null;
+}
+
+/** Athlete-surface reads (the logged-in athlete's own training). Split out to keep routeGet small. */
+function routeAthleteGet(
+  dataset: Dataset,
+  pathname: string,
+  search: URLSearchParams,
+  seg: string[],
+): Resolved | null {
+  if (pathname === "/v5/users/exercises/history") {
+    return { status: 200, body: dataset.athlete.exercisesList };
+  }
+  if (pathname === "/3.0/athlete/programworkout/range") {
+    return {
+      status: 200,
+      body: dataset.athlete.range(search.get("startDate") ?? "", search.get("endDate") ?? ""),
+    };
+  }
+  if (pathname === "/2.0/athlete/workingMax") {
+    return { status: 200, body: dataset.athlete.workingMaxes };
+  }
+  if (pathname === "/1.0/athlete/prefs") return { status: 200, body: dataset.athlete.prefs };
+  if (seg[0] === "v5" && seg[1] === "exercises" && seg[3] === "personalRecords") {
+    const exerciseId = num(seg[2] ?? null);
+    if (exerciseId === null) return { status: 400, body: { error: "bad exercise id" } };
+    return { status: 200, body: dataset.athlete.getPersonalRecords(exerciseId) };
+  }
+  if (seg[0] === "v5" && seg[1] === "exercises" && seg[3] === "stats") {
+    const exerciseId = num(seg[2] ?? null);
+    if (exerciseId === null) return { status: 400, body: { error: "bad exercise id" } };
+    return { status: 200, body: dataset.athlete.getExerciseStats(exerciseId) };
+  }
+  if (
+    seg[0] === "3.0" &&
+    seg[1] === "athlete" &&
+    seg[2] === "leaderboard" &&
+    seg[3] !== undefined
+  ) {
+    return { status: 200, body: { entries: [] } };
   }
   return null;
 }

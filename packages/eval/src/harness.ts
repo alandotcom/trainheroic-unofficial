@@ -8,9 +8,11 @@ import { spawnSync } from "node:child_process";
 import { startBackend } from "./fake-backend";
 import { cliDriver } from "./surfaces/cli";
 import { mcpDriver } from "./surfaces/mcp";
-import type { Driver, Grade, RunTranscript, Scenario, Surface } from "./types";
+import type { Driver, Grade, Role, RunTranscript, Scenario, Surface } from "./types";
 
-const DRIVERS: Record<Surface, Driver> = { mcp: mcpDriver, cli: cliDriver };
+function driverFor(surface: Surface, role: Role): Driver {
+  return surface === "mcp" ? mcpDriver(role) : cliDriver(role);
+}
 
 export type ScenarioResult = {
   name: string;
@@ -34,7 +36,7 @@ export async function runScenario(
   surface: Surface,
   opts: { model?: string; k?: number; threshold?: number } = {},
 ): Promise<ScenarioResult> {
-  const driver = DRIVERS[surface];
+  const driver = driverFor(surface, scenario.role ?? "coach");
   const model = resolveModel(opts.model);
   const k = opts.k ?? (Number(process.env.EVAL_K) || scenario.k || 5);
   const threshold =

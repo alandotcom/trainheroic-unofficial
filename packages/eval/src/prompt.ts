@@ -4,15 +4,22 @@
 
 import { EVAL_REPORT_END, EVAL_REPORT_START } from "./types";
 
-export function buildReadOnlyPrompt(query: string, today: string, surfacePreamble: string): string {
+export function buildReadOnlyPrompt(
+  query: string,
+  today: string,
+  surfacePreamble: string,
+  role: "coach" | "athlete",
+): string {
+  const owner =
+    role === "coach" ? "the coach who owns this account" : "the athlete (account owner)";
   return `${surfacePreamble}
 
-CONTEXT: Today's date is ${today}. You are assisting the coach who owns this account.
+CONTEXT: Today's date is ${today}. You are assisting ${owner}.
 
 HARD CONSTRAINTS — this is a read-only evaluation:
 - Never take an action that writes, logs, creates, modifies, deletes, sends, or publishes
   anything. Only read/query/list operations are allowed.
-- If the request is ambiguous (several things could match), ask the coach a clarifying question
+- If the request is ambiguous (several things could match), ask a clarifying question
   rather than guessing — that is a valid and often correct outcome.
 
 YOUR TASK: Answer this question as naturally and correctly as you can, grounded in real results.
@@ -24,7 +31,7 @@ Then output a delimited report for the developer in EXACTLY this format:
 
 ${EVAL_REPORT_START}
 QUERY: "${query}"
-FINAL_ANSWER: <one-paragraph summary of what you concluded for the coach>
+FINAL_ANSWER: <one-paragraph summary of what you concluded>
 ANSWER_REACHED: yes | partial | no
 CALLS (in order, one per line): <n>. <tool-or-command> | args: <key args> | outcome: <useful / empty / error / wrong-direction>
 TOTAL_CALLS: <number>
@@ -37,11 +44,18 @@ ${EVAL_REPORT_END}
 Be brutally honest in the report — its purpose is to find usability problems.`;
 }
 
-export const MCP_PREAMBLE =
-  "You are role-playing a general AI assistant connected to the TrainHeroic MCP. Its tools are " +
-  "named mcp__trainheroic-local-coach__* . Use whatever TrainHeroic tools you need.";
+export function mcpPreamble(prefix: string): string {
+  return (
+    "You are role-playing a general AI assistant connected to the TrainHeroic MCP. Its tools are " +
+    `named ${prefix}* . Use whatever TrainHeroic tools you need.`
+  );
+}
 
-export const CLI_PREAMBLE =
-  "You are role-playing a general AI assistant with a `trainheroic` command-line tool on PATH " +
-  "(run it via Bash). Discover commands by running `trainheroic` with no arguments, and " +
-  "`trainheroic coach` for the coach subcommands. Use whatever `trainheroic` commands you need.";
+export function cliPreamble(role: "coach" | "athlete"): string {
+  const group = role === "coach" ? "`trainheroic coach`" : "`trainheroic athlete`";
+  return (
+    "You are role-playing a general AI assistant with a `trainheroic` command-line tool on PATH " +
+    "(run it via Bash). Discover commands by running `trainheroic` with no arguments, and " +
+    `${group} for the ${role} subcommands. Use whatever \`trainheroic\` commands you need.`
+  );
+}

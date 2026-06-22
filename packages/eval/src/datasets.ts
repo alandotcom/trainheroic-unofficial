@@ -41,7 +41,36 @@ export type Dataset = {
   getExerciseHistory: (exerciseId: number, athleteId: number) => unknown;
   /** GET /v5/exerciseLibrary/all — the org's exercise catalog (exercise_resolve/search/get). */
   exerciseLibrary: Array<Record<string, unknown>>;
+  /** Athlete-surface endpoints (the logged-in athlete reads their OWN training). */
+  athlete: AthleteEndpoints;
 };
+
+/** The athlete-surface reads, served as the logged-in athlete's own training. */
+export type AthleteEndpoints = {
+  /** GET /v5/users/exercises/history — the athlete's logged-exercise list (athlete_exercises). */
+  exercisesList: Array<Record<string, unknown>>;
+  /** GET /3.0/athlete/programworkout/range — scheduled/logged workouts (athlete_workouts). */
+  range: (startDate: string, endDate: string) => unknown[];
+  /** GET /2.0/athlete/workingMax — working maxes (athlete_working_maxes). */
+  workingMaxes: Array<Record<string, unknown>>;
+  /** GET /1.0/athlete/prefs — preference flags (athlete_prefs). */
+  prefs: Record<string, unknown>;
+  /** GET /v5/exercises/:id/personalRecords (athlete_personal_records). */
+  getPersonalRecords: (exerciseId: number) => unknown[];
+  /** GET /v5/exercises/:id/stats (athlete_exercise_stats). */
+  getExerciseStats: (exerciseId: number) => unknown;
+};
+
+function emptyAthleteEndpoints(): AthleteEndpoints {
+  return {
+    exercisesList: [],
+    range: () => [],
+    workingMaxes: [],
+    prefs: { id: 1 },
+    getPersonalRecords: () => [],
+    getExerciseStats: () => ({ isLift: true, lastPerformance: null, personalRecord: null }),
+  };
+}
 
 /** A small default exercise catalog, matching the exercise_ids the synthetic programs reference. */
 function defaultExerciseLibrary(): Array<Record<string, unknown>> {
@@ -279,6 +308,7 @@ function buildOrg(opts: OrgOptions): Dataset {
     getCoachAthleteRange: () => [],
     getExerciseHistory: () => ({ liftPRs: [], history: [] }),
     exerciseLibrary: defaultExerciseLibrary(),
+    athlete: emptyAthleteEndpoints(),
   };
 }
 
@@ -477,4 +507,44 @@ export function historyAthlete(): { dataset: Dataset; info: HistoryAthleteInfo }
     exerciseLibrary: corpus.exerciseLibrary,
   };
   return { dataset, info: { athleteId, corpus } };
+}
+
+/**
+ * The same 2-year corpus, but driven from the ATHLETE surface: /user/simple is the athlete, and the
+ * athlete's own-training endpoints (their exercise list, per-exercise history) are served from the
+ * corpus. This is the athlete twin of historyAthlete() — the athlete reads their own deep history.
+ */
+export function historyAthleteSelf(): { dataset: Dataset; info: HistoryAthleteInfo } {
+  const { dataset: coachView, info } = historyAthlete();
+  const { corpus } = info;
+  const dataset: Dataset = {
+    ...coachView,
+    name: "historyAthleteSelf(2yr)",
+    userSimple: {
+      id: info.athleteId,
+      name_first: "Athlete001",
+      name_last: "Lastname001",
+      roles: ["athlete"],
+      org_id: 4242,
+    },
+    getProfileSummary: () => ({
+      user_id: info.athleteId,
+      sessions_count: corpus.sessionCount,
+      first_logged_date: corpus.firstDate,
+      last_logged_date: corpus.lastDate,
+      reps_sum: corpus.sessionCount * 140,
+      volume_sum: corpus.sessionCount * 16000,
+    }),
+    athlete: {
+      ...emptyAthleteEndpoints(),
+      exercisesList: corpus.exerciseLibrary.map((e) => ({
+        id: e.id,
+        title: e.title,
+        isCircuit: false,
+        param1Type: e.param_1_type,
+        param2Type: e.param_2_type,
+      })),
+    },
+  };
+  return { dataset, info };
 }

@@ -2,9 +2,18 @@
 
 In-code evals for the TrainHeroic toolkit. A vitest suite spawns a headless `claude -p` against a
 **fixture-backed fake TrainHeroic backend** and asserts on how the agent behaves — across **both
-surfaces (MCP and CLI)** from one scenario definition. This replaces the ad-hoc bash eval runners
-with proper evals in code, and gives CLI↔MCP parity: the same question, dataset, and grader run on
-either surface, so the two can be compared directly.
+roles (coach and athlete)** and **both surfaces (MCP and CLI)** from one scenario definition. This
+replaces the ad-hoc bash eval runners with proper evals in code, and gives full parity: the same
+question, dataset, and grader run on either surface, so they can be compared directly.
+
+Two orthogonal axes:
+
+- **role** (`coach` | `athlete`): which account the scenario drives. Picks the MCP server
+  (`coach-mcp` / `athlete-mcp`), the tool allow-list, the CLI command group, and the prompt. A
+  scenario sets `role` (default `coach`).
+- **surface** (`mcp` | `cli`): how the agent reaches the API. Each `(role, surface)` is one run
+  config. Tool/command calls are normalized to one canonical capability name so a single grader
+  covers all of them.
 
 ## Why a fake backend
 
@@ -61,6 +70,7 @@ pass-rate bar).
 | `coach-ambiguous-clarify.eval.ts` | several "Bodybuilding"-titled programs                                | mcp, cli | guessing one program instead of asking which                                                     |
 | `coach-high-enrollment.eval.ts`   | one athlete in 8 programs on one day (issue #18)                      | mcp, cli | failing to reach a target program's log ids when the raw view truncates                          |
 | `coach-history-trend.eval.ts`     | one athlete with a real 2-year corpus (1192 sessions, ~839 exercises) | mcp, cli | giving up on deep history instead of pulling a month + a lift's dated series to describe a trend |
+| `athlete-history-trend.eval.ts`   | the athlete twin — the logged-in athlete's own 2-year history         | mcp, cli | (role: athlete) giving up on deep own-history instead of finding the lift + pulling its series   |
 
 Deterministic, claude-free coverage of the fake backend and datasets lives in
 `test/fake-backend.test.ts` (runs in `pnpm test` / the gate): it asserts the datasets actually serve
@@ -76,7 +86,10 @@ results (no result budget). `EVAL_SURFACES` further narrows what runs.
 
 Keep three lists in sync so both surfaces can exercise a new capability:
 
-- `src/tools.ts` — the MCP read/write tool partition (a tool in neither list is denied in every
-  mode, so the eval can't call it).
-- `src/canonical.ts` — the CLI `trainheroic …` command → canonical capability mapping.
+- `src/tools.ts` — the MCP read/write tool partition per role (`ROLE_TOOLS`); a tool in neither list
+  is denied in every mode, so the eval can't call it.
+- `src/canonical.ts` — the CLI `trainheroic …` command → canonical capability mapping (per role).
 - the canonical name should match the MCP tool name, so one grader covers both surfaces.
+
+Adding a new athlete-surface read also needs a fake-backend route (`src/fake-backend.ts`,
+`routeAthleteGet`) and a `Dataset.athlete` field for its data.

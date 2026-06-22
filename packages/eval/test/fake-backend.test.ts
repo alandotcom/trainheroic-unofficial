@@ -5,6 +5,7 @@ import {
   highEnrollmentAthlete,
   HIGH_ENROLLMENT,
   historyAthlete,
+  historyAthleteSelf,
   largeRoster,
   manyPrograms,
 } from "../src/datasets";
@@ -176,6 +177,36 @@ describe("historyAthlete (2-year corpus)", () => {
     expect(detail.liftPRs.length).toBeGreaterThan(0);
     const dates = detail.history.map((h) => h.dateCompleted);
     expect(dates[0] < (dates.at(-1) ?? "")).toBe(true);
+  });
+});
+
+describe("historyAthleteSelf (athlete surface)", () => {
+  it("serves /user/simple as the athlete and the athlete's own exercise list + history", async () => {
+    const { dataset, info } = historyAthleteSelf();
+    const b = await boot(dataset);
+
+    // The logged-in user IS the athlete (not the coach), so athlete tools resolve the right userId.
+    const me = (await getJson(`${b.url}/user/simple`)) as { id: number; roles: string[] };
+    expect(me.id).toBe(info.athleteId);
+    expect(me.roles).toContain("athlete");
+
+    // The athlete's own exercise list (athlete_exercises) carries the corpus exercises.
+    const list = (await getJson(`${b.url}/v5/users/exercises/history`)) as Array<{ id: number }>;
+    expect(list.length).toBe(info.corpus.exerciseCount);
+
+    // The per-exercise series (athlete_exercise_history) resolves for the athlete's own userId.
+    const detail = (await getJson(
+      `${b.url}/v5/exercises/${info.corpus.topExercise.id}/history?userId=${info.athleteId}`,
+    )) as { history: unknown[] };
+    expect(detail.history.length).toBe(info.corpus.topExercise.sessions);
+
+    // The empty-default athlete endpoints answer (no unmatched routes).
+    await getJson(`${b.url}/1.0/athlete/prefs`);
+    await getJson(`${b.url}/2.0/athlete/workingMax`);
+    await getJson(
+      `${b.url}/3.0/athlete/programworkout/range?startDate=2026-03-01&endDate=2026-03-27`,
+    );
+    expect(b.unmatched).toHaveLength(0);
   });
 });
 

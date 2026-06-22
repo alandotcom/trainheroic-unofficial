@@ -5,6 +5,8 @@
 import type { Dataset } from "./datasets";
 
 export type Surface = "mcp" | "cli";
+/** The account role a scenario drives. Orthogonal to surface: each (role, surface) is one run config. */
+export type Role = "coach" | "athlete";
 
 export type ToolCall = {
   /** Canonical capability name, normalized across surfaces (e.g. "list_teams", "athlete_saved_workouts"). */
@@ -55,6 +57,8 @@ export type Scenario = {
   query: string;
   today: string;
   grade: (t: RunTranscript) => Grade;
+  /** The account role this scenario drives. Defaults to "coach". */
+  role?: Role;
   /** Which surfaces this scenario runs on. Defaults to both. */
   surfaces?: Surface[];
   /** Default K and threshold; overridable via EVAL_K / EVAL_THRESHOLD. */

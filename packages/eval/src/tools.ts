@@ -81,6 +81,59 @@ export const DENIED_BUILTINS: readonly string[] = [
   "ToolSearch",
 ];
 
-export function prefixed(tools: readonly string[]): string[] {
-  return tools.map((t) => `${COACH_PREFIX}${t}`);
+// --- Athlete surface ---
+
+export const ATHLETE_SERVER = "trainheroic-local";
+export const ATHLETE_PREFIX = `mcp__${ATHLETE_SERVER}__`;
+
+/** Read-only athlete tools. */
+export const ATHLETE_READ_TOOLS: readonly string[] = [
+  "athlete_whoami",
+  "athlete_profile",
+  "athlete_prefs",
+  "athlete_working_maxes",
+  "athlete_leaderboard",
+  "athlete_workouts",
+  "athlete_exercises",
+  "athlete_exercise_history",
+  "athlete_personal_records",
+  "athlete_exercise_stats",
+];
+
+/** Write athlete tools — denied in a read eval. */
+export const ATHLETE_WRITE_TOOLS: readonly string[] = [
+  "athlete_session_create",
+  "athlete_session_add_exercises",
+  "athlete_log_session",
+  "athlete_log_set",
+];
+
+export type RoleTools = {
+  server: string;
+  prefix: string;
+  /** The MCP server package (under packages/) whose tsx bin + src/server.ts the harness spawns. */
+  pkg: string;
+  readTools: readonly string[];
+  writeTools: readonly string[];
+};
+
+export const ROLE_TOOLS: Record<"coach" | "athlete", RoleTools> = {
+  coach: {
+    server: COACH_SERVER,
+    prefix: COACH_PREFIX,
+    pkg: "coach-mcp",
+    readTools: COACH_READ_TOOLS,
+    writeTools: COACH_WRITE_TOOLS,
+  },
+  athlete: {
+    server: ATHLETE_SERVER,
+    prefix: ATHLETE_PREFIX,
+    pkg: "athlete-mcp",
+    readTools: ATHLETE_READ_TOOLS,
+    writeTools: ATHLETE_WRITE_TOOLS,
+  },
+};
+
+export function prefixed(prefix: string, tools: readonly string[]): string[] {
+  return tools.map((t) => `${prefix}${t}`);
 }
