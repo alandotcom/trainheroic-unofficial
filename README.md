@@ -134,7 +134,15 @@ For the athlete server, swap the package name to `@trainheroic-unofficial/athlet
 
 <br>
 
-Bridge the hosted server with [`mcp-remote`](https://github.com/geelen/mcp-remote):
+The hosted server authorizes through a browser sign-in. Do that once on a machine that has a browser, then carry the cached token to the headless box.
+
+On the machine with a browser, run [`mcp-remote`](https://github.com/geelen/mcp-remote) and complete the sign-in. It writes the token to `~/.mcp-auth`:
+
+```bash
+npx -y mcp-remote https://mcp.trainheroic-unofficial.com/mcp
+```
+
+Copy `~/.mcp-auth` to the same path on the headless box, then point the client there:
 
 ```jsonc
 {
@@ -147,7 +155,7 @@ Bridge the hosted server with [`mcp-remote`](https://github.com/geelen/mcp-remot
 }
 ```
 
-First run opens OAuth in a browser and caches the token under `~/.mcp-auth`. A web IDE like Codespaces or VS Code Remote auto-forwards `localhost`, so the callback lands back in the session on its own.
+It reads the cached token and connects. A browser-free sign-in is tracked in #13.
 
 </details>
 
