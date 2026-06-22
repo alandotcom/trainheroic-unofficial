@@ -54,12 +54,20 @@ pass-rate bar).
 
 ## Scenarios
 
-| File                              | Simulates                                        | Surfaces | Guards against                                                                                   |
-| --------------------------------- | ------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------ |
-| `coach-pagination.eval.ts`        | 300-athlete roster + one oversized program       | mcp      | giving up on a large/truncated pull instead of narrowing or aggregating (truncation is MCP-only) |
-| `coach-many-programs.eval.ts`     | 30 team programs, empty standalone list          | mcp, cli | concluding "no programs" instead of walking teams → program detail                               |
-| `coach-ambiguous-clarify.eval.ts` | several "Bodybuilding"-titled programs           | mcp, cli | guessing one program instead of asking which                                                     |
-| `coach-high-enrollment.eval.ts`   | one athlete in 8 programs on one day (issue #18) | mcp, cli | failing to reach a target program's log ids when the raw view truncates                          |
+| File                              | Simulates                                                             | Surfaces | Guards against                                                                                   |
+| --------------------------------- | --------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `coach-pagination.eval.ts`        | 300-athlete roster + one oversized program                            | mcp      | giving up on a large/truncated pull instead of narrowing or aggregating (truncation is MCP-only) |
+| `coach-many-programs.eval.ts`     | 30 team programs, empty standalone list                               | mcp, cli | concluding "no programs" instead of walking teams → program detail                               |
+| `coach-ambiguous-clarify.eval.ts` | several "Bodybuilding"-titled programs                                | mcp, cli | guessing one program instead of asking which                                                     |
+| `coach-high-enrollment.eval.ts`   | one athlete in 8 programs on one day (issue #18)                      | mcp, cli | failing to reach a target program's log ids when the raw view truncates                          |
+| `coach-history-trend.eval.ts`     | one athlete with a real 2-year corpus (1192 sessions, ~839 exercises) | mcp, cli | giving up on deep history instead of pulling a month + a lift's dated series to describe a trend |
+
+Deterministic, claude-free coverage of the fake backend and datasets lives in
+`test/fake-backend.test.ts` (runs in `pnpm test` / the gate): it asserts the datasets actually serve
+hundreds of athletes, dozens of teams, the 2-year history corpus, and that list payloads cross the
+result budget the LLM evals depend on. The 2-year corpus is a prescribed-program export
+(`fixtures/history-2yr.json`, no PII); `src/history.ts` maps it onto the raw API shapes and notes
+where values (per-set weights) are synthesized.
 
 A scenario declares its `surfaces`; truncation-driven ones are MCP-only because the CLI streams full
 results (no result budget). `EVAL_SURFACES` further narrows what runs.

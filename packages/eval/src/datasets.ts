@@ -4,6 +4,9 @@
 // fake backend answers every route from; builders compose the same primitives so scenarios differ
 // only in scale and structure (many programs, large roster, ambiguous titles).
 
+import { historyCorpus } from "./history";
+import type { HistoryCorpus } from "./history";
+
 export type AthleteRow = Record<string, unknown> & { id: number; groups: number[] };
 export type TeamRow = Record<string, unknown> & { id: number; group_program: number };
 
@@ -34,7 +37,24 @@ export type Dataset = {
   ) => { rows: unknown[] };
   /** GET /3.0/coach/athlete/programworkout/range/:athleteId */
   getCoachAthleteRange: (athleteId: number, startDate: string, endDate: string) => unknown[];
+  /** GET /v5/exercises/:id/history?userId= — PR board + dated series (athlete_lift_history). */
+  getExerciseHistory: (exerciseId: number, athleteId: number) => unknown;
+  /** GET /v5/exerciseLibrary/all — the org's exercise catalog (exercise_resolve/search/get). */
+  exerciseLibrary: Array<Record<string, unknown>>;
 };
+
+/** A small default exercise catalog, matching the exercise_ids the synthetic programs reference. */
+function defaultExerciseLibrary(): Array<Record<string, unknown>> {
+  const names = [
+    "Back Squat",
+    "Bench Press",
+    "Deadlift",
+    "Barbell Row",
+    "Overhead Press",
+    "Barbell Curl",
+  ];
+  return names.map((title, e) => ({ id: 900000 + e, title, param_1_type: 1, param_2_type: 2 }));
+}
 
 const COACH_ID = 700000;
 const ATHLETE_BASE = 100000;
@@ -257,6 +277,8 @@ function buildOrg(opts: OrgOptions): Dataset {
       return { rows };
     },
     getCoachAthleteRange: () => [],
+    getExerciseHistory: () => ({ liftPRs: [], history: [] }),
+    exerciseLibrary: defaultExerciseLibrary(),
   };
 }
 
@@ -420,4 +442,39 @@ export function highEnrollmentAthlete(programCount = HE_PROGRAM_TITLES.length): 
     getCoachAthleteRange: (id, _startDate, _endDate) =>
       id === athleteId ? titles.map((_title, t) => makeCoachWorkout(t, HIGH_ENROLLMENT.date)) : [],
   };
+}
+
+// --- Deep training history (2-year real corpus) ---
+
+/** Identifiers the history scenarios assert against, filled in from the loaded corpus. */
+export type HistoryAthleteInfo = {
+  athleteId: number;
+  corpus: HistoryCorpus;
+};
+
+/**
+ * One athlete with a real 2-year training history (1192 sessions, ~839 exercises) served through
+ * the month-calendar and per-exercise-history endpoints. This is the dataset for testing that an
+ * agent can navigate deep history — pull a month, trend one lift across the corpus — at a scale the
+ * sparse real test accounts can't reach. The history is read-only program content (no PII); see
+ * src/history.ts for how the prescribed export maps onto the raw API shapes.
+ */
+export function historyAthlete(): { dataset: Dataset; info: HistoryAthleteInfo } {
+  const athleteId = ATHLETE_BASE + 1;
+  const corpus = historyCorpus(`Athlete${pad(1)} Lastname${pad(1)}`);
+  const base = buildOrg({
+    name: "historyAthlete(2yr)",
+    athleteCount: 20,
+    programTitles: ["Bodybuilding", "Strength", "Conditioning"],
+  });
+  const dataset: Dataset = {
+    ...base,
+    name: "historyAthlete(2yr)",
+    getCalendarSummary: (id, year, month) =>
+      id === athleteId ? corpus.getCalendarSummary(year, month) : [],
+    getExerciseHistory: (exerciseId, id) =>
+      id === athleteId ? corpus.getExerciseHistory(exerciseId) : { liftPRs: [], history: [] },
+    exerciseLibrary: corpus.exerciseLibrary,
+  };
+  return { dataset, info: { athleteId, corpus } };
 }

@@ -4,6 +4,7 @@ import {
   ambiguousBodybuilding,
   highEnrollmentAthlete,
   HIGH_ENROLLMENT,
+  historyAthlete,
   largeRoster,
   manyPrograms,
 } from "../src/datasets";
@@ -17,7 +18,8 @@ import type { Dataset } from "../src/datasets";
 // and that the #18 high-enrollment data carries the target log ids. The LLM evals depend on all of
 // this being true, so pinning it here catches a dataset/route regression cheaply.
 
-const RESULT_BUDGET = 60_000; // mirrors DEFAULT_RESULT_BUDGET in @trainheroic-unofficial/core
+// Mirrors DEFAULT_RESULT_BUDGET in @trainheroic-unofficial/core.
+const RESULT_BUDGET = 60_000;
 
 let backend: BackendHandle | null = null;
 
@@ -136,6 +138,44 @@ describe("ambiguousBodybuilding", () => {
     }
     const bodybuilding = titles.filter((t) => t.toLowerCase().includes("bodybuilding"));
     expect(bodybuilding.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("historyAthlete (2-year corpus)", () => {
+  it("serves ~1192 sessions across 24 months and ~839 distinct exercises", async () => {
+    const { dataset, info } = historyAthlete();
+    expect(info.corpus.sessionCount).toBeGreaterThan(1000);
+    expect(info.corpus.exerciseCount).toBeGreaterThan(700);
+    expect(info.corpus.firstDate).toBe("2024-03-27");
+    expect(info.corpus.lastDate).toBe("2026-03-27");
+
+    const b = await boot(dataset);
+    // A populated month returns that month's real sessions.
+    const may2025 = (await getJson(
+      `${b.url}/2.0/coach/athlete/calendar/summary/${info.athleteId}/2025/5/7`,
+    )) as Array<{ workout_title: string; sets: Array<{ exercises: unknown[] }> }>;
+    expect(may2025.length).toBeGreaterThan(0);
+    expect(may2025[0]?.sets[0]?.exercises.length).toBeGreaterThan(0);
+    // A different athlete on this dataset has no deep history.
+    const otherMonth = (await getJson(
+      `${b.url}/2.0/coach/athlete/calendar/summary/999999/2025/5/7`,
+    )) as unknown[];
+    expect(otherMonth).toHaveLength(0);
+    expect(b.unmatched).toHaveLength(0);
+  });
+
+  it("serves a per-exercise dated history series across the corpus (athlete_lift_history)", async () => {
+    const { dataset, info } = historyAthlete();
+    const b = await boot(dataset);
+    const detail = (await getJson(
+      `${b.url}/v5/exercises/${info.corpus.topExercise.id}/history?userId=${info.athleteId}`,
+    )) as { liftPRs: unknown[]; history: Array<{ dateCompleted: string }> };
+    // The most-prescribed exercise should appear in many dated sessions, spanning the 2 years.
+    expect(detail.history.length).toBe(info.corpus.topExercise.sessions);
+    expect(detail.history.length).toBeGreaterThan(20);
+    expect(detail.liftPRs.length).toBeGreaterThan(0);
+    const dates = detail.history.map((h) => h.dateCompleted);
+    expect(dates[0] < (dates.at(-1) ?? "")).toBe(true);
   });
 });
 

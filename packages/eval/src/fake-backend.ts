@@ -64,6 +64,7 @@ function routeGet(
     return { status: 200, body: { countMessagingNotViewed: 0, countNotificationsNotViewed: 0 } };
   }
   if (pathname === "/v5/analytics") return { status: 200, body: [] };
+  if (pathname === "/v5/exerciseLibrary/all") return { status: 200, body: dataset.exerciseLibrary };
   if (pathname === "/v5/athletes") return { status: 200, body: dataset.athletes };
 
   if (pathname === "/1.0/coach/teams") {
@@ -100,9 +101,12 @@ function routeGet(
       : { status: 200, body: program };
   }
 
-  // /v5/exercises/:id/history (coach athlete_lift_history)
+  // /v5/exercises/:id/history?userId= (coach athlete_lift_history)
   if (seg[0] === "v5" && seg[1] === "exercises" && seg[3] === "history") {
-    return { status: 200, body: { liftPRs: [], history: [] } };
+    const exerciseId = num(seg[2] ?? null);
+    const athleteId = num(search.get("userId"));
+    if (exerciseId === null) return { status: 400, body: { error: "bad exercise id" } };
+    return { status: 200, body: dataset.getExerciseHistory(exerciseId, athleteId ?? 0) };
   }
 
   // /2.0/coach/athlete/calendar/summary/:athleteId/:year/:month/:n
