@@ -1,0 +1,33 @@
+// Folder-specific settings
+//
+// For a full list of overridable settings, and general information on folder-specific settings,
+// see the documentation: https://zed.dev/docs/configuring-zed#settings-files
+{
+  // This repo lints and formats with oxlint + oxfmt (via the "oxc" Zed extension),
+  // not Biome. For the TypeScript-family languages:
+  //   - "vtsls"                      -> the one TypeScript server we want
+  //   - "!typescript-language-server" -> kill the duplicate tsserver wrapper
+  //   - "!biome"                     -> oxlint/oxfmt own this repo, not Biome
+  //   - "..."                        -> keep the rest (oxlint, oxfmt, eslint, tailwind)
+  // and oxfmt is pinned as the formatter so it (not vtsls/prettier) formats on save.
+  "languages": {
+    "TypeScript": {
+      "language_servers": ["vtsls", "!typescript-language-server", "!biome", "..."],
+      "formatter": { "language_server": { "name": "oxfmt" } }
+    },
+    "TSX": {
+      "language_servers": ["vtsls", "!typescript-language-server", "!biome", "..."],
+      "formatter": { "language_server": { "name": "oxfmt" } }
+    },
+    "JavaScript": {
+      "language_servers": ["vtsls", "!typescript-language-server", "!biome", "..."],
+      "formatter": { "language_server": { "name": "oxfmt" } }
+    },
+    "JSX": {
+      "language_servers": ["vtsls", "!typescript-language-server", "!biome", "..."],
+      "formatter": { "language_server": { "name": "oxfmt" } }
+    },
+    "JSON": { "language_servers": ["!biome", "..."] },
+    "JSONC": { "language_servers": ["!biome", "..."] }
+  }
+}
