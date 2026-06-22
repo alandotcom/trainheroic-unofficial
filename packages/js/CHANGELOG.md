@@ -1,5 +1,11 @@
 # @trainheroic-unofficial/js
 
+## 1.1.0
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@1.1.0
+
 ## 1.0.0
 
 ### Patch Changes
