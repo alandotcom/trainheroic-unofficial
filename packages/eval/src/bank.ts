@@ -5,15 +5,8 @@
 // capability fired successfully, no give-up, and (read mode) nothing was written. Add an entry here
 // when a new tool or a new everyday question shows up.
 
-import {
-  answerReached,
-  didWrite,
-  hadSuccessfulRead,
-  reportField,
-  soundsLikeGivingUp,
-} from "./grade";
+import { answerReached, callsTo, didWrite, reportField, soundsLikeGivingUp } from "./grade";
 import type { Dataset } from "./datasets";
-import { callsTo } from "./grade";
 import type { Grade, Mode, Role, RunTranscript, Scenario } from "./types";
 
 export type BankEntry = {
@@ -31,18 +24,23 @@ function firedOk(t: RunTranscript, names: readonly string[]): boolean {
   return names.some((n) => callsTo(t, n).some((c) => !c.isError));
 }
 
-/** The shared light grader: did the agent answer this query the expected way? */
+/**
+ * The shared light grader. This is a ROUTING/PLUMBING check, not an answer-correctness check: it
+ * verifies the agent reached the right capability without erroring and didn't give up. It cannot
+ * catch a confident-wrong answer (an LLM grading limitation) — the tailored scenarios in evals/ are
+ * where correctness is asserted. `firedOk` already requires a non-error call to an EXPECTED
+ * capability, so it subsumes a generic "some read succeeded" check; we don't add one.
+ */
 function gradeBank(entry: BankEntry, mode: Mode) {
   return (t: RunTranscript): Grade => {
     const used = firedOk(t, entry.expect);
-    // Reached when the model's own report says yes/partial, OR (no report) it left a real answer.
-    // A terse model puts everything in FINAL_ANSWER and leaves answerText empty, so don't require both.
-    const report = answerReached(t);
-    const reached =
-      report === "yes" || report === "partial" || (report === null && t.answerText.length > 0);
     const gaveUp = soundsLikeGivingUp(t);
     if (mode === "write") {
-      const wrote = entry.expectWrite ? didWrite(t, entry.expectWrite) : t.writes.length > 0;
+      // A write entry MUST name the write it expects — otherwise any stray mutation would pass.
+      if (!entry.expectWrite) {
+        return { pass: false, reason: "write-bank entry is missing expectWrite (cannot grade)" };
+      }
+      const wrote = didWrite(t, entry.expectWrite);
       const pass = used && wrote && !gaveUp;
       return {
         pass,
@@ -51,7 +49,12 @@ function gradeBank(entry: BankEntry, mode: Mode) {
           : `usedExpected=${used} wrote=${wrote} gaveUp=${gaveUp}`,
       };
     }
-    const pass = used && reached && hadSuccessfulRead(t) && !gaveUp;
+    // Reached when the model's own report says yes/partial, OR (no report) it left a real answer.
+    // A terse model puts everything in FINAL_ANSWER and leaves answerText empty, so don't require both.
+    const report = answerReached(t);
+    const reached =
+      report === "yes" || report === "partial" || (report === null && t.answerText.length > 0);
+    const pass = used && reached && !gaveUp;
     return {
       pass,
       reason: pass

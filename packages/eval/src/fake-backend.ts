@@ -21,6 +21,8 @@ export type BackendHandle = {
   unmatched: string[];
   /** Every mutating request, in order — what a write-mode grader asserts against. */
   writes: WriteRecord[];
+  /** Clear per-run read-after-write state (the in-flight ad-hoc session). Call between K runs. */
+  reset: () => void;
   close: () => Promise<void>;
 };
 
@@ -70,10 +72,9 @@ function buildApp(
   requests: string[],
   unmatched: string[],
   writes: WriteRecord[],
+  personal: { current: PersonalSession | null },
 ): Hono {
   const app = new Hono();
-  // Holds the one ad-hoc personal session between its create/add writes and the range read.
-  const personal: { current: PersonalSession | null } = { current: null };
 
   app.use("*", async (c, next) => {
     requests.push(`${c.req.method} ${new URL(c.req.url).pathname}`);
@@ -301,7 +302,8 @@ export function startBackend(dataset: Dataset): Promise<BackendHandle> {
   const requests: string[] = [];
   const unmatched: string[] = [];
   const writes: WriteRecord[] = [];
-  const app = buildApp(dataset, requests, unmatched, writes);
+  const personal: { current: PersonalSession | null } = { current: null };
+  const app = buildApp(dataset, requests, unmatched, writes, personal);
   return new Promise((resolve, reject) => {
     const server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 0 }, (info) => {
       resolve({
@@ -310,6 +312,9 @@ export function startBackend(dataset: Dataset): Promise<BackendHandle> {
         requests,
         unmatched,
         writes,
+        reset: () => {
+          personal.current = null;
+        },
         close: () =>
           new Promise<void>((res, rej) => {
             server.close((err) => {

@@ -47,6 +47,8 @@ export async function runScenario(
   const runs: Array<{ grade: Grade; t: RunTranscript }> = [];
   try {
     for (let i = 0; i < k; i += 1) {
+      // Clear read-after-write state so a scenario's K runs don't bleed into each other.
+      backend.reset();
       const writesBefore = backend.writes.length;
       const t = await driver.runOnce(backend.url, scenario.query, scenario.today, { model, mode });
       // The backend is shared across this scenario's K runs; attribute only THIS run's writes.
@@ -107,7 +109,12 @@ function formatRun(r: { grade: Grade; t: RunTranscript }, i: number): string[] {
     .join(" → ");
   return [
     `\n--- run ${i + 1}: ${r.grade.pass ? "PASS" : "FAIL"} — ${r.grade.reason}`,
-    ...(r.t.connected ? [] : ["  (!) surface did not connect/launch"]),
+    ...(r.t.connected
+      ? []
+      : [
+          "  (!) surface did not connect/launch",
+          ...(r.t.stderrTail ? [indent(`stderr tail:\n${r.t.stderrTail}`, "    ")] : []),
+        ]),
     ...(r.t.timedOut ? ["  (!) run timed out"] : []),
     `  calls: ${calls || "(none)"}`,
     ...(r.t.writes.length > 0

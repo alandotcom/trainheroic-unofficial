@@ -85,7 +85,7 @@ function parseEvents(
   lines: readonly string[],
   surface: Surface,
   normalize: Normalize,
-): Omit<RunTranscript, "timedOut" | "raw" | "writes"> {
+): Omit<RunTranscript, "timedOut" | "raw" | "writes" | "stderrTail"> {
   const toolCalls: ToolCall[] = [];
   const byId = new Map<string, number>();
   let finalText = "";
@@ -132,12 +132,15 @@ function parseEvents(
   return { surface, toolCalls, finalText, answerText, evalReport, connected, costUsd, numTurns };
 }
 
+const STDERR_TAIL_BYTES = 4000;
+
 /** Spawn claude, stream its JSONL stdout, and return the parsed transcript. */
 export function spawnAndParse(spec: SpawnSpec): Promise<RunTranscript> {
   const lines: string[] = [];
   return new Promise((resolveRun) => {
     const child = spawn(spec.command, spec.args, { cwd: spec.cwd, env: spec.env });
     let buf = "";
+    let stderr = "";
     let timedOut = false;
     let settled = false;
 
@@ -155,8 +158,10 @@ export function spawnAndParse(spec: SpawnSpec): Promise<RunTranscript> {
         nl = buf.indexOf("\n");
       }
     });
-    child.stderr.on("data", () => {
-      // surface/claude diagnostics; ignored (the transcript carries what we grade on).
+    child.stderr.on("data", (chunk: Buffer) => {
+      // Keep only the tail — surfaced when a run fails to connect/launch so a boot failure (bad
+      // path, server crash) is diagnosable instead of an unexplained 0% pass-rate.
+      stderr = (stderr + chunk.toString("utf8")).slice(-STDERR_TAIL_BYTES);
     });
 
     // close and error can both fire; the settled guard makes the run resolve exactly once.
@@ -168,7 +173,7 @@ export function spawnAndParse(spec: SpawnSpec): Promise<RunTranscript> {
       const parsed = parseEvents(lines, spec.surface, spec.normalize);
       // The harness fills `writes` from the backend after the run (the driver can't see it).
       // oxlint-disable-next-line promise/no-multiple-resolved -- guarded by `settled`
-      resolveRun({ ...parsed, timedOut, writes: [], raw: lines });
+      resolveRun({ ...parsed, timedOut, writes: [], stderrTail: stderr.trim(), raw: lines });
     };
     child.on("close", finish);
     child.on("error", finish);

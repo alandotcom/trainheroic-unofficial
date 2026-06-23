@@ -8,7 +8,7 @@
 import type { Role } from "./types";
 
 /** coach CLI command path (tokens after `trainheroic`) → canonical capability name. */
-const COACH_COMMANDS: Record<string, string> = {
+export const COACH_COMMANDS: Record<string, string> = {
   whoami: "whoami",
   "coach head-coach": "head_coach",
   "coach athletes": "list_athletes",
@@ -35,7 +35,7 @@ const COACH_COMMANDS: Record<string, string> = {
 };
 
 /** athlete CLI command path → canonical capability name. */
-const ATHLETE_COMMANDS: Record<string, string> = {
+export const ATHLETE_COMMANDS: Record<string, string> = {
   "athlete whoami": "athlete_whoami",
   "athlete profile": "athlete_profile",
   "athlete prefs": "athlete_prefs",

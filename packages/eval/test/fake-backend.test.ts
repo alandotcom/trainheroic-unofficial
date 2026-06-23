@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { presentLogTargets, selectWorkoutsByProgram } from "@trainheroic-unofficial/js";
+import { DEFAULT_RESULT_BUDGET as RESULT_BUDGET } from "@trainheroic-unofficial/core";
+import {
+  presentAthleteWorkouts,
+  presentExerciseHistory,
+  presentLogTargets,
+  selectWorkoutsByProgram,
+  type ExerciseHistoryDetail,
+} from "@trainheroic-unofficial/js";
 import {
   ambiguousBodybuilding,
   highEnrollmentAthlete,
@@ -9,24 +16,16 @@ import {
   largeRoster,
   manyPrograms,
 } from "../src/datasets";
-import { startBackend } from "../src/fake-backend";
-import type { BackendHandle } from "../src/fake-backend";
 import type { Dataset } from "../src/datasets";
 import { demoAthlete, demoCoach } from "../src/demo";
-import {
-  presentAthleteWorkouts,
-  presentExerciseHistory,
-  type ExerciseHistoryDetail,
-} from "@trainheroic-unofficial/js";
+import { startBackend } from "../src/fake-backend";
+import type { BackendHandle } from "../src/fake-backend";
 
 // Deterministic coverage for the fake backend + datasets — no claude, runs in the normal gate.
 // These assert the datasets actually serve large orgs (hundreds of athletes, dozens of teams),
 // that the list payloads cross the MCP result budget (so the LLM evals exercise real truncation),
 // and that the #18 high-enrollment data carries the target log ids. The LLM evals depend on all of
 // this being true, so pinning it here catches a dataset/route regression cheaply.
-
-// Mirrors DEFAULT_RESULT_BUDGET in @trainheroic-unofficial/core.
-const RESULT_BUDGET = 60_000;
 
 let backend: BackendHandle | null = null;
 

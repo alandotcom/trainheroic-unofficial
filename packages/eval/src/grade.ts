@@ -11,10 +11,6 @@ export function countCalls(t: RunTranscript, name: string): number {
   return callsTo(t, name).length;
 }
 
-export function anyTruncated(t: RunTranscript): boolean {
-  return t.toolCalls.some((c) => c.truncated);
-}
-
 const NARROWING_ARGS = [
   "q",
   "limit",
@@ -46,11 +42,6 @@ export function narrowedAfterTruncation(t: RunTranscript): boolean {
   const firstTruncatedIdx = t.toolCalls.findIndex((c) => c.truncated);
   if (firstTruncatedIdx === -1) return false;
   return t.toolCalls.slice(firstTruncatedIdx + 1).some(hasNarrowingArg);
-}
-
-/** The agent kept making progress across a many-item space rather than stalling on one call. */
-export function exploredAcross(t: RunTranscript, name: string, min: number): boolean {
-  return countCalls(t, name) >= min;
 }
 
 /** True when any call to `name` carried a narrowing argument (filter/limit/page/date scope). */
@@ -97,11 +88,6 @@ export function mentionsAny(t: RunTranscript, words: readonly string[]): boolean
 export function finalMentions(t: RunTranscript, words: readonly string[]): boolean {
   const text = t.finalText.toLowerCase();
   return words.some((w) => text.includes(w.toLowerCase()));
-}
-
-export function countMentions(t: RunTranscript, words: readonly string[]): number {
-  const text = t.answerText.toLowerCase();
-  return words.filter((w) => text.includes(w.toLowerCase())).length;
 }
 
 export function noWrites(t: RunTranscript, writeNames: readonly string[]): boolean {

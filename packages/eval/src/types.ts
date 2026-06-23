@@ -40,6 +40,9 @@ export type RunTranscript = {
   timedOut: boolean;
   /** The mutating requests this run made to the fake backend (write mode); empty in read mode. */
   writes: WriteRecord[];
+  /** The tail of the child's stderr — the surface/claude diagnostics, surfaced when a run fails to
+   * connect/launch (otherwise a boot failure is an unexplained 0%). */
+  stderrTail: string;
   /** Raw stream-json lines, for debugging a parse miss. */
   raw: string[];
 };
