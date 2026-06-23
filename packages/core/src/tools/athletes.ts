@@ -153,22 +153,24 @@ function registerAthleteSavedWorkouts(server: McpServer, ctx: ToolContext): void
         "from list_athletes. The default view is COMPACT: one row per saved set, each carrying its " +
         "program/programId, the savedWorkoutSetId, and every exercise's savedWorkoutSetExerciseId " +
         "with prescribed/performed values — so you read those ids straight off it, no raw needed. " +
-        "An athlete enrolled in many programs returns one row per program; pass programId (or " +
-        "teamId) to target just one program's session (read the programId off this same view, or " +
-        "from a team's group_program). raw:true returns the untouched API objects, but that blob " +
-        "is large and can be truncated for a high-enrollment athlete — prefer programId + the " +
-        "default view. athlete_training gives a whole-month overview but not these ids.",
+        "An athlete enrolled in many programs returns one row per program; narrow to one with " +
+        "program (a case-insensitive title substring, e.g. 'bodybuilding' — no id lookup needed), " +
+        "or programId/teamId if you already have the id. raw:true returns the untouched API " +
+        "objects, but that blob is large and can be truncated for a high-enrollment athlete — " +
+        "prefer the program filter + the default view. athlete_training gives a whole-month " +
+        "overview but not these ids.",
       inputSchema: {
         athleteId: idParam,
         startDate: dateString,
         endDate: dateString,
+        program: z.string().optional(),
         programId: idParam.optional(),
         teamId: idParam.optional(),
         raw: z.boolean().optional(),
       },
       annotations: READ,
     },
-    ({ athleteId, startDate, endDate, programId, teamId, raw }) =>
+    ({ athleteId, startDate, endDate, program, programId, teamId, raw }) =>
       attempt(async () => {
         const all = await fetchCoachAthleteWorkouts(
           ctx.client,
@@ -177,17 +179,18 @@ function registerAthleteSavedWorkouts(server: McpServer, ctx: ToolContext): void
           endDate,
         );
         const filter = definedProps({
+          programTitle: program,
           programId: programId === undefined ? undefined : toId(programId),
           teamId: teamId === undefined ? undefined : toId(teamId),
         });
         const workouts = selectWorkoutsByProgram(all, filter);
         if (raw === true) {
           return jsonResult(workouts, {
-            hint: "Each set's id is the savedWorkoutSetId; each savedWorkoutSetExercises[].id is the savedWorkoutSetExerciseId. This raw blob is large — if truncated, pass programId to target one program, or use the default (compact) view which carries the same ids.",
+            hint: "Each set's id is the savedWorkoutSetId; each savedWorkoutSetExercises[].id is the savedWorkoutSetExerciseId. This raw blob is large — if truncated, pass program (a title substring) to target one program, or use the default (compact) view which carries the same ids.",
           });
         }
         return jsonResult(presentLogTargets(workouts), {
-          hint: "One row per saved set: savedWorkoutSetId plus each savedWorkoutSetExerciseId, with the program it belongs to. Pass both ids to log_athlete_set / prescribe_athlete_set. Filter with programId/teamId if the athlete is on several programs.",
+          hint: "One row per saved set: savedWorkoutSetId plus each savedWorkoutSetExerciseId, with the program it belongs to. Pass both ids to log_athlete_set / prescribe_athlete_set. Filter with program (title substring), programId, or teamId if the athlete is on several programs.",
         });
       }),
   );

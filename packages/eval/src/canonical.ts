@@ -63,7 +63,8 @@ const POSITIONAL_ID: Record<string, string> = {
 
 /** CLI flag → canonical arg name (only the ones graders inspect need mapping). */
 const FLAG_MAP: Record<string, string> = {
-  program: "programId",
+  program: "program",
+  "program-id": "programId",
   team: "teamId",
   athlete: "athleteId",
   limit: "limit",

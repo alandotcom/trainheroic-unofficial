@@ -101,7 +101,7 @@ Coach — manage a roster (needs a coach account):
   roster athlete reads (three lenses — pick by the question):
   coach roster-activity --athletes <id,id,...> [--metric]                  rank roster by recency; --metric adds session count + training volume. All-time snapshot, NO date range — for a windowed total use 'coach team-volume'. Get the full id list from 'coach athletes'.
   coach team-volume (--team <id> | --athletes <id,id,...>) --start Y-M-D --end Y-M-D   team training volume scoped to a date window: per-athlete rows (only those who logged in range) + rolled-up totals (volume in lb). --team resolves the roster; --athletes passes ids directly.
-  coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--program <id>|--team <id>] [--logged-only] [--summary] [--raw|--log-ids]   prescribed + logged work over a date range; --program/--team targets one program when the athlete is on several; --logged-only/--summary narrow it to what was actually logged; --log-ids prints just the savedWorkoutSetId + savedWorkoutSetExerciseId per set that log-set needs
+  coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--program <title>|--program-id <id>|--team <id>] [--logged-only] [--summary] [--raw|--log-ids]   prescribed + logged work over a date range; --program (title substring) / --program-id / --team targets one program when the athlete is on several; --logged-only/--summary narrow it to what was actually logged; --log-ids prints just the savedWorkoutSetId + savedWorkoutSetExerciseId per set that log-set needs
   coach athlete-training --athlete <id> --year <YYYY> --month <1-12>        sessions the athlete LOGGED in one month (empty = nothing logged that month, not an error)
   coach athlete-lift-history --athlete <id> --exercise <id> [--since Y-M-D] [--until Y-M-D] [--raw]   one exercise's logged history + PRs
   coach main-lift-prs [--athlete <id>] [--athletes <id,id,...>] [--months <n>]   best PRs for the main lifts (squat/bench/deadlift/overhead press/clean & jerk/snatch); auto-discovers the logged variant. With --athlete, one athlete; otherwise the whole roster (or --athletes subset)
@@ -1031,12 +1031,13 @@ async function cmdCoachTeamVolume(client: TrainHeroicClient, a: string[]): Promi
 // savedWorkoutSetExerciseId that `coach log-set` needs.
 async function cmdCoachAthleteWorkouts(client: TrainHeroicClient, a: string[]): Promise<void> {
   const usage =
-    "coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--program <id>|--team <id>] [--raw|--log-ids] [--logged-only] [--limit N] [--summary]";
+    "coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--program <title>|--program-id <id>|--team <id>] [--raw|--log-ids] [--logged-only] [--limit N] [--summary]";
   const { values } = parse(a, {
     athlete: { type: "string" },
     start: { type: "string" },
     end: { type: "string" },
     program: { type: "string" },
+    "program-id": { type: "string" },
     team: { type: "string" },
     raw: { type: "boolean" },
     "log-ids": { type: "boolean" },
@@ -1048,10 +1049,12 @@ async function cmdCoachAthleteWorkouts(client: TrainHeroicClient, a: string[]): 
   const start = isoDate(need(values.start as string | undefined, usage), "--start");
   const end = isoDate(need(values.end as string | undefined, usage), "--end");
   const all = await fetchCoachAthleteWorkouts(client, athleteId, start, end);
-  // An athlete on many programs returns one workout per program; --program/--team narrows to one,
-  // which (with the truncation-free --log-ids view) keeps high-enrollment athletes manageable.
-  const filter: { programId?: number; teamId?: number } = {};
-  if (values.program !== undefined) filter.programId = toInt(values.program as string, "--program");
+  // An athlete on many programs returns one workout per program; narrow to one with --program (a
+  // title substring, no id lookup) or --program-id/--team, keeping high-enrollment athletes small.
+  const filter: { programTitle?: string; programId?: number; teamId?: number } = {};
+  if (values.program !== undefined) filter.programTitle = values.program as string;
+  if (values["program-id"] !== undefined)
+    filter.programId = toInt(values["program-id"] as string, "--program-id");
   if (values.team !== undefined) filter.teamId = toInt(values.team as string, "--team");
   const workouts = selectWorkoutsByProgram(all, filter);
   if (values["log-ids"] === true) return out(presentLogTargets(workouts));

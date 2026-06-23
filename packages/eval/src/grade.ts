@@ -28,6 +28,7 @@ const NARROWING_ARGS = [
   "endDate",
   "athleteIds",
   "athleteId",
+  "program",
   "programId",
   "teamId",
 ];

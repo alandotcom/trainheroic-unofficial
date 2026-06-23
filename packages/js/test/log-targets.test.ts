@@ -99,4 +99,10 @@ describe("selectWorkoutsByProgram", () => {
     expect(got).toHaveLength(1);
     expect(presentLogTargets(got)[0]?.program).toBe("Powerlifting");
   });
+
+  it("filters by programTitle (case-insensitive substring, no id lookup)", () => {
+    const got = selectWorkoutsByProgram([a, b], { programTitle: "hyper" });
+    expect(got).toHaveLength(1);
+    expect(presentLogTargets(got)[0]?.program).toBe("Hypertrophy");
+  });
 });
