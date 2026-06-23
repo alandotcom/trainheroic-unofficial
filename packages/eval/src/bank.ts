@@ -189,7 +189,9 @@ export const COACH_READ_BANK: BankEntry[] = [
   },
   {
     section: "programming",
-    query: "Show me team-wide training volume over the last couple of weeks.",
+    // "whole roster" not "team-wide" — the demo coach has several teams, so "the team" is
+    // genuinely ambiguous and a good model asks which; the roster framing tests team_volume directly.
+    query: "Show me training volume across my whole roster over the last couple of weeks.",
     expect: ["team_volume"],
   },
   {

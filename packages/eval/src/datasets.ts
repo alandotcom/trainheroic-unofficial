@@ -233,10 +233,13 @@ export type OrgOptions = {
  */
 export function buildOrg(opts: OrgOptions): Dataset {
   const teamCount = opts.programTitles.length;
-  const teams: TeamRow[] = opts.programTitles.map((title, t) => ({
+  // Team titles are intentionally generic (no program name) — a team's program purpose lives in its
+  // group_program, reachable only via get_program. That keeps "what programs do I run / which is
+  // bodybuilding" an honest test of walking teams INTO program detail, not a title read-off.
+  const teams: TeamRow[] = opts.programTitles.map((_title, t) => ({
     id: TEAM_BASE + t,
-    title: `Team ${t} — ${title}`,
-    name: `Team ${t}`,
+    title: `Squad ${t}`,
+    name: `Squad ${t}`,
     group_program: PROGRAM_BASE + t,
     member_count: 0,
     athlete_count: 0,

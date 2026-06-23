@@ -91,11 +91,11 @@ describe("manyPrograms(30)", () => {
     expect(page1).toHaveLength(10);
     expect(page2).toHaveLength(10);
     expect(page4).toHaveLength(0);
-    const filtered = (await getJson(`${b.url}/1.0/coach/teams?q=Strength`)) as Array<{
+    const filtered = (await getJson(`${b.url}/1.0/coach/teams?q=Squad%207`)) as Array<{
       title: string;
     }>;
     expect(filtered.length).toBeGreaterThan(0);
-    expect(filtered.every((t) => t.title.toLowerCase().includes("strength"))).toBe(true);
+    expect(filtered.every((t) => t.title.toLowerCase().includes("squad 7"))).toBe(true);
   });
 });
 
