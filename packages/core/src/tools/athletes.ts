@@ -147,10 +147,14 @@ function registerAthleteSavedWorkouts(server: McpServer, ctx: ToolContext): void
     {
       title: "Roster athlete's saved workouts (with log ids)",
       description:
-        "A roster athlete's scheduled/logged workouts in an inclusive YYYY-MM-DD window — the " +
-        "coach-side source of the savedWorkoutSetId and savedWorkoutSetExerciseId that " +
-        "log_athlete_set, prescribe_athlete_set, and swap_athlete_exercise need. Get athleteId " +
-        "from list_athletes. The default view is COMPACT: one row per saved set, each carrying its " +
+        "A roster athlete's scheduled/logged workouts in an inclusive YYYY-MM-DD window. This is the " +
+        "DATE-PRECISE coach read: to answer 'what did <athlete> do/log on <day>' (e.g. today), pass " +
+        "startDate=endDate=that day — each row carries its date and the performed values (what the " +
+        "athlete actually logged), unlike athlete_training which is a whole-month overview with no " +
+        "per-session date. It is also the coach-side source of the savedWorkoutSetId and " +
+        "savedWorkoutSetExerciseId that log_athlete_set, prescribe_athlete_set, and " +
+        "swap_athlete_exercise need. Get athleteId from list_athletes. The default view is COMPACT: " +
+        "one row per saved set, each carrying its " +
         "program/programId, the savedWorkoutSetId, and every exercise's savedWorkoutSetExerciseId " +
         "with prescribed/performed values — so you read those ids straight off it, no raw needed. " +
         "An athlete enrolled in many programs returns one row per program; narrow to one with " +

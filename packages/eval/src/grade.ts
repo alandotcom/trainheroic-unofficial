@@ -88,6 +88,17 @@ export function mentionsAny(t: RunTranscript, words: readonly string[]): boolean
   return words.some((w) => text.includes(w.toLowerCase()));
 }
 
+/**
+ * Like mentionsAny but over the FULL final output (answer + the model-authored EVAL REPORT). Use for
+ * "did the agent surface this fact" checks: a terse model puts its whole answer in the report's
+ * FINAL_ANSWER and leaves answerText empty, so an answerText-only check misses it. Don't use it for
+ * "did the answer prose ask/say X" checks (the report would create false positives).
+ */
+export function finalMentions(t: RunTranscript, words: readonly string[]): boolean {
+  const text = t.finalText.toLowerCase();
+  return words.some((w) => text.includes(w.toLowerCase()));
+}
+
 export function countMentions(t: RunTranscript, words: readonly string[]): number {
   const text = t.answerText.toLowerCase();
   return words.filter((w) => text.includes(w.toLowerCase())).length;

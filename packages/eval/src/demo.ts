@@ -8,6 +8,7 @@ import type { Dataset } from "./datasets";
 import {
   athleteRangeWorkout,
   athleteUser,
+  calendarSession,
   historyEntry,
   libraryExercise,
   liftPR,
@@ -214,4 +215,68 @@ export function demoCoach(): { dataset: Dataset; today: string; firstAthlete: st
         : [],
   };
   return { dataset, today: TODAY, firstAthlete: "Athlete001 Lastname001" };
+}
+
+/**
+ * A coach whose athlete logged a session TODAY, plus other days. Set up to test the per-date
+ * discoverability gap finding #5: athlete_training is a month overview with no per-session dates, so
+ * "what did <athlete> do today" must go through athlete_saved_workouts with a one-day window (which
+ * carries the date and the performed sets). The month view (getCalendarSummary) is populated and
+ * noisy so a model that reaches for it gets many undated sessions and can't pin today.
+ */
+export function coachDayLogged(): {
+  dataset: Dataset;
+  athleteId: number;
+  today: string;
+  athleteName: string;
+} {
+  const base = buildOrg({
+    name: "coachDayLogged",
+    athleteCount: 10,
+    programTitles: ["Varsity Strength"],
+  });
+  const athleteId = 100001;
+  const athleteName = "Athlete001 Lastname001";
+  const dayWorkouts: Record<string, { reps: number; weight: number; title: string }> = {
+    "2026-03-20": { title: "Lower", reps: 5, weight: 285 },
+    "2026-03-24": { title: "Upper", reps: 5, weight: 205 },
+    [TODAY]: { title: "Lower B", reps: 3, weight: 305 },
+  };
+  const dataset: Dataset = {
+    ...base,
+    name: "coachDayLogged",
+    getCoachAthleteRange: (id, startDate, endDate) => {
+      if (id !== athleteId) return [];
+      return Object.entries(dayWorkouts)
+        .filter(([d]) => (!startDate || d >= startDate) && (!endDate || d <= endDate))
+        .map(([d, w], i) =>
+          athleteRangeWorkout({
+            id: 760000 + i,
+            date: d,
+            title: w.title,
+            program: "Varsity Strength",
+            logged: true,
+            exercises: [
+              { exerciseId: 920001, title: "Back Squat", reps: w.reps, weight: w.weight },
+            ],
+          }),
+        );
+    },
+    // The month overview: several undated sessions (athlete_training can't pin a specific day).
+    getCalendarSummary: (id, _year, _month) =>
+      id === athleteId
+        ? Object.values(dayWorkouts).map((w, i) =>
+            calendarSession({
+              athleteName,
+              workoutId: 750000 + i,
+              savedWorkoutId: 751000 + i,
+              workoutTitle: w.title,
+              exercises: [
+                { exerciseId: 920001, title: "Back Squat", abr: `${w.reps} x ${w.weight} lb` },
+              ],
+            }),
+          )
+        : [],
+  };
+  return { dataset, athleteId, today: TODAY, athleteName };
 }
