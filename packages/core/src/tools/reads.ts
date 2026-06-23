@@ -44,8 +44,10 @@ const ATHLETE_TRAINING_DESC =
   "as the discovery handle a coach otherwise lacks: read the exercise titles here to learn what the " +
   "athlete actually did, then pass the lifts you care about to athlete_lift_history for their dated " +
   "PR board. Pass athleteId from list_athletes and a year + month (1-12); query the current month, " +
-  "and the previous month for more history. Sessions are in calendar order within the month (the " +
-  "API carries no per-session date). An empty list means no sessions that month.";
+  "and the previous month for more history. Sessions are in calendar order within the month and " +
+  "carry NO per-session date — so this canNOT answer 'what did they do on <day>' (e.g. today); for a " +
+  "specific day use athlete_saved_workouts with startDate=endDate=that day instead. An empty list " +
+  "means no sessions that month.";
 
 function enc(value: string | number): string {
   return encodeURIComponent(String(value));

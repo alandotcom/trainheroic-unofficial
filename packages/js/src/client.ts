@@ -1,7 +1,21 @@
 import { loginTrainHeroic } from "./auth";
 
-const COACH_BASE = "https://api.trainheroic.com";
-const APIS_BASE = "https://apis.trainheroic.com";
+const DEFAULT_COACH_BASE = "https://api.trainheroic.com";
+const DEFAULT_APIS_BASE = "https://apis.trainheroic.com";
+
+/**
+ * Resolve an API host, allowing an env override. The override exists so a test harness can point
+ * the client at a local fake backend (and it doubles as a staging knob); production leaves these
+ * unset and gets the real hosts. Read through `globalThis.process?.env` — not an `import process`
+ * — so the runtime-agnostic `.` entry stays free of `node:*` and runs unchanged on workerd, and
+ * read per request (not at module load) so a value the harness sets in the child env always wins.
+ */
+function envBase(key: string, fallback: string): string {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env;
+  const v = env?.[key];
+  return v && v.length > 0 ? v : fallback;
+}
 
 export class TrainHeroicAuthError extends Error {
   override name = "TrainHeroicAuthError";
@@ -66,7 +80,10 @@ export class TrainHeroicClient {
     path: string,
     options: RequestOptions = {},
   ): Promise<ClientResult<T>> {
-    const base = options.base === "apis" ? APIS_BASE : COACH_BASE;
+    const base =
+      options.base === "apis"
+        ? envBase("TH_APIS_BASE", DEFAULT_APIS_BASE)
+        : envBase("TH_COACH_BASE", DEFAULT_COACH_BASE);
     const url = `${base}/${path.replace(/^\//, "")}`;
 
     let session = await this.#ensureSession();

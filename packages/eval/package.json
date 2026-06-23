@@ -1,0 +1,25 @@
+{
+  "name": "@trainheroic-unofficial/eval",
+  "version": "1.3.0",
+  "private": true,
+  "description": "Repeatable claude -p eval harness for the TrainHeroic MCP, run against a fixture-backed fake backend.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run test",
+    "eval": "vitest run evals"
+  },
+  "dependencies": {
+    "@trainheroic-unofficial/dto": "workspace:*",
+    "@trainheroic-unofficial/js": "workspace:*"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^1.19.14",
+    "@trainheroic-unofficial/core": "workspace:*",
+    "@types/node": "^26.0.0",
+    "hono": "^4.12.26",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

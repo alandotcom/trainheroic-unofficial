@@ -477,6 +477,11 @@ export function presentAthleteWorkouts(list: readonly ProgramWorkout[]): Athlete
 export type LogSetTarget = {
   date: string;
   workoutTitle: string;
+  /** The program this saved workout belongs to — lets a caller pick the right one of several. */
+  program: string | null;
+  programId: number | null;
+  team: string | null;
+  teamId: number | null;
   /** The id for `--set` (logAthleteSet/logForAthlete `savedWorkoutSetId`). */
   savedWorkoutSetId: number;
   setTitle: string | null;
@@ -491,12 +496,40 @@ export type LogSetTarget = {
 };
 
 /**
+ * Narrow a coach-athlete workout range to a single program or team. The range endpoint returns
+ * every program the athlete is enrolled in on a date; for a high-enrollment athlete that is many
+ * workouts, so a caller wanting one program's session narrows it here. Match by `programId`/`teamId`
+ * (exact, on the raw `program_id`/`team_id`) or by `programTitle` (case-insensitive substring on the
+ * `program_title`/`team_title`) — the title match lets a caller target a program by name without
+ * first resolving its id. Any one match keeps the workout; with no filter the list is unchanged.
+ */
+export function selectWorkoutsByProgram(
+  list: readonly ProgramWorkout[],
+  filter: { programId?: number; teamId?: number; programTitle?: string },
+): ProgramWorkout[] {
+  const { programId, teamId, programTitle } = filter;
+  const needle = programTitle?.trim().toLowerCase();
+  if (programId === undefined && teamId === undefined && !needle) return [...list];
+  return list.filter((pw) => {
+    const rec = pw as Record<string, unknown>;
+    if (programId !== undefined && coerceInt(rec.program_id) === programId) return true;
+    if (teamId !== undefined && coerceInt(rec.team_id) === teamId) return true;
+    if (needle) {
+      const title = `${str(rec.program_title) ?? ""} ${str(rec.team_title) ?? ""}`.toLowerCase();
+      if (title.includes(needle)) return true;
+    }
+    return false;
+  });
+}
+
+/**
  * Project a workout range to just the ids a set-log write needs, read from the SAME saved-copy
  * location {@link findSavedWorkoutSet} matches against (`summarizedSavedWorkout.saved_workout`).
  * This is the self-service path for logging: instead of grepping the multi-KB `--raw` blob for
  * which of several id fields maps to `--set`, callers read `savedWorkoutSetId` and each
- * `savedWorkoutSetExerciseId` straight off these rows. One row per saved set, dropping any set
- * with no resolvable id.
+ * `savedWorkoutSetExerciseId` straight off these rows. Each target also carries its program/team
+ * so a caller can pick the right session when the athlete is on several. One row per saved set,
+ * dropping any set with no resolvable id.
  */
 export function presentLogTargets(list: readonly ProgramWorkout[]): LogSetTarget[] {
   const targets: LogSetTarget[] = [];
@@ -507,6 +540,10 @@ export function presentLogTargets(list: readonly ProgramWorkout[]): LogSetTarget
     if (!saved) continue;
     const date = str(rec.date) ?? "";
     const workoutTitle = str(rec.workout_title) ?? "";
+    const program = str(rec.program_title);
+    const programId = coerceInt(rec.program_id);
+    const team = str(rec.team_title);
+    const teamId = coerceInt(rec.team_id);
     const sets = Array.isArray(saved.workoutSets) ? saved.workoutSets : [];
     for (const s of sets) {
       if (!isRecord(s)) continue;
@@ -534,6 +571,10 @@ export function presentLogTargets(list: readonly ProgramWorkout[]): LogSetTarget
       targets.push({
         date,
         workoutTitle,
+        program,
+        programId,
+        team,
+        teamId,
         savedWorkoutSetId,
         setTitle: str(s.title),
         exercises,
@@ -1059,7 +1100,9 @@ async function writeSetResults(
     const workoutSetExerciseId = coerceInt(ex.workout_set_exercise_id);
     if (!workoutSetExerciseId) {
       throw new Error(
-        `Could not resolve workout_set_exercise_id for exercise ${result.savedWorkoutSetExerciseId}.`,
+        `savedWorkoutSetExercise ${result.savedWorkoutSetExerciseId} is missing its ` +
+          `workout_set_exercise_id (the prescription-template pointer the write needs). This is the ` +
+          `savedWorkoutSetExerciseId, not an exercise_id — re-read the ids from athlete_saved_workouts.`,
       );
     }
     const body = {

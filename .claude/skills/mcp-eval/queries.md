@@ -4,6 +4,13 @@ The queries an eval run uses when the caller gives none. Each is something a rea
 type, phrased the way a person phrases it (not the way a tool names it). Grouped by the surface
 they exercise. Add a query here when a new tool or a new failure mode shows up.
 
+> This list is mirrored as runnable scenarios in the in-code harness: `packages/eval/src/bank.ts`
+> (each entry adds the capability that should answer it), surfaced by
+> `packages/eval/evals/{coach,athlete}-bank.eval.ts`. Keep the two in sync — add a query here AND a
+> `BankEntry` there (with backing data in `packages/eval/src/demo.ts`). This file stays the
+> human-readable source; the bash runners (`scripts/mcp-eval.sh`, `scripts/cli-eval.sh`) still read
+> from it conceptually for real-API runs.
+
 The high-signal area is "what did I actually do" vs "what was I told to do" — the place models
 historically burned the most turns. Keep that group well covered.
 
