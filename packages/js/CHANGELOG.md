@@ -1,5 +1,59 @@
 # @trainheroic-unofficial/js
 
+## 1.4.0
+
+### Minor Changes
+
+- b776fe2: fix(coach): reach a high-enrollment athlete's log ids without the raw view (#18)
+
+  For an athlete enrolled in many programs on one day, `athlete_saved_workouts` with `raw:true`
+  truncated the response to a single workout, so the `savedWorkoutSetId` / `savedWorkoutSetExerciseId`
+  that `prescribe_athlete_set` and `log_athlete_set` need were unreachable for every program past the
+  first — blocking prescription and logging for those athletes.
+
+  Two changes fix it:
+
+  - The default (non-`raw`) view of `athlete_saved_workouts` is now COMPACT — one row per saved set
+    carrying the program/programId, the savedWorkoutSetId, and each exercise's savedWorkoutSetExerciseId
+    (with prescribed/performed values). It stays small even for a high-enrollment athlete, so those ids
+    no longer depend on the large `raw` blob that truncates. `presentLogTargets` (the SDK projection
+    behind it, also surfaced by the CLI's `--log-ids`) now includes program/team identity.
+  - `athlete_saved_workouts` and the CLI `coach athlete-workouts` take an optional `programId` / `teamId`
+    filter (via the new `selectWorkoutsByProgram` SDK helper) to target one program's session directly.
+
+  The `log_athlete_set`, `prescribe_athlete_set`, and `swap_athlete_exercise` tool descriptions no
+  longer point at `raw:true`; they direct callers to the compact default view (and `programId` when the
+  athlete is on several programs).
+
+- b776fe2: fix(coach): filter a roster athlete's saved workouts by program name, and clarify a write error
+
+  Two usability fixes the eval harness surfaced:
+
+  - `athlete_saved_workouts` now accepts a `program` title substring (case-insensitive) to target one
+    program's session, so a coach no longer has to side-call `list_teams` to resolve a `programId`
+    first. `selectWorkoutsByProgram` gains a `programTitle` match; the CLI `coach athlete-workouts`
+    gains `--program <title>` (and renames the id form to `--program-id`).
+  - The set-write error thrown when a saved-copy exercise has no `workout_set_exercise_id` now states
+    the id is a `savedWorkoutSetExerciseId` (not an `exercise_id`) and points back at
+    `athlete_saved_workouts`, instead of the ambiguous "Could not resolve workout_set_exercise_id for
+    exercise N" wording that conflated the two id types.
+
+### Patch Changes
+
+- b776fe2: feat(js): allow overriding the API hosts via env vars
+
+  The SDK client now reads optional `TH_COACH_BASE`, `TH_APIS_BASE`, and `TH_AUTH_URL` environment
+  variables to override the hardcoded TrainHeroic hosts. With none set, behavior is unchanged (the
+  real `api`/`apis.trainheroic.com` hosts). The override is read per request through
+  `globalThis.process?.env`, so the runtime-agnostic entry stays free of `node:*` and unchanged on
+  workerd.
+
+  This is the seam the new in-code MCP eval harness (`packages/eval`) uses to point a spawned MCP
+  server at a local fixture-backed fake backend, letting evals simulate large orgs (hundreds of
+  athletes, dozens of teams) instead of the sparse real test accounts.
+
+  - @trainheroic-unofficial/dto@1.4.0
+
 ## 1.3.0
 
 ### Minor Changes
