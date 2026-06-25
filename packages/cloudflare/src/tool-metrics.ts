@@ -2,17 +2,37 @@ import * as Sentry from "@sentry/cloudflare";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { tagMcpSession } from "./sentry";
 
-/** Which tool set a tool belongs to. A coach session also registers the athlete surface. */
-export type ToolSurface = "athlete" | "coach";
+/**
+ * Which tool set a tool belongs to. A coach session also registers the athlete surface; `system`
+ * covers the cross-cutting tools that belong to neither role (the feedback reporter).
+ */
+export type ToolSurface = "athlete" | "coach" | "system";
+
+/** One entry in the recent-calls ring buffer: what ran, on which surface, and how it ended. */
+export interface RecentToolCall {
+  tool: string;
+  surface: ToolSurface;
+  status: "ok" | "error";
+  ms: number;
+}
+
+/** How many recent tool calls to retain per session for bug-report context. */
+const MAX_RECENT_CALLS = 20;
 
 /**
  * A mutable handle returned by {@link instrumentToolMetrics}. Set `.surface` to the surface
  * currently registering, before each `registerXxxSurface` call; every tool registered while it
  * holds that value is tagged with it. Each tool belongs to exactly one surface, so this adds a
  * queryable dimension at zero extra metric cardinality.
+ *
+ * `recentCalls` is a per-session ring buffer (oldest first, capped at {@link MAX_RECENT_CALLS})
+ * of every tool call as it settles, so the feedback tool can attach "what the user was doing" to a
+ * bug report without standing up its own tracking. It holds only the same non-PII fields the
+ * metrics and spans do (tool name, surface, ok/error, duration) — never arguments or results.
  */
 export interface ToolInstrumentation {
   surface: ToolSurface;
+  readonly recentCalls: RecentToolCall[];
 }
 
 /**
@@ -50,7 +70,11 @@ export interface ToolInstrumentation {
  * tool performs, so the wall-clock spent waiting on the API is captured.
  */
 export function instrumentToolMetrics(server: McpServer, sessionId: string): ToolInstrumentation {
-  const state: ToolInstrumentation = { surface: "athlete" };
+  const state: ToolInstrumentation = { surface: "athlete", recentCalls: [] };
+  const record = (call: RecentToolCall): void => {
+    state.recentCalls.push(call);
+    if (state.recentCalls.length > MAX_RECENT_CALLS) state.recentCalls.shift();
+  };
   const original = server.registerTool.bind(server) as (...args: unknown[]) => unknown;
   const patched = (...args: unknown[]): unknown => {
     const name = typeof args[0] === "string" ? args[0] : "unknown";
@@ -62,6 +86,7 @@ export function instrumentToolMetrics(server: McpServer, sessionId: string): Too
         name,
         surface,
         sessionId,
+        record,
         handler as (...handlerArgs: unknown[]) => unknown,
       );
     }
@@ -90,6 +115,7 @@ function wrapHandler(
   name: string,
   surface: ToolSurface,
   sessionId: string,
+  record: (call: RecentToolCall) => void,
   handler: (...handlerArgs: unknown[]) => unknown,
 ): (...handlerArgs: unknown[]) => unknown {
   return (...handlerArgs: unknown[]): unknown => {
@@ -100,11 +126,15 @@ function wrapHandler(
 
     const start = Date.now();
     const recordMetrics = (status: "ok" | "error"): void => {
+      const ms = Date.now() - start;
       Sentry.metrics.count("mcp.tool.call", 1, { attributes: { tool: name, surface, status } });
-      Sentry.metrics.distribution("mcp.tool.duration_ms", Date.now() - start, {
+      Sentry.metrics.distribution("mcp.tool.duration_ms", ms, {
         unit: "millisecond",
         attributes: { tool: name, surface },
       });
+      // Append to the session ring buffer so the feedback tool can report recent activity. Done
+      // here (not in metrics) so it accrues even when SENTRY_DSN is unset and the metrics no-op.
+      record({ tool: name, surface, status, ms });
     };
 
     // Run the call inside its own span so it is a named, timed row in the trace waterfall. Sentry

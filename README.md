@@ -62,6 +62,8 @@ The tools the hosted server exposes depend on the account you log in with: a coa
 
 Two extra paths expose a single tool set, for when you keep separate accounts or want a connection scoped to one role: `https://mcp.trainheroic-unofficial.com/mcp/coach` (coaching tools only) and `.../mcp/athlete` (athlete training tools only). Same login; the coach path is empty for an athlete account.
 
+Every hosted connection also gets a **report a bug / send feedback** tool: ask the assistant to report a problem and it files the report (with your session and the last few tool calls attached) for the maintainers.
+
 <details open>
 <summary><b>Claude.ai</b></summary>
 

@@ -32,12 +32,21 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   shared write helpers (`runGroups`/`runBatches`, the cursor upserts) live in `src/store/d1.ts`
   and operate over Drizzle batch items.
 - `src/tools/sync.ts`: the warehouse sync tools, which belong here because they need D1.
+- `src/tools/feedback.ts`: the `report_feedback` tool — a cross-cutting bug/feedback reporter
+  registered on every variant (tagged surface `system`). It routes the report to Sentry's user
+  feedback channel (`Sentry.captureFeedback`) when a DSN is set, and falls back to a structured
+  `console.log` otherwise. Hosted-only because it leans on the Worker's Sentry setup and the
+  per-session recent-call ring buffer from `tool-metrics.ts`. The report inlines the user's message
+  plus non-PII context (session id, role, version/release, the last few tool calls) so it reads on
+  its own; the reporter's email rides along as the feedback contact.
 - `src/tool-metrics.ts`: patches the `registerTool` seam (once, in `init()`) so every tool call
   emits aggregate Sentry metrics (`mcp.tool.call`, `mcp.tool.duration_ms`, tagged by tool +
   surface + ok/error) and runs inside its own `mcp.tool/<name>` span (a named, timed row in the
   trace waterfall, tagged with tool, surface, ok/error status, and the opaque mcp-session-id;
   errors marked red). It also stamps the `mcp.session` tag on the enclosing DO transaction and
-  scope. Lives here, not in `core`, so the shared tool layer stays Sentry-agnostic.
+  scope, and keeps a small per-session ring buffer of recent calls (tool, surface, ok/error,
+  duration — no args/results) on the returned instrumentation handle, which `feedback.ts` reads.
+  Lives here, not in `core`, so the shared tool layer stays Sentry-agnostic.
 - `src/sentry.ts`: the shared Sentry config (`sentryOptions(env)`) used by both `withSentry`
   (the handler in `index.ts`) and `instrumentDurableObjectWithSentry` (the DO export). Sends the
   error + user email, aggregate metrics, and traces (`SENTRY_TRACES_SAMPLE_RATE` var, default 1).
@@ -58,13 +67,16 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
 - `COOKIE_ENCRYPTION_KEY` is the only required secret and signs the CSRF and OAuth round-trip
   values; `ALLOWED_EMAILS` and `SENTRY_DSN` are optional secrets. Credentials are never a deploy
   secret here: each user enters them at login and they live in the OAuth grant's encrypted `props`.
-- Sentry is privacy-constrained on purpose: the only data it sends is the error and the user
-  email. `src/sentry.ts` keeps `sendDefaultPii` off and forces `httpServerIntegration`'s
-  `maxRequestBodySize: "none"` so request bodies (the login POST password) are never captured;
-  the email is attached via `Sentry.setUser` in `agent.ts` (`init()` and the `onError` override,
-  because each per-message DO invocation gets a fresh isolation scope). With no `SENTRY_DSN` the
-  SDK is disabled and every Sentry call is a no-op. Keep new PII out of error paths, and do not
-  set the user to anything but the email.
+- Sentry is privacy-constrained on purpose: the data it sends is the error, the user email,
+  aggregate metrics/traces (tool name, surface, ok/error, opaque session id), and — only when the
+  user explicitly files one — a `report_feedback` report (the user's own message plus that same
+  non-PII context, with their email as the contact). `src/sentry.ts` keeps `sendDefaultPii` off and
+  forces `httpServerIntegration`'s `maxRequestBodySize: "none"` so request bodies (the login POST
+  password) are never captured; the email is attached via `Sentry.setUser` in `agent.ts` (`init()`
+  and the `onError` override, because each per-message DO invocation gets a fresh isolation scope).
+  With no `SENTRY_DSN` the SDK is disabled and every Sentry call is a no-op (the feedback tool then
+  logs the report to `console` instead). Keep new PII out of error paths and out of tool
+  args/results sent to Sentry, and do not set the user to anything but the email.
 - Migrations are append-only. Add a new numbered file; do not edit a migration that has
   already been applied. After changing bindings, run `pnpm cf-typegen`. `migrations/` is the
   source of truth for the live DB — Drizzle does NOT generate it. When a migration changes a

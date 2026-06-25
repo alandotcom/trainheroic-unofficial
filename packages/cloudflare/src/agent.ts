@@ -19,6 +19,7 @@ import { registerReadTools } from "@trainheroic-unofficial/core";
 import { SERVER_INSTRUCTIONS } from "@trainheroic-unofficial/core";
 import { registerTeamTools } from "@trainheroic-unofficial/core";
 import { registerAthleteSyncTools } from "./tools/athlete-sync";
+import { registerFeedbackTool } from "./tools/feedback";
 import { registerSyncTools } from "./tools/sync";
 import { instrumentToolMetrics } from "./tool-metrics";
 import { tagMcpSession } from "./sentry";
@@ -130,6 +131,20 @@ abstract class TrainHeroicMCPBase extends McpAgent<Env, State, Props> {
       instrumentation.surface = "coach";
       await registerCoachSurface(this.server, this.env, client);
     }
+
+    // The feedback reporter is cross-cutting — every variant gets it, regardless of role. It reads
+    // the session ring buffer the instrumentation accrues, plus the identity/build context, to file
+    // a self-contained bug report.
+    instrumentation.surface = "system";
+    registerFeedbackTool(this.server, {
+      email: props.email,
+      role: props.role,
+      sessionId: this.name,
+      version: pkg.version,
+      release: this.env.SENTRY_RELEASE,
+      // Copy so the report sees a stable snapshot, not the live buffer the wrapper keeps mutating.
+      recentCalls: () => [...instrumentation.recentCalls],
+    });
   }
 
   /**
