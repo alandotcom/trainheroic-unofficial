@@ -29,14 +29,18 @@ const TOOL_NAME = "report_feedback";
 
 const DESCRIPTION =
   "Report a bug or send feedback about this TrainHeroic assistant itself — a tool that errored or " +
-  "returned the wrong thing, a confusing result, a missing capability, or a suggestion. This is " +
-  "for problems with the integration, NOT for anything about the user's actual training data. " +
-  "Call it only when the user explicitly asks to report a bug or leave feedback; do not file " +
-  "reports on your own. Pass the user's description in their own words as `message`; for a bug, " +
-  "fill `expected` and `actual` if the user said what they expected versus what happened. The " +
-  "current session, role, app version, and the last few tool calls are attached automatically, so " +
-  "you do not need to gather or restate any of that. The reply carries a reference id to share " +
-  "with the user.";
+  "returned the wrong thing, a confusing or incorrect result, a missing capability, or a suggestion. " +
+  "It covers problems with the integration, not the user's own training data. " +
+  "Call it only when the user explicitly asks to report a bug or leave feedback; never file on your own. " +
+  "Aim for a report the maintainer can act on without having to come back and ask. Before filing a bug, " +
+  "make sure you have a concrete problem to describe: if the user only said something like 'report a bug' " +
+  "without saying what went wrong, first ask what happened, what they were doing at the time, and what " +
+  "they expected, then file with their answers. Stick to what the user actually reported; do not invent " +
+  "details or pad the report with filler or commentary about this reporting tool. If the user is only " +
+  "checking that reporting works, say that plainly in `message` and leave `expected` and `actual` empty " +
+  "rather than making up a bug. The session, role, app version, and recent tool calls are attached " +
+  "automatically — the recent-call trail already shows which tool misbehaved — so do not gather or " +
+  "restate any of that. The reply carries a reference id to share with the user.";
 
 /** The arguments the model supplies (after zod parsing applies the `kind` default). */
 interface FeedbackInput {
@@ -130,13 +134,30 @@ export function registerFeedbackTool(server: McpServer, deps: FeedbackToolDeps):
       title: "Report a bug or send feedback",
       description: DESCRIPTION,
       inputSchema: {
-        message: z.string().min(1).describe("The user's report or feedback, in their own words."),
+        message: z
+          .string()
+          .min(1)
+          .describe(
+            "The specific problem in the user's own words: what they were doing and what went wrong. " +
+              "Open with a short, concrete summary line (it becomes the report's title), then add any " +
+              "detail. Keep it specific and free of placeholder or meta text about this reporting tool.",
+          ),
         kind: z
           .enum(KINDS)
           .default("bug")
           .describe("What kind of report this is. Defaults to a bug report."),
-        expected: z.string().optional().describe("For a bug: what the user expected to happen."),
-        actual: z.string().optional().describe("For a bug: what actually happened."),
+        expected: z
+          .string()
+          .optional()
+          .describe(
+            "For a bug: what the user expected to happen. Leave empty for a test or non-bug feedback.",
+          ),
+        actual: z
+          .string()
+          .optional()
+          .describe(
+            "For a bug: what actually happened instead. Leave empty for a test or non-bug feedback.",
+          ),
       },
       annotations: {
         readOnlyHint: false,
