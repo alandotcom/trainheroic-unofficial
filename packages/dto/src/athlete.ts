@@ -190,6 +190,7 @@ export const loggedSetSchema = z.object({
  * always sequential).
  */
 export const loggedSetWithSlotSchema = loggedSetSchema.extend({
+  // 10 tracks the SDK's MAX_PARAM_SLOTS (param_N_data_1..10); dto cannot import from `js`.
   slot: z.number().int().min(1).max(10).optional(),
 });
 
@@ -223,14 +224,27 @@ export const coachLogSetArgsSchema = logSetArgsSchema.extend({ athleteId: idArgS
 export type CoachLogSetArgs = z.infer<typeof coachLogSetArgsSchema>;
 
 /**
- * Args for the coach prescription-override write. Structurally the same as
- * {@link coachLogSetArgsSchema} (athleteId + date + savedWorkoutSetId + per-exercise `sets`), but
- * the values are prescribed targets (param1 = reps, param2 = weight) written to the athlete's
- * plan without marking the set performed. It is a separate schema (not an alias) so a future
- * prescribe-only constraint can be added here without changing the log args, and the write
- * replaces the slot's prescribed values for this athlete only.
+ * Args for the coach prescription-override write. Like {@link coachLogSetArgsSchema}
+ * (athleteId + date + savedWorkoutSetId + per-exercise `sets`), but the values are prescribed
+ * targets (param1 = reps, param2 = weight) written to the athlete's plan without marking the set
+ * performed. The write replaces this athlete's whole prescription for the set, so its sets are
+ * positional and sequential by definition: it deliberately omits the log path's `slot` field (a
+ * sparse, slot-targeted prescription has no meaning here) by building its results off
+ * {@link loggedSetSchema} rather than {@link loggedSetWithSlotSchema}.
  */
-export const coachPrescribeSetArgsSchema = logSetArgsSchema.extend({ athleteId: idArgSchema });
+export const coachPrescribeSetArgsSchema = z.object({
+  date: dateString,
+  savedWorkoutSetId: idArgSchema,
+  athleteId: idArgSchema,
+  results: z
+    .array(
+      z.object({
+        savedWorkoutSetExerciseId: idArgSchema,
+        sets: z.array(loggedSetSchema).min(1),
+      }),
+    )
+    .min(1),
+});
 export type CoachPrescribeSetArgs = z.infer<typeof coachPrescribeSetArgsSchema>;
 
 /**

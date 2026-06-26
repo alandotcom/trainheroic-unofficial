@@ -268,7 +268,9 @@ export function fetchLeaderboard(
 
 // --- Presenters (pure; flatten the deep API shapes into model-friendly views) ---
 
-const SLOTS = 10;
+/** TrainHeroic stores up to 10 sets per exercise as `param_N_data_1..10`. One source of truth for
+ * the bound, shared by the presenters and the set-logging write path below. */
+const MAX_PARAM_SLOTS = 10;
 
 function nonEmpty(value: unknown): boolean {
   return value !== undefined && value !== null && String(value).trim() !== "";
@@ -281,7 +283,7 @@ function nonEmpty(value: unknown): boolean {
  */
 function prescribedSets(ex: Record<string, unknown>): string[] {
   const out: string[] = [];
-  for (let i = 1; i <= SLOTS; i += 1) {
+  for (let i = 1; i <= MAX_PARAM_SLOTS; i += 1) {
     const p1 = ex[`param_1_data_${i}`];
     const p2 = ex[`param_2_data_${i}`];
     const has1 = nonEmpty(p1);
@@ -303,7 +305,7 @@ function prescribedSets(ex: Record<string, unknown>): string[] {
  */
 function performedSets(ex: Record<string, unknown>): string[] {
   const out: string[] = [];
-  for (let i = 1; i <= SLOTS; i += 1) {
+  for (let i = 1; i <= MAX_PARAM_SLOTS; i += 1) {
     if (coerceInt(ex[`param_${i}_made`]) !== 1) continue;
     const p1 = ex[`param_1_data_${i}`];
     const p2 = ex[`param_2_data_${i}`];
@@ -683,8 +685,6 @@ export function presentCoachAthleteTraining(
 
 // --- Set logging write path ---
 
-const MAX_PARAM_SLOTS = 10;
-
 /**
  * One set of entered values for a single exercise within a saved workout set.
  * `param1` and `param2` correspond to the exercise's first and second parameter types
@@ -843,6 +843,22 @@ function exerciseHasLoggedData(ex: Record<string, unknown>): boolean {
     if (coerceInt(ex[`param_${i}_made`]) === 1) return true;
   }
   return false;
+}
+
+/**
+ * Whether every exercise in a saved workout set now has logged data — either written in this call
+ * (`writtenIds`) or already carrying a performed slot. Gates the set-completion PUT: a
+ * superset/circuit stays open until the last exercise is logged, so completing it on a partial log
+ * does not flip its still-empty siblings to "done".
+ */
+function isSetFullyLogged(
+  exercises: readonly Record<string, unknown>[],
+  writtenIds: ReadonlySet<number>,
+): boolean {
+  return exercises.every((ex) => {
+    const id = coerceInt(ex.id);
+    return (id !== null && writtenIds.has(id)) || exerciseHasLoggedData(ex);
+  });
 }
 
 /**
@@ -1206,20 +1222,12 @@ async function writeSetResults(
   }
 
   // Step 2: mark the set completed — only when logging a performed result, and only when every
-  // exercise in the set now has logged data (written in this call, or already carrying a
-  // performed slot). A prescription leaves the set open, so it is skipped. For a superset/circuit
-  // logged one exercise at a time, completing the set on a partial log would flip its still-empty
-  // siblings to "done" — the source of the app's "NAN LB" total — so the set stays open until the
-  // last exercise is logged.
+  // exercise in the set now has logged data (see isSetFullyLogged). A prescription leaves the set
+  // open, so it is skipped.
   let setCompleted = false;
   if (mode === "log") {
     const writtenIds = new Set(results.map((r) => r.savedWorkoutSetExerciseId));
-    const allCovered = exercises.every((ex) => {
-      const id = coerceInt(ex.id);
-      if (id !== null && writtenIds.has(id)) return true;
-      return exerciseHasLoggedData(ex);
-    });
-    if (allCovered) {
+    if (isSetFullyLogged(exercises, writtenIds)) {
       const allExerciseIds = exercises
         .map((e) => coerceInt(e.id))
         .filter((n): n is number => n !== null);
