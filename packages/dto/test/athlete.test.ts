@@ -7,6 +7,7 @@ import {
   athleteUserSchema,
   athleteWorkingMaxListSchema,
   athleteWorkoutRangeArgsSchema,
+  coachPrescribeSetArgsSchema,
   exerciseHistoryListSchema,
   exerciseStatsSchema,
   logSetArgsSchema,
@@ -62,5 +63,31 @@ describe("athlete input schemas", () => {
       logSetArgsSchema.safeParse({ date: "2026-06-01", savedWorkoutSetId: 123, results: [] })
         .success,
     ).toBe(false);
+  });
+
+  it("accepts an in-range set slot and rejects an out-of-range one", () => {
+    const withSlot = (slot: number) =>
+      logSetArgsSchema.safeParse({
+        date: "2026-06-01",
+        savedWorkoutSetId: 123,
+        results: [{ savedWorkoutSetExerciseId: 9, sets: [{ slot, param1: 1, param2: 245 }] }],
+      });
+    const ok = withSlot(4);
+    expect(ok.success).toBe(true);
+    // The log path keeps slot so a partial log can target a position.
+    expect(ok.data?.results[0]?.sets[0]?.slot).toBe(4);
+    expect(withSlot(0).success).toBe(false);
+    expect(withSlot(11).success).toBe(false);
+  });
+
+  it("prescribe args drop the log-only slot field (full-replacement write has no slot)", () => {
+    const parsed = coachPrescribeSetArgsSchema.safeParse({
+      athleteId: 1,
+      date: "2026-06-01",
+      savedWorkoutSetId: 123,
+      results: [{ savedWorkoutSetExerciseId: 9, sets: [{ slot: 4, param1: 5, param2: 225 }] }],
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.results[0]?.sets[0]).not.toHaveProperty("slot");
   });
 });

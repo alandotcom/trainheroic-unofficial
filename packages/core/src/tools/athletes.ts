@@ -209,13 +209,18 @@ function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
       title: "Log set results for a roster athlete",
       description:
         "Coach-facing write: record entered results (reps/weight per set) for one of a roster " +
-        "athlete's saved workout sets on a given day, marking the set completed — the API " +
-        "equivalent of the app's \"Log for Athlete\". Writes to that athlete's training log and " +
-        "shows in their history. Get athleteId from list_athletes; get savedWorkoutSetId + " +
-        "savedWorkoutSetExerciseId from athlete_saved_workouts for that athlete/day (its default " +
-        "view carries both — pass programId there if the athlete is on several programs). " +
-        "Seeded demo athletes are read-only and will fail; use a real (invited) athlete. " +
-        "Requires confirmation (elicitation or confirm:true).",
+        "athlete's saved workout sets on a given day — the API equivalent of the app's \"Log for " +
+        "Athlete\". Writes to that athlete's training log and shows in their history. Each set " +
+        "fills the next position in order; give a set a 1-based `slot` to place it at a specific " +
+        "position. A partial log records only the positions you send (plus any logged earlier) and " +
+        "leaves the rest unlogged. In a " +
+        "superset/circuit the block is marked done only once every exercise in it has logged " +
+        "results (the response's `setCompleted` reports whether it was). Get athleteId from " +
+        "list_athletes; get savedWorkoutSetId + savedWorkoutSetExerciseId from " +
+        "athlete_saved_workouts for that athlete/day (its default view carries both — pass " +
+        "programId there if the athlete is on several programs). Seeded demo athletes are " +
+        "read-only and will fail; use a real (invited) athlete. Requires confirmation " +
+        "(elicitation or confirm:true).",
       inputSchema: { ...coachLogSetArgsSchema.shape, confirm: z.boolean().optional() },
       annotations: DESTRUCTIVE,
     },

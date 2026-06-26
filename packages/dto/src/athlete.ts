@@ -181,9 +181,26 @@ export const loggedSetSchema = z.object({
 });
 
 /**
+ * A logged set that can name the prescribed position it fills. `slot` is the 1-based set
+ * index in the prescription (10 max) the result should land in; omit it to fill the next
+ * sequential position (the first entry is set 1, the second set 2, and so on). Targeting a
+ * slot lets a partial log land in the right positions of a multi-set prescription — e.g.
+ * three top singles into the 4th/5th/6th positions of an `8,5,3,1,1,1` ramp. Used by the
+ * by-set logging write (not the by-exercise session log, where each exercise's sets are
+ * always sequential).
+ */
+export const loggedSetWithSlotSchema = loggedSetSchema.extend({
+  // 10 tracks the SDK's MAX_PARAM_SLOTS (param_N_data_1..10); dto cannot import from `js`.
+  slot: z.number().int().min(1).max(10).optional(),
+});
+
+/**
  * Args for the set-logging write. `date` (the workout's day) locates the saved
  * workout via the range endpoint; `savedWorkoutSetId` picks the set to complete; `results`
- * gives, per exercise in it, the entered value of each set (param 1 / param 2 by entry slot).
+ * gives, per exercise in it, the entered value of each set. Each set fills the next position by
+ * default, or names its `slot` (1-based) to place a partial log at specific positions. A partial
+ * log keeps positions already logged in an earlier call and leaves the positions it does not
+ * write empty.
  */
 export const logSetArgsSchema = z.object({
   date: dateString,
@@ -192,7 +209,7 @@ export const logSetArgsSchema = z.object({
     .array(
       z.object({
         savedWorkoutSetExerciseId: idArgSchema,
-        sets: z.array(loggedSetSchema).min(1),
+        sets: z.array(loggedSetWithSlotSchema).min(1),
       }),
     )
     .min(1),
@@ -207,14 +224,27 @@ export const coachLogSetArgsSchema = logSetArgsSchema.extend({ athleteId: idArgS
 export type CoachLogSetArgs = z.infer<typeof coachLogSetArgsSchema>;
 
 /**
- * Args for the coach prescription-override write. Structurally the same as
- * {@link coachLogSetArgsSchema} (athleteId + date + savedWorkoutSetId + per-exercise `sets`), but
- * the values are prescribed targets (param1 = reps, param2 = weight) written to the athlete's
- * plan without marking the set performed. It is a separate schema (not an alias) so a future
- * prescribe-only constraint can be added here without changing the log args, and the write
- * replaces the slot's prescribed values for this athlete only.
+ * Args for the coach prescription-override write. Like {@link coachLogSetArgsSchema}
+ * (athleteId + date + savedWorkoutSetId + per-exercise `sets`), but the values are prescribed
+ * targets (param1 = reps, param2 = weight) written to the athlete's plan without marking the set
+ * performed. The write replaces this athlete's whole prescription for the set, so its sets are
+ * positional and sequential by definition: it deliberately omits the log path's `slot` field (a
+ * sparse, slot-targeted prescription has no meaning here) by building its results off
+ * {@link loggedSetSchema} rather than {@link loggedSetWithSlotSchema}.
  */
-export const coachPrescribeSetArgsSchema = logSetArgsSchema.extend({ athleteId: idArgSchema });
+export const coachPrescribeSetArgsSchema = z.object({
+  date: dateString,
+  savedWorkoutSetId: idArgSchema,
+  athleteId: idArgSchema,
+  results: z
+    .array(
+      z.object({
+        savedWorkoutSetExerciseId: idArgSchema,
+        sets: z.array(loggedSetSchema).min(1),
+      }),
+    )
+    .min(1),
+});
 export type CoachPrescribeSetArgs = z.infer<typeof coachPrescribeSetArgsSchema>;
 
 /**
