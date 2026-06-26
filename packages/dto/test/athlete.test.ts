@@ -63,4 +63,16 @@ describe("athlete input schemas", () => {
         .success,
     ).toBe(false);
   });
+
+  it("accepts an in-range set slot and rejects an out-of-range one", () => {
+    const withSlot = (slot: number) =>
+      logSetArgsSchema.safeParse({
+        date: "2026-06-01",
+        savedWorkoutSetId: 123,
+        results: [{ savedWorkoutSetExerciseId: 9, sets: [{ slot, param1: 1, param2: 245 }] }],
+      }).success;
+    expect(withSlot(4)).toBe(true);
+    expect(withSlot(0)).toBe(false);
+    expect(withSlot(11)).toBe(false);
+  });
 });

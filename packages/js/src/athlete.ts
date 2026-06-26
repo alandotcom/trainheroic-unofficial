@@ -688,11 +688,12 @@ const MAX_PARAM_SLOTS = 10;
 /**
  * One set of entered values for a single exercise within a saved workout set.
  * `param1` and `param2` correspond to the exercise's first and second parameter types
- * (e.g. reps and weight). At most 10 sets are supported.
+ * (e.g. reps and weight). Optional `slot` is the 1-based prescribed position this set fills;
+ * omit it and the sets fill positions sequentially from the first. At most 10 sets are supported.
  */
 export type SetResult = {
   savedWorkoutSetExerciseId: number;
-  sets: Array<{ param1?: number | string; param2?: number | string }>;
+  sets: Array<{ param1?: number | string; param2?: number | string; slot?: number }>;
 };
 
 /**
@@ -715,6 +716,7 @@ export function toSetResults(
     sets: ReadonlyArray<{
       param1?: number | string | undefined;
       param2?: number | string | undefined;
+      slot?: number | undefined;
     }>;
   }>,
 ): SetResult[] {
@@ -726,10 +728,11 @@ export function toSetResults(
     return {
       savedWorkoutSetExerciseId: id,
       sets: r.sets.map((s) => {
-        const slot: { param1?: number | string; param2?: number | string } = {};
-        if (s.param1 !== undefined) slot.param1 = s.param1;
-        if (s.param2 !== undefined) slot.param2 = s.param2;
-        return slot;
+        const set: { param1?: number | string; param2?: number | string; slot?: number } = {};
+        if (s.param1 !== undefined) set.param1 = s.param1;
+        if (s.param2 !== undefined) set.param2 = s.param2;
+        if (s.slot !== undefined) set.slot = s.slot;
+        return set;
       }),
     };
   });
@@ -742,13 +745,23 @@ export function toSetResults(
  *
  * `mode` selects which write this is — the same endpoint serves both:
  *   - `"log"`: the values ARE a performed result, so `param_N_made` is 1 where the slot has data
- *     and the exercise `completed` flag is 1 when any set has data.
+ *     and the exercise `completed` flag is 1 when any set has logged data.
  *   - `"prescribe"`: the values are prescribed targets, written with every `param_N_made` and
  *     `completed` left at 0 so the set is not marked done. This matches what the app sends when a
  *     coach edits an athlete's prescribed reps/weight.
  *
+ * Each set fills a 1-based slot: its explicit `slot`, or its sequential position in `results`
+ * when `slot` is omitted. A `log` carrying the live exercise record in `existing` keeps the slots
+ * it does not write that were ALREADY performed (`param_N_made === 1`), so logging a second part of
+ * a set does not wipe the earlier-logged sets. A slot holding only un-logged prescription pre-fill
+ * (`param_N_made === 0`) is left blank rather than carried over: marking the set completed makes
+ * the server flag every data-bearing slot performed, so preserving that pre-fill would fabricate
+ * sets the athlete never did. The prescription is unaffected (it lives in the separate `workout`
+ * copy, not this saved copy). A `prescribe` ignores `existing` and replaces the whole prescription.
+ *
  * Only `savedWorkoutSetExerciseId`, `savedWorkoutSetId`, and `workoutSetExerciseId` are
- * required from the live exercise record; everything else is derived from `results`.
+ * required from the live exercise record; everything else is derived from `results` and the
+ * preserved slots of `existing`.
  *
  * Exported for unit testing — callers should use `logAthleteSet` / `prescribeForAthlete` instead.
  */
@@ -756,31 +769,80 @@ export function buildExerciseSetPayload(
   savedWorkoutSetExerciseId: number,
   savedWorkoutSetId: number,
   workoutSetExerciseId: number,
-  results: readonly { param1?: number | string; param2?: number | string }[],
+  results: readonly { param1?: number | string; param2?: number | string; slot?: number }[],
   mode: SetWriteMode,
+  existing?: Record<string, unknown>,
 ): Record<string, unknown> {
   if (results.length > MAX_PARAM_SLOTS) {
     throw new Error(
       `At most ${MAX_PARAM_SLOTS} sets are supported per exercise; got ${results.length}.`,
     );
   }
+  // Resolve each entered set to a 1-based slot — an explicit `slot`, else the next sequential
+  // position — rejecting an out-of-range or duplicated slot so two results never collide.
+  const bySlot = new Map<number, { param1?: number | string; param2?: number | string }>();
+  results.forEach((set, i) => {
+    const slot = set.slot ?? i + 1;
+    if (slot < 1 || slot > MAX_PARAM_SLOTS) {
+      throw new Error(`Set slot ${slot} is out of range; slots are 1–${MAX_PARAM_SLOTS}.`);
+    }
+    if (bySlot.has(slot)) {
+      throw new Error(`Two sets target slot ${slot}; each slot can be written once.`);
+    }
+    bySlot.set(slot, set);
+  });
+
   const performed = mode === "log";
-  const hasData = results.some((s) => s.param1 !== undefined || s.param2 !== undefined);
+  // Only a log carries over a slot it does not write, and only when that slot was already
+  // performed — so a second partial log keeps the earlier-logged sets without fabricating a result
+  // from un-logged prescription pre-fill. A prescribe replaces the whole prescription, and with no
+  // live record there is nothing to carry over.
+  const carryOver = performed && existing !== undefined;
   const body: Record<string, unknown> = {
     id: savedWorkoutSetExerciseId,
     saved_workout_set_id: savedWorkoutSetId,
     workout_set_exercise_id: workoutSetExerciseId,
-    completed: performed && hasData ? 1 : 0,
   };
+  let anyMade = false;
   for (let i = 1; i <= MAX_PARAM_SLOTS; i += 1) {
-    const slot = results[i - 1];
-    const p1 = slot?.param1 !== undefined ? String(slot.param1) : "";
-    const p2 = slot?.param2 !== undefined ? String(slot.param2) : "";
-    body[`param_${i}_made`] = performed && (p1 !== "" || p2 !== "") ? 1 : 0;
+    const target = bySlot.get(i);
+    let p1: string;
+    let p2: string;
+    let made: number;
+    if (target) {
+      p1 = target.param1 !== undefined ? String(target.param1) : "";
+      p2 = target.param2 !== undefined ? String(target.param2) : "";
+      made = performed && (p1 !== "" || p2 !== "") ? 1 : 0;
+    } else if (carryOver && coerceInt(existing?.[`param_${i}_made`]) === 1) {
+      p1 = existingSlotData(existing, `param_1_data_${i}`);
+      p2 = existingSlotData(existing, `param_2_data_${i}`);
+      made = 1;
+    } else {
+      p1 = "";
+      p2 = "";
+      made = 0;
+    }
+    if (made === 1) anyMade = true;
+    body[`param_${i}_made`] = made;
     body[`param_1_data_${i}`] = p1;
     body[`param_2_data_${i}`] = p2;
   }
+  body.completed = performed && anyMade ? 1 : 0;
   return body;
+}
+
+/** Read a saved-copy slot value (`param_1_data_N` / `param_2_data_N`) as the string the body uses. */
+function existingSlotData(existing: Record<string, unknown> | undefined, key: string): string {
+  const v = existing?.[key];
+  return v === undefined || v === null ? "" : String(v);
+}
+
+/** True when a saved-copy exercise already carries a performed slot (any `param_N_made` === 1). */
+function exerciseHasLoggedData(ex: Record<string, unknown>): boolean {
+  for (let i = 1; i <= MAX_PARAM_SLOTS; i += 1) {
+    if (coerceInt(ex[`param_${i}_made`]) === 1) return true;
+  }
+  return false;
 }
 
 /**
@@ -906,7 +968,7 @@ export function buildSetCompletePayload(
 export async function logAthleteSet(
   client: TrainHeroicClient,
   args: { date: string; savedWorkoutSetId: number; results: readonly SetResult[] },
-): Promise<{ savedWorkoutSetId: number; exercisesLogged: number }> {
+): Promise<{ savedWorkoutSetId: number; exercisesLogged: number; setCompleted: boolean }> {
   // Step 0: fetch the range to locate the set and its exercises.
   const workouts = await fetchAthleteWorkouts(client, args.date, args.date);
   const r = await writeSetResults(
@@ -917,7 +979,11 @@ export async function logAthleteSet(
     args.results,
     "log",
   );
-  return { savedWorkoutSetId: r.savedWorkoutSetId, exercisesLogged: r.exercisesWritten };
+  return {
+    savedWorkoutSetId: r.savedWorkoutSetId,
+    exercisesLogged: r.exercisesWritten,
+    setCompleted: r.setCompleted,
+  };
 }
 
 /**
@@ -938,7 +1004,7 @@ export async function logForAthlete(
     savedWorkoutSetId: number;
     results: readonly SetResult[];
   },
-): Promise<{ savedWorkoutSetId: number; exercisesLogged: number }> {
+): Promise<{ savedWorkoutSetId: number; exercisesLogged: number; setCompleted: boolean }> {
   const workouts = await fetchCoachAthleteWorkouts(client, args.athleteId, args.date, args.date);
   const r = await writeSetResults(
     client,
@@ -948,7 +1014,11 @@ export async function logForAthlete(
     args.results,
     "log",
   );
-  return { savedWorkoutSetId: r.savedWorkoutSetId, exercisesLogged: r.exercisesWritten };
+  return {
+    savedWorkoutSetId: r.savedWorkoutSetId,
+    exercisesLogged: r.exercisesWritten,
+    setCompleted: r.setCompleted,
+  };
 }
 
 /**
@@ -1072,7 +1142,7 @@ async function writeSetResults(
   savedWorkoutSetId: number,
   results: readonly SetResult[],
   mode: SetWriteMode,
-): Promise<{ savedWorkoutSetId: number; exercisesWritten: number }> {
+): Promise<{ savedWorkoutSetId: number; exercisesWritten: number; setCompleted: boolean }> {
   const { exercises, rawSet } = findSavedWorkoutSet(workouts, savedWorkoutSetId);
   const suffix = target.role === "coach" ? `/${target.athleteId}` : "";
   const extra = target.role === "coach" ? { athleteId: target.athleteId } : {};
@@ -1112,6 +1182,7 @@ async function writeSetResults(
         workoutSetExerciseId,
         result.sets,
         mode,
+        ex,
       ),
       ...extra,
     };
@@ -1134,26 +1205,40 @@ async function writeSetResults(
     exercisesWritten += 1;
   }
 
-  // Step 2: mark the set completed — only when logging a performed result. A prescription leaves
-  // the set open, so it is skipped (the app sends no set-completion PUT when editing targets).
+  // Step 2: mark the set completed — only when logging a performed result, and only when every
+  // exercise in the set now has logged data (written in this call, or already carrying a
+  // performed slot). A prescription leaves the set open, so it is skipped. For a superset/circuit
+  // logged one exercise at a time, completing the set on a partial log would flip its still-empty
+  // siblings to "done" — the source of the app's "NAN LB" total — so the set stays open until the
+  // last exercise is logged.
+  let setCompleted = false;
   if (mode === "log") {
-    const allExerciseIds = exercises
-      .map((e) => coerceInt(e.id))
-      .filter((n): n is number => n !== null);
-    const setBody = { ...buildSetCompletePayload(rawSet, allExerciseIds, true), ...extra };
-    const setRes = await client.request(
-      "PUT",
-      `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`,
-      { body: setBody },
-    );
-    if (!setRes.ok) {
-      throw new Error(
-        `Failed to mark workout set ${savedWorkoutSetId} completed (HTTP ${setRes.status}).`,
+    const writtenIds = new Set(results.map((r) => r.savedWorkoutSetExerciseId));
+    const allCovered = exercises.every((ex) => {
+      const id = coerceInt(ex.id);
+      if (id !== null && writtenIds.has(id)) return true;
+      return exerciseHasLoggedData(ex);
+    });
+    if (allCovered) {
+      const allExerciseIds = exercises
+        .map((e) => coerceInt(e.id))
+        .filter((n): n is number => n !== null);
+      const setBody = { ...buildSetCompletePayload(rawSet, allExerciseIds, true), ...extra };
+      const setRes = await client.request(
+        "PUT",
+        `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`,
+        { body: setBody },
       );
+      if (!setRes.ok) {
+        throw new Error(
+          `Failed to mark workout set ${savedWorkoutSetId} completed (HTTP ${setRes.status}).`,
+        );
+      }
+      setCompleted = true;
     }
   }
 
-  return { savedWorkoutSetId, exercisesWritten };
+  return { savedWorkoutSetId, exercisesWritten, setCompleted };
 }
 
 export type PersonalWorkoutCreated = {
@@ -1377,7 +1462,12 @@ async function logResolvedExercises(
             results,
           })
         : await logAthleteSet(client, { date, savedWorkoutSetId, results });
-    out.push(written);
+    // Keep the per-set shape to the two fields LogSessionResult documents; block completion is a
+    // by-set concern that the by-exercise session log does not surface.
+    out.push({
+      savedWorkoutSetId: written.savedWorkoutSetId,
+      exercisesLogged: written.exercisesLogged,
+    });
   }
   return out;
 }

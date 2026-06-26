@@ -24,6 +24,7 @@ import {
   searchExerciseHistory,
   selectWorkouts,
   summarizeAthleteWorkouts,
+  toSetResults,
 } from "@trainheroic-unofficial/js";
 import type { SessionExercise, TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { confirmGate, NOT_CONFIRMED } from "../confirm";
@@ -425,8 +426,14 @@ function registerLogTool(server: McpServer, ctx: AthleteContext): void {
       title: "Log completed set results",
       description:
         "Athlete-facing write: record entered results (reps/weight per set) for a saved workout " +
-        "set on a given day, marking the set completed. Writes to the athlete's (coach-visible) " +
-        "training log and shows in exercise history. Get savedWorkoutSetId + " +
+        "set on a given day. Writes to the athlete's (coach-visible) training log and shows in " +
+        "exercise history. Each set fills the next position in order; give a set a 1-based `slot` " +
+        "to place it at a specific position — e.g. log three top singles into positions 4-6 of an " +
+        "8,5,3,1,1,1 ramp. A partial log records only the positions you send (plus any logged in " +
+        "an earlier call) and leaves the rest unlogged, so it does not mark untouched sets as " +
+        "performed. In a superset/circuit the block is marked done only once every exercise in it " +
+        "has logged results, so logging one exercise leaves its siblings untouched (the response's " +
+        "`setCompleted` reports whether the block was completed). Get savedWorkoutSetId + " +
         "savedWorkoutSetExerciseId from athlete_workouts (raw:true). Requires confirmation " +
         "(elicitation or confirm:true).",
       inputSchema: { ...logSetArgsSchema.shape, confirm: z.boolean().optional() },
@@ -441,20 +448,11 @@ function registerLogTool(server: McpServer, ctx: AthleteContext): void {
           confirm,
         );
         if (!ok) return errorResult(NOT_CONFIRMED);
-        const mapped = results.map((r) => ({
-          savedWorkoutSetExerciseId: toId(r.savedWorkoutSetExerciseId),
-          sets: r.sets.map((s) => {
-            const slot: { param1?: number | string; param2?: number | string } = {};
-            if (s.param1 !== undefined) slot.param1 = s.param1;
-            if (s.param2 !== undefined) slot.param2 = s.param2;
-            return slot;
-          }),
-        }));
         return jsonResult(
           await logAthleteSet(ctx.client, {
             date,
             savedWorkoutSetId: toId(savedWorkoutSetId),
-            results: mapped,
+            results: toSetResults(results),
           }),
         );
       }),

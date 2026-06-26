@@ -372,6 +372,118 @@ describe('buildExerciseSetPayload (mode "log")', () => {
   });
 });
 
+describe("buildExerciseSetPayload (slot targeting + preservation)", () => {
+  // The prescribed 8,5,3,1,1,1 ramp as a live saved-copy exercise record: reps in the
+  // param_1_data slots, every made flag still 0 (nothing logged yet).
+  const ramp = (): Record<string, unknown> => {
+    const ex: Record<string, unknown> = {};
+    [8, 5, 3, 1, 1, 1].forEach((reps, i) => {
+      ex[`param_1_data_${i + 1}`] = String(reps);
+      ex[`param_2_data_${i + 1}`] = "";
+      ex[`param_${i + 1}_made`] = 0;
+    });
+    return ex;
+  };
+
+  it("places explicit-slot results at those positions (issue 23/26)", () => {
+    // Log three top singles into positions 4-6 of the ramp instead of slots 1-3.
+    const body = buildExerciseSetPayload(
+      1,
+      2,
+      3,
+      [
+        { slot: 4, param1: 1, param2: 245 },
+        { slot: 5, param1: 1, param2: 265 },
+        { slot: 6, param1: 1, param2: 275 },
+      ],
+      "log",
+      ramp(),
+    );
+    // The three singles landed in slots 4-6, marked performed.
+    expect(body.param_1_data_4).toBe("1");
+    expect(body.param_2_data_4).toBe("245");
+    expect(body.param_4_made).toBe(1);
+    expect(body.param_2_data_6).toBe("275");
+    expect(body.param_6_made).toBe(1);
+    expect(body.completed).toBe(1);
+    // The singles did NOT land in slot 1 (no sequential clobber of the ramp positions).
+    expect(body.param_2_data_1).not.toBe("245");
+  });
+
+  it("leaves un-logged prescription slots blank so completion does not fabricate sets", () => {
+    // The ramp's leading slots carry only prescription pre-fill (made=0); logging the singles at
+    // 4-6 must blank 1-3, because marking the set done would otherwise flag that pre-fill as
+    // performed.
+    const body = buildExerciseSetPayload(
+      1,
+      2,
+      3,
+      [
+        { slot: 4, param1: 1, param2: 245 },
+        { slot: 5, param1: 1, param2: 265 },
+        { slot: 6, param1: 1, param2: 275 },
+      ],
+      "log",
+      ramp(),
+    );
+    for (const i of [1, 2, 3]) {
+      expect(body[`param_1_data_${i}`]).toBe("");
+      expect(body[`param_2_data_${i}`]).toBe("");
+      expect(body[`param_${i}_made`]).toBe(0);
+    }
+  });
+
+  it("keeps an earlier logged slot's performed values when adding another (issue 26)", () => {
+    const ex = ramp();
+    ex.param_2_data_1 = "225";
+    // Slot 1 was logged earlier.
+    ex.param_1_made = 1;
+    const body = buildExerciseSetPayload(1, 2, 3, [{ slot: 4, param1: 1, param2: 245 }], "log", ex);
+    expect(body.param_1_made).toBe(1);
+    expect(body.param_2_data_1).toBe("225");
+    expect(body.param_4_made).toBe(1);
+    expect(body.completed).toBe(1);
+  });
+
+  it("prescribe ignores the live record and replaces the whole prescription", () => {
+    // Even with a live record present, a prescribe blanks the slots it does not write.
+    const body = buildExerciseSetPayload(
+      1,
+      2,
+      3,
+      [{ param1: 5, param2: 225 }],
+      "prescribe",
+      ramp(),
+    );
+    expect(body.param_1_data_1).toBe("5");
+    expect(body.param_2_data_1).toBe("225");
+    expect(body.param_1_data_2).toBe("");
+    expect(body.param_1_data_3).toBe("");
+    expect(body.completed).toBe(0);
+  });
+
+  it("rejects two sets targeting the same slot", () => {
+    expect(() =>
+      buildExerciseSetPayload(
+        1,
+        2,
+        3,
+        [
+          { slot: 4, param1: 1 },
+          { slot: 4, param1: 1 },
+        ],
+        "log",
+      ),
+    ).toThrow(/slot 4/iu);
+  });
+
+  it("rejects an out-of-range slot", () => {
+    expect(() => buildExerciseSetPayload(1, 2, 3, [{ slot: 11, param1: 1 }], "log")).toThrow(
+      /out of range/iu,
+    );
+  });
+});
+
 describe('buildExerciseSetPayload (mode "prescribe")', () => {
   it("writes the targets but leaves every made/completed flag at 0", () => {
     // A coach prescribing 4 sets of 100 lb — the case the mitmproxy capture showed: data in the

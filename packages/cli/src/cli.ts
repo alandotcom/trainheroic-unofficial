@@ -111,6 +111,9 @@ Coach — manage a roster (needs a coach account):
       --date is the workout's SCHEDULED date (not necessarily today); get --set (savedWorkoutSetId)
       and each result's savedWorkoutSetExerciseId from 'coach athlete-workouts ... --log-ids'
       resultsJson: [{"savedWorkoutSetExerciseId":N,"sets":[{"param1":reps,"param2":weight}, ...]}, ...]
+      each set fills the next position; add "slot":K to place it at the K-th prescribed set. A
+      partial log records only the positions you send (plus any logged earlier); a superset block
+      completes only once all its exercises are logged.
   coach log-session --athlete <id> --date Y-M-D <exercisesJson>|--file f --yes
       log by exercise instead of by set id: each exercise (exerciseId + sets) is matched to a set
       already on the athlete's calendar that day. The API can't put an off-plan session on an
@@ -183,7 +186,7 @@ Athlete — the logged-in user's own training (a coach account works too):
   athlete stats <exerciseId> --date Y-M-D
   athlete leaderboard <workoutId> [--page N] [--page-size N] [--gender N]
   athlete export [--out dir] [--start Y-M-D] [--end Y-M-D] [--full]
-  athlete log-set --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes   (logs to a PRESCRIBED workout on that date; ids from 'athlete workouts ... --log-ids')
+  athlete log-set --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes   (logs to a PRESCRIBED workout on that date; ids from 'athlete workouts ... --log-ids'; each set fills the next position, add "slot":K to target the K-th; a partial log records only what you send)
   athlete log-session --date Y-M-D <exercisesJson>|--file f --yes   (log OFF-PLAN work with no prescription — creates/reuses a personal session for the date, then logs it; exerciseIds from 'athlete exercises')
       JSON is the exercises array: [{"exerciseId":N,"sets":[{"param1":reps,"param2":weight}, ...]}, ...]
 `;
