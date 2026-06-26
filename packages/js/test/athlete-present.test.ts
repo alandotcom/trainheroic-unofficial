@@ -2,9 +2,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  buildExerciseSetPayload,
-  buildSetCompletePayload,
-  findSavedWorkoutSet,
   fetchRosterActivity,
   presentAthleteWorkout,
   presentCoachAthleteTraining,
@@ -13,6 +10,11 @@ import {
   sortRosterByRecency,
   summarizeAthleteWorkouts,
 } from "../src/athlete";
+import {
+  buildExerciseSetPayload,
+  buildSetCompletePayload,
+  findSavedWorkoutSet,
+} from "../src/athlete-set-write";
 import type { TrainHeroicClient } from "../src/client";
 import type { RosterActivityRow } from "@trainheroic-unofficial/dto";
 import type {

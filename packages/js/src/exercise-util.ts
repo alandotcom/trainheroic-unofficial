@@ -32,6 +32,10 @@ export const PARAM_PCT_MAX = 2;
 export const PARAM_REPS = 3;
 export const PARAM_RPE = 14;
 
+/** TrainHeroic stores up to 10 sets per exercise as `param_N_data_1..10`. One source of truth for
+ * the bound, shared by the workout presenters and the set-logging write path. */
+export const MAX_PARAM_SLOTS = 10;
+
 export function coerceInt(value: unknown): number | null {
   if (typeof value === "boolean") return value ? 1 : 0;
   if (typeof value === "number") return Number.isFinite(value) ? Math.trunc(value) : null;
@@ -123,6 +127,11 @@ export function asExerciseList(body: unknown): Array<Record<string, unknown>> {
 
 export function isRecord(x: unknown): x is Record<string, unknown> {
   return typeof x === "object" && x !== null && !Array.isArray(x);
+}
+
+/** A non-empty string, or null. Narrows a loosely-typed API field to a usable string. */
+export function str(v: unknown): string | null {
+  return typeof v === "string" && v !== "" ? v : null;
 }
 
 /**

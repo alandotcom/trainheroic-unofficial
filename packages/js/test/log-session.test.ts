@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { logAdHocSession, logSessionForAthlete } from "../src/athlete";
+import { logAdHocSession, logSessionForAthlete } from "../src/athlete-set-write";
 import { TrainHeroicClient } from "../src/client";
 
 function json(obj: unknown, status = 200): Response {

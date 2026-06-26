@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { logAthleteSet } from "../src/athlete";
+import { logAthleteSet } from "../src/athlete-set-write";
 import { TrainHeroicClient } from "../src/client";
 
 function json(obj: unknown, status = 200): Response {
@@ -144,6 +144,18 @@ describe("logAthleteSet superset completion (issue 25)", () => {
 
     expect(puts.some((p) => p.url.includes("/savedworkoutset/"))).toBe(true);
     expect(result.setCompleted).toBe(true);
+  });
+
+  it("does NOT complete a set when the only logged exercise carries no data", async () => {
+    // A no-data log writes the (cleared) exercise but must not fire the completion PUT — otherwise
+    // an empty result would mark the set done with nothing performed.
+    const { puts } = stubFetch([exercise(100, "Back Squat")]);
+
+    const result = await log([{ savedWorkoutSetExerciseId: 100, sets: [{}] }]);
+
+    expect(puts.some((p) => p.url.includes("/savedworkoutsetexercise/100"))).toBe(true);
+    expect(puts.some((p) => p.url.includes("/savedworkoutset/"))).toBe(false);
+    expect(result.setCompleted).toBe(false);
   });
 
   it("targets slots 4-6 and blanks the un-logged prescription slots (issue 23/26)", async () => {
