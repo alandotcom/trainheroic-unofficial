@@ -3,7 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import Snippet from "../components/Snippet.astro";
-import { withBase } from "../lib/paths.ts";
+import { relativeHref } from "../lib/paths.ts";
 import {
   NPM_CLI,
   SKILL_ATHLETE,
@@ -25,7 +25,7 @@ import {
           The skill points Claude Code at <code>{NPM_CLI}</code>. Sessions cache to disk and
           commands return JSON.
         </p>
-        <p class="doc__back"><a href={withBase("developers")}>← Developers</a></p>
+        <p class="doc__back"><a href={relativeHref("developers", Astro.url.pathname)}>← Developers</a></p>
       </header>
 
       <section class="doc" id="install">

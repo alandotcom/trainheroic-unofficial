@@ -43,7 +43,10 @@ pnpm gen:mcp-tools
 ## Deploy
 
 CI builds and publishes to GitHub Pages on pushes to `main`
-(`.github/workflows/website.yml`). The workflow sets `ASTRO_BASE=/trainheroic-unofficial/`
-for the project Pages URL. When moving to the custom domain
-`trainheroic-unofficial.com`, switch the workflow env to `ASTRO_BASE=/` and
-`ASTRO_SITE=https://trainheroic-unofficial.com`.
+(`.github/workflows/website.yml`). The build uses a relative asset base and
+path-relative links so one artifact works on both `trainheroic-unofficial.com`
+(custom domain via `public/CNAME`) and
+`https://alandotcom.github.io/trainheroic-unofficial/`.
+
+Configure DNS for the custom domain in repository **Settings → Pages**, then
+re-run the deploy workflow.

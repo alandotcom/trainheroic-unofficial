@@ -2,7 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
-import { withBase } from "../lib/paths.ts";
+import { relativeHref } from "../lib/paths.ts";
 ---
 
 <Layout
@@ -16,22 +16,22 @@ import { withBase } from "../lib/paths.ts";
         <h1>Developers</h1>
         <p class="lead">
           Documentation for Claude Code, scripts, and custom apps. To connect Claude.ai in the
-          browser, use the <a href={withBase("")}>connector setup</a> on the home page.
+          browser, use the <a href={relativeHref("/", Astro.url.pathname)}>connector setup</a> on the home page.
         </p>
       </header>
 
       <section class="doc">
         <ul class="doc-list">
           <li>
-            <a href={withBase("skill")}>Claude Code skill</a>: run <code>npx skills add</code>, then the agent
+            <a href={relativeHref("skill", Astro.url.pathname)}>Claude Code skill</a>: run <code>npx skills add</code>, then the agent
             calls <code>trainheroic</code>.
           </li>
           <li>
-            <a href={withBase("sdk")}>TypeScript SDK</a>: package <code>@trainheroic-unofficial/js</code> for
+            <a href={relativeHref("sdk", Astro.url.pathname)}>TypeScript SDK</a>: package <code>@trainheroic-unofficial/js</code> for
             scripts and workers.
           </li>
           <li>
-            <a href={withBase("mcp")}>MCP reference</a>: Cursor, Claude Desktop, local stdio servers, and the
+            <a href={relativeHref("mcp", Astro.url.pathname)}>MCP reference</a>: Cursor, Claude Desktop, local stdio servers, and the
             tool catalog.
           </li>
         </ul>

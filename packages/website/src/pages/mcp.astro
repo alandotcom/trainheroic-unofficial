@@ -4,7 +4,7 @@ import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import Snippet from "../components/Snippet.astro";
 import ToolIndex from "../components/ToolIndex.astro";
-import { withBase } from "../lib/paths.ts";
+import { relativeHref } from "../lib/paths.ts";
 import {
   ATHLETE_TOOL_GROUPS,
   COACH_TOOL_GROUPS,
@@ -29,10 +29,10 @@ import {
       <header class="doc__intro">
         <h1>MCP reference</h1>
         <p class="lead">
-          Setup for MCP clients beyond Claude.ai. The <a href={withBase("")}>home page</a> walks through the
+          Setup for MCP clients beyond Claude.ai. The <a href={relativeHref("/", Astro.url.pathname)}>home page</a> walks through the
           hosted connector for claude.ai.
         </p>
-        <p class="doc__back"><a href={withBase("developers")}>← Developers</a></p>
+        <p class="doc__back"><a href={relativeHref("developers", Astro.url.pathname)}>← Developers</a></p>
       </header>
 
       <section class="doc" id="hosted">
@@ -81,7 +81,7 @@ import {
 }`}
         />
         <p class="disclaimer">
-          For Claude Code on your laptop, the <a href={withBase("skill")}>skill</a> is usually simpler than
+          For Claude Code on your laptop, the <a href={relativeHref("skill", Astro.url.pathname)}>skill</a> is usually simpler than
           local stdio.
         </p>
       </section>
