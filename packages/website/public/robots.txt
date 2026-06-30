@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://trainheroic-unofficial.com/sitemap-index.xml

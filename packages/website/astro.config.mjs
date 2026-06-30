@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig } from "astro/config";
+import sitemap from "@astrojs/sitemap";
 
 const base = process.env.ASTRO_BASE ?? "/";
 const site = process.env.ASTRO_SITE ?? "https://trainheroic-unofficial.com";
@@ -9,6 +10,7 @@ export default defineConfig({
   site,
   base,
   output: "static",
+  integrations: [sitemap()],
   build: {
     // GitHub Pages project URL needs inlined CSS when ASTRO_BASE is a subpath.
     inlineStylesheets: base !== "/" ? "always" : "auto",
