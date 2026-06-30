@@ -42,4 +42,11 @@ pnpm gen:mcp-tools
 
 ## Deploy
 
-CI builds and publishes to GitHub Pages on pushes to `main` (`.github/workflows/website.yml`). Set the custom domain to `trainheroic-unofficial.com` in repository Pages settings when ready.
+CI builds and publishes to GitHub Pages on pushes to `main`
+(`.github/workflows/website.yml`). The build uses a relative asset base and
+path-relative links so one artifact works on both `trainheroic-unofficial.com`
+(custom domain via `public/CNAME`) and
+`https://alandotcom.github.io/trainheroic-unofficial/`.
+
+Configure DNS for the custom domain in repository **Settings → Pages**, then
+re-run the deploy workflow.
