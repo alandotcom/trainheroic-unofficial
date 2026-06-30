@@ -2,22 +2,18 @@
 
 ## Reference
 
-Early Stripe docs, agent-browser.dev — code-forward, no marketing chrome. Ink on paper, not purple SaaS.
+Early Stripe docs, agent-browser.dev — code-forward, no marketing chrome. Pure ink on white.
 
 ## Color strategy
 
-Restrained monochrome. Warm iron accent for links and emphasis only. OKLCH. No violet.
+Neutral monochrome only. No warm tints, no accent color — links are underlined black text.
 
 ```css
 --color-bg: oklch(1 0 0);
 --color-ink: oklch(0.13 0 0);
---color-muted: oklch(0.42 0.012 50);
---color-faint: oklch(0.48 0.008 50);
---color-line: oklch(0.86 0.006 50);
---color-link: oklch(0.45 0.1 42);
---color-link-hover: oklch(0.32 0.09 42);
---color-code-bg: oklch(0.97 0.004 50);
---color-code-ink: oklch(0.2 0.01 50);
+--color-muted: oklch(0.45 0 0);
+--color-faint: oklch(0.55 0 0);
+--color-line: oklch(0.88 0 0);
 ```
 
 ## Typography
@@ -36,7 +32,8 @@ Restrained monochrome. Warm iron accent for links and emphasis only. OKLCH. No v
 ## Components
 
 - **Nav**: text links, current page underlined
-- **Snippet**: light code block, 1px border, no traffic-light chrome, no uppercase labels
+- **Inline code**: monospace font only — no background, no border
+- **Snippet**: 1px border, white fill, copy button
 - **Section rule**: 1px `--color-line` only — no cards, callouts, or pills
 
 ## Motion

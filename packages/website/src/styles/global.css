@@ -2,13 +2,9 @@
   color-scheme: light;
   --color-bg: oklch(1 0 0);
   --color-ink: oklch(0.13 0 0);
-  --color-muted: oklch(0.42 0.012 50);
-  --color-faint: oklch(0.48 0.008 50);
-  --color-line: oklch(0.86 0.006 50);
-  --color-link: oklch(0.45 0.1 42);
-  --color-link-hover: oklch(0.32 0.09 42);
-  --color-code-bg: oklch(0.97 0.004 50);
-  --color-code-ink: oklch(0.2 0.01 50);
+  --color-muted: oklch(0.45 0 0);
+  --color-faint: oklch(0.55 0 0);
+  --color-line: oklch(0.88 0 0);
   --font-headline: "Archivo", system-ui, sans-serif;
   --font-body: "Hanken Grotesk", system-ui, sans-serif;
   --font-mono: "Source Code Pro", ui-monospace, monospace;
@@ -64,7 +60,7 @@ body {
 
 .skip-link:focus {
   transform: translateY(0);
-  outline: 2px solid var(--color-link);
+  outline: 2px solid var(--color-ink);
   outline-offset: 2px;
 }
 
@@ -73,7 +69,7 @@ main {
 }
 
 a {
-  color: var(--color-link);
+  color: var(--color-ink);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.18em;
@@ -81,11 +77,11 @@ a {
 }
 
 a:hover {
-  color: var(--color-link-hover);
+  color: var(--color-muted);
 }
 
 a:focus-visible {
-  outline: 2px solid var(--color-link);
+  outline: 2px solid var(--color-ink);
   outline-offset: 3px;
 }
 
@@ -179,7 +175,7 @@ p {
 }
 
 .brand:hover {
-  color: var(--color-link-hover);
+  color: var(--color-muted);
   text-decoration: none;
 }
 
@@ -363,12 +359,12 @@ p {
   margin-top: 0.35rem;
 }
 
-/* Code */
+/* Code blocks */
 .snippet {
   position: relative;
   margin: 1.25rem 0;
   border: 1px solid var(--color-line);
-  background: var(--color-code-bg);
+  background: var(--color-bg);
 }
 
 .snippet__label {
@@ -391,7 +387,7 @@ p {
   font-family: var(--font-mono);
   font-size: 0.8125rem;
   line-height: 1.65;
-  color: var(--color-code-ink);
+  color: var(--color-ink);
   tab-size: 2;
   -webkit-overflow-scrolling: touch;
 }
@@ -400,13 +396,11 @@ p {
   font-family: inherit;
 }
 
+/* Inline code — monospace only, no box */
 :not(pre) > code {
   font-family: var(--font-mono);
-  font-size: 0.84em;
+  font-size: 0.875em;
   color: var(--color-ink);
-  background: var(--color-code-bg);
-  padding: 0.1em 0.3em;
-  border: 1px solid var(--color-line);
 }
 
 .url-line {
@@ -427,7 +421,7 @@ p {
   margin: 1rem 0 0;
   padding: 0.75rem 1rem;
   border: 1px solid var(--color-line);
-  background: var(--color-code-bg);
+  background: var(--color-bg);
 }
 
 .copy-line__label {
@@ -472,7 +466,7 @@ p {
 }
 
 .copy-btn:focus-visible {
-  outline: 2px solid var(--color-link);
+  outline: 2px solid var(--color-ink);
   outline-offset: 2px;
 }
 
