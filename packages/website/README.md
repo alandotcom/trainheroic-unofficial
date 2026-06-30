@@ -42,4 +42,8 @@ pnpm gen:mcp-tools
 
 ## Deploy
 
-CI builds and publishes to GitHub Pages on pushes to `main` (`.github/workflows/website.yml`). Set the custom domain to `trainheroic-unofficial.com` in repository Pages settings when ready.
+CI builds and publishes to GitHub Pages on pushes to `main`
+(`.github/workflows/website.yml`). The workflow sets `ASTRO_BASE=/trainheroic-unofficial/`
+for the project Pages URL. When moving to the custom domain
+`trainheroic-unofficial.com`, switch the workflow env to `ASTRO_BASE=/` and
+`ASTRO_SITE=https://trainheroic-unofficial.com`.
