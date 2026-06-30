@@ -1,5 +1,12 @@
 # @trainheroic-unofficial/db
 
+## 1.6.1
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@1.6.1
+- @trainheroic-unofficial/js@1.6.1
+
 ## 1.6.0
 
 ### Patch Changes
