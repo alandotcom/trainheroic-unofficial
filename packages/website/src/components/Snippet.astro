@@ -1,11 +1,24 @@
 ---
 interface Props {
   code: string;
+  label?: string;
 }
 
-const { code } = Astro.props;
+const { code, label } = Astro.props;
+const trimmed = code.trim();
 ---
 
-<figure class="snippet">
-  <pre><code>{code.trim()}</code></pre>
+<figure class="snippet" data-copy-source>
+  {label && <figcaption class="snippet__label">{label}</figcaption>}
+  <div class="snippet__bar">
+    <button type="button" class="copy-btn" data-copy aria-label="Copy to clipboard">
+      <span class="copy-btn__idle" aria-hidden="true">Copy</span>
+      <span class="copy-btn__done" aria-hidden="true">Copied</span>
+    </button>
+  </div>
+  <pre><code data-copy-text>{trimmed}</code></pre>
 </figure>
+
+<script>
+  import "../scripts/copy.ts";
+</script>

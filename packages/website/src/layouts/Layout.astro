@@ -13,7 +13,10 @@ const canonical = new URL(path, Astro.site);
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -26,6 +29,7 @@ const canonical = new URL(path, Astro.site);
     <title>{title} · trainheroic-unofficial</title>
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
     <slot />
   </body>
 </html>

@@ -12,7 +12,7 @@ Restrained monochrome. Warm iron accent for links and emphasis only. OKLCH. No v
 --color-bg: oklch(1 0 0);
 --color-ink: oklch(0.13 0 0);
 --color-muted: oklch(0.42 0.012 50);
---color-faint: oklch(0.58 0.008 50);
+--color-faint: oklch(0.48 0.008 50);
 --color-line: oklch(0.86 0.006 50);
 --color-link: oklch(0.45 0.1 42);
 --color-link-hover: oklch(0.32 0.09 42);

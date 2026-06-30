@@ -2,8 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
-import Snippet from "../components/Snippet.astro";
-import { MCP_URL, NPM_JS, NPM_COACH_MCP } from "../data/tools";
+import { MCP_URL } from "../data/tools";
 ---
 
 <Layout
@@ -11,49 +10,69 @@ import { MCP_URL, NPM_JS, NPM_COACH_MCP } from "../data/tools";
   description="Connect Claude and other AI assistants to TrainHeroic through MCP tools, or build your own integrations with the TypeScript SDK."
 >
   <Header />
-  <main>
+  <main id="main">
     <div class="shell">
       <header class="doc__intro">
         <h1>TrainHeroic for assistants and code</h1>
         <p class="lead">
-          Unofficial toolkit for the TrainHeroic API. Wire Claude to your roster, or script the
-          same endpoints yourself.
+          Unofficial toolkit for the TrainHeroic API. Connect an AI assistant to your roster, or
+          script the same endpoints in TypeScript.
         </p>
         <ul class="doc__links">
-          <li><a href="/mcp">MCP server</a></li>
-          <li><a href="/sdk">TypeScript SDK</a></li>
-          <li><a href={MCP_URL}>Hosted endpoint ↗</a></li>
+          <li><a href="/mcp">Set up MCP</a></li>
+          <li><a href="/sdk">Use the SDK</a></li>
+          <li>
+            <a href={MCP_URL} aria-label="Hosted MCP endpoint (opens in new tab)" target="_blank" rel="noopener noreferrer"
+              >Hosted endpoint<span aria-hidden="true"> ↗</span></a
+            >
+          </li>
         </ul>
       </header>
 
-      <section class="doc">
-        <Snippet
-          code={`# Hosted MCP (OAuth)
-claude mcp add trainheroic --transport http \\
-  ${MCP_URL}
-
-# Local coach (stdio)
-claude mcp add trainheroic \\
-  -e TRAINHEROIC_EMAIL=you@example.com \\
-  -e TRAINHEROIC_PASSWORD=•••••••• \\
-  -- npx -y ${NPM_COACH_MCP}`}
-        />
-        <span class="url-line">{MCP_URL}</span>
+      <section class="doc narrow">
+        <h2>Pick a path</h2>
+        <ul class="list-plain">
+          <li>
+            <strong>Hosted MCP</strong> — OAuth at <code>{MCP_URL}</code>. Recommended for Claude.ai,
+            Cursor, and Claude Desktop. Credentials stay on the server.
+          </li>
+          <li>
+            <strong>Local MCP</strong> — stdio on your machine via <code>npx</code>. One
+            TrainHeroic account per process; email and password in your config.
+          </li>
+          <li>
+            <strong>TypeScript SDK</strong> — <code>@trainheroic-unofficial/js</code> for scripts,
+            workers, and custom integrations without MCP.
+          </li>
+        </ul>
+        <p>
+          <a href="/mcp#tools">Browse the MCP tool list</a> or jump to <a href="/mcp#setup">setup
+            instructions</a>.
+        </p>
       </section>
 
       <section class="doc narrow">
         <h2>What you get</h2>
         <ul class="list-plain">
-          <li><strong>Coach</strong> — program workouts, manage athletes and teams, analytics, messaging</li>
-          <li><strong>Athlete</strong> — training history, PRs, working maxes, session logging</li>
-          <li><strong>SDK</strong> — <code>{NPM_JS}</code> for your own scripts and workers</li>
+          <li>
+            <strong>Coach</strong> — program workouts, manage athletes and teams, analytics,
+            messaging
+          </li>
+          <li>
+            <strong>Athlete</strong> — training history, PRs, working maxes, session logging
+          </li>
+          <li>
+            <strong>Confirm gates</strong> — destructive writes ask before they run
+          </li>
         </ul>
       </section>
 
       <section class="doc narrow">
-        <p class="faint">
-          Unofficial, not affiliated with TrainHeroic. Hosted OAuth keeps credentials server-side;
-          local configs store email and password in plaintext.
+        <p class="disclaimer">
+          <strong>Unofficial</strong> — not affiliated with TrainHeroic. On the hosted server,
+          OAuth keeps your credentials server-side. Local stdio configs store
+          <code>TRAINHEROIC_EMAIL</code> and <code>TRAINHEROIC_PASSWORD</code> in plaintext on
+          your machine.
         </p>
       </section>
     </div>

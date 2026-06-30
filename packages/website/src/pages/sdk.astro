@@ -11,7 +11,7 @@ import { NPM_DTO, NPM_JS } from "../data/tools";
   description="Runtime-agnostic TypeScript SDK for TrainHeroic — exercises, workouts, athlete training, analytics, and messaging."
 >
   <Header />
-  <main>
+  <main id="main">
     <div class="shell">
       <header class="doc__intro narrow">
         <h1>SDK</h1>
@@ -22,14 +22,19 @@ import { NPM_DTO, NPM_JS } from "../data/tools";
         </p>
       </header>
 
-      <section class="doc">
-        <Snippet code={`npm install ${NPM_JS}`} />
+      <section class="doc" id="install">
+        <Snippet label="Install" code={`npm install ${NPM_JS}`} />
       </section>
 
-      <section class="doc narrow">
+      <section class="doc narrow" id="coach">
         <h2>Coach workflow</h2>
-        <p>List your roster, resolve an exercise by name, program a draft session.</p>
+        <p>
+          List your roster, resolve an exercise by name, program a draft session. Program and team
+          ids come from <code>fetchCoachRoster</code>, <code>fetchStreams</code>, or the MCP tools
+          <code>list_teams</code> and <code>get_program</code>.
+        </p>
         <Snippet
+          label="Roster, resolve, build session"
           code={`import {
   TrainHeroicClient,
   ExerciseLibrary,
@@ -49,7 +54,7 @@ const { match } = await library.resolve("Back Squat");
 if (!match) throw new Error("Resolve to one exercise first");
 
 const { pwId } = await buildSession(client, {
-  programId: 12345,
+  programId: 12345, // from list_teams → group_program
   date: [2026, 6, 22],
   blocks: [{
     title: "Strength",
@@ -60,10 +65,11 @@ const { pwId } = await buildSession(client, {
         />
       </section>
 
-      <section class="doc narrow">
+      <section class="doc narrow" id="athlete">
         <h2>Athlete reads</h2>
         <p>Profile, PRs, and history for the signed-in account.</p>
         <Snippet
+          label="Profile, history, PRs"
           code={`import {
   TrainHeroicClient,
   resolveAthleteUserId,
@@ -88,9 +94,11 @@ if (squat) {
         />
       </section>
 
-      <section class="doc narrow">
+      <section class="doc narrow" id="analytics">
         <h2>Analytics & messaging</h2>
+        <p>Team ids come from <code>fetchStreams</code> — filter for <code>kind === "team"</code>.</p>
         <Snippet
+          label="Readiness query and team message"
           code={`import {
   TrainHeroicClient,
   queryAnalytics,
@@ -114,11 +122,16 @@ if (team && typeof team.stream.id === "number") {
       </section>
 
       <section class="doc narrow">
-        <p class="faint">
+        <p class="disclaimer">
           The client logs in on first use and renews the session when it expires. On Node, import
-          <code>{NPM_JS}/node</code> to cache the exercise library between runs (see the coach
-          example above).
-          <a href="https://www.npmjs.com/package/@trainheroic-unofficial/js">Full API on npm ↗</a>
+          <code>{NPM_JS}/node</code> to cache the exercise library between runs.
+          <a
+            href="https://www.npmjs.com/package/@trainheroic-unofficial/js"
+            aria-label="Full API on npm (opens in new tab)"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Full API on npm<span aria-hidden="true"> ↗</span></a
+          >.
         </p>
       </section>
     </div>

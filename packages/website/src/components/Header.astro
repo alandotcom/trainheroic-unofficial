@@ -4,7 +4,11 @@ const path = Astro.url.pathname;
 const links = [
   { href: "/mcp", label: "MCP" },
   { href: "/sdk", label: "SDK" },
-  { href: "https://github.com/alandotcom/trainheroic-unofficial", label: "GitHub", external: true },
+  {
+    href: "https://github.com/alandotcom/trainheroic-unofficial",
+    label: "GitHub",
+    external: true,
+  },
 ];
 ---
 
@@ -15,13 +19,15 @@ const links = [
       {
         links.map((link) => (
           <a
+            class="nav__link"
             href={link.href}
             aria-current={path === link.href ? "page" : undefined}
             target={link.external ? "_blank" : undefined}
             rel={link.external ? "noopener noreferrer" : undefined}
+            aria-label={link.external ? `${link.label} (opens in new tab)` : undefined}
           >
             {link.label}
-            {link.external ? " ↗" : ""}
+            {link.external ? <span aria-hidden="true"> ↗</span> : null}
           </a>
         ))
       }
