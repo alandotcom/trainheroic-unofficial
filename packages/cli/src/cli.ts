@@ -7,6 +7,7 @@ import { parseArgs, type ParseArgsConfig } from "node:util";
 import type { ZodType } from "zod";
 import {
   coachLogSessionArgsSchema,
+  athleteSessionRemoveArgsSchema,
   coachLogSetArgsSchema,
   coachPrescribeSetArgsSchema,
   exerciseCreateSchema,
@@ -67,6 +68,7 @@ import {
   swapAthleteExercise,
   readLive,
   readSession,
+  removePersonalWorkout,
   removeSession,
   resolveAthleteUserId,
   searchExerciseHistory,
@@ -77,7 +79,7 @@ import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
 import { looksLikeJson, parseDate } from "./parse";
 import { loadSession, saveSession } from "./session-cache";
 
-const HELP = `trainheroic — command-line tool for the TrainHeroic coaching API
+const HELP = `trainheroic — command-line tool for the TrainHeroic API
 
 Credentials come from TRAINHEROIC_EMAIL and TRAINHEROIC_PASSWORD. Output is JSON.
 Coaching commands live under 'coach'; your own training lives under 'athlete'.
@@ -179,15 +181,17 @@ Coach — manage a roster (needs a coach account):
 
 Athlete — the logged-in user's own training (a coach account works too):
   athlete whoami | profile [--metric] | prefs | working-maxes
-  athlete workouts --start Y-M-D --end Y-M-D [--raw] [--log-ids] [--logged-only] [--limit N] [--summary]   (--log-ids: the savedWorkoutSetId + savedWorkoutSetExerciseId log-set needs)
+  athlete workouts --start Y-M-D --end Y-M-D [--raw] [--logged-only] [--limit N] [--summary]   (reads what you did; for the log ids use 'athlete log-targets')
+  athlete log-targets --start Y-M-D --end Y-M-D [--program <title>|--program-id <id>|--team <id>] [--raw]   (the savedWorkoutSetId + savedWorkoutSetExerciseId log-set needs; --program narrows when several workouts share a date)
   athlete exercises [--q <text>] [--limit N]
   athlete history <exerciseId> [--raw]
   athlete prs <exerciseId>
   athlete stats <exerciseId> --date Y-M-D
   athlete leaderboard <workoutId> [--page N] [--page-size N] [--gender N]
   athlete export [--out dir] [--start Y-M-D] [--end Y-M-D] [--full]
-  athlete log-set --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes   (logs to a PRESCRIBED workout on that date; ids from 'athlete workouts ... --log-ids'; each set fills the next position, add "slot":K to target the K-th; a partial log records only what you send)
+  athlete log-set --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes   (logs to a PRESCRIBED workout on that date; ids from 'athlete log-targets'; each set fills the next position, add "slot":K to target the K-th; a partial log records only what you send)
   athlete log-session --date Y-M-D <exercisesJson>|--file f --yes   (log OFF-PLAN work with no prescription — creates/reuses a personal session for the date, then logs it; exerciseIds from 'athlete exercises')
+  athlete session-remove --id <programWorkoutId> --date Y-M-D --yes   (delete a stray PERSONAL session; the id is the session 'id' from 'athlete workouts')
       JSON is the exercises array: [{"exerciseId":N,"sets":[{"param1":reps,"param2":weight}, ...]}, ...]
 `;
 
@@ -679,12 +683,76 @@ async function cmdAthleteLogSession(client: TrainHeroicClient, a: string[]): Pro
   const args = validate(logSessionArgsSchema, { date, exercises }, "log-session args");
   if (values.yes !== true)
     fail(`logging a session on ${date} writes to your coach-visible log; add --yes.`);
-  return out(
-    await logAdHocSession(client, {
-      date: args.date,
-      exercises: toSessionExercises(args.exercises),
-    }),
+  const result = await logAdHocSession(client, {
+    date: args.date,
+    exercises: toSessionExercises(args.exercises),
+  });
+  // Warn (don't redirect): a logged lift was already on a coach-scheduled workout today. Advisory to
+  // stderr so stdout stays pure JSON; the scheduledAlternatives field carries the ids to log there.
+  const scheduled = result.scheduledAlternatives ?? [];
+  if (scheduled.length > 0) {
+    const names = scheduled.map((s) => s.title).join(", ");
+    process.stderr.write(
+      `note: ${names} ${scheduled.length === 1 ? "was" : "were"} already on a coach-scheduled ` +
+        `workout today; this logged a SEPARATE personal session. To log into the scheduled workout ` +
+        `instead, use 'athlete log-set' with the savedWorkoutSetId/savedWorkoutSetExerciseId in ` +
+        `scheduledAlternatives, or 'athlete session-remove' to delete this personal session.\n`,
+    );
+  }
+  return out(result);
+}
+
+// The savedWorkoutSetId + savedWorkoutSetExerciseId that `athlete log-set` needs, read straight off
+// the logged-in athlete's own scheduled/logged workouts — no --raw needed. --program/--program-id/
+// --team narrows to one program when several workouts share a date.
+async function cmdAthleteLogTargets(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage =
+    "athlete log-targets --start Y-M-D --end Y-M-D [--program <title>|--program-id <id>|--team <id>] [--raw]";
+  const { values } = parse(a, {
+    start: { type: "string" },
+    end: { type: "string" },
+    program: { type: "string" },
+    "program-id": { type: "string" },
+    team: { type: "string" },
+    raw: { type: "boolean" },
+  });
+  const start = isoDate(need(values.start as string | undefined, usage), "--start");
+  const end = isoDate(need(values.end as string | undefined, usage), "--end");
+  const all = await fetchAthleteWorkouts(client, start, end);
+  const filter: { programTitle?: string; programId?: number; teamId?: number } = {};
+  if (values.program !== undefined) filter.programTitle = values.program as string;
+  if (values["program-id"] !== undefined)
+    filter.programId = toInt(values["program-id"] as string, "--program-id");
+  if (values.team !== undefined) filter.teamId = toInt(values.team as string, "--team");
+  const workouts = selectWorkoutsByProgram(all, filter);
+  return out(values.raw === true ? workouts : presentLogTargets(workouts));
+}
+
+const SESSION_REMOVE_USAGE = "athlete session-remove --id <programWorkoutId> --date Y-M-D --yes";
+
+// Delete a personal (self-created) session — cleanup for a stray ad-hoc log. Verifies the target is
+// a personal session (personal_cal) on that date and refuses a coach-scheduled workout.
+async function cmdAthleteSessionRemove(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values } = parse(a, {
+    id: { type: "string" },
+    date: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const args = validate(
+    athleteSessionRemoveArgsSchema,
+    {
+      programWorkoutId: need(values.id as string | undefined, SESSION_REMOVE_USAGE),
+      date: isoDate(need(values.date as string | undefined, SESSION_REMOVE_USAGE), "--date"),
+    },
+    "session-remove args",
   );
+  const id = toInt(String(args.programWorkoutId), "--id");
+  if (values.yes !== true)
+    fail(`removing personal session ${id} deletes its logged work; add --yes.`);
+  // removePersonalWorkout re-reads the day and throws if the target is missing or coach-scheduled
+  // (the personal-only guard lives in the SDK); the top-level catch prints that message.
+  await removePersonalWorkout(client, { programWorkoutId: id, date: args.date });
+  return out({ removed: true, programWorkoutId: id, date: args.date });
 }
 
 async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<void> {
@@ -785,13 +853,17 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
     }
     case "export":
       return cmdAthleteExport(client, a);
+    case "log-targets":
+      return cmdAthleteLogTargets(client, a);
     case "log-set":
       return cmdAthleteLogSet(client, a);
     case "log-session":
       return cmdAthleteLogSession(client, a);
+    case "session-remove":
+      return cmdAthleteSessionRemove(client, a);
     default:
       return fail(
-        "usage: trainheroic athlete <whoami|profile|prefs|workouts|exercises|history|prs|stats|working-maxes|leaderboard|export|log-set|log-session>",
+        "usage: trainheroic athlete <whoami|profile|prefs|workouts|log-targets|exercises|history|prs|stats|working-maxes|leaderboard|export|log-set|log-session|session-remove>",
       );
   }
 }

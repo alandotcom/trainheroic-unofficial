@@ -249,6 +249,16 @@ describe("write routes (write-mode support)", () => {
     expect(JSON.stringify(b.writes[0]?.body)).toContain("235");
     expect(b.unmatched).toHaveLength(0);
   });
+
+  it("records a personal-session DELETE (athlete_session_remove)", async () => {
+    const b = await boot(highEnrollmentAthlete());
+    const del = await fetch(`${b.url}/v5/programWorkouts/5550000`, { method: "DELETE" });
+    expect(del.ok).toBe(true);
+    expect(b.writes).toHaveLength(1);
+    expect(b.writes[0]?.method).toBe("DELETE");
+    expect(b.writes[0]?.path).toBe("/v5/programWorkouts/5550000");
+    expect(b.unmatched).toHaveLength(0);
+  });
 });
 
 describe("demoAthlete (query bank fixture)", () => {

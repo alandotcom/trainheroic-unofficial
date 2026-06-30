@@ -277,6 +277,12 @@ function registerWrites(
       savedWorkout: { id: 5550003, group_id: 5550004 },
     });
   });
+  // Delete a personal session (athlete_session_remove cleanup). Records the DELETE so a grader can
+  // assert it fired against the right programWorkout id; state is not mutated back into the range.
+  app.delete("/v5/programWorkouts/:id", async (c) => {
+    await record(c, writes);
+    return c.json({ success: true });
+  });
   app.put("/v5/personalCalendar/workouts/:id/addExercises", async (c) => {
     const body = (await record(c, writes)) as { exercises?: Array<{ exerciseId?: number }> } | null;
     const exercises = (body?.exercises ?? [])

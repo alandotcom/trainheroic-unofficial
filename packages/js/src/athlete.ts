@@ -5,7 +5,9 @@
 
 import {
   coerceInt,
+  exerciseTitle,
   exerciseUnits,
+  isPersonalSession,
   isRecord,
   MAX_PARAM_SLOTS,
   rankSearch,
@@ -466,6 +468,7 @@ export function presentAthleteWorkout(raw: ProgramWorkout): AthleteWorkoutView {
     team: str(rec.team_title),
     instruction: str(workout.instruction),
     logged: blocks.some((b) => b.exercises.some((e) => e.performed.length > 0)),
+    personal: isPersonalSession(rec),
     blocks,
   };
 }
@@ -559,10 +562,7 @@ export function presentLogTargets(list: readonly ProgramWorkout[]): LogSetTarget
           if (id === null) return null;
           return {
             savedWorkoutSetExerciseId: id,
-            title:
-              (typeof ex.exercise_title === "string" && ex.exercise_title) ||
-              (typeof ex.title === "string" && ex.title) ||
-              "",
+            title: exerciseTitle(ex),
             units: exerciseUnits(ex.param_1_type, ex.param_2_type),
             prescribed: prescribedSets(ex),
             performed: performedSets(ex),
@@ -626,6 +626,7 @@ export function summarizeAthleteWorkouts(
       program: w.program,
       team: w.team,
       logged: w.logged,
+      personal: w.personal,
       exerciseCount,
       performedCount,
     };

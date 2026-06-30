@@ -8,7 +8,7 @@ metadata:
 
 # TrainHeroic API
 
-Authenticated access to the TrainHeroic coaching API through the `trainheroic`
+Authenticated access to the TrainHeroic API through the `trainheroic`
 command-line tool (`@trainheroic-unofficial/cli`), which wraps the `@trainheroic-unofficial/js`
 SDK: a spec-driven workout builder, an on-disk exercise cache, and gated messaging.
 

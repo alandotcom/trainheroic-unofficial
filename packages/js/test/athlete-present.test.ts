@@ -81,6 +81,7 @@ describe("presentAthleteWorkout", () => {
       id: 1,
       date: "2026-06-20",
       program_title: "Test Athlete",
+      personal_cal: true,
       summarizedSavedWorkout: {
         saved_workout: {
           id: 42,
@@ -108,6 +109,7 @@ describe("presentAthleteWorkout", () => {
       },
     } as unknown as ProgramWorkout);
     expect(personal.logged).toBe(true);
+    expect(personal.personal).toBe(true);
     const bench = personal.blocks
       .flatMap((b) => b.exercises)
       .find((e) => e.title === "Bench Press");
@@ -125,6 +127,7 @@ describe("selectWorkouts", () => {
     team: null,
     instruction: null,
     logged,
+    personal: false,
     blocks: [],
   });
   const list: AthleteWorkoutView[] = [
@@ -188,6 +191,7 @@ describe("summarizeAthleteWorkouts", () => {
       team: null,
       instruction: null,
       logged: true,
+      personal: false,
       blocks: [
         {
           order: 1,

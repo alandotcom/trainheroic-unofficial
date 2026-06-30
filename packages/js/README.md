@@ -1,6 +1,6 @@
 # @trainheroic-unofficial/js
 
-An unofficial TypeScript SDK for the TrainHeroic coaching API. The client covers auth and
+An unofficial TypeScript SDK for the TrainHeroic API. The client covers auth and
 session renewal across both TrainHeroic hosts, a searchable exercise library, workout
 encoding, and messaging. It runs in any modern JavaScript runtime, including Cloudflare
 workerd.

@@ -35,7 +35,8 @@ Because graders are surface-agnostic, a CLI failure where the MCP passes (or vic
 signal that one surface's naming/help/output is harder to drive — run `pnpm eval` (both surfaces) and
 diff. The CLI→capability mapping lives in **`src/canonical.ts`**; when you add or rename a CLI
 command, update it so the canonical name still matches the MCP tool (see
-[mcp-eval → Adding a tool](../mcp-eval/SKILL.md#adding-a-tool-or-a-scenario)). Truncation-driven
+[mcp-eval → Adding a tool](../mcp-eval/SKILL.md#adding-a-tool-or-a-scenario), and the harness quick
+reference in [packages/eval/CLAUDE.md](../../packages/eval/CLAUDE.md)). Truncation-driven
 scenarios are MCP-only — the CLI streams full results — so they declare `surfaces: ["mcp"]`.
 
 ## The bash runner (`scripts/cli-eval.sh`) — real API

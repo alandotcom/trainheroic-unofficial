@@ -287,6 +287,18 @@ export type LogSessionArgs = z.infer<typeof logSessionArgsSchema>;
 export const coachLogSessionArgsSchema = logSessionArgsSchema.extend({ athleteId: idArgSchema });
 export type CoachLogSessionArgs = z.infer<typeof coachLogSessionArgsSchema>;
 
+/**
+ * Args for removing a personal (athlete-created) workout session. `programWorkoutId` is the
+ * range item's top-level `id`; `date` is that session's day, used to look the item back up so the
+ * write can confirm it is a personal session (`personal_cal === true`) before deleting. A
+ * coach-scheduled workout is never removed this way.
+ */
+export const athleteSessionRemoveArgsSchema = z.object({
+  programWorkoutId: idArgSchema,
+  date: dateString,
+});
+export type AthleteSessionRemoveArgs = z.infer<typeof athleteSessionRemoveArgsSchema>;
+
 // --- Presented (model-friendly) view types, produced by the `js` presenters ---
 
 /** A flattened exercise within a presented workout: prescriptions, logged results, units. */
@@ -329,6 +341,12 @@ export type AthleteWorkoutView = {
    * the API's own completion flags are unreliable.
    */
   logged: boolean;
+  /**
+   * True when this is a personal session the athlete created (the API's `personal_cal` flag),
+   * rather than a coach-scheduled workout. Only a personal session can be removed with
+   * `athlete_session_remove`; its `id` is the `programWorkoutId` that tool takes.
+   */
+  personal: boolean;
   blocks: AthleteWorkoutBlock[];
 };
 
@@ -347,6 +365,8 @@ export type AthleteWorkoutSummary = {
   team: string | null;
   /** True when the athlete logged at least one set on this workout. */
   logged: boolean;
+  /** True when this is a personal session the athlete created, not a coach-scheduled workout. */
+  personal: boolean;
   /** Total prescribed exercises across all blocks. */
   exerciseCount: number;
   /**

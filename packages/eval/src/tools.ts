@@ -96,6 +96,7 @@ export const ATHLETE_READ_TOOLS: readonly string[] = [
   "athlete_working_maxes",
   "athlete_leaderboard",
   "athlete_workouts",
+  "athlete_log_targets",
   "athlete_exercises",
   "athlete_exercise_history",
   "athlete_personal_records",
@@ -106,6 +107,7 @@ export const ATHLETE_READ_TOOLS: readonly string[] = [
 export const ATHLETE_WRITE_TOOLS: readonly string[] = [
   "athlete_session_create",
   "athlete_session_add_exercises",
+  "athlete_session_remove",
   "athlete_log_session",
   "athlete_log_set",
 ];

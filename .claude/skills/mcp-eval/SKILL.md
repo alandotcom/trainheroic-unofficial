@@ -23,7 +23,9 @@ server (or the CLI), pointed at a local **Hono** fake backend whose datasets sim
 sparse real test accounts can't. It parses the tool-call trace, normalizes every call to a canonical
 capability name (so one grader covers MCP and CLI), runs each scenario K times, and asserts a
 pass-rate. Three orthogonal axes: **role** (coach/athlete), **surface** (mcp/cli), **mode**
-(read/write). Full detail in [packages/eval/README.md](../../packages/eval/README.md).
+(read/write). Full detail in [packages/eval/README.md](../../packages/eval/README.md); the
+agent-facing quick reference (scenario schema, grader catalog, add-a-tool recipe) is in
+[packages/eval/CLAUDE.md](../../packages/eval/CLAUDE.md).
 
 ```bash
 # from the repo root — evals are gated (cost money, need claude on PATH) and are NOT in `pnpm check`
