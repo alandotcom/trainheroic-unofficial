@@ -8,6 +8,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
+    "detect": "npx impeccable detect src",
     "astro": "astro"
   },
   "dependencies": {

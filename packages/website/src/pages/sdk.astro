@@ -69,40 +69,46 @@ import { JsonFileLibraryCache, defaultCachePath } from "${NPM_JS}/node";`}
       />
     </section>
 
-    <section class="section section--border container">
+    <section class="section container section--ruled">
       <h2>What it covers</h2>
-      <ul class="feature-list">
-        <li>
-          <strong>Client & auth</strong>
-          Lazy login, single shared in-flight login on cold start, dual hosts (<code>api</code> /
-          <code>apis</code>).
-        </li>
-        <li>
-          <strong>Exercises</strong>
-          <code>ExerciseIndex</code> interface with in-memory <code>ExerciseLibrary</code> —
-          resolve, fuzzy search, JSON-file cache via <code>./node</code>.
-        </li>
-        <li>
-          <strong>Workouts</strong>
-          <code>buildSession</code>, <code>readSession</code>, <code>publishSession</code>,
-          <code>removeSession</code>, and the <code>WorkoutSpec</code> encoder.
-        </li>
-        <li>
-          <strong>Athlete training</strong>
-          Profile, workouts, exercise history, PRs, working maxes for the logged-in account.
-        </li>
-        <li>
-          <strong>Messaging</strong>
-          List conversations, read streams, draft, send, and delete comments.
-        </li>
-        <li>
-          <strong>Analytics</strong>
-          <code>queryAnalytics()</code> with readiness, 1RM history, compliance, and more.
-        </li>
-      </ul>
+      <dl class="cap-list">
+        <div>
+          <dt>Client & auth</dt>
+          <dd>
+            Lazy login, single shared in-flight login on cold start, dual hosts (<code>api</code> /
+            <code>apis</code>).
+          </dd>
+        </div>
+        <div>
+          <dt>Exercises</dt>
+          <dd>
+            <code>ExerciseIndex</code> interface with in-memory <code>ExerciseLibrary</code> —
+            resolve, fuzzy search, JSON-file cache via <code>./node</code>.
+          </dd>
+        </div>
+        <div>
+          <dt>Workouts</dt>
+          <dd>
+            <code>buildSession</code>, <code>readSession</code>, <code>publishSession</code>,
+            <code>removeSession</code>, and the <code>WorkoutSpec</code> encoder.
+          </dd>
+        </div>
+        <div>
+          <dt>Athlete training</dt>
+          <dd>Profile, workouts, exercise history, PRs, working maxes for the logged-in account.</dd>
+        </div>
+        <div>
+          <dt>Messaging</dt>
+          <dd>List conversations, read streams, draft, send, and delete comments.</dd>
+        </div>
+        <div>
+          <dt>Analytics</dt>
+          <dd><code>queryAnalytics()</code> with readiness, 1RM history, compliance, and more.</dd>
+        </div>
+      </dl>
     </section>
 
-    <section class="section section--border container">
+    <section class="section container section--ruled">
       <div class="docs-layout docs-layout--split">
         <div class="prose">
           <h2>Exercise library</h2>
@@ -124,7 +130,7 @@ const { match, candidates } = await library.resolve("Back Squat");`}
       </div>
     </section>
 
-    <section class="section section--border container">
+    <section class="section container section--ruled">
       <div class="docs-layout docs-layout--split">
         <div class="prose">
           <h2>Building a workout</h2>
