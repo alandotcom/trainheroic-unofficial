@@ -2,7 +2,7 @@
 
 ## Reference
 
-[agent-browser.dev](https://agent-browser.dev/) — simple docs, system fonts, Shiki-highlighted code blocks.
+Simple documentation layout: system fonts, Shiki-highlighted code blocks.
 
 ## Color strategy
 
