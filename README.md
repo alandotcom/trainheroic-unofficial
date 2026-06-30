@@ -157,6 +157,18 @@ trainheroic help
 | [`@trainheroic-unofficial/athlete-mcp`](packages/athlete-mcp) | local stdio MCP server for an athlete |
 | [`@trainheroic-unofficial/cloudflare`](packages/cloudflare) | the hosted multi-tenant Worker (OAuth + D1) |
 | [`@trainheroic-unofficial/cli`](packages/cli) | the command-line tool |
+| [`@trainheroic-unofficial/website`](packages/website) | documentation site (Claude.ai setup, skill, SDK, MCP reference) |
+
+## Documentation site
+
+Static site at [trainheroic-unofficial.com](https://trainheroic-unofficial.com) (GitHub Pages):
+
+```bash
+pnpm website:dev     # http://localhost:4321
+pnpm website:build
+```
+
+The home page walks through the Claude.ai connector; `/developers` links to skill, SDK, and MCP reference pages.
 
 ## Disclaimer
 

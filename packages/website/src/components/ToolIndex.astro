@@ -1,64 +1,38 @@
 ---
-import type { McpToolGroup } from "../data/mcp-tools";
+import type { McpTool, McpToolGroup } from "../data/mcp-tools";
+import ToolGroupSection from "./ToolGroupSection.astro";
 
 interface Props {
   coachGroups: McpToolGroup[];
   athleteGroups: McpToolGroup[];
-  hostedOnly?: { name: string; summary: string }[];
+  hostedOnly?: McpTool[];
 }
 
 const { coachGroups, athleteGroups, hostedOnly = [] } = Astro.props;
 ---
 
 <div class="tool-index">
-  <section class="tool-index__section" aria-labelledby="tools-coach">
-    <h3 id="tools-coach">Coach tools</h3>
-    <p class="tool-index__note">
-      Coach accounts on the main URL or <code>/mcp/coach</code>.
-    </p>
-    {
-      coachGroups.map((group) => (
-        <div class="tool-index__group">
-          <h4>{group.title}</h4>
-          <ul class="tool-index__list">
-            {group.tools.map((tool) => (
-              <li>
-                <code>{tool.name}</code>
-                <span>{tool.summary}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))
-    }
-  </section>
+  <ToolGroupSection
+    id="tools-coach"
+    title="Coach tools"
+    note='Coach accounts on the main URL or <code>/mcp/coach</code>.'
+    groups={coachGroups}
+  />
 
-  <section class="tool-index__section" aria-labelledby="tools-athlete">
-    <h3 id="tools-athlete">Athlete tools</h3>
-    <p class="tool-index__note">
-      Every account on the main URL or <code>/mcp/athlete</code>.
-    </p>
-    {
-      athleteGroups.map((group) => (
-        <div class="tool-index__group">
-          <h4>{group.title}</h4>
-          <ul class="tool-index__list">
-            {group.tools.map((tool) => (
-              <li>
-                <code>{tool.name}</code>
-                <span>{tool.summary}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))
-    }
-  </section>
+  <ToolGroupSection
+    id="tools-athlete"
+    title="Athlete tools"
+    note='Every account on the main URL or <code>/mcp/athlete</code>.'
+    groups={athleteGroups}
+  />
 
   {
     hostedOnly.length > 0 && (
       <section class="tool-index__section" aria-labelledby="tools-hosted">
         <h3 id="tools-hosted">Hosted only</h3>
+        <p class="tool-index__note">
+          D1 warehouse sync/query tools and feedback — available on the hosted connector only.
+        </p>
         <ul class="tool-index__list">
           {hostedOnly.map((tool) => (
             <li>

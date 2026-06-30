@@ -30,6 +30,8 @@ pnpm test         # vitest in every package
 pnpm lint         # oxlint --deny-warnings
 pnpm fmt          # oxfmt (this repo uses oxfmt, not prettier, despite .prettierignore)
 pnpm check        # fmt:check + lint + typecheck + test; run this before considering work done
+pnpm website:dev  # Astro docs site at http://localhost:4321
+pnpm website:build
 ```
 
 ## Releasing
@@ -77,6 +79,10 @@ cd packages/cloudflare && pnpm deploy                         # see its DEPLOY.m
 # CLI:
 TRAINHEROIC_EMAIL=... TRAINHEROIC_PASSWORD=... \
   pnpm --filter @trainheroic-unofficial/cli start whoami
+
+# Documentation site (static Astro, GitHub Pages):
+pnpm website:dev    # http://localhost:4321
+pnpm website:build  # output in packages/website/dist
 ```
 
 Run a single test file, or a single test by name, from within the owning package:
@@ -124,6 +130,11 @@ The dependency graph runs one direction; nothing lower depends on anything highe
 - **`cli`** (`@trainheroic-unofficial/cli`): an argv-driven tool over the `js` SDK directly, no
   MCP. It caches the session under `~/.trainheroic/`. Has an `athlete` command group and an
   `athlete export` that dumps historicals to JSON (the local counterpart to the hosted warehouse).
+- **`website`** (`@trainheroic-unofficial/website`): static Astro site for Claude.ai connector
+  setup and developer docs (skill, SDK, MCP reference). The MCP tool index is generated at build
+  time from `packages/eval/src/tools.ts` plus hosted-only tools in
+  `packages/website/src/data/mcp-tool-catalog.ts`. Deployed to GitHub Pages via
+  `.github/workflows/website.yml`.
 
 The central seam is the `ExerciseIndex` interface (in `js`). Local implements it in memory
 (`ExerciseLibrary`); hosted implements it over D1 (`cloudflare/src/store/exercises.ts`).

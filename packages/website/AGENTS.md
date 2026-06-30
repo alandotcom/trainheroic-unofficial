@@ -1,12 +1,27 @@
 ## Development
 
-When starting the dev server, use background mode:
+From the repo root:
 
-```
-astro dev --background
+```bash
+pnpm website:dev     # http://localhost:4321
 ```
 
-Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
+Or from this package:
+
+```bash
+pnpm dev
+pnpm build
+pnpm preview
+```
+
+## MCP tool catalog
+
+The tool list on `/mcp` is generated from `packages/eval/src/tools.ts` and
+`src/data/mcp-tool-catalog.ts`. After adding a core tool, update eval and the catalog, then run:
+
+```bash
+pnpm gen:mcp-tools
+```
 
 ## Documentation
 

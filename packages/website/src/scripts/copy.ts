@@ -9,7 +9,14 @@ function copyText(text: string, button: HTMLButtonElement): void {
   };
 
   if (navigator.clipboard?.writeText) {
-    void navigator.clipboard.writeText(text).then(done).catch(fallback);
+    void (async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        done();
+      } catch {
+        fallback();
+      }
+    })();
     return;
   }
 
@@ -21,13 +28,13 @@ function copyText(text: string, button: HTMLButtonElement): void {
     area.setAttribute("readonly", "");
     area.style.position = "fixed";
     area.style.left = "-9999px";
-    document.body.appendChild(area);
+    document.body.append(area);
     area.select();
     try {
       document.execCommand("copy");
       done();
     } finally {
-      document.body.removeChild(area);
+      area.remove();
     }
   }
 }

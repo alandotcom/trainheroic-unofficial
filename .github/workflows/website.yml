@@ -1,6 +1,6 @@
 name: Deploy website
 
-# Build the static site and publish to GitHub Pages on release tags and manual dispatch.
+# Build the static site and publish to GitHub Pages on pushes to main and manual dispatch.
 
 on:
   push:
