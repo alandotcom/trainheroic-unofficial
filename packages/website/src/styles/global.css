@@ -221,6 +221,68 @@ p {
   margin-top: 0.5rem;
 }
 
+/* Homepage — fit in one viewport */
+.site-header:has(+ main.home) {
+  padding-top: 1rem;
+}
+
+.site-header:has(+ main.home) .site-header__inner {
+  padding-bottom: 0.5rem;
+}
+
+main.home {
+  line-height: 1.5;
+}
+
+main.home .doc__intro {
+  padding: 1rem 0 0.25rem;
+}
+
+main.home h1 {
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+
+main.home h2 {
+  margin: 0.875rem 0 0.375rem;
+  font-size: 1.125rem;
+}
+
+main.home p {
+  margin-bottom: 0.5rem;
+}
+
+main.home .doc {
+  margin-bottom: 0;
+}
+
+main.home .doc-steps li {
+  margin-bottom: 0.5rem;
+}
+
+main.home .doc-steps li p {
+  margin-bottom: 0.375rem;
+}
+
+main.home .doc-list li {
+  margin-bottom: 0.2rem;
+}
+
+main.home .code-block {
+  margin: 0.375rem 0;
+}
+
+main.home .code-block pre {
+  padding: 0.625rem 3.25rem 0.625rem 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+main.home ~ .site-footer {
+  margin-top: 1rem;
+  padding: 0.875rem 0 1rem;
+}
+
 /* Doc layout */
 .doc {
   margin-bottom: 0.5rem;
