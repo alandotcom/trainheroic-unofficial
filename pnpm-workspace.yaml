@@ -1,6 +1,12 @@
 packages:
   - "packages/*"
 
+# Force the dev-only changesets transitive js-yaml@3.x to the patched release
+# (GHSA-h67p-54hq-rp68, quadratic-complexity DoS in merge-key handling). Scoped to
+# the 3.x range so Astro's js-yaml@4.x is left alone.
+overrides:
+  js-yaml@3: "^3.15.0"
+
 # pnpm 11 build-script policy (replaces package.json's "pnpm.onlyBuiltDependencies").
 # Every dependency with an install script needs an explicit decision, or pnpm fails the
 # deps-status check with ERR_PNPM_IGNORED_BUILDS. Only the toolchain binaries we actually
