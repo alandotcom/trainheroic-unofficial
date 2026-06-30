@@ -20,7 +20,7 @@ import {
 
 <Layout
   title="MCP reference"
-  description="MCP setup for Cursor and Claude Desktop, local stdio servers, and the full tool list."
+  description="MCP setup for Cursor, Claude Desktop, local stdio servers, and the tool catalog."
 >
   <Header />
   <main id="main">
@@ -28,15 +28,17 @@ import {
       <header class="doc__intro">
         <h1>MCP reference</h1>
         <p class="lead">
-          For Claude.ai, use the <a href="/">connector setup</a>. This page is for other MCP
-          clients and local servers.
+          Setup for MCP clients beyond Claude.ai. The <a href="/">home page</a> walks through the
+          hosted connector for claude.ai.
         </p>
         <p class="doc__back"><a href="/developers">← Developers</a></p>
       </header>
 
       <section class="doc" id="hosted">
         <h2>Hosted endpoint</h2>
+        <p>Main URL (OAuth, same as Claude.ai):</p>
         <Snippet code={MCP_URL} lang="text" />
+        <p>Cursor or Claude Desktop config:</p>
         <Snippet
           lang="json"
           code={`{
@@ -47,13 +49,15 @@ import {
   }
 }`}
         />
-        <p>Scoped endpoints:</p>
+        <p>Coach-only URL:</p>
         <Snippet code={MCP_COACH_URL} lang="text" />
+        <p>Athlete-only URL:</p>
         <Snippet code={MCP_ATHLETE_URL} lang="text" />
       </section>
 
       <section class="doc" id="local-coach">
         <h2>Local coach server</h2>
+        <p>Stdio on your machine. Credentials sit in the MCP client config file.</p>
         <Snippet
           code={`claude mcp add trainheroic \\
   -e TRAINHEROIC_EMAIL=coach@example.com \\
@@ -75,6 +79,10 @@ import {
   }
 }`}
         />
+        <p class="disclaimer">
+          For Claude Code on your laptop, the <a href="/skill">skill</a> is usually simpler than
+          local stdio.
+        </p>
       </section>
 
       <section class="doc" id="local-athlete">
@@ -89,6 +97,7 @@ import {
 
       <section class="doc" id="tools">
         <h2>Tool list</h2>
+        <p>Tool names for reference. The model picks the call from your question.</p>
         <ToolIndex
           coachGroups={COACH_TOOL_GROUPS}
           athleteGroups={ATHLETE_TOOL_GROUPS}

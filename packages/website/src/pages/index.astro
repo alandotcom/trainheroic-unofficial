@@ -8,7 +8,7 @@ import { CLAUDE_AI_CONNECTOR_URL, MCP_URL } from "../data/tools";
 
 <Layout
   title="Connect to Claude"
-  description="Connect your TrainHeroic account to Claude.ai in three steps — ask about your roster, programming, and training."
+  description="Connect your TrainHeroic account to Claude.ai. Ask about your roster, programming, and training."
 >
   <Header />
   <main id="main">
@@ -16,8 +16,8 @@ import { CLAUDE_AI_CONNECTOR_URL, MCP_URL } from "../data/tools";
       <header class="doc__intro">
         <h1>Connect TrainHeroic to Claude</h1>
         <p class="lead">
-          Ask Claude about your athletes, workouts, and training history. Sign in with your
-          TrainHeroic account — no API key.
+          Claude can read your TrainHeroic data when you sign in with the same email and password you
+          use in the app.
         </p>
       </header>
 
@@ -25,46 +25,50 @@ import { CLAUDE_AI_CONNECTOR_URL, MCP_URL } from "../data/tools";
         <h2>Set up in Claude.ai</h2>
         <ol class="doc-steps">
           <li>
-            Open
-            <a href={CLAUDE_AI_CONNECTOR_URL}>Settings → Connectors → Add custom connector</a>.
+            <p>
+              Open
+              <a href={CLAUDE_AI_CONNECTOR_URL}>Settings → Connectors → Add custom connector</a>.
+            </p>
           </li>
           <li>
-            Paste this URL:
+            <p>Paste the connector URL:</p>
             <Snippet code={MCP_URL} lang="text" />
           </li>
           <li>
-            Sign in with your <strong>TrainHeroic email and password</strong> when prompted.
+            <p>
+              Sign in with your <strong>TrainHeroic email and password</strong> when Claude asks.
+            </p>
           </li>
         </ol>
       </section>
 
       <section class="doc">
         <h2>Try it</h2>
-        <p>Ask in plain language:</p>
+        <p>Start a chat and ask a question like one of these:</p>
         <Snippet
           lang="text"
           code={`List my athletes
 What's on the program for Tuesday?
 Show my squat PRs this year
-Draft a back squat workout for next Monday — don't publish yet`}
+Draft a back squat workout for next Monday (keep it unpublished)`}
         />
       </section>
 
       <section class="doc">
         <h2>What you can ask</h2>
         <ul class="doc-list">
-          <li><strong>Coaches</strong> — roster, workouts, teams, analytics, messages</li>
-          <li><strong>Athletes</strong> — history, PRs, working maxes, today's program</li>
-          <li><strong>Safety</strong> — Claude asks before publishing or sending messages</li>
+          <li>Coaches can query roster, workouts, teams, analytics, and messages.</li>
+          <li>Athletes can look up history, PRs, working maxes, and today's program.</li>
+          <li>Claude confirms before publishing workouts or sending messages.</li>
         </ul>
       </section>
 
       <section class="doc">
         <p class="disclaimer">
-          <strong>Unofficial</strong> — not affiliated with TrainHeroic. OAuth keeps your login
-          server-side.
+          <strong>Unofficial project.</strong> TrainHeroic is a separate company. OAuth stores your
+          login on the hosted connector server.
         </p>
-        <p>Building with code? <a href="/developers">Developer docs</a>.</p>
+        <p>Integrating in code? See <a href="/developers">developer docs</a>.</p>
       </section>
     </div>
   </main>

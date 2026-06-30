@@ -13,7 +13,7 @@ import {
 
 <Layout
   title="Claude Code skill"
-  description="Install the TrainHeroic skill for Claude Code — the recommended path for coding agents that run the trainheroic CLI."
+  description="Install the TrainHeroic skill for Claude Code. The agent runs the trainheroic CLI."
 >
   <Header />
   <main id="main">
@@ -21,8 +21,8 @@ import {
       <header class="doc__intro">
         <h1>Claude Code skill</h1>
         <p class="lead">
-          The skill teaches Claude Code to run <code>{NPM_CLI}</code> — cached sessions, JSON
-          output, no MCP config.
+          The skill points Claude Code at <code>{NPM_CLI}</code>. Sessions cache to disk and
+          commands return JSON.
         </p>
         <p class="doc__back"><a href="/developers">← Developers</a></p>
       </header>
@@ -30,7 +30,7 @@ import {
       <section class="doc" id="install">
         <h2>Install</h2>
         <Snippet code={`npx skills add ${SKILL_REPO}`} />
-        <p>Or install the CLI and copy skills to <code>~/.claude/skills/</code>:</p>
+        <p>You can also install the CLI and copy skills into <code>~/.claude/skills/</code>:</p>
         <Snippet
           code={`npm install -g ${NPM_CLI}
 trainheroic install-skill`}
@@ -44,16 +44,16 @@ trainheroic install-skill`}
 export TRAINHEROIC_PASSWORD=yourpassword`}
         />
         <p class="disclaimer">
-          Session cached at <code>~/.trainheroic/session.json</code>. Credentials live in your
-          environment.
+          The CLI writes the session to <code>~/.trainheroic/session.json</code>. Credentials come
+          from your shell environment.
         </p>
       </section>
 
       <section class="doc" id="use">
         <h2>Use in Claude Code</h2>
         <ul class="doc-list">
-          <li><strong>Coach</strong> — <code>/{SKILL_COACH}</code></li>
-          <li><strong>Athlete</strong> — <code>/{SKILL_ATHLETE}</code></li>
+          <li>Coaching: type <code>/{SKILL_COACH}</code></li>
+          <li>Your own training: type <code>/{SKILL_ATHLETE}</code></li>
         </ul>
       </section>
 

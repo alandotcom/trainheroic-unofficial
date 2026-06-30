@@ -269,10 +269,23 @@ p {
 }
 
 .doc-steps li {
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .doc-steps li:last-child {
+  margin-bottom: 0;
+}
+
+.doc-steps li p {
+  margin: 0 0 0.625rem;
+}
+
+.doc-steps li p:last-child {
+  margin-bottom: 0;
+}
+
+.doc-steps .code-block {
+  margin-top: 0.625rem;
   margin-bottom: 0;
 }
 
@@ -290,18 +303,22 @@ p {
 /* Syntax-highlighted code blocks */
 .code-block {
   position: relative;
-  margin: 1rem 0 1.25rem;
+  margin: 1.25rem 0;
+}
+
+.doc p + .code-block {
+  margin-top: 0.625rem;
 }
 
 .code-block pre {
   margin: 0;
-  padding: 1rem 3.5rem 1rem 1rem;
+  padding: 1.125rem 3.5rem 1.125rem 1.125rem;
   border: 1px solid var(--color-line);
   border-radius: 8px;
-  background: var(--color-code-bg) !important;
+  background-color: var(--color-code-bg) !important;
   font-family: var(--font-mono);
   font-size: 0.8125rem;
-  line-height: 1.55;
+  line-height: 1.6;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }

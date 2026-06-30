@@ -8,7 +8,7 @@ import { NPM_DTO, NPM_JS } from "../data/tools";
 
 <Layout
   title="TypeScript SDK"
-  description="Runtime-agnostic TypeScript SDK for TrainHeroic — exercises, workouts, athlete training, analytics, and messaging."
+  description="TypeScript SDK for TrainHeroic: exercises, workouts, athlete training, analytics, messaging."
 >
   <Header />
   <main id="main">
@@ -16,8 +16,9 @@ import { NPM_DTO, NPM_JS } from "../data/tools";
       <header class="doc__intro">
         <h1>TypeScript SDK</h1>
         <p class="lead">
-          <code>{NPM_JS}</code> — auth, workouts, roster, athlete reads, analytics, messaging.
-          Types in <code>{NPM_DTO}</code>. Runs on Node, workerd, and browsers.
+          Package <code>{NPM_JS}</code> wraps auth, workouts, roster helpers, athlete reads,
+          analytics, and messaging. Types ship in <code>{NPM_DTO}</code>. The runtime runs on Node,
+          workerd, and browsers.
         </p>
         <p class="doc__back"><a href="/developers">← Developers</a></p>
       </header>
@@ -90,7 +91,7 @@ if (squat) {
       </section>
 
       <section class="doc" id="analytics">
-        <h2>Analytics & messaging</h2>
+        <h2>Analytics and messaging</h2>
         <Snippet
           lang="typescript"
           code={`import {
