@@ -1,5 +1,12 @@
 # @trainheroic-unofficial/coach-mcp
 
+## 1.6.1
+
+### Patch Changes
+
+- @trainheroic-unofficial/js@1.6.1
+- @trainheroic-unofficial/core@1.6.1
+
 ## 1.6.0
 
 ### Patch Changes
