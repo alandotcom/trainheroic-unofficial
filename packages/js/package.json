@@ -7,7 +7,7 @@
     "url": "https://github.com/alandotcom/trainheroic-unofficial.git",
     "directory": "packages/js"
   },
-  "description": "Unofficial TypeScript SDK for the TrainHeroic coaching API.",
+  "description": "Unofficial TypeScript SDK for the TrainHeroic API.",
   "type": "module",
   "exports": {
     ".": {

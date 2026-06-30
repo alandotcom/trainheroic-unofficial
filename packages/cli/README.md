@@ -1,6 +1,6 @@
 # @trainheroic-unofficial/cli
 
-A command-line tool for the TrainHeroic coaching API. Takes credentials from the environment, prints JSON.
+A command-line tool for the TrainHeroic API. Takes credentials from the environment, prints JSON.
 
 Part of the [trainheroic-unofficial](../../README.md) workspace.
 

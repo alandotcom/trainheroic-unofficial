@@ -7,7 +7,7 @@
 [![athlete-mcp](https://img.shields.io/npm/v/@trainheroic-unofficial/athlete-mcp?label=athlete-mcp)](https://www.npmjs.com/package/@trainheroic-unofficial/athlete-mcp)
 [![cli](https://img.shields.io/npm/v/@trainheroic-unofficial/cli?label=cli)](https://www.npmjs.com/package/@trainheroic-unofficial/cli)
 
-> Drive the TrainHeroic coaching API from Claude and other AI assistants, or from your own scripts.
+> Drive the TrainHeroic API from Claude and other AI assistants, or from your own scripts.
 
 [TrainHeroic](https://www.trainheroic.com) is a strength-and-conditioning platform: a coach programs workouts for a roster of athletes, and each athlete logs their training. This project wraps its (undocumented) API as a Claude Code skill, [MCP](https://modelcontextprotocol.io) servers (Model Context Protocol, the standard Claude and other assistants use to call external tools), and a CLI. You sign in with an existing TrainHeroic account; this does not create one.
 

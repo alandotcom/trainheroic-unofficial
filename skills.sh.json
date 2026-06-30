@@ -3,7 +3,7 @@
   "groupings": [
     {
       "title": "TrainHeroic",
-      "description": "Authenticated access to the TrainHeroic coaching API: athletes, teams, programs, exercise resolution, workout building, and analytics.",
+      "description": "Authenticated access to the TrainHeroic API: athletes, teams, programs, exercise resolution, workout building, and analytics.",
       "skills": ["trainheroic-unofficial"]
     }
   ]

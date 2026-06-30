@@ -46,8 +46,10 @@ export const ATHLETE_COMMANDS: Record<string, string> = {
   "athlete prs": "athlete_personal_records",
   "athlete stats": "athlete_exercise_stats",
   "athlete leaderboard": "athlete_leaderboard",
+  "athlete log-targets": "athlete_log_targets",
   "athlete log-set": "athlete_log_set",
   "athlete log-session": "athlete_log_session",
+  "athlete session-remove": "athlete_session_remove",
 };
 
 /** Commands whose first positional token after the command path is an id, keyed by canonical name. */

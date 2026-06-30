@@ -1,10 +1,16 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { dateString, logSessionArgsSchema, logSetArgsSchema } from "@trainheroic-unofficial/dto";
+import {
+  athleteSessionRemoveArgsSchema,
+  dateString,
+  logSessionArgsSchema,
+  logSetArgsSchema,
+} from "@trainheroic-unofficial/dto";
 import {
   addExercisesToWorkout,
   coerceInt,
   createPersonalWorkout,
+  definedProps,
   exerciseUnits,
   fetchAthletePrefs,
   fetchAthleteProfileSummary,
@@ -21,8 +27,11 @@ import {
   logAthleteSet,
   presentAthleteWorkouts,
   presentExerciseHistory,
+  presentLogTargets,
+  removePersonalWorkout,
   searchExerciseHistory,
   selectWorkouts,
+  selectWorkoutsByProgram,
   summarizeAthleteWorkouts,
   toSetResults,
 } from "@trainheroic-unofficial/js";
@@ -158,6 +167,19 @@ const ATHLETE_WORKOUTS_DESC =
   "lifetime totals (all-time session count, total volume, first/last logged date) call " +
   "athlete_profile instead of summing windows — a multi-year range here can time out. Narrow the " +
   "window if the result is truncated.";
+
+const ATHLETE_LOG_TARGETS_DESC =
+  "The savedWorkoutSetId + savedWorkoutSetExerciseId that athlete_log_set needs, read straight off " +
+  "your scheduled/logged workouts in an inclusive YYYY-MM-DD window — no raw needed. This is the " +
+  "self-service path for logging into a COACH-SCHEDULED workout: read the ids here, then pass them " +
+  "to athlete_log_set. The default view is COMPACT: one row per saved set, each carrying its " +
+  "program/programId, the savedWorkoutSetId, and every exercise's savedWorkoutSetExerciseId with " +
+  "prescribed/performed values. When several workouts fall on the same day (you're on more than one " +
+  "program), narrow to one with program (a case-insensitive title substring, e.g. 'bodybuilding' — " +
+  "no id lookup needed), or programId/teamId if you have the id. raw:true returns the untouched API " +
+  "objects, but that blob is large and can be truncated when several workouts share a date — prefer " +
+  "the program filter + the default view. For reading what you actually did (not the log ids), use " +
+  "athlete_workouts.";
 
 const ATHLETE_EXERCISE_HISTORY_DESC =
   "Per-exercise PRs and the dated session time-series (sets performed, estimated 1RM). The " +
@@ -320,7 +342,45 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
   );
 }
 
-/** Create a personal workout session and add exercises to it. */
+/** The compact log-id read: savedWorkoutSetId + savedWorkoutSetExerciseId for athlete_log_set. */
+function registerLogTargetsTool(server: McpServer, ctx: AthleteContext): void {
+  server.registerTool(
+    "athlete_log_targets",
+    {
+      title: "Saved-workout log ids (for athlete_log_set)",
+      description: ATHLETE_LOG_TARGETS_DESC,
+      inputSchema: {
+        startDate: dateString,
+        endDate: dateString,
+        program: z.string().optional(),
+        programId: idParam.optional(),
+        teamId: idParam.optional(),
+        raw: z.boolean().optional(),
+      },
+      annotations: READ,
+    },
+    ({ startDate, endDate, program, programId, teamId, raw }) =>
+      attempt(async () => {
+        const all = await fetchAthleteWorkouts(ctx.client, startDate, endDate);
+        const filter = definedProps({
+          programTitle: program,
+          programId: programId === undefined ? undefined : toId(programId),
+          teamId: teamId === undefined ? undefined : toId(teamId),
+        });
+        const workouts = selectWorkoutsByProgram(all, filter);
+        if (raw === true) {
+          return jsonResult(workouts, {
+            hint: "Each set's id is the savedWorkoutSetId; each savedWorkoutSetExercises[].id is the savedWorkoutSetExerciseId. Large — if truncated, pass program (a title substring) or use the default compact view.",
+          });
+        }
+        return jsonResult(presentLogTargets(workouts), {
+          hint: "One row per saved set: savedWorkoutSetId plus each savedWorkoutSetExerciseId, with the program it belongs to. Pass both to athlete_log_set. Filter with program (title substring), programId, or teamId if you're on several programs.",
+        });
+      }),
+  );
+}
+
+/** Create a personal workout session, add exercises, and remove a stray personal session. */
 function registerSessionTools(server: McpServer, ctx: AthleteContext): void {
   server.registerTool(
     "athlete_session_create",
@@ -360,6 +420,37 @@ function registerSessionTools(server: McpServer, ctx: AthleteContext): void {
         return jsonResult(await addExercisesToWorkout(ctx.client, toId(workoutId), mapped), {
           hint: "Each top-level id is a savedWorkoutSetId; savedWorkoutSetExercises[].id is the savedWorkoutSetExerciseId for athlete_log_set.",
         });
+      }),
+  );
+
+  server.registerTool(
+    "athlete_session_remove",
+    {
+      title: "Remove a personal workout session",
+      description:
+        "Delete a personal (self-created) workout session from your calendar — use it to clean up a " +
+        "stray ad-hoc session, e.g. one athlete_log_session created when you meant to log into a " +
+        "coach-scheduled workout. Give the programWorkoutId (the `id` of the session in " +
+        "athlete_workouts, where personal:true marks a personal session) and its date. ONLY personal " +
+        "sessions can be removed: the tool re-reads that day and refuses a coach-scheduled workout. " +
+        "Requires confirmation (elicitation or confirm:true).",
+      inputSchema: { ...athleteSessionRemoveArgsSchema.shape, confirm: z.boolean().optional() },
+      annotations: DESTRUCTIVE,
+    },
+    ({ programWorkoutId, date, confirm }, extra) =>
+      attempt(async () => {
+        const id = toId(programWorkoutId);
+        const ok = await confirmGate(
+          server,
+          extra.requestId,
+          `Permanently remove personal session ${id} on ${date}? This deletes the session and anything logged in it.`,
+          confirm,
+        );
+        if (!ok) return errorResult(NOT_CONFIRMED);
+        // removePersonalWorkout re-reads the day and refuses a coach-scheduled workout (the guard
+        // lives at the delete itself); attempt turns its throw into a self-correcting error result.
+        await removePersonalWorkout(ctx.client, { programWorkoutId: id, date });
+        return jsonResult({ removed: true, programWorkoutId: id, date });
       }),
   );
 }
@@ -414,9 +505,23 @@ function registerLogTool(server: McpServer, ctx: AthleteContext): void {
           confirm,
         );
         if (!ok) return errorResult(NOT_CONFIRMED);
-        return jsonResult(
-          await logAdHocSession(ctx.client, { date, exercises: mapSessionExercises(exercises) }),
-        );
+        const res = await logAdHocSession(ctx.client, {
+          date,
+          exercises: mapSessionExercises(exercises),
+        });
+        // Warn (don't redirect): if a logged lift was already on a coach-scheduled workout today,
+        // point at athlete_log_set + the cleanup tool rather than silently leaving a second session.
+        if (res.scheduledAlternatives !== undefined && res.scheduledAlternatives.length > 0) {
+          return jsonResult(res, {
+            hint:
+              "Heads up: one or more of these lifts were already on a coach-scheduled workout today " +
+              "(see scheduledAlternatives). This logged a SEPARATE personal session. To log into the " +
+              "scheduled workout instead, use athlete_log_set with the savedWorkoutSetId / " +
+              "savedWorkoutSetExerciseId shown there — and athlete_session_remove to delete this " +
+              "personal session if it was a mistake.",
+          });
+        }
+        return jsonResult(res);
       }),
   );
 
@@ -434,8 +539,8 @@ function registerLogTool(server: McpServer, ctx: AthleteContext): void {
         "performed. In a superset/circuit the block is marked done only once every exercise in it " +
         "has logged results, so logging one exercise leaves its siblings untouched (the response's " +
         "`setCompleted` reports whether the block was completed). Get savedWorkoutSetId + " +
-        "savedWorkoutSetExerciseId from athlete_workouts (raw:true). Requires confirmation " +
-        "(elicitation or confirm:true).",
+        "savedWorkoutSetExerciseId from athlete_log_targets (filter by program when several workouts " +
+        "share a date). Requires confirmation (elicitation or confirm:true).",
       inputSchema: { ...logSetArgsSchema.shape, confirm: z.boolean().optional() },
       annotations: DESTRUCTIVE,
     },
@@ -485,6 +590,7 @@ export function registerAthleteTrainingTools(server: McpServer, ctx: AthleteCont
 
   registerProfileTools(server, ctx, whoami, userId);
   registerExerciseTools(server, ctx, userId);
+  registerLogTargetsTool(server, ctx);
   registerSessionTools(server, ctx);
   registerLogTool(server, ctx);
 }

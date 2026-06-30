@@ -4,7 +4,14 @@
 // the same TrainHeroic hosts as the reads; the day's range is fetched via athlete.ts's read
 // helpers to resolve the ids each write needs. Runtime-agnostic: no `node:*`, so it runs on workerd.
 
-import { coerceInt, isRecord, MAX_PARAM_SLOTS, str } from "./exercise-util";
+import {
+  coerceInt,
+  exerciseTitle,
+  isPersonalSession,
+  isRecord,
+  MAX_PARAM_SLOTS,
+  str,
+} from "./exercise-util";
 import { fetchAthleteWorkouts, fetchCoachAthleteWorkouts } from "./athlete";
 import type { TrainHeroicClient } from "./client";
 import type { ProgramWorkout } from "@trainheroic-unofficial/dto";
@@ -233,11 +240,7 @@ export function findSavedWorkoutSet(
         const exLabels = exercises
           .map((ex) => {
             const exId = coerceInt(ex.id);
-            const title =
-              (typeof ex.exercise_title === "string" && ex.exercise_title) ||
-              (typeof ex.title === "string" && ex.title) ||
-              "exercise";
-            return exId === null ? null : `${exId} (${title})`;
+            return exId === null ? null : `${exId} (${exerciseTitle(ex, "exercise")})`;
           })
           .filter((x): x is string => x !== null);
         available.push(`set ${setId} → exercise ids: ${exLabels.join(", ") || "none"}`);
@@ -505,11 +508,7 @@ async function writeSetResults(
       const valid = exercises
         .map((e) => {
           const id = coerceInt(e.id);
-          const title =
-            (typeof e.exercise_title === "string" && e.exercise_title) ||
-            (typeof e.title === "string" && e.title) ||
-            "exercise";
-          return id === null ? null : `${id} (${title})`;
+          return id === null ? null : `${id} (${exerciseTitle(e, "exercise")})`;
         })
         .filter((x): x is string => x !== null);
       throw new Error(
@@ -650,6 +649,40 @@ export async function addExercisesToWorkout(
   return res.data;
 }
 
+/**
+ * DELETE /v5/programWorkouts/{programWorkoutId} — remove a personal (athlete-created) workout
+ * session from the athlete's own calendar. Re-reads the day and removes ONLY a personal session
+ * (`personal_cal`): it throws if no workout with that id is on the date, or if the target is a
+ * coach-scheduled workout (which is not the athlete's to delete). This guard lives here, at the
+ * delete itself, so no caller can issue the DELETE against a coach workout by skipping a check.
+ * Throws on a non-ok response.
+ */
+export async function removePersonalWorkout(
+  client: TrainHeroicClient,
+  args: { programWorkoutId: number; date: string },
+): Promise<void> {
+  const day = await fetchAthleteWorkouts(client, args.date, args.date);
+  const target = day.find(
+    (pw) => coerceInt((pw as Record<string, unknown>).id) === args.programWorkoutId,
+  );
+  if (target === undefined) {
+    throw new Error(
+      `No workout with id ${args.programWorkoutId} on ${args.date}. Get the id and date from athlete_workouts.`,
+    );
+  }
+  if (!isPersonalSession(target)) {
+    throw new Error(
+      `Workout ${args.programWorkoutId} on ${args.date} is a coach-scheduled workout, not a ` +
+        "personal session, so it can't be removed. To change logged results on a scheduled workout, use athlete_log_set.",
+    );
+  }
+  const res = await client.request<unknown>(
+    "DELETE",
+    `/v5/programWorkouts/${args.programWorkoutId}`,
+  );
+  if (!res.ok) throw new Error(`Remove personal workout failed (HTTP ${res.status}).`);
+}
+
 // --- Ad-hoc / by-exercise session logging ---
 
 /** One exercise's entered sets, keyed by the exercise id rather than a saved-set id. */
@@ -659,12 +692,30 @@ export type SessionExercise = {
   sets: ReadonlyArray<{ param1?: number | string; param2?: number | string }>;
 };
 
+/** A coach-scheduled prescription on the same day that matches an exercise the athlete just logged
+ * ad-hoc. Surfaced as a hint that {@link logAthleteSet} could log into the scheduled workout. */
+export type ScheduledAlternative = {
+  exerciseId: number;
+  title: string;
+  program: string | null;
+  workoutTitle: string;
+  savedWorkoutSetId: number;
+  savedWorkoutSetExerciseId: number;
+};
+
 /** Result of logging a session by exercise: which sets were written, and (athlete) whether a
  * new personal session had to be created for the date. */
 export type LogSessionResult = {
   date: string;
   created: boolean;
   sets: Array<{ savedWorkoutSetId: number; exercisesLogged: number }>;
+  /**
+   * Coach-scheduled prescriptions that day matching a logged exercise (athlete path only). Present
+   * only when non-empty — a hint that the same lift was already on the athlete's scheduled workout,
+   * so {@link logAthleteSet} (athlete_log_set) could have logged into it instead of a personal
+   * session. The ad-hoc log still happened; this does not redirect it.
+   */
+  scheduledAlternatives?: ScheduledAlternative[];
 };
 
 /** A saved-set target for one requested exercise, resolved from the API. */
@@ -682,11 +733,9 @@ type ResolvedExercise = {
  */
 function findPersonalSessionWorkoutId(workouts: readonly ProgramWorkout[]): number | null {
   for (const pw of workouts) {
-    const rec = pw as Record<string, unknown>;
-    if (rec.personal_cal === true) {
-      const workoutId = coerceInt(rec.workout_id);
-      if (workoutId !== null) return workoutId;
-    }
+    if (!isPersonalSession(pw)) continue;
+    const workoutId = coerceInt((pw as Record<string, unknown>).workout_id);
+    if (workoutId !== null) return workoutId;
   }
   return null;
 }
@@ -721,11 +770,19 @@ function indexAddedExercises(
   return out;
 }
 
-/** Flatten a day's prescribed saved sets into `{ savedWorkoutSetId, ex }` rows (both set keys). */
+/**
+ * Flatten a day's saved sets into `{ pw, savedWorkoutSetId, ex }` rows (both saved-set keys),
+ * carrying the parent program-workout so a caller can read its identity (`personal_cal`, program
+ * title) without re-walking. The one saved-copy traversal the by-exercise paths share.
+ */
 function eachPrescribedExercise(
   workouts: readonly ProgramWorkout[],
-): Array<{ savedWorkoutSetId: number; ex: Record<string, unknown> }> {
-  const rows: Array<{ savedWorkoutSetId: number; ex: Record<string, unknown> }> = [];
+): Array<{ pw: Record<string, unknown>; savedWorkoutSetId: number; ex: Record<string, unknown> }> {
+  const rows: Array<{
+    pw: Record<string, unknown>;
+    savedWorkoutSetId: number;
+    ex: Record<string, unknown>;
+  }> = [];
   for (const pw of workouts) {
     const rec = pw as Record<string, unknown>;
     const ssw = isRecord(rec.summarizedSavedWorkout) ? rec.summarizedSavedWorkout : {};
@@ -740,7 +797,7 @@ function eachPrescribedExercise(
       const savedWorkoutSetId = coerceInt(s.id);
       if (savedWorkoutSetId === null) continue;
       const exercises = Array.isArray(s.workoutSetExercises) ? s.workoutSetExercises : [];
-      for (const ex of exercises) if (isRecord(ex)) rows.push({ savedWorkoutSetId, ex });
+      for (const ex of exercises) if (isRecord(ex)) rows.push({ pw: rec, savedWorkoutSetId, ex });
     }
   }
   return rows;
@@ -767,17 +824,43 @@ function findPrescribedExercise(
   return null;
 }
 
+/**
+ * Find prescribed exercises on coach-scheduled (non-personal) workouts that day matching any of the
+ * given exercise ids. Used to warn after an ad-hoc log that the same lift was already on the
+ * athlete's scheduled workout — a caller can then point at {@link logAthleteSet}. Personal sessions
+ * (`personal_cal === true`) are skipped: the ad-hoc log itself lands there, so they are not an
+ * alternative. One row per matching saved-set exercise, dropping any with an unresolvable id.
+ */
+function findScheduledMatches(
+  workouts: readonly ProgramWorkout[],
+  exerciseIds: ReadonlySet<number>,
+): ScheduledAlternative[] {
+  const out: ScheduledAlternative[] = [];
+  for (const { pw, savedWorkoutSetId, ex } of eachPrescribedExercise(workouts)) {
+    if (isPersonalSession(pw)) continue;
+    const exerciseId = coerceInt(ex.exercise_id);
+    const savedWorkoutSetExerciseId = coerceInt(ex.id);
+    if (exerciseId === null || savedWorkoutSetExerciseId === null) continue;
+    if (!exerciseIds.has(exerciseId)) continue;
+    out.push({
+      exerciseId,
+      title: exerciseTitle(ex),
+      program: str(pw.program_title),
+      workoutTitle: str(pw.workout_title) ?? "",
+      savedWorkoutSetId,
+      savedWorkoutSetExerciseId,
+    });
+  }
+  return out;
+}
+
 /** List the prescribed exercises on a day as `id (title)` labels, for not-found errors. */
 function prescribedExerciseLabels(workouts: readonly ProgramWorkout[]): string[] {
   const labels: string[] = [];
   for (const { ex } of eachPrescribedExercise(workouts)) {
     const id = coerceInt(ex.exercise_id);
     if (id === null) continue;
-    const title =
-      (typeof ex.exercise_title === "string" && ex.exercise_title) ||
-      (typeof ex.title === "string" && ex.title) ||
-      "exercise";
-    labels.push(`${id} (${title})`);
+    labels.push(`${id} (${exerciseTitle(ex, "exercise")})`);
   }
   return labels;
 }
@@ -862,7 +945,15 @@ export async function logAdHocSession(
   });
 
   const sets = await logResolvedExercises(client, { role: "athlete" }, args.date, resolved);
-  return { date: args.date, created, sets };
+  const result: LogSessionResult = { date: args.date, created, sets };
+  // Warn (don't redirect) when a logged exercise was already on a coach-scheduled workout that day:
+  // the ad-hoc log stands, but the caller can point at athlete_log_set to log into the schedule.
+  const scheduledAlternatives = findScheduledMatches(
+    day,
+    new Set(args.exercises.map((e) => e.exerciseId)),
+  );
+  if (scheduledAlternatives.length > 0) result.scheduledAlternatives = scheduledAlternatives;
+  return result;
 }
 
 /**

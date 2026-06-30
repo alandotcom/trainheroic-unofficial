@@ -8,7 +8,7 @@ package file for whatever you are touching.
 
 ## What this repo is
 
-An unofficial TypeScript toolkit for the undocumented TrainHeroic coaching API. One shared
+An unofficial TypeScript toolkit for the undocumented TrainHeroic API. One shared
 tool layer runs in several shapes: a remote multi-tenant MCP server on Cloudflare Workers,
 two local single-user stdio MCP servers (one for a coach, one for an athlete), and a CLI.
 The API has two roles — a coach manages a roster; an athlete trains their own program. A

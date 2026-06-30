@@ -1,6 +1,6 @@
 # TrainHeroic Toolkit
 
-The shared domain language for this toolkit over the undocumented TrainHeroic coaching API.
+The shared domain language for this toolkit over the undocumented TrainHeroic API.
 This glossary pins terms that are easy to confuse across the SDK, the tool layer, and the
 servers. It is a glossary only, not a spec; implementation lives in the code and package
 READMEs.
@@ -9,6 +9,21 @@ Names follow TrainHeroic's own vocabulary wherever the API exposes one, even whe
 produces close collisions (the two log actions below being the clearest case). The
 TrainHeroic term wins over a cleaner invented one, so renaming to remove a collision is not
 something we do.
+
+## The platform and its API
+
+**TrainHeroic**:
+The strength-and-conditioning platform this toolkit talks to. A coach programs workouts for a
+roster; each athlete trains and logs against their own program.
+_Avoid_: calling it a "coaching platform" in our own summaries, which hides the athlete half
+the toolkit treats as first-class.
+
+**TrainHeroic API**:
+The single undocumented REST API behind that platform, reached over two hosts and serving both
+roles from one surface. This is the canonical name for the upstream API in our taglines,
+package descriptions, and docs.
+_Avoid_: "coaching API". It frames a two-role surface as coach-only, and it gets quoted
+verbatim into downstream summaries of the repo.
 
 ## Roles and acting on behalf
 

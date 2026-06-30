@@ -135,6 +135,28 @@ export function str(v: unknown): string | null {
 }
 
 /**
+ * The display title of a saved-copy exercise row, preferring `exercise_title`, then `title`, then
+ * the given fallback. The saved-workout shape carries the title under either key depending on the
+ * endpoint, so this is the one place that reconciles them.
+ */
+export function exerciseTitle(ex: Record<string, unknown>, fallback = ""): string {
+  return (
+    (typeof ex.exercise_title === "string" && ex.exercise_title) ||
+    (typeof ex.title === "string" && ex.title) ||
+    fallback
+  );
+}
+
+/**
+ * True when a program-workout range item is a personal (athlete-created) session rather than a
+ * coach-scheduled one. The API marks these with `personal_cal === true`; this is the single
+ * definition every consumer (presenter, find-or-create, the remove guard) reads through.
+ */
+export function isPersonalSession(pw: unknown): boolean {
+  return isRecord(pw) && pw.personal_cal === true;
+}
+
+/**
  * Rank candidate rows for a free-text query (FTS5 replacement). Higher is better:
  * exact title, then prefix, then count of matched tokens, with shorter titles and
  * standard (non-custom) exercises preferred on ties.

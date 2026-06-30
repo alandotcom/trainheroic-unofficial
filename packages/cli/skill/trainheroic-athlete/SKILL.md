@@ -63,8 +63,10 @@ on a 401/403. Start with `$TH athlete whoami` to confirm auth and get your `id`.
 | Working maxes (drive % prescriptions) | `$TH athlete working-maxes`                                                    |
 | Benchmark leaderboard                 | `$TH athlete leaderboard <workoutId>`                                          |
 | Download all historicals to JSON      | `$TH athlete export [--out dir] [--full]`                                      |
+| Log ids for a scheduled workout       | `$TH athlete log-targets --start Y-M-D --end Y-M-D [--program <title>]`        |
 | Log completed set results (gated)     | `$TH athlete log-set --date Y-M-D --set <id> ... --yes`                        |
 | Log an off-plan session (gated)       | `$TH athlete log-session --date Y-M-D '[{"exerciseId":N,"sets":[...]}]' --yes` |
+| Remove a stray personal session       | `$TH athlete session-remove --id <programWorkoutId> --date Y-M-D --yes`        |
 
 ## Reading training
 
@@ -114,11 +116,12 @@ marks the set completed, and the result shows up in your exercise history. **It 
 athlete-facing**: it mutates your training log, which your coach can see, so confirm before
 running and re-read the workout to check the result landed.
 
-Get the `savedWorkoutSetId` and each `savedWorkoutSetExerciseId` from the raw workout
-(`$TH athlete workouts --start <day> --end <day> --raw`, under
-`summarizedSavedWorkout.saved_workout.workoutSets`). Then:
+Get the `savedWorkoutSetId` and each `savedWorkoutSetExerciseId` from `$TH athlete log-targets`
+— a compact one-row-per-set view, no raw blob to dig through. When several workouts fall on the
+same day (you're on more than one program), narrow with `--program <title-substring>`:
 
 ```bash
+$TH athlete log-targets --start 2026-06-01 --end 2026-06-01 --program "Bodybuilding"
 $TH athlete log-set --date 2026-06-01 --set 1593305783 --yes \
   '[{"savedWorkoutSetExerciseId": 2712369448, "sets": [{"param1": 3, "param2": 225}]}]'
 ```

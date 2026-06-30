@@ -7,7 +7,7 @@
     "url": "https://github.com/alandotcom/trainheroic-unofficial.git",
     "directory": "packages/cli"
   },
-  "description": "Command-line tool for the TrainHeroic coaching API.",
+  "description": "Command-line tool for the TrainHeroic API.",
   "type": "module",
   "bin": {
     "trainheroic": "./dist/cli.mjs"
