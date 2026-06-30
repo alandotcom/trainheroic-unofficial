@@ -113,18 +113,11 @@ if (team && typeof team.stream.id === "number") {
         />
       </section>
 
-      <section class="doc narrow prose">
-        <h2>Runtime split</h2>
-        <p>
-          The main export has no <code>node:*</code> imports. Filesystem cache lives at
-          <code>./node</code>.
-        </p>
-        <p>
-          Session tokens can be persisted via <code>client.sessionId</code> and passed to the third
-          constructor argument. TrainHeroic has no refresh token — expired tokens trigger one
-          re-login.
-        </p>
-        <p>
+      <section class="doc narrow">
+        <p class="faint">
+          The client logs in on first use and renews the session when it expires. On Node, import
+          <code>{NPM_JS}/node</code> to cache the exercise library between runs (see the coach
+          example above).
           <a href="https://www.npmjs.com/package/@trainheroic-unofficial/js">Full API on npm ↗</a>
         </p>
       </section>
