@@ -2,6 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
+import Snippet from "../components/Snippet.astro";
 import { MCP_URL, NPM_JS, NPM_COACH_MCP } from "../data/tools";
 ---
 
@@ -11,125 +12,51 @@ import { MCP_URL, NPM_JS, NPM_COACH_MCP } from "../data/tools";
 >
   <Header />
   <main>
-    <section class="hero container">
-      <div class="hero__grid">
-        <div>
-          <h1>TrainHeroic for assistants and code</h1>
-          <p class="hero__lead">
-            Typed tools and a runtime-agnostic SDK around the undocumented TrainHeroic API.
-            Wire Claude to your roster, or call the same endpoints from your own scripts.
-          </p>
-          <div class="hero__actions">
-            <a class="btn btn--primary" href="/mcp">MCP setup</a>
-            <a class="btn btn--ghost" href="/sdk">SDK reference</a>
-          </div>
-        </div>
-        <div class="hero__terminal" aria-label="Example MCP connection">
-          <div class="hero__terminal-bar" aria-hidden="true">
-            <span class="hero__terminal-dot"></span>
-            <span class="hero__terminal-dot"></span>
-            <span class="hero__terminal-dot"></span>
-          </div>
-          <pre><code><span class="comment"># Claude Code — hosted MCP</span>
-claude mcp add trainheroic \
-  --transport http \
-  {MCP_URL}
-
-<span class="comment"># Local coach server</span>
-claude mcp add trainheroic \
-  -e <span class="key">TRAINHEROIC_EMAIL</span>=<span class="str">coach@example.com</span> \
-  -e <span class="key">TRAINHEROIC_PASSWORD</span>=<span class="str">••••••••</span> \
-  -- npx -y {NPM_COACH_MCP}</code></pre>
-        </div>
-      </div>
-    </section>
-
-    <section class="section container section--ruled">
-      <h2>Start here</h2>
-      <p class="section__lead">Three entry points. Pick the one that matches how you work.</p>
-      <ul class="path-list">
-        <li>
-          <a href="/mcp">
-            <span class="path-list__label">MCP</span>
-            <span class="path-list__desc"
-              >~50 coach tools and ~16 athlete tools over HTTP or stdio. Hosted OAuth or local
-              npx.</span
-            >
-            <span class="path-list__arrow" aria-hidden="true">→</span>
-          </a>
-        </li>
-        <li>
-          <a href="/sdk">
-            <span class="path-list__label">SDK</span>
-            <span class="path-list__desc"
-              ><code>{NPM_JS}</code> — auth, exercise library, workout encoder, athlete reads,
-              messaging. Runs on Node and workerd.</span
-            >
-            <span class="path-list__arrow" aria-hidden="true">→</span>
-          </a>
-        </li>
-        <li>
-          <a href={MCP_URL} target="_blank" rel="noopener noreferrer">
-            <span class="path-list__label">Hosted</span>
-            <span class="path-list__desc"
-              >Paste one URL into Claude.ai or Claude Code. Credentials stay server-side behind
-              OAuth.</span
-            >
-            <span class="path-list__arrow" aria-hidden="true">↗</span>
-          </a>
-        </li>
-      </ul>
-    </section>
-
-    <section class="section container section--ruled">
-      <h2>What the tools cover</h2>
-      <p class="section__lead">
-        Surface depends on the account you sign in with. Coaches get programming plus their own
-        athlete data.
-      </p>
-      <dl class="cap-list">
-        <div>
-          <dt>Program workouts</dt>
-          <dd>Build, publish, and manage sessions with the workout encoder and exercise library.</dd>
-        </div>
-        <div>
-          <dt>Manage a roster</dt>
-          <dd>List athletes, invite and archive, log sets, prescribe training.</dd>
-        </div>
-        <div>
-          <dt>Read analytics</dt>
-          <dd>Readiness, 1RM history, compliance, lift progress, training summaries.</dd>
-        </div>
-        <div>
-          <dt>Athlete history</dt>
-          <dd>Workouts, PRs, working maxes, exercise history, session logging.</dd>
-        </div>
-        <div>
-          <dt>Messaging</dt>
-          <dd>List conversations, read streams, draft and send comments.</dd>
-        </div>
-        <div>
-          <dt>Warehouse sync</dt>
-          <dd>Hosted-only tools mirror programming and training history for fast reads.</dd>
-        </div>
-      </dl>
-    </section>
-
-    <section class="section container section--ruled">
-      <h2>Quick connect</h2>
-      <p class="section__lead">The public hosted endpoint:</p>
-      <div class="endpoint" style="margin-bottom: 1.25rem;">
-        <span class="endpoint__dot" aria-hidden="true"></span>
-        {MCP_URL}
-      </div>
-      <div class="callout">
-        <p>
-          <strong>Credentials:</strong> every entry point uses your real TrainHeroic email and
-          password. Local configs store them in plaintext. The hosted server keeps credentials
-          server-side behind OAuth.
+    <div class="shell">
+      <header class="doc__intro">
+        <h1>TrainHeroic for assistants and code</h1>
+        <p class="lead">
+          Unofficial toolkit for the TrainHeroic API. Wire Claude to your roster, or script the
+          same endpoints yourself.
         </p>
-      </div>
-    </section>
+        <ul class="doc__links">
+          <li><a href="/mcp">MCP server</a></li>
+          <li><a href="/sdk">TypeScript SDK</a></li>
+          <li><a href={MCP_URL}>Hosted endpoint ↗</a></li>
+        </ul>
+      </header>
+
+      <section class="doc">
+        <Snippet
+          code={`# Hosted MCP (OAuth)
+claude mcp add trainheroic --transport http \\
+  ${MCP_URL}
+
+# Local coach (stdio)
+claude mcp add trainheroic \\
+  -e TRAINHEROIC_EMAIL=you@example.com \\
+  -e TRAINHEROIC_PASSWORD=•••••••• \\
+  -- npx -y ${NPM_COACH_MCP}`}
+        />
+        <span class="url-line">{MCP_URL}</span>
+      </section>
+
+      <section class="doc narrow">
+        <h2>What you get</h2>
+        <ul class="list-plain">
+          <li><strong>Coach</strong> — program workouts, manage athletes and teams, analytics, messaging</li>
+          <li><strong>Athlete</strong> — training history, PRs, working maxes, session logging</li>
+          <li><strong>SDK</strong> — <code>{NPM_JS}</code> for your own scripts and workers</li>
+        </ul>
+      </section>
+
+      <section class="doc narrow">
+        <p class="faint">
+          Unofficial, not affiliated with TrainHeroic. Hosted OAuth keeps credentials server-side;
+          local configs store email and password in plaintext.
+        </p>
+      </section>
+    </div>
   </main>
   <Footer />
 </Layout>

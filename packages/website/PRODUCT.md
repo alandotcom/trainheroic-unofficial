@@ -24,13 +24,16 @@ Capable, direct, quietly opinionated. Expert confidence without gym-bro energy o
 - Tiny uppercase tracked eyebrows above every section
 - Side-stripe callout borders
 - IBM Plex / Inter / Space Grotesk as the whole personality
+- AI purple on white (violet primary, indigo links)
+- Fake terminal windows with red/yellow/green dots
+- Pill buttons and logo squares with initials
 
 ## Design Principles
 
 1. **Show the integration** — lead with real URLs, commands, and tool names; decoration is secondary.
 2. **One clear path** — hosted MCP first, local stdio second, SDK for builders.
 3. **Typographic hierarchy over boxes** — use type and spacing before reaching for cards.
-4. **Restraint with a POV** — committed violet ink on pure white; no decorative noise.
+4. **Ink on paper** — near-black type on pure white; color only where it earns a click.
 5. **Practice what we preach** — the site should look like something you’d ship from the same repo.
 
 ## Accessibility & Inclusion

@@ -1,0 +1,11 @@
+---
+interface Props {
+  code: string;
+}
+
+const { code } = Astro.props;
+---
+
+<figure class="snippet">
+  <pre><code>{code.trim()}</code></pre>
+</figure>

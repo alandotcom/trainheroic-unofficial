@@ -8,12 +8,9 @@ const links = [
 ];
 ---
 
-<header class="site-header">
-  <div class="container site-header__inner">
-    <a class="brand" href="/">
-      <span class="brand__mark" aria-hidden="true">TH</span>
-      <span>trainheroic-unofficial</span>
-    </a>
+<header class="site-header shell">
+  <div class="site-header__inner">
+    <a class="brand" href="/">trainheroic <span>unofficial</span></a>
     <nav class="nav" aria-label="Main">
       {
         links.map((link) => (
@@ -22,10 +19,9 @@ const links = [
             aria-current={path === link.href ? "page" : undefined}
             target={link.external ? "_blank" : undefined}
             rel={link.external ? "noopener noreferrer" : undefined}
-            class:list={{ nav__external: link.external }}
           >
             {link.label}
-            {link.external ? <span aria-hidden="true">↗</span> : null}
+            {link.external ? " ↗" : ""}
           </a>
         ))
       }

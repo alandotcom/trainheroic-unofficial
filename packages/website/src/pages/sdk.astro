@@ -2,7 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
-import CodeBlock from "../components/CodeBlock.astro";
+import Snippet from "../components/Snippet.astro";
 import { NPM_DTO, NPM_JS } from "../data/tools";
 ---
 
@@ -12,29 +12,25 @@ import { NPM_DTO, NPM_JS } from "../data/tools";
 >
   <Header />
   <main>
-    <header class="page-header container">
-      <h1>TypeScript SDK</h1>
-      <p>
-        <code>{NPM_JS}</code> wraps auth, the exercise library, workout encoding, roster helpers,
-        athlete reads, analytics, and messaging. Runs on Node, workerd, and modern browsers.
-        Shapes live in <code>{NPM_DTO}</code>.
-      </p>
-    </header>
+    <div class="shell">
+      <header class="doc__intro narrow">
+        <h1>SDK</h1>
+        <p class="lead">
+          <code>{NPM_JS}</code> — auth, exercises, workouts, roster helpers, athlete reads,
+          analytics, messaging. Runs on Node, workerd, and browsers. Types in <code>{NPM_DTO}</code
+          >.
+        </p>
+      </header>
 
-    <section class="container" style="padding-bottom: 1rem;">
-      <CodeBlock
-        code={`npm install ${NPM_JS}
-# or: pnpm add ${NPM_JS}`}
-      />
-    </section>
+      <section class="doc">
+        <Snippet code={`npm install ${NPM_JS}`} />
+      </section>
 
-    <section class="section container section--ruled">
-      <h2>Coach workflow</h2>
-      <p class="section__lead">
-        List your roster, resolve an exercise by name, and program a session as a draft.
-      </p>
-      <CodeBlock
-        code={`import {
+      <section class="doc narrow">
+        <h2>Coach workflow</h2>
+        <p>List your roster, resolve an exercise by name, program a draft session.</p>
+        <Snippet
+          code={`import {
   TrainHeroicClient,
   ExerciseLibrary,
   buildSession,
@@ -42,46 +38,33 @@ import { NPM_DTO, NPM_JS } from "../data/tools";
 } from "${NPM_JS}";
 import { JsonFileLibraryCache } from "${NPM_JS}/node";
 
-const client = new TrainHeroicClient(
-  process.env.TRAINHEROIC_EMAIL!,
-  process.env.TRAINHEROIC_PASSWORD!,
-);
-
+const client = new TrainHeroicClient(email, password);
 const library = new ExerciseLibrary(client, new JsonFileLibraryCache());
 
-const roster = await fetchCoachRoster(client);
-console.log(roster.map((a) => \`\${a.name} (\${a.id})\`));
-
-const { match, candidates } = await library.resolve("Back Squat");
-if (!match) {
-  throw new Error(\`Ambiguous — pick one: \${candidates.map((c) => c.title).join(", ")}\`);
+for (const athlete of await fetchCoachRoster(client)) {
+  console.log(athlete.name, athlete.id);
 }
+
+const { match } = await library.resolve("Back Squat");
+if (!match) throw new Error("Resolve to one exercise first");
 
 const { pwId } = await buildSession(client, {
   programId: 12345,
   date: [2026, 6, 22],
-  blocks: [
-    {
-      title: "Strength",
-      exercises: [{ id: match.id, sets: 5, reps: 5, weight: 225, rpe: 8 }],
-    },
-  ],
-  instruction: "Warm up thoroughly.",
+  blocks: [{
+    title: "Strength",
+    exercises: [{ id: match.id, sets: 5, reps: 5, weight: 225, rpe: 8 }],
+  }],
   publish: false,
-});
+});`}
+        />
+      </section>
 
-console.log("Draft session:", pwId);`}
-      />
-    </section>
-
-    <section class="section container section--ruled">
-      <h2>Athlete reads</h2>
-      <p class="section__lead">
-        Profile totals, personal records, and exercise history for the signed-in account (coach
-        accounts have athlete scope too).
-      </p>
-      <CodeBlock
-        code={`import {
+      <section class="doc narrow">
+        <h2>Athlete reads</h2>
+        <p>Profile, PRs, and history for the signed-in account.</p>
+        <Snippet
+          code={`import {
   TrainHeroicClient,
   resolveAthleteUserId,
   fetchAthleteProfileSummary,
@@ -90,86 +73,62 @@ console.log("Draft session:", pwId);`}
   fetchPersonalRecords,
 } from "${NPM_JS}";
 
-const client = new TrainHeroicClient(
-  process.env.TRAINHEROIC_EMAIL!,
-  process.env.TRAINHEROIC_PASSWORD!,
-);
-
+const client = new TrainHeroicClient(email, password);
 const userId = await resolveAthleteUserId(client);
 
 const profile = await fetchAthleteProfileSummary(client, userId);
-console.log(profile.volume_sum, "lbs lifetime volume");
+console.log(profile.volume_sum);
 
 const [squat] = await searchExerciseHistory(client, "back squat", 1);
 if (squat) {
-  const exerciseId = Number(squat.id);
-  const history = await fetchExerciseHistoryDetail(client, exerciseId, userId);
-  console.log("Best set:", history.liftPRs?.[0]);
-
-  const prs = await fetchPersonalRecords(client, exerciseId);
-  console.log("Standards PR:", prs[0]);
+  const id = Number(squat.id);
+  console.log(await fetchExerciseHistoryDetail(client, id, userId));
+  console.log(await fetchPersonalRecords(client, id));
 }`}
-      />
-    </section>
+        />
+      </section>
 
-    <section class="section container section--ruled">
-      <h2>Analytics & messaging</h2>
-      <p class="section__lead">Team readiness and a direct message to a roster stream.</p>
-      <CodeBlock
-        code={`import {
+      <section class="doc narrow">
+        <h2>Analytics & messaging</h2>
+        <Snippet
+          code={`import {
   TrainHeroicClient,
   queryAnalytics,
   fetchStreams,
   sendComment,
 } from "${NPM_JS}";
 
-const client = new TrainHeroicClient(
-  process.env.TRAINHEROIC_EMAIL!,
-  process.env.TRAINHEROIC_PASSWORD!,
-);
+const client = new TrainHeroicClient(email, password);
 
-const readiness = await queryAnalytics(client, {
+await queryAnalytics(client, {
   metric: "readiness-team",
   teamId: 42,
   date: "2026-06-22",
 });
 
-const streams = await fetchStreams(client);
-const team = streams.find((s) => s.kind === "team");
+const team = (await fetchStreams(client)).find((s) => s.kind === "team");
 if (team && typeof team.stream.id === "number") {
-  await sendComment(client, team.stream.id, "Great work this week.");
+  await sendComment(client, team.stream.id, "Great week.");
 }`}
-      />
-    </section>
+        />
+      </section>
 
-    <section class="section container section--ruled">
-      <h2>Runtime split</h2>
-      <p class="section__lead">
-        The main export has no <code>node:*</code> imports — safe on workerd. Filesystem cache
-        helpers are behind <code>./node</code>.
-      </p>
-      <CodeBlock
-        code={`// Any modern JS runtime
-import { TrainHeroicClient, buildSession } from "${NPM_JS}";
-
-// Node only — persists ~/.trainheroic/library.json
-import { JsonFileLibraryCache } from "${NPM_JS}/node";`}
-      />
-    </section>
-
-    <section class="section container section--ruled prose">
-      <h2>Session reuse</h2>
-      <p>
-        TrainHeroic has no refresh token. After the first call, <code>client.sessionId</code> holds
-        the active token — persist it and pass it as the third constructor argument to skip login on
-        restart. Expired tokens trigger one re-login and retry.
-      </p>
-      <p>
-        <a href="https://www.npmjs.com/package/@trainheroic-unofficial/js" target="_blank" rel="noopener noreferrer"
-          >Full API on npm ↗</a
-        >
-      </p>
-    </section>
+      <section class="doc narrow prose">
+        <h2>Runtime split</h2>
+        <p>
+          The main export has no <code>node:*</code> imports. Filesystem cache lives at
+          <code>./node</code>.
+        </p>
+        <p>
+          Session tokens can be persisted via <code>client.sessionId</code> and passed to the third
+          constructor argument. TrainHeroic has no refresh token — expired tokens trigger one
+          re-login.
+        </p>
+        <p>
+          <a href="https://www.npmjs.com/package/@trainheroic-unofficial/js">Full API on npm ↗</a>
+        </p>
+      </section>
+    </div>
   </main>
   <Footer />
 </Layout>
