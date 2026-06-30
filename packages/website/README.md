@@ -42,4 +42,8 @@ pnpm gen:mcp-tools
 
 ## Deploy
 
-CI builds and publishes to GitHub Pages on pushes to `main` (`.github/workflows/website.yml`). Set the custom domain to `trainheroic-unofficial.com` in repository Pages settings when ready.
+CI builds and publishes to GitHub Pages on pushes to `main`
+(`.github/workflows/website.yml`). **One-time setup:** enable Pages with
+**GitHub Actions** as the build source — see [DEPLOY.md](./DEPLOY.md). Set the
+custom domain to `trainheroic-unofficial.com` in repository Pages settings when
+ready.
