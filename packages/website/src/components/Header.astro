@@ -1,0 +1,40 @@
+---
+const path = Astro.url.pathname;
+
+const isDevelopers =
+  path === "/developers" || path === "/skill" || path === "/sdk" || path === "/mcp";
+
+const links = [
+  { href: "/developers", label: "Developers", match: isDevelopers },
+  {
+    href: "https://github.com/alandotcom/trainheroic-unofficial",
+    label: "GitHub",
+    external: true,
+  },
+];
+---
+
+<header class="site-header shell">
+  <div class="site-header__inner">
+    <a class="brand" href="/">trainheroic <span>unofficial</span></a>
+    <nav class="nav" aria-label="Main">
+      {
+        links.map((link) => (
+          <a
+            class="nav__link"
+            href={link.href}
+            aria-current={
+              link.match || path === link.href ? "page" : undefined
+            }
+            target={link.external ? "_blank" : undefined}
+            rel={link.external ? "noopener noreferrer" : undefined}
+            aria-label={link.external ? `${link.label} (opens in new tab)` : undefined}
+          >
+            {link.label}
+            {link.external ? <span aria-hidden="true"> ↗</span> : null}
+          </a>
+        ))
+      }
+    </nav>
+  </div>
+</header>

@@ -1,0 +1,110 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import Snippet from "../components/Snippet.astro";
+import ToolIndex from "../components/ToolIndex.astro";
+import {
+  ATHLETE_TOOL_GROUPS,
+  COACH_TOOL_GROUPS,
+  HOSTED_ONLY_TOOLS,
+} from "../data/mcp-tools";
+import {
+  MCP_ATHLETE_URL,
+  MCP_COACH_URL,
+  MCP_URL,
+  NPM_ATHLETE_MCP,
+  NPM_COACH_MCP,
+} from "../data/tools";
+---
+
+<Layout
+  title="MCP reference"
+  description="MCP setup for Cursor, Claude Desktop, local stdio servers, and the tool catalog."
+>
+  <Header />
+  <main id="main">
+    <div class="shell narrow">
+      <header class="doc__intro">
+        <h1>MCP reference</h1>
+        <p class="lead">
+          Setup for MCP clients beyond Claude.ai. The <a href="/">home page</a> walks through the
+          hosted connector for claude.ai.
+        </p>
+        <p class="doc__back"><a href="/developers">← Developers</a></p>
+      </header>
+
+      <section class="doc" id="hosted">
+        <h2>Hosted endpoint</h2>
+        <p>Main URL (OAuth, same as Claude.ai):</p>
+        <Snippet code={MCP_URL} lang="text" />
+        <p>Cursor or Claude Desktop config:</p>
+        <Snippet
+          lang="json"
+          code={`{
+  "mcpServers": {
+    "trainheroic": {
+      "url": "${MCP_URL}"
+    }
+  }
+}`}
+        />
+        <p>Coach-only URL:</p>
+        <Snippet code={MCP_COACH_URL} lang="text" />
+        <p>Athlete-only URL:</p>
+        <Snippet code={MCP_ATHLETE_URL} lang="text" />
+      </section>
+
+      <section class="doc" id="local-coach">
+        <h2>Local coach server</h2>
+        <p>Stdio on your machine. Credentials sit in the MCP client config file.</p>
+        <Snippet
+          code={`claude mcp add trainheroic \\
+  -e TRAINHEROIC_EMAIL=coach@example.com \\
+  -e TRAINHEROIC_PASSWORD=yourpassword \\
+  -- npx -y ${NPM_COACH_MCP}`}
+        />
+        <Snippet
+          lang="json"
+          code={`{
+  "mcpServers": {
+    "trainheroic": {
+      "command": "npx",
+      "args": ["-y", "${NPM_COACH_MCP}"],
+      "env": {
+        "TRAINHEROIC_EMAIL": "coach@example.com",
+        "TRAINHEROIC_PASSWORD": "yourpassword"
+      }
+    }
+  }
+}`}
+        />
+        <p class="disclaimer">
+          For Claude Code on your laptop, the <a href="/skill">skill</a> is usually simpler than
+          local stdio.
+        </p>
+      </section>
+
+      <section class="doc" id="local-athlete">
+        <h2>Local athlete server</h2>
+        <Snippet
+          code={`claude mcp add trainheroic-athlete \\
+  -e TRAINHEROIC_EMAIL=athlete@example.com \\
+  -e TRAINHEROIC_PASSWORD=yourpassword \\
+  -- npx -y ${NPM_ATHLETE_MCP}`}
+        />
+      </section>
+
+      <section class="doc" id="tools">
+        <h2>Tool list</h2>
+        <p>Tool names for reference. The model picks the call from your question.</p>
+        <ToolIndex
+          coachGroups={COACH_TOOL_GROUPS}
+          athleteGroups={ATHLETE_TOOL_GROUPS}
+          hostedOnly={HOSTED_ONLY_TOOLS}
+        />
+      </section>
+    </div>
+  </main>
+  <Footer />
+</Layout>

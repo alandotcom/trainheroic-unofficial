@@ -1,0 +1,32 @@
+---
+import type { McpToolGroup } from "../data/mcp-tools";
+
+interface Props {
+  id: string;
+  title: string;
+  note: string;
+  groups: McpToolGroup[];
+}
+
+const { id, title, note, groups } = Astro.props;
+---
+
+<section class="tool-index__section" aria-labelledby={id}>
+  <h3 id={id}>{title}</h3>
+  <p class="tool-index__note" set:html={note} />
+  {
+    groups.map((group) => (
+      <div class="tool-index__group">
+        <h4>{group.title}</h4>
+        <ul class="tool-index__list">
+          {group.tools.map((tool) => (
+            <li>
+              <code>{tool.name}</code>
+              <span>{tool.summary}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))
+  }
+</section>

@@ -51,3 +51,6 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+      - name: Build website
+        run: pnpm website:build

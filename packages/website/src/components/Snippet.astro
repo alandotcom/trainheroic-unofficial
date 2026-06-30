@@ -1,0 +1,20 @@
+---
+import { Code } from "astro:components";
+
+interface Props {
+  code: string;
+  lang?: string;
+}
+
+const { code, lang = "bash" } = Astro.props;
+const trimmed = code.trim();
+---
+
+<figure class="code-block" data-copy-source>
+  <button type="button" class="code-block__copy" data-copy aria-label="Copy to clipboard">
+    <span class="code-block__copy-idle">Copy</span>
+    <span class="code-block__copy-done">Copied</span>
+  </button>
+  <span class="visually-hidden" data-copy-text>{trimmed}</span>
+  <Code code={trimmed} lang={lang} theme="github-light" />
+</figure>
