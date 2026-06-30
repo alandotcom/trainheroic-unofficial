@@ -1,22 +1,22 @@
 ---
+import { Code } from "astro:components";
+
 interface Props {
   code: string;
-  label?: string;
+  lang?: string;
 }
 
-const { code, label } = Astro.props;
+const { code, lang = "bash" } = Astro.props;
 const trimmed = code.trim();
 ---
 
-<figure class="snippet" data-copy-source>
-  {label && <figcaption class="snippet__label">{label}</figcaption>}
-  <div class="snippet__bar">
-    <button type="button" class="copy-btn" data-copy aria-label="Copy to clipboard">
-      <span class="copy-btn__idle" aria-hidden="true">Copy</span>
-      <span class="copy-btn__done" aria-hidden="true">Copied</span>
-    </button>
-  </div>
-  <pre><code data-copy-text>{trimmed}</code></pre>
+<figure class="code-block" data-copy-source>
+  <button type="button" class="code-block__copy" data-copy aria-label="Copy to clipboard">
+    <span class="code-block__copy-idle">Copy</span>
+    <span class="code-block__copy-done">Copied</span>
+  </button>
+  <span class="visually-hidden" data-copy-text>{trimmed}</span>
+  <Code code={trimmed} lang={lang} theme="github-light" />
 </figure>
 
 <script>

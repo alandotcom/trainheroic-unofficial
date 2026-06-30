@@ -10,31 +10,28 @@ import Footer from "../components/Footer.astro";
 >
   <Header />
   <main id="main">
-    <div class="shell">
-      <header class="doc__intro narrow">
+    <div class="shell narrow">
+      <header class="doc__intro">
         <h1>Developers</h1>
         <p class="lead">
-          Integrate TrainHeroic in code or with a coding agent. For Claude.ai in the browser, use
-          the <a href="/">hosted connector setup</a> instead.
+          For Claude Code, scripts, and custom integrations. Using Claude.ai in the browser?
+          <a href="/">Connector setup</a>.
         </p>
       </header>
 
-      <section class="doc narrow">
-        <ul class="list-plain">
+      <section class="doc">
+        <ul class="doc-list">
           <li>
-            <strong><a href="/skill">Claude Code skill & CLI</a></strong> — recommended for Claude
-            Code and agents that run shell commands. Install with
-            <code>npx skills add</code>, drive the API through <code>trainheroic</code>.
+            <strong><a href="/skill">Claude Code skill</a></strong> — install with
+            <code>npx skills add</code>, run <code>trainheroic</code> from the agent
           </li>
           <li>
-            <strong><a href="/sdk">TypeScript SDK</a></strong> — <code>@trainheroic-unofficial/js</code>
-            for scripts, workers, and custom apps. Typed helpers for workouts, roster, athlete reads,
-            and messaging.
+            <strong><a href="/sdk">TypeScript SDK</a></strong> —
+            <code>@trainheroic-unofficial/js</code> for scripts and workers
           </li>
           <li>
-            <strong><a href="/mcp">MCP reference</a></strong> — Cursor, Claude Desktop, local stdio
-            servers, and the full tool list. Most users should use the <a href="/">Claude.ai
-              connector</a>.
+            <strong><a href="/mcp">MCP reference</a></strong> — Cursor, Claude Desktop, local
+            servers, tool list
           </li>
         </ul>
       </section>

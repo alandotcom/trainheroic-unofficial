@@ -3,7 +3,6 @@ import Layout from "../layouts/Layout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import Snippet from "../components/Snippet.astro";
-import CopyLine from "../components/CopyLine.astro";
 import ToolIndex from "../components/ToolIndex.astro";
 import {
   ATHLETE_TOOL_GROUPS,
@@ -25,27 +24,21 @@ import {
 >
   <Header />
   <main id="main">
-    <div class="shell">
-      <header class="doc__intro narrow">
+    <div class="shell narrow">
+      <header class="doc__intro">
         <h1>MCP reference</h1>
         <p class="lead">
-          For Claude.ai, use the <a href="/">three-step connector setup</a>. This page covers other
-          MCP clients, local servers, and the tool catalog.
+          For Claude.ai, use the <a href="/">connector setup</a>. This page is for other MCP
+          clients and local servers.
         </p>
-        <p>
-          <a href="/developers">← Developers</a>
-        </p>
+        <p class="doc__back"><a href="/developers">← Developers</a></p>
       </header>
 
       <section class="doc" id="hosted">
-        <h2 class="narrow">Hosted endpoint</h2>
-        <p class="narrow">
-          Same OAuth server as Claude.ai. One URL for coach and athlete tools depending on your
-          account.
-        </p>
-        <CopyLine text={MCP_URL} label="Main endpoint" />
+        <h2>Hosted endpoint</h2>
+        <Snippet code={MCP_URL} lang="text" />
         <Snippet
-          label="Cursor or Claude Desktop"
+          lang="json"
           code={`{
   "mcpServers": {
     "trainheroic": {
@@ -54,29 +47,21 @@ import {
   }
 }`}
         />
-        <p class="narrow">
-          <strong>Scoped endpoints</strong> — coach-only or athlete-only when you want a narrower
-          connection:
-        </p>
-        <CopyLine text={MCP_COACH_URL} label="Coach only" />
-        <CopyLine text={MCP_ATHLETE_URL} label="Athlete only" />
+        <p>Scoped endpoints:</p>
+        <Snippet code={MCP_COACH_URL} lang="text" />
+        <Snippet code={MCP_ATHLETE_URL} lang="text" />
       </section>
 
-      <section class="doc narrow" id="local-coach">
+      <section class="doc" id="local-coach">
         <h2>Local coach server</h2>
-        <p>
-          Stdio on your machine. Credentials live in your MCP config — prefer the
-          <a href="/skill">skill & CLI</a> for Claude Code instead.
-        </p>
         <Snippet
-          label="Claude Code"
           code={`claude mcp add trainheroic \\
   -e TRAINHEROIC_EMAIL=coach@example.com \\
   -e TRAINHEROIC_PASSWORD=yourpassword \\
   -- npx -y ${NPM_COACH_MCP}`}
         />
         <Snippet
-          label="Cursor or Claude Desktop"
+          lang="json"
           code={`{
   "mcpServers": {
     "trainheroic": {
@@ -90,16 +75,11 @@ import {
   }
 }`}
         />
-        <p class="disclaimer">
-          <strong>Local configs store credentials in plaintext.</strong> Use the
-          <a href="/">hosted connector</a> when you can.
-        </p>
       </section>
 
-      <section class="doc narrow" id="local-athlete">
+      <section class="doc" id="local-athlete">
         <h2>Local athlete server</h2>
         <Snippet
-          label="Claude Code"
           code={`claude mcp add trainheroic-athlete \\
   -e TRAINHEROIC_EMAIL=athlete@example.com \\
   -e TRAINHEROIC_PASSWORD=yourpassword \\
@@ -107,12 +87,8 @@ import {
         />
       </section>
 
-      <section class="doc narrow" id="tools">
+      <section class="doc" id="tools">
         <h2>Tool list</h2>
-        <p>
-          Reference names — assistants pick the right call from your question. Coach accounts on the
-          main endpoint get coach tools plus your own athlete tools.
-        </p>
         <ToolIndex
           coachGroups={COACH_TOOL_GROUPS}
           athleteGroups={ATHLETE_TOOL_GROUPS}

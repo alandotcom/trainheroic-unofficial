@@ -17,74 +17,54 @@ import {
 >
   <Header />
   <main id="main">
-    <div class="shell">
-      <header class="doc__intro narrow">
+    <div class="shell narrow">
+      <header class="doc__intro">
         <h1>Claude Code skill</h1>
         <p class="lead">
-          For Claude Code and agents that run shell commands. The skill teaches the assistant to
-          call <code>{NPM_CLI}</code> — cached sessions, JSON output, no MCP config.
+          The skill teaches Claude Code to run <code>{NPM_CLI}</code> — cached sessions, JSON
+          output, no MCP config.
         </p>
-        <p>
-          <a href="/developers">← Developers</a>
-        </p>
+        <p class="doc__back"><a href="/developers">← Developers</a></p>
       </header>
 
       <section class="doc" id="install">
-        <h2 class="narrow">Install</h2>
-        <Snippet label="Recommended" code={`npx skills add ${SKILL_REPO}`} />
-        <p class="narrow">
-          Or install the CLI and copy both skills (coach + athlete) to
-          <code>~/.claude/skills/</code>:
-        </p>
+        <h2>Install</h2>
+        <Snippet code={`npx skills add ${SKILL_REPO}`} />
+        <p>Or install the CLI and copy skills to <code>~/.claude/skills/</code>:</p>
         <Snippet
-          label="CLI + install-skill"
           code={`npm install -g ${NPM_CLI}
 trainheroic install-skill`}
         />
       </section>
 
-      <section class="doc narrow" id="credentials">
+      <section class="doc" id="credentials">
         <h2>Credentials</h2>
-        <p>
-          Set your TrainHeroic email and password in the environment. The CLI caches the session at
-          <code>~/.trainheroic/session.json</code>.
-        </p>
         <Snippet
-          label="Shell environment"
           code={`export TRAINHEROIC_EMAIL=coach@example.com
 export TRAINHEROIC_PASSWORD=yourpassword`}
         />
         <p class="disclaimer">
-          <strong>Credentials live in your environment</strong> and may appear in shell history.
+          Session cached at <code>~/.trainheroic/session.json</code>. Credentials live in your
+          environment.
         </p>
       </section>
 
-      <section class="doc narrow" id="use">
+      <section class="doc" id="use">
         <h2>Use in Claude Code</h2>
-        <ul class="list-plain">
-          <li>
-            <strong>Coach</strong> — <code>/{SKILL_COACH}</code> for roster, programming, teams,
-            analytics, messaging
-          </li>
-          <li>
-            <strong>Athlete</strong> — <code>/{SKILL_ATHLETE}</code> for your own training history,
-            PRs, and logging
-          </li>
+        <ul class="doc-list">
+          <li><strong>Coach</strong> — <code>/{SKILL_COACH}</code></li>
+          <li><strong>Athlete</strong> — <code>/{SKILL_ATHLETE}</code></li>
         </ul>
       </section>
 
-      <section class="doc narrow" id="cli">
-        <h2>CLI reference</h2>
-        <p>Output is JSON on stdout. Run <code>trainheroic help</code> for the full command list.</p>
+      <section class="doc" id="cli">
+        <h2>CLI</h2>
         <Snippet
-          label="Common commands"
           code={`trainheroic whoami
 trainheroic coach athletes
-trainheroic coach programs
 trainheroic athlete profile
 trainheroic athlete export
-trainheroic skill          # workflow guides
-trainheroic skill list`}
+trainheroic help`}
         />
       </section>
     </div>
