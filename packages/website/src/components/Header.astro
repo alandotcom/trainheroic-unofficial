@@ -1,0 +1,34 @@
+---
+const path = Astro.url.pathname;
+
+const links = [
+  { href: "/mcp", label: "MCP" },
+  { href: "/sdk", label: "SDK" },
+  { href: "https://github.com/alandotcom/trainheroic-unofficial", label: "GitHub", external: true },
+];
+---
+
+<header class="site-header">
+  <div class="container site-header__inner">
+    <a class="brand" href="/">
+      <span class="brand__mark" aria-hidden="true">TH</span>
+      <span>trainheroic-unofficial</span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      {
+        links.map((link) => (
+          <a
+            href={link.href}
+            aria-current={path === link.href ? "page" : undefined}
+            target={link.external ? "_blank" : undefined}
+            rel={link.external ? "noopener noreferrer" : undefined}
+            class:list={{ nav__external: link.external }}
+          >
+            {link.label}
+            {link.external ? <span aria-hidden="true">↗</span> : null}
+          </a>
+        ))
+      }
+    </nav>
+  </div>
+</header>

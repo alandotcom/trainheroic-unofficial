@@ -1,0 +1,19 @@
+{
+  "name": "@trainheroic-unofficial/website",
+  "version": "1.6.0",
+  "private": true,
+  "type": "module",
+  "description": "Marketing and documentation site for the TrainHeroic unofficial MCP and SDK.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^7.0.4"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

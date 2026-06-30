@@ -1,0 +1,114 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import { MCP_URL, NPM_JS, NPM_COACH_MCP } from "../data/tools";
+---
+
+<Layout
+  title="TrainHeroic MCP & SDK"
+  description="Connect Claude and other AI assistants to TrainHeroic through MCP tools, or build your own integrations with the TypeScript SDK."
+>
+  <Header />
+  <main>
+    <section class="hero container">
+      <p class="hero__eyebrow">Unofficial · TypeScript · MIT</p>
+      <h1>TrainHeroic for AI assistants and your own code</h1>
+      <p class="hero__lead">
+        A typed toolkit around the undocumented TrainHeroic API. Give Claude and other MCP
+        clients full coaching and athlete tools, or call the same endpoints from your scripts
+        with the runtime-agnostic SDK.
+      </p>
+      <div class="hero__actions">
+        <a class="btn btn--primary" href="/mcp">Get started with MCP</a>
+        <a class="btn btn--secondary" href="/sdk">Explore the SDK</a>
+      </div>
+    </section>
+
+    <section class="section container">
+      <div class="card-grid">
+        <article class="card">
+          <h2>MCP server</h2>
+          <p>
+            ~50 coach tools and ~16 athlete tools exposed over the Model Context Protocol.
+            Connect a hosted server with OAuth, or run a local stdio server on your machine.
+          </p>
+          <a class="card__link" href="/mcp">Setup guides & tool catalog →</a>
+        </article>
+        <article class="card">
+          <h2>TypeScript SDK</h2>
+          <p>
+            <code>{NPM_JS}</code> wraps auth, the exercise library, workout encoding, athlete
+            training reads, and messaging. Runs on Node, workerd, and modern browsers.
+          </p>
+          <a class="card__link" href="/sdk">Install & quickstart →</a>
+        </article>
+        <article class="card">
+          <h2>Hosted endpoint</h2>
+          <p>
+            The public MCP server handles login and per-tenant storage. Paste one URL into
+            Claude.ai or Claude Code and authenticate with your TrainHeroic account.
+          </p>
+          <a class="card__link" href={MCP_URL} target="_blank" rel="noopener noreferrer">
+            {MCP_URL} ↗
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <section class="section section--border container">
+      <h2>What you can build</h2>
+      <p class="section__lead">
+        Tools depend on the account you sign in with. Coach accounts get the full coaching
+        surface plus their own athlete training data.
+      </p>
+      <ul class="feature-list">
+        <li>
+          <strong>Program workouts</strong>
+          Build, publish, and manage sessions with the workout encoder and exercise library.
+        </li>
+        <li>
+          <strong>Manage a roster</strong>
+          List athletes, invite and archive, log sets, and prescribe training.
+        </li>
+        <li>
+          <strong>Read analytics</strong>
+          Readiness, 1RM history, compliance, lift progress, and training summaries.
+        </li>
+        <li>
+          <strong>Athlete history</strong>
+          Workouts, PRs, working maxes, exercise history, and session logging.
+        </li>
+        <li>
+          <strong>Messaging</strong>
+          List conversations, read streams, draft and send comments.
+        </li>
+        <li>
+          <strong>Warehouse sync</strong>
+          Hosted-only tools mirror programming and training data into D1 for fast reads.
+        </li>
+      </ul>
+    </section>
+
+    <section class="section section--border container">
+      <h2>Quick connect</h2>
+      <p class="section__lead">Paste the hosted URL into your MCP client, or run locally with npx.</p>
+      <div class="endpoint" style="margin-bottom: 1rem;">
+        <span class="endpoint__dot" aria-hidden="true"></span>
+        {MCP_URL}
+      </div>
+      <p style="color: var(--text-faint); font-size: 0.9rem; margin: 0 0 1rem;">
+        Local coach server: <code>npx -y {NPM_COACH_MCP}</code> with <code>TRAINHEROIC_EMAIL</code>
+        and <code>TRAINHEROIC_PASSWORD</code> in the environment.
+      </p>
+      <div class="callout">
+        <p>
+          <strong>Credentials:</strong> every entry point uses your real TrainHeroic email and
+          password. Local configs store them in plaintext. The hosted server keeps credentials
+          server-side behind OAuth.
+        </p>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Layout>

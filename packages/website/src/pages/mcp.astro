@@ -1,0 +1,175 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import CodeBlock from "../components/CodeBlock.astro";
+import ToolCatalog from "../components/ToolCatalog.astro";
+import {
+  athleteTools,
+  coachTools,
+  hostedOnlyTools,
+  MCP_ATHLETE_URL,
+  MCP_COACH_URL,
+  MCP_URL,
+  NPM_ATHLETE_MCP,
+  NPM_COACH_MCP,
+} from "../data/tools";
+---
+
+<Layout
+  title="MCP Server"
+  description="Connect Claude and other AI assistants to TrainHeroic with the hosted OAuth MCP server or local stdio servers."
+>
+  <Header />
+  <main>
+    <header class="page-header container">
+      <h1>MCP server</h1>
+      <p>
+        Expose TrainHeroic as callable tools over the
+        <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer"
+          >Model Context Protocol</a
+        >. The same tool definitions power the hosted Worker and the local stdio servers.
+      </p>
+    </header>
+
+    <div class="container docs-layout docs-layout--split" style="padding-bottom: 0;">
+      <div class="prose">
+        <h2>Hosted (recommended)</h2>
+        <p>
+          OAuth login, credentials held server-side, per-tenant D1 storage for the exercise
+          mirror and training warehouse. One URL for most users:
+        </p>
+        <div class="endpoint">
+          <span class="endpoint__dot" aria-hidden="true"></span>
+          {MCP_URL}
+        </div>
+        <p>
+          Role-aware: a coach account gets coaching tools <em>and</em> athlete training tools.
+          An athlete account gets the athlete surface only.
+        </p>
+        <p>Scoped variants when you want a connection limited to one role:</p>
+        <ul>
+          <li><code>{MCP_COACH_URL}</code> — coaching tools only</li>
+          <li><code>{MCP_ATHLETE_URL}</code> — athlete training tools only</li>
+        </ul>
+      </div>
+      <div>
+        <CodeBlock
+          label="Claude Code"
+          code={`claude mcp add trainheroic --transport http \\
+  ${MCP_URL}`}
+        />
+        <CodeBlock
+          label="Claude.ai"
+          code={`Open Settings → Connectors → Add custom connector
+Paste: ${MCP_URL}
+Authenticate with your TrainHeroic email and password.`}
+        />
+      </div>
+    </div>
+
+    <section class="section container">
+      <h2>Local stdio servers</h2>
+      <p class="section__lead">
+        Run on your machine. Credentials come from environment variables and live in plaintext
+        in your MCP config.
+      </p>
+      <table class="compare">
+        <thead>
+          <tr>
+            <th>Server</th>
+            <th>Package</th>
+            <th>Surface</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Coach</td>
+            <td><code>{NPM_COACH_MCP}</code></td>
+            <td>Full coaching tools (~50). Exercise library cached at <code>~/.trainheroic/</code>.</td>
+          </tr>
+          <tr>
+            <td>Athlete</td>
+            <td><code>{NPM_ATHLETE_MCP}</code></td>
+            <td>Athlete training tools (~16). Live API only, no local cache.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="docs-layout docs-layout--split" style="margin-top: 1.5rem;">
+        <CodeBlock
+          label="Coach — Claude Code"
+          code={`claude mcp add trainheroic \\
+  -e TRAINHEROIC_EMAIL=coach@example.com \\
+  -e TRAINHEROIC_PASSWORD=yourpassword \\
+  -- npx -y ${NPM_COACH_MCP}`}
+        />
+        <CodeBlock
+          label="Athlete — Claude Code"
+          code={`claude mcp add trainheroic-athlete \\
+  -e TRAINHEROIC_EMAIL=athlete@example.com \\
+  -e TRAINHEROIC_PASSWORD=yourpassword \\
+  -- npx -y ${NPM_ATHLETE_MCP}`}
+        />
+      </div>
+
+      <CodeBlock
+        label="Claude Desktop / .mcp.json"
+        code={`{
+  "mcpServers": {
+    "trainheroic": {
+      "command": "npx",
+      "args": ["-y", "${NPM_COACH_MCP}"],
+      "env": {
+        "TRAINHEROIC_EMAIL": "coach@example.com",
+        "TRAINHEROIC_PASSWORD": "yourpassword"
+      }
+    }
+  }
+}`}
+      />
+    </section>
+
+    <section class="section section--border container prose-wide">
+      <h2>Tool catalog</h2>
+      <p class="section__lead">
+        Tools are defined once in <code>@trainheroic-unofficial/core</code> and registered by
+        every server. Destructive and athlete-facing writes confirm before they run (MCP
+        elicitation or an explicit <code>confirm: true</code> argument).
+      </p>
+
+      <h3 style="margin-top: 2rem; font-size: 1.1rem;">Coach surface</h3>
+      <ToolCatalog groups={coachTools} />
+
+      <h3 style="margin-top: 2.5rem; font-size: 1.1rem;">Athlete surface</h3>
+      <ToolCatalog groups={athleteTools} />
+
+      <h3 style="margin-top: 2.5rem; font-size: 1.1rem;">Hosted-only extras</h3>
+      <p style="color: var(--text-muted); max-width: 42rem;">
+        Available on the Cloudflare Worker only. Warehouse tools sync programming, messaging,
+        and athlete training data into D1 for fast historical reads.
+      </p>
+      <ToolCatalog groups={hostedOnlyTools} />
+    </section>
+
+    <section class="section section--border container prose">
+      <h2>Architecture</h2>
+      <p>
+        The MCP layer sits on top of the SDK. Local servers build a <code>ToolContext</code> from
+        env credentials plus a file-backed exercise library; the hosted Worker adds OAuth,
+        D1-backed storage, and warehouse sync tools.
+      </p>
+      <ul>
+        <li><strong>core</strong> — shared <code>registerXxxTools</code> functions</li>
+        <li><strong>coach-mcp / athlete-mcp</strong> — local stdio transports</li>
+        <li><strong>cloudflare</strong> — multi-tenant HTTP + Durable Objects per session</li>
+      </ul>
+      <p>
+        On the hosted <code>/mcp</code> endpoint, coach accounts register both surfaces.
+        Locally, use <code>coach-mcp</code> for coaching and <code>athlete-mcp</code> for the
+        athlete tool set.
+      </p>
+    </section>
+  </main>
+  <Footer />
+</Layout>

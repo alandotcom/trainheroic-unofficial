@@ -1,0 +1,186 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import CodeBlock from "../components/CodeBlock.astro";
+import { NPM_DTO, NPM_JS } from "../data/tools";
+---
+
+<Layout
+  title="TypeScript SDK"
+  description="Runtime-agnostic TypeScript SDK for the TrainHeroic API — auth, exercises, workouts, athlete training, and messaging."
+>
+  <Header />
+  <main>
+    <header class="page-header container">
+      <h1>TypeScript SDK</h1>
+      <p>
+        <code>{NPM_JS}</code> is the runtime-agnostic client everything else builds on — MCP
+        servers, the CLI, and the hosted Worker. Request and response shapes live in
+        <code>{NPM_DTO}</code> as zod schemas.
+      </p>
+    </header>
+
+    <section class="container docs-layout docs-layout--split">
+      <div class="prose">
+        <h2>Install</h2>
+        <p>Requires a runtime with global <code>fetch</code> and Web Crypto (Node ≥ 18, workerd, modern browsers).</p>
+        <CodeBlock code={`npm install ${NPM_JS}
+# or: pnpm add ${NPM_JS}`} />
+      </div>
+      <div class="prose">
+        <h2>Quickstart</h2>
+        <p>
+          Construct a client with your TrainHeroic credentials. Login is lazy on the first
+          request; the client renews the session on 401/403.
+        </p>
+      </div>
+    </section>
+
+    <section class="container" style="padding-bottom: 1rem;">
+      <CodeBlock
+        label="Basic client"
+        code={`import { TrainHeroicClient } from "${NPM_JS}";
+
+const client = new TrainHeroicClient(
+  process.env.TRAINHEROIC_EMAIL!,
+  process.env.TRAINHEROIC_PASSWORD!,
+);
+
+const res = await client.request<{ id: number }>("GET", "/user/simple");
+if (res.ok) {
+  console.log(res.data.id);
+}`}
+      />
+    </section>
+
+    <section class="section container">
+      <h2>Two entry points</h2>
+      <p class="section__lead">
+        The main export imports no <code>node:*</code> modules so it runs on Cloudflare
+        workerd. Filesystem helpers sit behind a separate subpath.
+      </p>
+      <CodeBlock
+        code={`// Runtime-agnostic — browsers, Node, workerd
+import { TrainHeroicClient, ExerciseLibrary, buildSession } from "${NPM_JS}";
+
+// Node-only filesystem helpers
+import { JsonFileLibraryCache, defaultCachePath } from "${NPM_JS}/node";`}
+      />
+    </section>
+
+    <section class="section section--border container">
+      <h2>What it covers</h2>
+      <ul class="feature-list">
+        <li>
+          <strong>Client & auth</strong>
+          Lazy login, single shared in-flight login on cold start, dual hosts (<code>api</code> /
+          <code>apis</code>).
+        </li>
+        <li>
+          <strong>Exercises</strong>
+          <code>ExerciseIndex</code> interface with in-memory <code>ExerciseLibrary</code> —
+          resolve, fuzzy search, JSON-file cache via <code>./node</code>.
+        </li>
+        <li>
+          <strong>Workouts</strong>
+          <code>buildSession</code>, <code>readSession</code>, <code>publishSession</code>,
+          <code>removeSession</code>, and the <code>WorkoutSpec</code> encoder.
+        </li>
+        <li>
+          <strong>Athlete training</strong>
+          Profile, workouts, exercise history, PRs, working maxes for the logged-in account.
+        </li>
+        <li>
+          <strong>Messaging</strong>
+          List conversations, read streams, draft, send, and delete comments.
+        </li>
+        <li>
+          <strong>Analytics</strong>
+          <code>queryAnalytics()</code> with readiness, 1RM history, compliance, and more.
+        </li>
+      </ul>
+    </section>
+
+    <section class="section section--border container">
+      <div class="docs-layout docs-layout--split">
+        <div class="prose">
+          <h2>Exercise library</h2>
+          <p>
+            Load the full library once, cache it, and resolve names to IDs with fuzzy search.
+            Pass <code>JsonFileLibraryCache</code> to persist between runs at
+            <code>~/.trainheroic/library.json</code>.
+          </p>
+        </div>
+        <div>
+          <CodeBlock
+            code={`import { ExerciseLibrary } from "${NPM_JS}";
+import { JsonFileLibraryCache } from "${NPM_JS}/node";
+
+const library = new ExerciseLibrary(client, new JsonFileLibraryCache());
+const { match, candidates } = await library.resolve("Back Squat");`}
+          />
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--border container">
+      <div class="docs-layout docs-layout--split">
+        <div class="prose">
+          <h2>Building a workout</h2>
+          <p>
+            <code>buildSession</code> creates a session, saves blocks and exercises, and
+            optionally publishes. Scalars broadcast across sets; RPE routes into instruction
+            text.
+          </p>
+        </div>
+        <div>
+          <CodeBlock
+            code={`import { buildSession, type BlockSpec } from "${NPM_JS}";
+
+const blocks: BlockSpec[] = [{
+  title: "Strength",
+  exercises: [{ id: match.id, sets: 5, reps: 5, weight: 225, rpe: 8 }],
+}];
+
+const { pwId } = await buildSession(client, {
+  programId: 12345,
+  date: [2026, 6, 22],
+  blocks,
+  publish: false,
+});`}
+          />
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--border container prose">
+      <h2>Session reuse</h2>
+      <p>
+        TrainHeroic has no refresh token. By default the client keeps the session in memory.
+        To skip login on restart, persist <code>client.sessionId</code> and pass it as the third
+        constructor argument. Expired tokens trigger a single re-login and retry.
+      </p>
+
+      <h2>Shapes from dto</h2>
+      <p>
+        Do not redefine API types in application code — import them from
+        <code>{NPM_DTO}</code>. The SDK and MCP tools share the same zod schemas.
+      </p>
+
+      <h2>Used by</h2>
+      <ul>
+        <li><code>@trainheroic-unofficial/core</code> — MCP tool implementations</li>
+        <li><code>@trainheroic-unofficial/coach-mcp</code> / <code>athlete-mcp</code> — local servers</li>
+        <li><code>@trainheroic-unofficial/cloudflare</code> — hosted Worker (uses <code>.</code> only, never <code>./node</code>)</li>
+        <li><code>@trainheroic-unofficial/cli</code> — command-line interface</li>
+      </ul>
+      <p>
+        <a href="https://www.npmjs.com/package/@trainheroic-unofficial/js" target="_blank" rel="noopener noreferrer"
+          >Full SDK documentation on npm ↗</a
+        >
+      </p>
+    </section>
+  </main>
+  <Footer />
+</Layout>

@@ -17,6 +17,8 @@
     "check:versions": "node scripts/check-versions.mjs",
     "check": "pnpm run check:versions && pnpm run fmt:check && pnpm run lint && pnpm run typecheck && pnpm run test",
     "deploy": "pnpm --filter @trainheroic-unofficial/cloudflare run deploy",
+    "website:dev": "pnpm --filter @trainheroic-unofficial/website run dev",
+    "website:build": "pnpm --filter @trainheroic-unofficial/website run build",
     "eval": "RUN_EVALS=1 pnpm --filter @trainheroic-unofficial/eval run eval",
     "eval:mcp": "RUN_EVALS=1 EVAL_SURFACES=mcp pnpm --filter @trainheroic-unofficial/eval run eval",
     "eval:cli": "RUN_EVALS=1 EVAL_SURFACES=cli pnpm --filter @trainheroic-unofficial/eval run eval",

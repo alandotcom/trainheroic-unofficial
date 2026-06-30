@@ -1,0 +1,13 @@
+---
+interface Props {
+  label?: string;
+  code: string;
+}
+
+const { label, code } = Astro.props;
+---
+
+<div class="code-block">
+  {label ? <div class="code-block__label">{label}</div> : null}
+  <pre><code>{code.trim()}</code></pre>
+</div>
