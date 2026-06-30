@@ -4,9 +4,9 @@ Static marketing and documentation site for the TrainHeroic unofficial MCP serve
 
 ## Pages
 
-- `/` — overview and quick links
-- `/mcp` — connect hosted or local MCP, features, example prompts
-- `/sdk` — install and typed workflow examples (coach, athlete, analytics)
+- `/` — Claude.ai connector setup
+- `/developers` — skill, SDK, and MCP reference
+- `/skill`, `/sdk`, `/mcp` — developer docs
 
 ## Develop
 
@@ -27,14 +27,7 @@ pnpm preview
 
 ## Design
 
-This site uses [Impeccable](https://impeccable.style/) for design context and anti-pattern checks.
-
-```bash
-pnpm detect          # from this package
-npx impeccable init  # in Cursor, after install — refreshes PRODUCT.md / DESIGN.md
-```
-
-Design context lives in `PRODUCT.md` and `DESIGN.md`. Impeccable skills install to `.cursor/`, `.claude/`, and `.github/` at the repo root via `npx impeccable install`.
+Design notes live in `PRODUCT.md` and `DESIGN.md`.
 
 ## Deploy
 
