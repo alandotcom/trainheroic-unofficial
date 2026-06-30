@@ -1,5 +1,5 @@
 ---
-import { relativeHref, sitePath } from "../lib/paths.ts";
+import { pageHref, sitePath } from "../lib/paths.ts";
 
 const path = sitePath(Astro.url.pathname);
 
@@ -7,7 +7,7 @@ const isDevelopers =
   path === "/developers" || path === "/skill" || path === "/sdk" || path === "/mcp";
 
 const links = [
-  { href: relativeHref("developers", path), label: "Developers", match: isDevelopers },
+  { href: pageHref("developers", path), label: "Developers", match: isDevelopers },
   {
     href: "https://github.com/alandotcom/trainheroic-unofficial",
     label: "GitHub",
@@ -18,7 +18,7 @@ const links = [
 
 <header class="site-header shell">
   <div class="site-header__inner">
-    <a class="brand" href={relativeHref("/", path)}>trainheroic <span>unofficial</span></a>
+    <a class="brand" href={pageHref("/", path)}>trainheroic <span>unofficial</span></a>
     <nav class="nav" aria-label="Main">
       {
         links.map((link) => (

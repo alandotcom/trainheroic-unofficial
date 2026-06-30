@@ -3,7 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import Snippet from "../components/Snippet.astro";
-import { relativeHref } from "../lib/paths.ts";
+import { pageHref } from "../lib/paths.ts";
 import { CLAUDE_AI_CONNECTOR_URL, MCP_URL } from "../data/tools";
 ---
 
@@ -12,7 +12,7 @@ import { CLAUDE_AI_CONNECTOR_URL, MCP_URL } from "../data/tools";
   description="Connect your TrainHeroic account to Claude.ai. Ask about your roster, programming, and training."
 >
   <Header />
-  <main id="main" class="home">
+  <main id="main">
     <div class="shell narrow">
       <header class="doc__intro">
         <h1>Connect TrainHeroic to Claude</h1>
@@ -26,7 +26,10 @@ import { CLAUDE_AI_CONNECTOR_URL, MCP_URL } from "../data/tools";
         <h2>Set up in Claude.ai</h2>
         <ol class="doc-steps">
           <li>
-            <p>Open <a href={CLAUDE_AI_CONNECTOR_URL}>Settings → Connectors → Add custom connector</a>.</p>
+            <p>
+              Open
+              <a href={CLAUDE_AI_CONNECTOR_URL}>Settings → Connectors → Add custom connector</a>.
+            </p>
           </li>
           <li>
             <p>Paste the connector URL:</p>
@@ -66,7 +69,7 @@ Draft a back squat workout for next Monday (keep it unpublished)`}
           <strong>Unofficial project.</strong> TrainHeroic is a separate company. OAuth stores your
           login on the hosted connector server.
         </p>
-        <p>Integrating in code? See <a href={relativeHref("developers", Astro.url.pathname)}>developer docs</a>.</p>
+        <p>Integrating in code? See <a href={pageHref("developers", Astro.url.pathname)}>developer docs</a>.</p>
       </section>
     </div>
   </main>

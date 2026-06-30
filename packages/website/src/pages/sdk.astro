@@ -3,7 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import Snippet from "../components/Snippet.astro";
-import { relativeHref } from "../lib/paths.ts";
+import { pageHref } from "../lib/paths.ts";
 import { NPM_DTO, NPM_JS } from "../data/tools";
 ---
 
@@ -21,7 +21,7 @@ import { NPM_DTO, NPM_JS } from "../data/tools";
           analytics, and messaging. Types ship in <code>{NPM_DTO}</code>. The runtime runs on Node,
           workerd, and browsers.
         </p>
-        <p class="doc__back"><a href={relativeHref("developers", Astro.url.pathname)}>← Developers</a></p>
+        <p class="doc__back"><a href={pageHref("developers", Astro.url.pathname)}>← Developers</a></p>
       </header>
 
       <section class="doc" id="install">

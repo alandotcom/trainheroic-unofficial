@@ -1,52 +1,27 @@
-# @trainheroic-unofficial/website
-
-Static marketing and documentation site for the TrainHeroic unofficial MCP server and TypeScript SDK.
-
-## Pages
-
-- `/` — Claude.ai connector setup
-- `/developers` — skill, SDK, and MCP reference
-- `/skill`, `/sdk`, `/mcp` — developer docs
-
-## Develop
-
-From the repo root:
-
-```bash
-pnpm website:dev     # http://localhost:4321
-pnpm website:build   # output in dist/
-```
-
-Or from this package:
-
-```bash
-pnpm dev
-pnpm build
-pnpm preview
-```
-
-## Design
-
-Design notes live in `PRODUCT.md` and `DESIGN.md`.
-
-## MCP tool catalog
-
-The `/mcp` tool list is generated from `packages/eval/src/tools.ts` and
-`src/data/mcp-tool-catalog.ts`. After adding a core tool, update eval and the catalog, then:
-
-```bash
-pnpm gen:mcp-tools
-```
-
-`prebuild` and `predev` run this automatically.
-
 ## Deploy
 
-CI builds and publishes to GitHub Pages on pushes to `main`
-(`.github/workflows/website.yml`). The build uses a relative asset base and
-path-relative links so one artifact works on both `trainheroic-unofficial.com`
-(custom domain via `public/CNAME`) and
-`https://alandotcom.github.io/trainheroic-unofficial/`.
+Two hosts, two builds:
 
-Configure DNS for the custom domain in repository **Settings → Pages**, then
-re-run the deploy workflow.
+| Host | Builder | Build env |
+|------|---------|-----------|
+| `https://alandotcom.github.io/trainheroic-unofficial/` | GitHub Actions (`.github/workflows/website.yml`) | `ASTRO_BASE=/trainheroic-unofficial/` |
+| `https://trainheroic-unofficial.com` | [Cloudflare Pages](https://developers.cloudflare.com/pages/) (connected repo) | none (defaults to `/`) |
+
+### GitHub Pages
+
+Pushes to `main` build with the project subpath and deploy via GitHub Pages. Enable Pages in repo **Settings → Pages** with source **GitHub Actions**.
+
+### Cloudflare Pages
+
+Connect this repository in the Cloudflare dashboard (**Workers & Pages → Create → Pages → Connect to Git**). Use the **repository root** as the project root:
+
+| Setting | Value |
+|---------|-------|
+| Framework preset | None |
+| Build command | `pnpm install && pnpm website:build` |
+| Build output directory | `packages/website/dist` |
+| Environment variable | `NODE_VERSION=24` |
+
+Add custom domains (`trainheroic-unofficial.com`, `www`) in the Pages project settings. Do not add a GitHub Actions deploy step for Cloudflare — Pages builds on its own when you push.
+
+`wrangler.jsonc` documents the static output layout for local `wrangler dev` in `packages/website` after `pnpm build`.
