@@ -347,6 +347,37 @@ h3 {
   color: var(--color-ink);
 }
 
+/* Feature bullets (docs pages) */
+.feature-bullets {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.875rem;
+  max-width: 40rem;
+}
+
+.feature-bullets li {
+  color: var(--color-muted);
+  font-size: 1rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+  padding-left: 1.25rem;
+  position: relative;
+}
+
+.feature-bullets li::before {
+  content: "—";
+  position: absolute;
+  left: 0;
+  color: var(--color-primary);
+}
+
+.feature-bullets strong {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
 /* Path links (replaces card grid) */
 .path-list {
   list-style: none;

@@ -5,8 +5,8 @@ Static marketing and documentation site for the TrainHeroic unofficial MCP serve
 ## Pages
 
 - `/` — overview and quick links
-- `/mcp` — hosted and local MCP setup, full tool catalog
-- `/sdk` — SDK install, quickstart, and API surface
+- `/mcp` — connect hosted or local MCP, features, example prompts
+- `/sdk` — install and typed workflow examples (coach, athlete, analytics)
 
 ## Develop
 
