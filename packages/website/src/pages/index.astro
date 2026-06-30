@@ -2,77 +2,83 @@
 import Layout from "../layouts/Layout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
-import { MCP_URL } from "../data/tools";
+import CopyLine from "../components/CopyLine.astro";
+import Snippet from "../components/Snippet.astro";
+import { CLAUDE_AI_CONNECTOR_URL, MCP_URL } from "../data/tools";
 ---
 
 <Layout
-  title="TrainHeroic MCP & SDK"
-  description="Connect Claude and other AI assistants to TrainHeroic through MCP tools, or build your own integrations with the TypeScript SDK."
+  title="Connect to Claude"
+  description="Connect your TrainHeroic account to Claude.ai in three steps — ask about your roster, programming, and training."
 >
   <Header />
   <main id="main">
     <div class="shell">
-      <header class="doc__intro">
-        <h1>TrainHeroic for assistants and code</h1>
+      <header class="doc__intro narrow">
+        <h1>Connect TrainHeroic to Claude</h1>
         <p class="lead">
-          Unofficial toolkit for the TrainHeroic API. Connect an AI assistant to your roster, or
-          script the same endpoints in TypeScript.
+          Ask Claude about your athletes, workouts, and training history — using the TrainHeroic
+          account you already have. No API key. Sign in once.
         </p>
-        <ul class="doc__links">
-          <li><a href="/mcp">Set up MCP</a></li>
-          <li><a href="/sdk">Use the SDK</a></li>
-          <li>
-            <a href={MCP_URL} aria-label="Hosted MCP endpoint (opens in new tab)" target="_blank" rel="noopener noreferrer"
-              >Hosted endpoint<span aria-hidden="true"> ↗</span></a
-            >
-          </li>
-        </ul>
       </header>
 
-      <section class="doc narrow">
-        <h2>Pick a path</h2>
-        <ul class="list-plain">
+      <section class="doc narrow" id="setup">
+        <h2>Set up in Claude.ai</h2>
+        <ol class="steps">
           <li>
-            <strong>Hosted MCP</strong> — OAuth at <code>{MCP_URL}</code>. Recommended for Claude.ai,
-            Cursor, and Claude Desktop. Credentials stay on the server.
+            <p>
+              Open <a href={CLAUDE_AI_CONNECTOR_URL}>Settings → Connectors → Add custom connector</a
+              > in Claude.ai.
+            </p>
           </li>
           <li>
-            <strong>Local MCP</strong> — stdio on your machine via <code>npx</code>. One
-            TrainHeroic account per process; email and password in your config.
+            <p>Paste this URL when asked for the connector address:</p>
+            <CopyLine text={MCP_URL} label="Connector URL" />
           </li>
           <li>
-            <strong>TypeScript SDK</strong> — <code>@trainheroic-unofficial/js</code> for scripts,
-            workers, and custom integrations without MCP.
+            <p>
+              Sign in with your <strong>TrainHeroic email and password</strong> when Claude prompts
+              you. A coach account gets coaching and your own athlete tools; an athlete account
+              gets athlete tools.
+            </p>
           </li>
-        </ul>
-        <p>
-          <a href="/mcp#tools">Browse the MCP tool list</a> or jump to <a href="/mcp#setup">setup
-            instructions</a>.
-        </p>
+        </ol>
       </section>
 
       <section class="doc narrow">
-        <h2>What you get</h2>
+        <h2>Try it</h2>
+        <p>Start a chat in Claude and ask in plain language:</p>
+        <Snippet
+          label="Example questions"
+          code={`List my athletes
+What's on the program for Tuesday?
+Show my squat PRs this year
+Draft a back squat workout for next Monday — don't publish yet`}
+        />
+      </section>
+
+      <section class="doc narrow">
+        <h2>What you can ask</h2>
         <ul class="list-plain">
           <li>
-            <strong>Coach</strong> — program workouts, manage athletes and teams, analytics,
-            messaging
+            <strong>Coaches</strong> — roster, program workouts, teams, athlete analytics, messages
           </li>
           <li>
-            <strong>Athlete</strong> — training history, PRs, working maxes, session logging
+            <strong>Athletes</strong> — training history, PRs, working maxes, what's programmed today
           </li>
           <li>
-            <strong>Confirm gates</strong> — destructive writes ask before they run
+            <strong>Safety</strong> — Claude asks before publishing workouts or sending messages
           </li>
         </ul>
       </section>
 
       <section class="doc narrow">
         <p class="disclaimer">
-          <strong>Unofficial</strong> — not affiliated with TrainHeroic. On the hosted server,
-          OAuth keeps your credentials server-side. Local stdio configs store
-          <code>TRAINHEROIC_EMAIL</code> and <code>TRAINHEROIC_PASSWORD</code> in plaintext on
-          your machine.
+          <strong>Unofficial</strong> — not affiliated with TrainHeroic. Your login is handled by
+          OAuth on the hosted connector; we do not store your password in plaintext on the server.
+        </p>
+        <p>
+          Building with Claude Code or TypeScript? See the <a href="/developers">developer docs</a>.
         </p>
       </section>
     </div>

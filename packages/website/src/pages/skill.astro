@@ -1,0 +1,93 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import Snippet from "../components/Snippet.astro";
+import {
+  NPM_CLI,
+  SKILL_ATHLETE,
+  SKILL_COACH,
+  SKILL_REPO,
+} from "../data/tools";
+---
+
+<Layout
+  title="Claude Code skill"
+  description="Install the TrainHeroic skill for Claude Code — the recommended path for coding agents that run the trainheroic CLI."
+>
+  <Header />
+  <main id="main">
+    <div class="shell">
+      <header class="doc__intro narrow">
+        <h1>Claude Code skill</h1>
+        <p class="lead">
+          For Claude Code and agents that run shell commands. The skill teaches the assistant to
+          call <code>{NPM_CLI}</code> — cached sessions, JSON output, no MCP config.
+        </p>
+        <p>
+          <a href="/developers">← Developers</a>
+        </p>
+      </header>
+
+      <section class="doc" id="install">
+        <h2 class="narrow">Install</h2>
+        <Snippet label="Recommended" code={`npx skills add ${SKILL_REPO}`} />
+        <p class="narrow">
+          Or install the CLI and copy both skills (coach + athlete) to
+          <code>~/.claude/skills/</code>:
+        </p>
+        <Snippet
+          label="CLI + install-skill"
+          code={`npm install -g ${NPM_CLI}
+trainheroic install-skill`}
+        />
+      </section>
+
+      <section class="doc narrow" id="credentials">
+        <h2>Credentials</h2>
+        <p>
+          Set your TrainHeroic email and password in the environment. The CLI caches the session at
+          <code>~/.trainheroic/session.json</code>.
+        </p>
+        <Snippet
+          label="Shell environment"
+          code={`export TRAINHEROIC_EMAIL=coach@example.com
+export TRAINHEROIC_PASSWORD=yourpassword`}
+        />
+        <p class="disclaimer">
+          <strong>Credentials live in your environment</strong> and may appear in shell history.
+        </p>
+      </section>
+
+      <section class="doc narrow" id="use">
+        <h2>Use in Claude Code</h2>
+        <ul class="list-plain">
+          <li>
+            <strong>Coach</strong> — <code>/{SKILL_COACH}</code> for roster, programming, teams,
+            analytics, messaging
+          </li>
+          <li>
+            <strong>Athlete</strong> — <code>/{SKILL_ATHLETE}</code> for your own training history,
+            PRs, and logging
+          </li>
+        </ul>
+      </section>
+
+      <section class="doc narrow" id="cli">
+        <h2>CLI reference</h2>
+        <p>Output is JSON on stdout. Run <code>trainheroic help</code> for the full command list.</p>
+        <Snippet
+          label="Common commands"
+          code={`trainheroic whoami
+trainheroic coach athletes
+trainheroic coach programs
+trainheroic athlete profile
+trainheroic athlete export
+trainheroic skill          # workflow guides
+trainheroic skill list`}
+        />
+      </section>
+    </div>
+  </main>
+  <Footer />
+</Layout>

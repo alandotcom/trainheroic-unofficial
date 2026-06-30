@@ -6,11 +6,14 @@ brand
 
 ## Users
 
-Developers and coaches who already use TrainHeroic and want to connect it to Claude, Cursor, or their own scripts. They arrive with a concrete task — wire up MCP, skim the SDK, copy a config snippet — and need to trust the project quickly. They are technical, skeptical of hype, and allergic to “AI wrapper” aesthetics.
+Two audiences:
+
+1. **Users** — coaches and athletes who use TrainHeroic and want Claude.ai to answer questions about their roster, programming, and training. They are not developers. They need three clear steps and a URL to copy.
+2. **Developers** — people building with Claude Code, the skill/CLI, or the TypeScript SDK. They want commands, API examples, and reference material.
 
 ## Product Purpose
 
-Explain and sell the unofficial TrainHeroic MCP server and TypeScript SDK. The site should make the hosted endpoint obvious, show what tools exist, and get someone to a working integration in one session. Success is a copied URL or install command, not time on page.
+Get normal users connected to Claude.ai in one session (copy URL, add connector, sign in). Route developers to skill and SDK docs. Success is a working connector or a copied install command — not time on page.
 
 ## Brand Personality
 
@@ -30,11 +33,11 @@ Capable, direct, quietly opinionated. Expert confidence without gym-bro energy o
 
 ## Design Principles
 
-1. **Show the integration** — lead with real URLs, commands, and tool names; decoration is secondary.
-2. **One clear path** — hosted MCP first, local stdio second, SDK for builders.
-3. **Typographic hierarchy over boxes** — use type and spacing before reaching for cards.
-4. **Ink on paper** — near-black type on pure white; color only where it earns a click.
-5. **Practice what we preach** — the site should look like something you’d ship from the same repo.
+1. **Users first on the home page** — Claude.ai connector setup before any developer jargon.
+2. **Developers off the main path** — skill, SDK, and MCP reference live under `/developers`.
+3. **Show the integration** — real URLs, commands, and tool names; decoration is secondary.
+4. **Typographic hierarchy over boxes** — type and spacing before cards.
+5. **Ink on paper** — near-black type on pure white; color only where it earns a click.
 
 ## Accessibility & Inclusion
 
