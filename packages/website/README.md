@@ -1,52 +1,32 @@
-# @trainheroic-unofficial/website
-
-Static marketing and documentation site for the TrainHeroic unofficial MCP server and TypeScript SDK.
-
-## Pages
-
-- `/` — Claude.ai connector setup
-- `/developers` — skill, SDK, and MCP reference
-- `/skill`, `/sdk`, `/mcp` — developer docs
-
-## Develop
-
-From the repo root:
-
-```bash
-pnpm website:dev     # http://localhost:4321
-pnpm website:build   # output in dist/
-```
-
-Or from this package:
-
-```bash
-pnpm dev
-pnpm build
-pnpm preview
-```
-
-## Design
-
-Design notes live in `PRODUCT.md` and `DESIGN.md`.
-
-## MCP tool catalog
-
-The `/mcp` tool list is generated from `packages/eval/src/tools.ts` and
-`src/data/mcp-tool-catalog.ts`. After adding a core tool, update eval and the catalog, then:
-
-```bash
-pnpm gen:mcp-tools
-```
-
-`prebuild` and `predev` run this automatically.
-
 ## Deploy
 
-CI builds and publishes to GitHub Pages on pushes to `main`
-(`.github/workflows/website.yml`). The build uses a relative asset base and
-path-relative links so one artifact works on both `trainheroic-unofficial.com`
-(custom domain via `public/CNAME`) and
-`https://alandotcom.github.io/trainheroic-unofficial/`.
+Two hosts, two builds:
 
-Configure DNS for the custom domain in repository **Settings → Pages**, then
-re-run the deploy workflow.
+| Host                                                   | Builder                                                                                    | Build env                             |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------- |
+| `https://alandotcom.github.io/trainheroic-unofficial/` | GitHub Actions (`.github/workflows/website.yml`)                                           | `ASTRO_BASE=/trainheroic-unofficial/` |
+| `https://trainheroic-unofficial.com`                   | [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) (connected repo) | none (defaults to `/`)                |
+
+### GitHub Pages
+
+Pushes to `main` build with the project subpath and deploy via GitHub Pages. Enable Pages in repo **Settings → Pages** with source **GitHub Actions**.
+
+### Cloudflare Worker (static assets)
+
+The site is a static-assets Worker (`trainheroic-website`) — no Worker script, just `assets.directory` in `wrangler.jsonc`. Connect this repository via **Workers & Pages → Create → Import from Git** and enable [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/).
+
+Use the **repository root** as the project root:
+
+| Setting              | Value                                                                |
+| -------------------- | -------------------------------------------------------------------- |
+| Build command        | `pnpm install && pnpm website:build`                                 |
+| Deploy command       | `pnpm --filter @trainheroic-unofficial/website exec wrangler deploy` |
+| Environment variable | `NODE_VERSION=24`                                                    |
+
+Custom domains (`trainheroic-unofficial.com`, `www`) are declared in `wrangler.jsonc` and attached on deploy. Do not add a GitHub Actions deploy step for Cloudflare — Workers Builds runs on push.
+
+Local preview after `pnpm build`:
+
+```bash
+pnpm --filter @trainheroic-unofficial/website exec wrangler dev
+```

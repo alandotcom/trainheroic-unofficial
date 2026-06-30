@@ -1,6 +1,7 @@
 name: Deploy website
 
 # Build the static site and publish to GitHub Pages on pushes to main and manual dispatch.
+# Cloudflare Workers static assets build separately via Workers Builds (see packages/website/README.md).
 
 on:
   push:
@@ -36,6 +37,10 @@ jobs:
 
       - name: Build website
         run: pnpm --filter @trainheroic-unofficial/website run build
+        env:
+          # Project Pages URL: https://alandotcom.github.io/trainheroic-unofficial/
+          ASTRO_BASE: /trainheroic-unofficial/
+          ASTRO_SITE: https://alandotcom.github.io/trainheroic-unofficial
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4

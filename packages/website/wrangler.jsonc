@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "trainheroic-website",
+  "compatibility_date": "2026-06-19",
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash"
+  },
+  "routes": [
+    { "pattern": "trainheroic-unofficial.com", "custom_domain": true },
+    { "pattern": "www.trainheroic-unofficial.com", "custom_domain": true }
+  ]
+}

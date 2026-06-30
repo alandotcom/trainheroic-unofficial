@@ -1,14 +1,16 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 
-// Relative base so asset URLs resolve on both trainheroic-unofficial.com and
-// alandotcom.github.io/trainheroic-unofficial/ from one build.
+const base = process.env.ASTRO_BASE ?? "/";
+const site = process.env.ASTRO_SITE ?? "https://trainheroic-unofficial.com";
+
+// https://astro.build/config
 export default defineConfig({
-  site: "https://trainheroic-unofficial.com",
-  base: "./",
+  site,
+  base,
   output: "static",
   build: {
-    // Avoid root-absolute /_astro/*.css URLs that break on the github.io subpath.
-    inlineStylesheets: "always",
+    // GitHub Pages project URL needs inlined CSS when ASTRO_BASE is a subpath.
+    inlineStylesheets: base !== "/" ? "always" : "auto",
   },
 });

@@ -1,5 +1,5 @@
 ---
-import { relativeHref, sitePath } from "../lib/paths.ts";
+import { pageHref, sitePath } from "../lib/paths.ts";
 
 interface Props {
   title: string;
@@ -21,7 +21,7 @@ const canonical = new URL(path === "/" ? "" : path.slice(1), Astro.site);
     />
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <link rel="icon" type="image/svg+xml" href={relativeHref("favicon.svg", Astro.url.pathname)} />
+    <link rel="icon" type="image/svg+xml" href={pageHref("favicon.svg", Astro.url.pathname)} />
     <title>{title} · trainheroic-unofficial</title>
   </head>
   <body>
