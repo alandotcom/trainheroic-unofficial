@@ -297,6 +297,9 @@ importers:
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
+      wrangler:
+        specifier: ^4.105.0
+        version: 4.105.0(@cloudflare/workers-types@4.20260620.1)
 
 packages:
 

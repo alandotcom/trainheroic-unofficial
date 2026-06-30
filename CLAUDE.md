@@ -80,7 +80,7 @@ cd packages/cloudflare && pnpm deploy                         # see its DEPLOY.m
 TRAINHEROIC_EMAIL=... TRAINHEROIC_PASSWORD=... \
   pnpm --filter @trainheroic-unofficial/cli start whoami
 
-# Documentation site (static Astro; GitHub Pages + Cloudflare Pages):
+# Documentation site (static Astro; GitHub Pages + Cloudflare Workers static assets):
 pnpm website:dev    # http://localhost:4321
 pnpm website:build  # output in packages/website/dist
 ```
@@ -134,7 +134,7 @@ The dependency graph runs one direction; nothing lower depends on anything highe
   setup and developer docs (skill, SDK, MCP reference). The MCP tool index is generated at build
   time from `packages/eval/src/tools.ts` plus hosted-only tools in
   `packages/website/src/data/mcp-tool-catalog.ts`. GitHub Pages via
-  `.github/workflows/website.yml`; Cloudflare Pages builds from the connected repo.
+  `.github/workflows/website.yml`; Cloudflare Workers static assets via Workers Builds.
 
 The central seam is the `ExerciseIndex` interface (in `js`). Local implements it in memory
 (`ExerciseLibrary`); hosted implements it over D1 (`cloudflare/src/store/exercises.ts`).

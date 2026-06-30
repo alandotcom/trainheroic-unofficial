@@ -5,5 +5,9 @@
   "assets": {
     "directory": "./dist",
     "html_handling": "auto-trailing-slash"
-  }
+  },
+  "routes": [
+    { "pattern": "trainheroic-unofficial.com", "custom_domain": true },
+    { "pattern": "www.trainheroic-unofficial.com", "custom_domain": true }
+  ]
 }

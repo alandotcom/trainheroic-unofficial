@@ -1,7 +1,7 @@
 name: Deploy website
 
 # Build the static site and publish to GitHub Pages on pushes to main and manual dispatch.
-# Cloudflare Pages builds separately from the connected GitHub repo (see packages/website/README.md).
+# Cloudflare Workers static assets build separately via Workers Builds (see packages/website/README.md).
 
 on:
   push:
