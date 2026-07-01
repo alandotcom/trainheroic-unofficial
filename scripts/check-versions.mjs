@@ -1,20 +1,27 @@
-// Asserts every workspace package under packages/* shares one version.
+// Asserts every package in the changesets `fixed` group shares one version.
 //
-// The `fixed` group in .changeset/config.json keeps the suite aligned during a normal
-// release. This guard is the backstop: it catches drift from a hand-edited version, a
-// reverted config, or a half-applied bump, and it runs as part of `pnpm check` so the
-// failure surfaces in everyday development and CI, not at publish time.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+// The fixed group keeps the suite aligned during a normal release. This guard is the
+// backstop: it catches drift from a hand-edited version, a reverted config, or a
+// half-applied bump, and it runs as part of `pnpm check` so the failure surfaces in
+// everyday development and CI, not at publish time.
+//
+// Packages outside the fixed group (e.g. website — private, deployed separately) are not
+// versioned with the suite and are intentionally excluded.
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
-const pkgDir = join(root, "packages");
+const changesetConfig = JSON.parse(readFileSync(join(root, ".changeset/config.json"), "utf8"));
+const versioned = new Set(changesetConfig.fixed.flat());
 
 const found = [];
-for (const name of readdirSync(pkgDir)) {
-  const manifest = join(pkgDir, name, "package.json");
-  if (!existsSync(manifest)) continue;
-  const { name: pkgName, version } = JSON.parse(readFileSync(manifest, "utf8"));
+for (const pkgName of versioned) {
+  const manifest = join(root, "packages", pkgName.replace("@trainheroic-unofficial/", ""), "package.json");
+  if (!existsSync(manifest)) {
+    console.error(`✗ ${pkgName} is in the changesets fixed group but has no package.json`);
+    process.exit(1);
+  }
+  const { version } = JSON.parse(readFileSync(manifest, "utf8"));
   found.push({ pkgName, version });
 }
 

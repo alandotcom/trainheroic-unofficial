@@ -1,6 +1,6 @@
 {
   "name": "@trainheroic-unofficial/website",
-  "version": "1.6.0",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "description": "Marketing and documentation site for the TrainHeroic unofficial MCP and SDK.",
