@@ -1,14 +1,30 @@
 ---
-import { pageHref, sitePath } from "../lib/paths.ts";
+import { pageHref, sitePath, withBase } from "../lib/paths.ts";
 
 interface Props {
   title: string;
   description: string;
   path?: string;
+  image?: string;
+  imageAlt?: string;
 }
 
-const { title, description, path = sitePath(Astro.url.pathname) } = Astro.props;
+const SITE_NAME = "trainheroic-unofficial";
+const DEFAULT_OG_IMAGE = "og-image.png";
+const DEFAULT_OG_IMAGE_ALT =
+  "trainheroic-unofficial - Connect TrainHeroic to Claude via MCP";
+
+const {
+  title,
+  description,
+  path = sitePath(Astro.url.pathname),
+  image = DEFAULT_OG_IMAGE,
+  imageAlt = DEFAULT_OG_IMAGE_ALT,
+} = Astro.props;
+
+const pageTitle = `${title} · ${SITE_NAME}`;
 const canonical = new URL(path === "/" ? "" : path.slice(1), Astro.site);
+const ogImage = new URL(withBase(image), Astro.site);
 ---
 
 <!doctype html>
@@ -20,9 +36,31 @@ const canonical = new URL(path === "/" ? "" : path.slice(1), Astro.site);
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <meta name="description" content={description} />
+    <meta name="theme-color" content="#ffffff" />
     <link rel="canonical" href={canonical} />
     <link rel="icon" type="image/svg+xml" href={pageHref("favicon.svg", Astro.url.pathname)} />
-    <title>{title} · trainheroic-unofficial</title>
+    <link
+      rel="apple-touch-icon"
+      href={pageHref("apple-touch-icon.png", Astro.url.pathname)}
+    />
+    <title>{pageTitle}</title>
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={imageAlt} />
+    <meta property="og:locale" content="en_US" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={imageAlt} />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to main content</a>
