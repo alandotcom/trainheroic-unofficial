@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/db
 
+## 1.7.0
+
+### Patch Changes
+
+- Updated dependencies [b0240c3]
+  - @trainheroic-unofficial/dto@1.7.0
+  - @trainheroic-unofficial/js@1.7.0
+
 ## 1.6.1
 
 ### Patch Changes
