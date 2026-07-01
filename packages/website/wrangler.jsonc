@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "trainheroic-website",
+  "name": "trainheroic-unofficial",
   "compatibility_date": "2026-06-19",
   "assets": {
     "directory": "./dist",
