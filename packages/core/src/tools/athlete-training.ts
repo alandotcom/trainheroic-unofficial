@@ -5,6 +5,7 @@ import {
   dateString,
   logSessionArgsSchema,
   logSetArgsSchema,
+  swapAthleteExerciseArgsSchema,
 } from "@trainheroic-unofficial/dto";
 import {
   addExercisesToWorkout,
@@ -33,6 +34,7 @@ import {
   selectWorkouts,
   selectWorkoutsByProgram,
   summarizeAthleteWorkouts,
+  swapAthleteExercise,
   toSetResults,
 } from "@trainheroic-unofficial/js";
 import type { SessionExercise, TrainHeroicClient } from "@trainheroic-unofficial/js";
@@ -565,6 +567,51 @@ function registerLogTool(server: McpServer, ctx: AthleteContext): void {
 }
 
 /**
+ * The athlete's own per-exercise swap, in its own function so registerLogTool/registerSessionTools
+ * stay under the oxlint max-lines-per-function cap. Lets an athlete substitute a prescribed
+ * exercise in a coach-scheduled workout for a different one — the self-service equivalent of the
+ * app's "swap exercise", overriding only the athlete's own copy of that slot.
+ */
+function registerSwapTool(server: McpServer, ctx: AthleteContext): void {
+  server.registerTool(
+    "athlete_swap_exercise",
+    {
+      title: "Swap one exercise in your scheduled workout",
+      description:
+        "Athlete-facing write: substitute one prescribed exercise in your scheduled workout for a " +
+        'different one — the API equivalent of the app\'s "swap exercise". This is the way to change ' +
+        "which movement a slot is BEFORE logging: session_add/remove only touch personal sessions, and " +
+        "athlete_log_set records results into a slot without changing its exercise, so use this when a " +
+        "COACH-SCHEDULED slot should be a different lift. It overrides only your copy of the slot; the " +
+        "team/program prescription is untouched. Give savedWorkoutSetExerciseId (the slot to change, " +
+        "from athlete_log_targets — each row lists it per exercise) and exerciseId (the replacement, " +
+        "from athlete_exercises). After swapping, log against the slot as usual with athlete_log_set. " +
+        "Requires confirmation (elicitation or confirm:true).",
+      inputSchema: { ...swapAthleteExerciseArgsSchema.shape, confirm: z.boolean().optional() },
+      annotations: DESTRUCTIVE,
+    },
+    ({ savedWorkoutSetExerciseId, exerciseId, confirm }, extra) =>
+      attempt(async () => {
+        const sweId = toId(savedWorkoutSetExerciseId);
+        const exId = toId(exerciseId);
+        const ok = await confirmGate(
+          server,
+          extra.requestId,
+          `Swap the exercise in your saved workout slot ${sweId} to exercise ${exId}? This changes what that slot is prescribed (your copy only).`,
+          confirm,
+        );
+        if (!ok) return errorResult(NOT_CONFIRMED);
+        return jsonResult(
+          await swapAthleteExercise(ctx.client, {
+            savedWorkoutSetExerciseId: sweId,
+            exerciseId: exId,
+          }),
+        );
+      }),
+  );
+}
+
+/**
  * Live tools over the logged-in user's own training (history, scheduled/completed workouts,
  * PRs, working maxes), plus a gated set-logging write. The athlete user id is
  * resolved once from /user/simple and reused across tools.
@@ -593,4 +640,5 @@ export function registerAthleteTrainingTools(server: McpServer, ctx: AthleteCont
   registerLogTargetsTool(server, ctx);
   registerSessionTools(server, ctx);
   registerLogTool(server, ctx);
+  registerSwapTool(server, ctx);
 }
