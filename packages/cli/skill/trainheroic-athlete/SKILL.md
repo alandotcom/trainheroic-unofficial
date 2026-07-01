@@ -52,21 +52,22 @@ on a 401/403. Start with `$TH athlete whoami` to confirm auth and get your `id`.
 
 ## What you can do
 
-| Goal                                  | Command                                                                        |
-| ------------------------------------- | ------------------------------------------------------------------------------ |
-| Lifetime totals + profile             | `$TH athlete profile [--metric]`                                               |
-| Scheduled / completed workouts        | `$TH athlete workouts --start Y-M-D --end Y-M-D [--raw] [--summary]`           |
-| Find an exercise you've logged        | `$TH athlete exercises [--q <text>] [--limit N]`                               |
-| One lift's PRs + history over time    | `$TH athlete history <exerciseId> [--raw]`                                     |
-| Personal records for a lift           | `$TH athlete prs <exerciseId>`                                                 |
-| Last performance + PR as of a date    | `$TH athlete stats <exerciseId> --date Y-M-D`                                  |
-| Working maxes (drive % prescriptions) | `$TH athlete working-maxes`                                                    |
-| Benchmark leaderboard                 | `$TH athlete leaderboard <workoutId>`                                          |
-| Download all historicals to JSON      | `$TH athlete export [--out dir] [--full]`                                      |
-| Log ids for a scheduled workout       | `$TH athlete log-targets --start Y-M-D --end Y-M-D [--program <title>]`        |
-| Log completed set results (gated)     | `$TH athlete log-set --date Y-M-D --set <id> ... --yes`                        |
-| Log an off-plan session (gated)       | `$TH athlete log-session --date Y-M-D '[{"exerciseId":N,"sets":[...]}]' --yes` |
-| Remove a stray personal session       | `$TH athlete session-remove --id <programWorkoutId> --date Y-M-D --yes`        |
+| Goal                                  | Command                                                                          |
+| ------------------------------------- | -------------------------------------------------------------------------------- |
+| Lifetime totals + profile             | `$TH athlete profile [--metric]`                                                 |
+| Scheduled / completed workouts        | `$TH athlete workouts --start Y-M-D --end Y-M-D [--raw] [--summary]`             |
+| Find an exercise you've logged        | `$TH athlete exercises [--q <text>] [--limit N]`                                 |
+| One lift's PRs + history over time    | `$TH athlete history <exerciseId> [--raw]`                                       |
+| Personal records for a lift           | `$TH athlete prs <exerciseId>`                                                   |
+| Last performance + PR as of a date    | `$TH athlete stats <exerciseId> --date Y-M-D`                                    |
+| Working maxes (drive % prescriptions) | `$TH athlete working-maxes`                                                      |
+| Benchmark leaderboard                 | `$TH athlete leaderboard <workoutId>`                                            |
+| Download all historicals to JSON      | `$TH athlete export [--out dir] [--full]`                                        |
+| Log ids for a scheduled workout       | `$TH athlete log-targets --start Y-M-D --end Y-M-D [--program <title>]`          |
+| Log completed set results (gated)     | `$TH athlete log-set --date Y-M-D --set <id> ... --yes`                          |
+| Log an off-plan session (gated)       | `$TH athlete log-session --date Y-M-D '[{"exerciseId":N,"sets":[...]}]' --yes`   |
+| Swap a prescribed exercise (gated)    | `$TH athlete swap-exercise --set-exercise <sweId> --exercise <exerciseId> --yes` |
+| Remove a stray personal session       | `$TH athlete session-remove --id <programWorkoutId> --date Y-M-D --yes`          |
 
 ## Reading training
 
@@ -144,6 +145,24 @@ $TH athlete log-session --date 2026-06-21 --yes \
 
 Same coach-visible write and the same `--yes` gate as `log-set`. For a workout the coach
 already scheduled, prefer `log-set` so it attaches to the prescription.
+
+### Swapping a prescribed exercise
+
+To substitute one movement in a coach-scheduled workout for a different one (the in-app "swap
+exercise"), use `swap-exercise`. It changes which exercise the slot is, for your copy only —
+the team/program prescription stays as the coach set it. Get the slot's
+`savedWorkoutSetExerciseId` from `$TH athlete log-targets` (each row lists it per exercise) and
+the replacement `exerciseId` from `$TH athlete exercises`, then swap:
+
+```bash
+$TH athlete log-targets --start 2026-06-01 --end 2026-06-01 --program "Bodybuilding"
+$TH athlete swap-exercise --set-exercise 1599201 --exercise 920003 --yes
+```
+
+Do this **before** logging: `log-set` records results into a slot without changing its
+exercise, so swap first, then log against the new movement as usual. Same `--yes` gate; re-read
+the workout with `$TH athlete workouts --start Y-M-D --end Y-M-D` to confirm the slot now shows
+the replacement.
 
 ## Gotchas
 

@@ -314,6 +314,10 @@ export const ATHLETE_TOOL_GROUPS: McpToolGroup[] = [
         name: "athlete_log_set",
         summary: "Log one set",
       },
+      {
+        name: "athlete_swap_exercise",
+        summary: "Swap an exercise in a scheduled workout",
+      },
     ],
   },
 ];

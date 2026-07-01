@@ -196,6 +196,7 @@ Athlete — the logged-in user's own training (a coach account works too):
   athlete log-set --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes   (logs to a PRESCRIBED workout on that date; ids from 'athlete log-targets'; each set fills the next position, add "slot":K to target the K-th; a partial log records only what you send)
   athlete log-session --date Y-M-D <exercisesJson>|--file f --yes   (log OFF-PLAN work with no prescription — creates/reuses a personal session for the date, then logs it; exerciseIds from 'athlete exercises')
   athlete session-remove --id <programWorkoutId> --date Y-M-D --yes   (delete a stray PERSONAL session; the id is the session 'id' from 'athlete workouts')
+  athlete swap-exercise --set-exercise <savedWorkoutSetExerciseId> --exercise <exerciseId> --yes   (substitute one prescribed exercise in a COACH-SCHEDULED slot for a different one — your copy only; slot id from 'athlete log-targets', exerciseId from 'athlete exercises')
       JSON is the exercises array: [{"exerciseId":N,"sets":[{"param1":reps,"param2":weight}, ...]}, ...]
 `;
 
@@ -772,6 +773,38 @@ async function cmdAthleteSessionRemove(client: TrainHeroicClient, a: string[]): 
   return out({ removed: true, programWorkoutId: id, date: args.date });
 }
 
+const ATHLETE_SWAP_EXERCISE_USAGE =
+  "athlete swap-exercise --set-exercise <savedWorkoutSetExerciseId> --exercise <exerciseId> --yes";
+
+// Substitute one prescribed exercise in the athlete's own scheduled workout for a different one
+// (their copy only; the team prescription is untouched). The slot id comes from `athlete
+// log-targets`; the replacement exercise id from `athlete exercises`.
+async function cmdAthleteSwapExercise(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values } = parse(a, {
+    "set-exercise": { type: "string" },
+    exercise: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const savedWorkoutSetExerciseId = toInt(
+    need(values["set-exercise"] as string | undefined, ATHLETE_SWAP_EXERCISE_USAGE),
+    "--set-exercise",
+  );
+  const exerciseId = toInt(
+    need(values.exercise as string | undefined, ATHLETE_SWAP_EXERCISE_USAGE),
+    "--exercise",
+  );
+  validate(
+    swapAthleteExerciseArgsSchema,
+    { savedWorkoutSetExerciseId, exerciseId },
+    "athlete swap-exercise args",
+  );
+  if (values.yes !== true)
+    fail(
+      `swapping slot ${savedWorkoutSetExerciseId} changes what that slot is prescribed; add --yes.`,
+    );
+  return out(await swapAthleteExercise(client, { savedWorkoutSetExerciseId, exerciseId }));
+}
+
 async function cmdAthleteWorkouts(client: TrainHeroicClient, a: string[]): Promise<void> {
   const { values } = parse(a, {
     start: { type: "string" },
@@ -905,9 +938,11 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
       return cmdAthleteLogSession(client, a);
     case "session-remove":
       return cmdAthleteSessionRemove(client, a);
+    case "swap-exercise":
+      return cmdAthleteSwapExercise(client, a);
     default:
       return fail(
-        "usage: trainheroic athlete <whoami|profile|prefs|workouts|log-targets|exercises|history|prs|stats|working-maxes|leaderboard|export|log-set|log-session|session-remove>",
+        "usage: trainheroic athlete <whoami|profile|prefs|workouts|log-targets|exercises|history|prs|stats|working-maxes|leaderboard|export|log-set|log-session|session-remove|swap-exercise>",
       );
   }
 }

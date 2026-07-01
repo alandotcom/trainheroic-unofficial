@@ -113,6 +113,7 @@ export const ATHLETE_WRITE_TOOLS: readonly string[] = [
   "athlete_session_remove",
   "athlete_log_session",
   "athlete_log_set",
+  "athlete_swap_exercise",
 ];
 
 export type RoleTools = {

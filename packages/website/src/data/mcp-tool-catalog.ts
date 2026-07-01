@@ -86,6 +86,7 @@ export const TOOL_SUMMARIES: Record<string, string> = {
   athlete_session_remove: "Remove a session",
   athlete_log_session: "Log a full session",
   athlete_log_set: "Log one set",
+  athlete_swap_exercise: "Swap an exercise in a scheduled workout",
   report_feedback: "Report a bug or send feedback to the maintainers",
   programming_sync: "Sync prescribed programming history into D1",
   programming_stored: "Query synced programming history",
@@ -206,6 +207,7 @@ export const ATHLETE_GROUP_NAMES: { title: string; tools: string[] }[] = [
       "athlete_session_remove",
       "athlete_log_session",
       "athlete_log_set",
+      "athlete_swap_exercise",
     ],
   },
 ];

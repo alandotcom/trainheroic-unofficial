@@ -50,6 +50,7 @@ export const ATHLETE_COMMANDS: Record<string, string> = {
   "athlete log-set": "athlete_log_set",
   "athlete log-session": "athlete_log_session",
   "athlete session-remove": "athlete_session_remove",
+  "athlete swap-exercise": "athlete_swap_exercise",
 };
 
 /** Commands whose first positional token after the command path is an id, keyed by canonical name. */

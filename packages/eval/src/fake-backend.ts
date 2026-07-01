@@ -177,7 +177,10 @@ function buildApp(
 /** Read a write's JSON body and record (method, path, body). Returns the parsed body for the route. */
 async function record(c: Context, writes: WriteRecord[]): Promise<unknown> {
   const body = await c.req.json().catch(() => null);
-  writes.push({ method: c.req.method, path: new URL(c.req.url).pathname, body });
+  // Keep the query string: some writes (the per-athlete swap) carry their payload there, not in the
+  // body — `?exerciseId=` — so a grader can assert on it. `url.search` is "" when there's no query.
+  const url = new URL(c.req.url);
+  writes.push({ method: c.req.method, path: url.pathname + url.search, body });
   return body;
 }
 
