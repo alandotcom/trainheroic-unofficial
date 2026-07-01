@@ -1,5 +1,27 @@
 # @trainheroic-unofficial/cli
 
+## 1.7.0
+
+### Minor Changes
+
+- e2bcad3: Let an athlete substitute a prescribed exercise in a coach-scheduled workout. closes #44
+
+  The athlete surface gains `athlete_swap_exercise` (MCP) and `athlete swap-exercise` (CLI), the self-service counterpart to the coach's `swap_athlete_exercise`. An athlete reads a slot's `savedWorkoutSetExerciseId` from `athlete_log_targets` and a replacement exercise id from `athlete_exercises`, then swaps the movement in a non-personal (coach-scheduled) session for their own copy only — the team/program prescription is untouched. Previously the athlete write surface could log results into a prescribed slot but never change which exercise the slot was, so an in-app substitution had no representation through the integration.
+
+  Both surfaces reuse the existing SDK `swapAthleteExercise` and the `swapAthleteExerciseArgsSchema` shape, and the write is gated the same way as the other athlete-facing writes (elicitation or `confirm: true` / `--yes`).
+
+- b0240c3: Add athlete workout-history export. An athlete can download a full training history as CSV, JSON, or plain text, with reps and weight broken out per set.
+
+  The SDK gains `presentAthleteWorkoutsExport` (a structured projection of a session), `serializeWorkoutHistory` (CSV/JSON/text serialization that neutralizes spreadsheet formula injection), and `fetchAthleteWorkoutsChunked` with `mergeWorkoutsById`, which window a long date range so the `programworkout/range` endpoint stops timing out on a multi-year span. The `dto` package adds the `WorkoutHistoryExport` shape. The CLI adds `athlete workouts --format json|csv|text`.
+
+  The readable and structured athlete-workout presenters now derive from one merge, so the two views always agree on what a session contains.
+
+### Patch Changes
+
+- Updated dependencies [b0240c3]
+  - @trainheroic-unofficial/dto@1.7.0
+  - @trainheroic-unofficial/js@1.7.0
+
 ## 1.6.1
 
 ### Patch Changes

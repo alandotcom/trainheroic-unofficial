@@ -1,5 +1,20 @@
 # @trainheroic-unofficial/js
 
+## 1.7.0
+
+### Minor Changes
+
+- b0240c3: Add athlete workout-history export. An athlete can download a full training history as CSV, JSON, or plain text, with reps and weight broken out per set.
+
+  The SDK gains `presentAthleteWorkoutsExport` (a structured projection of a session), `serializeWorkoutHistory` (CSV/JSON/text serialization that neutralizes spreadsheet formula injection), and `fetchAthleteWorkoutsChunked` with `mergeWorkoutsById`, which window a long date range so the `programworkout/range` endpoint stops timing out on a multi-year span. The `dto` package adds the `WorkoutHistoryExport` shape. The CLI adds `athlete workouts --format json|csv|text`.
+
+  The readable and structured athlete-workout presenters now derive from one merge, so the two views always agree on what a session contains.
+
+### Patch Changes
+
+- Updated dependencies [b0240c3]
+  - @trainheroic-unofficial/dto@1.7.0
+
 ## 1.6.1
 
 ### Patch Changes
