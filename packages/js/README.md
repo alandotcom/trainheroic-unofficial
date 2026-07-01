@@ -245,10 +245,7 @@ There is no team-wide training volume metric. Pass every athlete's id to
 `training-summary-athlete`, or call `teamVolume()` to group those rows into a team rollup.
 
 ```ts
-import {
-  analyticsMetricCatalog,
-  queryAnalytics,
-} from "@trainheroic-unofficial/js";
+import { analyticsMetricCatalog, queryAnalytics } from "@trainheroic-unofficial/js";
 
 // Read-only report (TrainHeroic uses POST for these queries).
 const readiness = await queryAnalytics(client, {
