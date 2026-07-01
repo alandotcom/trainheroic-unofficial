@@ -14,6 +14,23 @@ pnpm build
 pnpm preview
 ```
 
+## Structure
+
+Two kinds of pages:
+
+- **Docs** (`/`, `/developers`, `/skill`, `/sdk`, `/mcp`): [Starlight](https://starlight.astro.build)
+  content in `src/content/docs/` (`.md`/`.mdx`). Starlight owns the shell (sidebar, search);
+  the site is light-only and themed to DESIGN.md via `src/styles/starlight.css` plus the
+  component overrides in `src/components/starlight/` (pinned light theme, brand site title,
+  disclaimer footer). Multi-line code snippets live in `src/data/snippets.ts` (MDX strips the
+  JSX indentation from inline template literals) and shared names/URLs in `src/data/tools.ts`,
+  rendered with Starlight's `Code` component so they stay single-sourced.
+- **Bespoke** (`/export`): an interactive `.astro` app in `src/pages/` using `Layout.astro`,
+  `Header`/`Footer`, and `src/styles/global.css`. It stays out of Starlight.
+
+Internal links inside docs content are relative (`../sdk/`) so they work on both hosts (root
+domain and the GitHub Pages subpath).
+
 ## MCP tool catalog
 
 The tool list on `/mcp` is generated from `packages/eval/src/tools.ts` and

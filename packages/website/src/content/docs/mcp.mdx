@@ -1,0 +1,61 @@
+---
+title: MCP reference
+description: MCP setup for Cursor, Claude Desktop, local stdio servers, and the tool catalog.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import ToolIndex from "../../components/ToolIndex.astro";
+import { ATHLETE_TOOL_GROUPS, COACH_TOOL_GROUPS, HOSTED_ONLY_TOOLS } from "../../data/mcp-tools";
+import {
+  MCP_ATHLETE_ADD,
+  MCP_CLIENT_CONFIG,
+  MCP_COACH_ADD,
+  MCP_COACH_CONFIG,
+} from "../../data/snippets";
+import { MCP_ATHLETE_URL, MCP_COACH_URL, MCP_URL } from "../../data/tools";
+
+Setup for MCP clients beyond Claude.ai. The [home page](../) walks through the
+hosted connector for claude.ai.
+
+## Hosted endpoint
+
+Main URL (OAuth, same as Claude.ai):
+
+<Code lang="txt" code={MCP_URL} />
+
+Cursor or Claude Desktop config:
+
+<Code lang="json" code={MCP_CLIENT_CONFIG} />
+
+Coach-only URL:
+
+<Code lang="txt" code={MCP_COACH_URL} />
+
+Athlete-only URL:
+
+<Code lang="txt" code={MCP_ATHLETE_URL} />
+
+## Local coach server
+
+Stdio on your machine. Credentials sit in the MCP client config file.
+
+<Code lang="sh" code={MCP_COACH_ADD} />
+
+<Code lang="json" code={MCP_COACH_CONFIG} />
+
+For Claude Code on your laptop, the [skill](../skill/) is usually simpler than
+local stdio.
+
+## Local athlete server
+
+<Code lang="sh" code={MCP_ATHLETE_ADD} />
+
+## Tool list
+
+Tool names for reference. The model picks the call from your question.
+
+<ToolIndex
+  coachGroups={COACH_TOOL_GROUPS}
+  athleteGroups={ATHLETE_TOOL_GROUPS}
+  hostedOnly={HOSTED_ONLY_TOOLS}
+/>

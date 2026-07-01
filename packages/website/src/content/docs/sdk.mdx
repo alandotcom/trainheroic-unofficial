@@ -1,0 +1,42 @@
+---
+title: TypeScript SDK
+description: "TypeScript SDK for TrainHeroic: exercises, workouts, athlete training, analytics, messaging."
+---
+
+import { Code } from "@astrojs/starlight/components";
+import {
+  SDK_ANALYTICS,
+  SDK_ATHLETE_READS,
+  SDK_COACH_WORKFLOW,
+  SDK_MESSAGING,
+} from "../../data/snippets";
+import { NPM_DTO, NPM_JS } from "../../data/tools";
+
+Package <code>{NPM_JS}</code> wraps auth, workouts, roster helpers, athlete
+reads, analytics, and messaging. Types ship in <code>{NPM_DTO}</code>. The
+runtime runs on Node, workerd, and browsers.
+
+## Install
+
+<Code lang="sh" code={`npm install ${NPM_JS}`} />
+
+## Coach workflow
+
+<Code lang="typescript" code={SDK_COACH_WORKFLOW} />
+
+## Athlete reads
+
+<Code lang="typescript" code={SDK_ATHLETE_READS} />
+
+## Analytics
+
+Analytics reports are read-only data pulls. TrainHeroic uses POST for these
+queries, but they do not mutate anything.
+
+<Code lang="typescript" code={SDK_ANALYTICS} />
+
+## Messaging
+
+<Code lang="typescript" code={SDK_MESSAGING} />
+
+[Full API on npm ↗](https://www.npmjs.com/package/@trainheroic-unofficial/js)

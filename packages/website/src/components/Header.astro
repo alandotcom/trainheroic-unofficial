@@ -3,12 +3,9 @@ import { pageHref, sitePath } from "../lib/paths.ts";
 
 const path = sitePath(Astro.url.pathname);
 
-const isDevelopers =
-  path === "/developers" || path === "/skill" || path === "/sdk" || path === "/mcp";
-
 const links = [
   { href: pageHref("export", path), label: "Export", match: path === "/export" },
-  { href: pageHref("developers", path), label: "Developers", match: isDevelopers },
+  { href: pageHref("developers", path), label: "Developers", match: false },
   {
     href: "https://github.com/alandotcom/trainheroic-unofficial",
     label: "GitHub",
