@@ -1,0 +1,13 @@
+# Cloudflare Workers static assets reads this file (same format as Pages).
+# Astro copies public/ into dist/, so this ends up at the assets root.
+#
+# Everything under /_astro/ is content-hashed (the hash is in the filename),
+# so a given URL can never serve different bytes. Cache it forever and skip
+# revalidation — without this, Workers Assets defaults to
+# `max-age=0, must-revalidate`, which fires a 304 round-trip per asset on
+# every navigation and blocks paint (the flash between page clicks).
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# HTML pages keep the default (revalidate) so content and the asset hashes
+# they reference stay fresh after a deploy.
