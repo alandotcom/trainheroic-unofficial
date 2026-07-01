@@ -293,6 +293,9 @@ importers:
       '@astrojs/sitemap':
         specifier: ^3.7.3
         version: 3.7.3
+      '@trainheroic-unofficial/js':
+        specifier: workspace:*
+        version: link:../js
       astro:
         specifier: ^7.0.4
         version: 7.0.4(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.0.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)

@@ -1,0 +1,923 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+---
+
+<Layout
+  title="Export your workout history"
+  description="Sign in with your TrainHeroic account, preview your logged sessions, and download your full history as CSV, JSON, or text. You sign in here in your browser; your email and password go straight to TrainHeroic and never touch our servers."
+>
+  <Header />
+  <main id="main" class="export">
+    <div class="shell narrow">
+      <header class="doc__intro">
+        <h1>Export your workout history</h1>
+        <p class="lead">
+          Sign in, preview your logged sessions, then download them as a spreadsheet (CSV),
+          structured data (JSON), or a plain-text log. Sets, reps, and weights are broken out into
+          their own columns.
+        </p>
+      </header>
+
+      <section class="doc">
+        <p class="privacy">
+          <strong>Your login stays in your browser.</strong> This is a static page. Your browser talks
+          directly to TrainHeroic to sign in and read your workouts. Your email and password are never
+          sent to this site or stored anywhere; they are used once to sign in and then discarded. Your
+          workout history is cached in this browser so return visits don't re-download it, and logging
+          out clears that cache.
+        </p>
+
+        <!-- Sign-in step. action="about:blank" + a disabled button fail closed: if the client
+             script never loads, no native submit can leak credentials in the page URL. -->
+        <form id="signin-form" class="export-form" action="about:blank" method="post" novalidate>
+          <div class="field">
+            <label for="email">TrainHeroic email</label>
+            <input id="email" name="email" type="email" autocomplete="username" inputmode="email" required />
+          </div>
+          <div class="field">
+            <label for="password">TrainHeroic password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+          </div>
+          <button type="submit" disabled>Sign in</button>
+          <p id="signin-status" class="status" role="status" aria-live="polite"></p>
+        </form>
+
+        <!-- Signed-in workspace: shown after login, hidden until the script reveals it. -->
+        <div id="app" hidden>
+          <div class="identity">
+            <p class="identity__who">Signed in as <strong id="who"></strong></p>
+            <button id="logout" type="button" class="btn-secondary">Log out</button>
+          </div>
+
+          <form id="load-form" class="export-form" action="about:blank" method="post" novalidate>
+            <div class="field-row">
+              <div class="field">
+                <label for="start">From</label>
+                <input id="start" name="start" type="date" required />
+              </div>
+              <div class="field">
+                <label for="end">To</label>
+                <input id="end" name="end" type="date" required />
+              </div>
+            </div>
+            <label class="check">
+              <input id="logged-only" type="checkbox" name="loggedOnly" />
+              Only sessions I actually logged
+            </label>
+            <button type="submit" class="btn-secondary">Load workouts</button>
+            <p id="load-status" class="status" role="status" aria-live="polite"></p>
+          </form>
+
+          <!-- Not a live region: the summary count is announced via #load-status; the table itself
+               must stay silent so screen readers don't read hundreds of cells on every render. -->
+          <div id="preview" class="preview"></div>
+
+          <div class="download-bar">
+            <div class="field download-bar__format">
+              <label for="format">Format</label>
+              <select id="format" name="format">
+                <option value="csv">CSV (spreadsheet)</option>
+                <option value="json">JSON (structured data)</option>
+                <option value="text">Text (readable log)</option>
+              </select>
+            </div>
+            <button id="download" type="button" disabled>Download</button>
+          </div>
+          <p id="download-status" class="status download-status" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section class="doc">
+        <p class="disclaimer">
+          <strong>Unofficial project.</strong> TrainHeroic is a separate company. This page is not affiliated
+          with or endorsed by them.
+        </p>
+      </section>
+    </div>
+  </main>
+  <Footer />
+</Layout>
+
+<script>
+  import {
+    TrainHeroicAuthError,
+    TrainHeroicClient,
+    fetchAthleteProfileSummary,
+    fetchAthleteUser,
+    fetchAthleteWorkoutsChunked,
+    presentAthleteWorkoutsExport,
+    resolveAthleteUserId,
+    serializeWorkoutHistory,
+    type WorkoutExportFormat,
+    type WorkoutHistoryExport,
+  } from "@trainheroic-unofficial/js";
+
+  const STORAGE_KEY = "th-export-session";
+  const CACHE_PREFIX = "th-export-workouts:";
+
+  type StoredSession = {
+    email: string;
+    sessionId: string;
+    name: string;
+    first?: string;
+    last?: string;
+  };
+
+  type WorkoutCache = {
+    start: string;
+    end: string;
+    savedAt: string;
+    workouts: WorkoutHistoryExport[];
+  };
+
+  const cacheKey = (email: string) => `${CACHE_PREFIX}${email.toLowerCase()}`;
+
+  const readWorkoutCache = (email: string): WorkoutCache | null => {
+    try {
+      const raw = localStorage.getItem(cacheKey(email));
+      return raw ? (JSON.parse(raw) as WorkoutCache) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const writeWorkoutCache = (email: string, cache: WorkoutCache) => {
+    // localStorage has a ~5MB quota; a very long history can exceed it. Caching is a nicety, so a
+    // quota (or private-mode) failure is swallowed — the next load just re-fetches.
+    try {
+      localStorage.setItem(cacheKey(email), JSON.stringify(cache));
+    } catch {
+      /* cache is best-effort */
+    }
+  };
+
+  const clearWorkoutCache = (email: string) => {
+    try {
+      localStorage.removeItem(cacheKey(email));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const savedAtLabel = (iso: string) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "earlier" : d.toLocaleString();
+  };
+
+  const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel);
+
+  const setStatus = (el: HTMLElement, message: string, isError = false) => {
+    el.textContent = message;
+    el.classList.toggle("status--error", isError);
+  };
+
+  // A sign-in / session-expiry failure, keyed on the SDK's typed error rather than its message
+  // text (the class is a stable contract; the message string is not). The `name` fallback covers
+  // the case where bundling produces a second copy of the class and `instanceof` misses.
+  const isAuthError = (error: unknown) =>
+    error instanceof TrainHeroicAuthError ||
+    (error instanceof Error && error.name === "TrainHeroicAuthError");
+
+  const errorMessage = (error: unknown, fallback: string) => {
+    if (isAuthError(error)) return "Sign-in failed. Check your email and password.";
+    return error instanceof Error && error.message ? error.message : fallback;
+  };
+
+  const download = (filename: string, content: string, type: string) => {
+    const url = URL.createObjectURL(new Blob([content], { type }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const sessionCounts = (w: WorkoutHistoryExport) => {
+    let exercises = 0;
+    let loggedSets = 0;
+    for (const block of w.blocks) {
+      exercises += block.exercises.length;
+      for (const ex of block.exercises)
+        for (const set of ex.sets) if (set.performed !== null) loggedSets += 1;
+    }
+    return { exercises, loggedSets };
+  };
+
+  const cell = (text: string, tag: "td" | "th" = "td") => {
+    const el = document.createElement(tag);
+    // textContent, never innerHTML — workout titles are untrusted
+    el.textContent = text;
+    if (tag === "th") el.scope = "col";
+    return el;
+  };
+
+  const ROW_CAP = 300;
+
+  const signinForm = $<HTMLFormElement>("#signin-form");
+  const signinStatus = $<HTMLParagraphElement>("#signin-status");
+  const emailInput = $<HTMLInputElement>("#email");
+  const app = $<HTMLElement>("#app");
+  const whoEl = $<HTMLElement>("#who");
+  const logoutBtn = $<HTMLButtonElement>("#logout");
+  const loadForm = $<HTMLFormElement>("#load-form");
+  const loadStatus = $<HTMLParagraphElement>("#load-status");
+  const startInput = $<HTMLInputElement>("#start");
+  const endInput = $<HTMLInputElement>("#end");
+  const loggedOnly = $<HTMLInputElement>("#logged-only");
+  const previewEl = $<HTMLElement>("#preview");
+  const formatSel = $<HTMLSelectElement>("#format");
+  const downloadBtn = $<HTMLButtonElement>("#download");
+  const downloadStatus = $<HTMLParagraphElement>("#download-status");
+
+  if (
+    signinForm &&
+    signinStatus &&
+    emailInput &&
+    app &&
+    whoEl &&
+    logoutBtn &&
+    loadForm &&
+    loadStatus &&
+    startInput &&
+    endInput &&
+    loggedOnly &&
+    previewEl &&
+    formatSel &&
+    downloadBtn &&
+    downloadStatus
+  ) {
+    let client: TrainHeroicClient | null = null;
+    let loaded: WorkoutHistoryExport[] | null = null;
+    let currentEmail = "";
+
+    const setDefaultDates = (bounds?: { first?: string; last?: string }) => {
+      const today = new Date().toISOString().slice(0, 10);
+      // Bound the default range to the athlete's real training history when we know it, so we don't
+      // request empty pre-signup years. Fall back to a wide range otherwise.
+      if (!endInput.value) endInput.value = bounds?.last || today;
+      if (!startInput.value) startInput.value = bounds?.first || "2012-01-01";
+    };
+
+    const filtered = (): WorkoutHistoryExport[] =>
+      loaded ? (loggedOnly.checked ? loaded.filter((w) => w.logged) : loaded) : [];
+
+    // The list as previewed and downloaded: filtered, then newest-first. Both the table and the
+    // download read this, so the file always matches what was on screen.
+    const visibleList = (): WorkoutHistoryExport[] =>
+      [...filtered()].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+    const renderPreview = () => {
+      if (!loaded) return;
+      const list = visibleList();
+      previewEl.replaceChildren();
+
+      if (list.length === 0) {
+        setStatus(
+          loadStatus,
+          loggedOnly.checked
+            ? "No logged sessions in this range. Widen the dates or uncheck the filter."
+            : "No sessions in this range. Try widening the dates.",
+        );
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = "Download";
+        return;
+      }
+      const loggedCount = list.filter((w) => w.logged).length;
+      const earliest = list.at(-1)?.date ?? "";
+      const latest = list.at(0)?.date ?? "";
+      // The concise count is announced through the #load-status live region; the table below is
+      // built silently (its container is not a live region) so it isn't read cell-by-cell.
+      setStatus(
+        loadStatus,
+        `${list.length} session${list.length === 1 ? "" : "s"} (${loggedCount} with logged sets) · ${earliest} to ${latest}`,
+      );
+
+      const table = document.createElement("table");
+      table.className = "preview__table";
+      const thead = document.createElement("thead");
+      const headRow = document.createElement("tr");
+      for (const h of ["Date", "Workout", "Program", "Exercises", "Logged sets"])
+        headRow.append(cell(h, "th"));
+      thead.append(headRow);
+      table.append(thead);
+
+      const tbody = document.createElement("tbody");
+      let i = 0;
+      for (const w of list.slice(0, ROW_CAP)) {
+        const { exercises, loggedSets } = sessionCounts(w);
+        const row = document.createElement("tr");
+        // Cap the stagger index so a long history settles quickly (see row-in).
+        row.style.setProperty("--i", String(Math.min(i, 11)));
+        i += 1;
+        const loggedCell = cell(String(loggedSets));
+        if (loggedSets === 0) loggedCell.classList.add("is-zero");
+        row.append(
+          cell(w.date),
+          cell(w.title || "—"),
+          cell(w.program ?? w.team ?? "—"),
+          cell(String(exercises)),
+          loggedCell,
+        );
+        tbody.append(row);
+      }
+      table.append(tbody);
+      // The table stays display:table (columns size correctly); scrolling lives on the wrapper.
+      // tabindex + role make the horizontally-scrollable region reachable and
+      // announced for keyboard and screen-reader users (WCAG 2.1.1).
+      const scroll = document.createElement("div");
+      scroll.className = "preview__scroll";
+      scroll.tabIndex = 0;
+      scroll.setAttribute("role", "region");
+      scroll.setAttribute("aria-label", "Workout sessions, scroll sideways for all columns");
+      scroll.append(table);
+      previewEl.append(scroll);
+
+      if (list.length > ROW_CAP) {
+        const note = document.createElement("p");
+        note.className = "preview__note";
+        note.textContent = `Showing the ${ROW_CAP} most recent; the download includes all ${list.length}.`;
+        previewEl.append(note);
+      }
+
+      downloadBtn.disabled = false;
+      downloadBtn.textContent = `Download ${list.length} session${list.length === 1 ? "" : "s"}`;
+    };
+
+    const showSignedIn = (name: string, moveFocus = false) => {
+      whoEl.textContent = name;
+      signinForm.hidden = true;
+      app.hidden = false;
+      // After an explicit sign-in, move focus into the workspace: hiding the focused sign-in button
+      // drops focus to <body>, so a keyboard/screen-reader user would otherwise land back at the
+      // top of the page. Skipped on session restore (no user action to follow).
+      if (moveFocus) startInput.focus();
+    };
+
+    const showSignedOut = () => {
+      client = null;
+      loaded = null;
+      sessionStorage.removeItem(STORAGE_KEY);
+      app.hidden = true;
+      signinForm.hidden = false;
+      previewEl.replaceChildren();
+      downloadBtn.disabled = true;
+      setStatus(signinStatus, "");
+      // Logout and session-expiry both hide the app while its button holds focus; put focus back on
+      // the sign-in form so it doesn't fall to <body>.
+      emailInput.focus();
+    };
+
+    const loadWorkouts = async () => {
+      if (!client) return;
+      const start = startInput.value;
+      const end = endInput.value;
+      if (!start || !end) {
+        setStatus(loadStatus, "Choose a date range.", true);
+        return;
+      }
+      const loadBtn = loadForm.querySelector<HTMLButtonElement>("button[type=submit]");
+      if (loadBtn) loadBtn.disabled = true;
+      downloadBtn.disabled = true;
+      setStatus(loadStatus, "Loading your workouts…");
+      loadStatus.classList.add("status--busy");
+      try {
+        // The range endpoint 504s on a multi-year span, so fetch in windows with a progress count.
+        const raw = await fetchAthleteWorkoutsChunked(client, start, end, {
+          onProgress: (doneWindows, totalWindows) => {
+            if (totalWindows > 1)
+              setStatus(loadStatus, `Loading your workouts… ${doneWindows}/${totalWindows}`);
+          },
+        });
+        loaded = presentAthleteWorkoutsExport(raw);
+        if (currentEmail)
+          writeWorkoutCache(currentEmail, {
+            start,
+            end,
+            savedAt: new Date().toISOString(),
+            workouts: loaded,
+          });
+        setStatus(loadStatus, "");
+        renderPreview();
+      } catch (error) {
+        if (isAuthError(error)) {
+          showSignedOut();
+          setStatus(signinStatus, "Your session expired. Please sign in again.", true);
+          return;
+        }
+        setStatus(loadStatus, errorMessage(error, "Could not load your workouts."), true);
+      } finally {
+        if (loadBtn) loadBtn.disabled = false;
+        loadStatus.classList.remove("status--busy");
+      }
+    };
+
+    // Show the last export from localStorage instead of re-fetching on every sign-in; the athlete
+    // clicks "Load workouts" to pull fresh data. Avoids hammering the range endpoint each visit.
+    const hydrateOrLoad = (email: string) => {
+      const cache = readWorkoutCache(email);
+      if (cache && cache.workouts.length > 0) {
+        startInput.value = cache.start;
+        endInput.value = cache.end;
+        loaded = cache.workouts;
+        renderPreview();
+        setStatus(
+          loadStatus,
+          `Showing your saved history from ${savedAtLabel(cache.savedAt)}. Click “Load workouts” to refresh.`,
+        );
+      } else {
+        void loadWorkouts();
+      }
+    };
+
+    signinForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = new FormData(signinForm);
+      const email = String(data.get("email") ?? "").trim();
+      const password = String(data.get("password") ?? "");
+      if (!email || !password) {
+        setStatus(signinStatus, "Enter your TrainHeroic email and password.", true);
+        return;
+      }
+      const submit = signinForm.querySelector<HTMLButtonElement>("button[type=submit]");
+      if (submit) submit.disabled = true;
+      setStatus(signinStatus, "Signing in to TrainHeroic…");
+      try {
+        const candidate = new TrainHeroicClient(email, password);
+        const userId = await resolveAthleteUserId(candidate);
+        const [user, summary] = await Promise.all([
+          fetchAthleteUser(candidate, userId).catch(() => null),
+          fetchAthleteProfileSummary(candidate, userId).catch(() => null),
+        ]);
+        const name = user
+          ? `${user.name_first ?? ""} ${user.name_last ?? ""}`.trim() || user.email || email
+          : email;
+        client = candidate;
+        currentEmail = email;
+        const sessionId = candidate.sessionId;
+        const bounds = { first: summary?.first_logged_date, last: summary?.last_logged_date };
+        if (sessionId)
+          sessionStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({ email, sessionId, name, ...bounds }),
+          );
+        setStatus(signinStatus, "");
+        setDefaultDates(bounds);
+        showSignedIn(name, true);
+        hydrateOrLoad(email);
+      } catch (error) {
+        setStatus(signinStatus, errorMessage(error, "Could not sign in."), true);
+      } finally {
+        if (submit) submit.disabled = false;
+      }
+    });
+
+    loadForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void loadWorkouts();
+    });
+
+    loggedOnly.addEventListener("change", () => {
+      if (loaded) renderPreview();
+    });
+
+    logoutBtn.addEventListener("click", () => {
+      // Explicit logout wipes the cached history too (a session expiry keeps it, so a re-login is
+      // instant); reset currentEmail last so the clear targets the right key.
+      if (currentEmail) clearWorkoutCache(currentEmail);
+      currentEmail = "";
+      showSignedOut();
+    });
+
+    let confirmTimer: ReturnType<typeof setTimeout> | undefined;
+    const flashDownloadStatus = () => {
+      downloadStatus.classList.add("download-status--shown");
+      clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(() => {
+        downloadStatus.classList.remove("download-status--shown");
+        downloadBtn.classList.remove("is-confirmed");
+      }, 4000);
+    };
+    downloadBtn.addEventListener("click", () => {
+      const list = visibleList();
+      if (list.length === 0) return;
+      const format = formatSel.value as WorkoutExportFormat;
+      let file;
+      try {
+        // Serializing a long history builds one large string and a Blob; on a very large export
+        // either can throw (memory/quota). Catch it so the button doesn't silently do nothing.
+        file = serializeWorkoutHistory(list, format, {
+          filenameBase: `trainheroic-workout-history-${startInput.value}-to-${endInput.value}`,
+        });
+        download(file.filename, file.content, file.contentType);
+      } catch {
+        setStatus(downloadStatus, "Couldn't build the file — try a narrower date range.", true);
+        flashDownloadStatus();
+        return;
+      }
+      // The browser download is invisible on-page. A pop on the button plus a
+      // named, announced confirmation closes the loop for sighted and
+      // screen-reader users; the button label stays put so re-downloading in
+      // another format is one click away.
+      setStatus(downloadStatus, `Downloaded ${file.filename}`);
+      downloadBtn.classList.remove("is-confirmed");
+      // Force reflow so the pop animation replays on rapid re-clicks.
+      void downloadBtn.offsetWidth;
+      downloadBtn.classList.add("is-confirmed");
+      flashDownloadStatus();
+    });
+
+    // Restore a session for this tab so a reload keeps you signed in (session token only, never the
+    // password). The token expires after ~1-2h; the first request that 401s falls back to sign-in.
+    const restore = () => {
+      const stored = sessionStorage.getItem(STORAGE_KEY);
+      if (!stored) return false;
+      try {
+        const s = JSON.parse(stored) as StoredSession;
+        if (!s.email || !s.sessionId) return false;
+        client = new TrainHeroicClient(s.email, "", s.sessionId);
+        currentEmail = s.email;
+        setDefaultDates({ first: s.first, last: s.last });
+        showSignedIn(s.name || s.email);
+        hydrateOrLoad(s.email);
+        return true;
+      } catch {
+        sessionStorage.removeItem(STORAGE_KEY);
+        return false;
+      }
+    };
+
+    restore();
+
+    // Everything is wired: enable the sign-in button (it ships disabled to fail closed).
+    const signinButton = signinForm.querySelector<HTMLButtonElement>("button[type=submit]");
+    if (signinButton) signinButton.disabled = false;
+  }
+</script>
+
+<style>
+  .privacy {
+    padding: 1rem 1.125rem;
+    background: var(--color-code-bg);
+    border: 1px solid var(--color-line);
+    border-radius: 0.5rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .export-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .field-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .field-row .field {
+    flex: 1 1 9rem;
+    min-width: 9rem;
+  }
+
+  .field label,
+  .check {
+    font-weight: 500;
+    font-size: 0.9375rem;
+  }
+
+  .export-form input,
+  .export-form select,
+  .download-bar select {
+    width: 100%;
+    font: inherit;
+    color: var(--color-ink);
+    background: var(--color-bg);
+    padding: 0.625rem 0.75rem;
+    min-height: 44px;
+    border: 1px solid var(--color-line);
+    border-radius: 0.5rem;
+    transition: border-color 0.15s ease;
+  }
+
+  .export-form input:hover,
+  .export-form select:hover,
+  .download-bar select:hover {
+    border-color: var(--color-faint);
+  }
+
+  .export-form input:focus-visible,
+  .export-form select:focus-visible,
+  button:focus-visible,
+  .download-bar select:focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    font-weight: 400;
+    cursor: pointer;
+  }
+
+  .check input {
+    width: 1.125rem;
+    height: 1.125rem;
+    cursor: pointer;
+  }
+
+  button {
+    font: inherit;
+    font-weight: 600;
+    color: var(--color-bg);
+    background: var(--color-ink);
+    padding: 0.75rem 1.25rem;
+    min-height: 48px;
+    border: 1px solid var(--color-ink);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition:
+      opacity 0.15s ease,
+      background-color 0.15s ease,
+      color 0.15s ease,
+      transform 0.15s var(--ease-out-quart);
+  }
+
+  /* Only the column-form buttons hug the left; a global align-self would fight
+     the row layouts (download bar bottom-aligns, identity centers). */
+  .export-form > button {
+    align-self: flex-start;
+  }
+
+  button:not(:disabled):hover {
+    opacity: 0.88;
+  }
+
+  /* Tactile press: quick scale-down gives the click a physical acknowledgement. */
+  button:not(:disabled):active {
+    transform: scale(0.97);
+    transition-duration: 0.05s;
+  }
+
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    color: var(--color-ink);
+    background: var(--color-bg);
+  }
+
+  .btn-secondary:not(:disabled):hover {
+    opacity: 1;
+    background: var(--color-code-bg);
+  }
+
+  .identity {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .identity__who {
+    margin: 0;
+  }
+
+  .identity .btn-secondary {
+    min-height: 44px;
+    padding: 0.5rem 1rem;
+    font-size: 0.9375rem;
+  }
+
+  .status {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--color-muted);
+    min-height: 1.4em;
+  }
+
+  .status--error {
+    color: var(--color-danger);
+  }
+
+  /* Download confirmation: ink-weighted, fades in when a file is handed off. */
+  .download-status {
+    color: var(--color-ink);
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .download-status--shown {
+    opacity: 1;
+  }
+
+  /* A failed download reuses the error color (the compound selector outweighs the ink default). */
+  .download-status.status--error {
+    color: var(--color-danger);
+  }
+
+  /* While a load is in flight the status line breathes, so the progress count
+     reads as active work rather than a frozen label. */
+  .status--busy {
+    animation: status-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes status-pulse {
+    50% {
+      opacity: 0.45;
+    }
+  }
+
+  /* Signing in swaps the credential form for the workspace; a short fade + rise
+     makes that a view change instead of a jump-cut. Rests visible if it never
+     runs (background tab, reduced motion), so content is never gated on it. */
+  #app:not([hidden]) {
+    animation: app-in 0.26s var(--ease-out-quart) both;
+  }
+
+  @keyframes app-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+
+  .preview {
+    margin: 1.75rem 0;
+  }
+
+  /* The preview table, its rows, and the note are built in the client script, so
+     those nodes never carry Astro's scoping attribute. These rules target them with
+     :global so the styles actually land on the rendered table. Class names are
+     namespaced (preview__*) to keep the global surface tight. */
+  :global(.preview__scroll) {
+    max-height: 24rem;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--color-line);
+    border-radius: 0.5rem;
+    /* Edge shadows that appear only while there's more to scroll toward — the
+       cue that the count columns continue off-screen on a narrow viewport.
+       Cover gradients ride with the content (local); shadows stay pinned. */
+    background:
+      linear-gradient(to right, var(--color-bg) 30%, transparent),
+      linear-gradient(to left, var(--color-bg) 30%, transparent) 100% 0,
+      radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 12%), transparent),
+      radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 12%), transparent) 100% 0;
+    background-repeat: no-repeat;
+    background-size:
+      36px 100%,
+      36px 100%,
+      14px 100%,
+      14px 100%;
+    background-attachment: local, local, scroll, scroll;
+  }
+
+  :global(.preview__scroll:focus-visible) {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+
+  :global(.preview__table) {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  :global(.preview__table th),
+  :global(.preview__table td) {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-line);
+    white-space: nowrap;
+  }
+
+  :global(.preview__table tbody tr:last-child td) {
+    border-bottom: 0;
+  }
+
+  /* Workout title can be long; let it wrap and hold a column. Program keeps a
+     floor so the count columns never crowd the team name. */
+  :global(.preview__table td:nth-child(2)) {
+    white-space: normal;
+    min-width: 11rem;
+  }
+
+  :global(.preview__table th:nth-child(3)),
+  :global(.preview__table td:nth-child(3)) {
+    min-width: 7rem;
+  }
+
+  /* Count columns: right-aligned, tabular, held to a floor so digits line up. */
+  :global(.preview__table th:nth-child(n + 4)),
+  :global(.preview__table td:nth-child(n + 4)) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    min-width: 4.5rem;
+  }
+
+  :global(.preview__table thead th) {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--color-bg);
+    font-weight: 600;
+    box-shadow: inset 0 -1px 0 var(--color-line);
+  }
+
+  /* Sessions with nothing logged fade back so the ones with data stand out. */
+  :global(.preview__table td.is-zero) {
+    color: var(--color-faint);
+  }
+
+  /* Rows fade in as the data lands. The stagger is capped (--i clamps at 11 in
+     the script) so a long history settles in ~0.2s, not a slow cascade. */
+  :global(.preview__table tbody tr) {
+    animation: row-in 0.24s var(--ease-out-quart) both;
+    animation-delay: calc(var(--i, 0) * 22ms);
+  }
+
+  @keyframes row-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  :global(.preview__note) {
+    margin: 0.75rem 0 0;
+    font-size: 0.875rem;
+    color: var(--color-muted);
+  }
+
+  .download-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-line);
+  }
+
+  .download-bar__format {
+    flex: 1 1 12rem;
+    max-width: 18rem;
+  }
+
+  .download-bar #download {
+    flex: 0 0 auto;
+  }
+
+  /* Confirmation flourish after a file is handed off — the download is otherwise
+     invisible on-page, so this closes the loop (peak-end). */
+  #download.is-confirmed {
+    animation: confirm-pop 0.7s var(--ease-out-quart);
+  }
+
+  @keyframes confirm-pop {
+    0% {
+      transform: scale(1);
+    }
+    35% {
+      transform: scale(1.04);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .export-form input,
+    .export-form select,
+    .download-bar select,
+    .download-status,
+    button {
+      transition: none;
+    }
+
+    #app:not([hidden]),
+    .status--busy,
+    #download.is-confirmed,
+    :global(.preview__table tbody tr) {
+      animation: none;
+    }
+  }
+</style>

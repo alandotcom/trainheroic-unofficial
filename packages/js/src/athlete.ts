@@ -5,10 +5,12 @@
 
 import {
   coerceInt,
+  coerceNum,
   exerciseTitle,
   exerciseUnits,
   isPersonalSession,
   isRecord,
+  mapPool,
   MAX_PARAM_SLOTS,
   rankSearch,
   str,
@@ -29,10 +31,14 @@ import type {
   ExerciseHistoryDetail,
   ExerciseHistoryListItem,
   ExerciseStats,
+  ExportExercise,
+  ExportSetParam,
+  ExportSetSide,
   PersonalRecord,
   PresentedExerciseHistory,
   ProgramWorkout,
   RosterActivityRow,
+  WorkoutHistoryExport,
 } from "@trainheroic-unofficial/dto";
 
 async function getJson<T>(client: TrainHeroicClient, path: string, label: string): Promise<T> {
@@ -220,6 +226,85 @@ export function fetchAthleteWorkouts(
   );
 }
 
+/** Add `days` to a `YYYY-MM-DD` date (UTC), returning `YYYY-MM-DD`. */
+function shiftDate(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Split an inclusive `[start, end]` range into consecutive non-overlapping windows of `windowDays`. */
+export function dateWindows(
+  startDate: string,
+  endDate: string,
+  windowDays: number,
+): Array<{ start: string; end: string }> {
+  const size = Math.max(1, Math.floor(windowDays));
+  const windows: Array<{ start: string; end: string }> = [];
+  // `cursor` advances by `size` days each step and the loop stops at `endDate`, so a start-after-end
+  // range yields no windows and the loop always terminates.
+  let cursor = startDate;
+  while (cursor <= endDate) {
+    const winEnd = shiftDate(cursor, size - 1);
+    const clamped = winEnd > endDate ? endDate : winEnd;
+    windows.push({ start: cursor, end: clamped });
+    cursor = shiftDate(clamped, 1);
+  }
+  return windows;
+}
+
+/**
+ * Merge windowed pages of workouts into one list: deduped by workout id (a session sitting on a
+ * window boundary must not double up, first occurrence wins), then sorted oldest-first by date so
+ * the order is stable regardless of window seams. Id-less rows are kept and appended.
+ */
+export function mergeWorkoutsById(pages: readonly ProgramWorkout[][]): ProgramWorkout[] {
+  const byId = new Map<number, ProgramWorkout>();
+  const noId: ProgramWorkout[] = [];
+  for (const pw of pages.flat()) {
+    const id = coerceInt((pw as Record<string, unknown>).id);
+    if (id === null) noId.push(pw);
+    else if (!byId.has(id)) byId.set(id, pw);
+  }
+  return [...byId.values(), ...noId].sort((a, b) => {
+    const da = str((a as Record<string, unknown>).date) ?? "";
+    const db = str((b as Record<string, unknown>).date) ?? "";
+    return da < db ? -1 : da > db ? 1 : 0;
+  });
+}
+
+/**
+ * Fetch an athlete's workouts across a long range by splitting it into windows and fetching them
+ * with bounded concurrency, then merging (deduped by workout id, sorted oldest-first). The
+ * `programworkout/range` endpoint 504s on a multi-year span, so a full-history export must chunk.
+ * `windowDays` defaults to 180; `onProgress(done, total)` reports completed windows for a progress
+ * indicator. A range that fits one window delegates to the plain fetch (API order preserved).
+ */
+export async function fetchAthleteWorkoutsChunked(
+  client: TrainHeroicClient,
+  startDate: string,
+  endDate: string,
+  opts: {
+    windowDays?: number;
+    concurrency?: number;
+    onProgress?: (done: number, total: number) => void;
+  } = {},
+): Promise<ProgramWorkout[]> {
+  const windows = dateWindows(startDate, endDate, opts.windowDays ?? 180);
+  if (windows.length <= 1) return fetchAthleteWorkouts(client, startDate, endDate);
+
+  let done = 0;
+  const total = windows.length;
+  const pages = await mapPool(windows, opts.concurrency ?? 4, async (w) => {
+    const page = await fetchAthleteWorkouts(client, w.start, w.end);
+    done += 1;
+    opts.onProgress?.(done, total);
+    return page;
+  });
+
+  return mergeWorkoutsById(pages);
+}
+
 /**
  * A coach's view of a roster athlete's scheduled + completed workouts in an inclusive
  * YYYY-MM-DD window (`/3.0/coach/athlete/programworkout/range/{athleteId}`). Returns the same
@@ -281,79 +366,83 @@ function nonEmpty(value: unknown): boolean {
   return value !== undefined && value !== null && String(value).trim() !== "";
 }
 
-/**
- * Per-set prescriptions from the param_N_data slots, e.g. ["5 @ 225", "3 @ 245"] or ["AMRAP"].
- * Values are kept raw (a non-numeric prescription like "AMRAP" or "8-12" must survive); the
- * positional units come from the exercise's param types, mirroring the coach presenter.
- */
-function prescribedSets(ex: Record<string, unknown>): string[] {
-  const out: string[] = [];
-  for (let i = 1; i <= MAX_PARAM_SLOTS; i += 1) {
-    const p1 = ex[`param_1_data_${i}`];
-    const p2 = ex[`param_2_data_${i}`];
-    const has1 = nonEmpty(p1);
-    const has2 = nonEmpty(p2);
-    if (!has1 && !has2) continue;
-    if (has1 && has2) out.push(`${p1} @ ${p2}`);
-    else if (has1) out.push(String(p1));
-    else out.push(`@ ${p2}`);
-  }
-  return out;
-}
+// Both presented views project from one merge. `mergeAthleteWorkout` owns every TrainHeroic-
+// specific rule: a slot counts as performed only when `param_i_made === 1` (the saved copy
+// pre-fills the prescription values, so data-presence alone lies), a saved exercise's
+// `workout_set_exercise_id` points back at the prescription exercise's `id`, and athlete-added
+// work with no prescription is appended as its own block. The readable string view and the
+// structured export differ only in each set's leaf shape, so the merge lives here once and each
+// `present*` function is a thin projection.
+
+/** One set's two positional slots, kept raw so the string view can join them verbatim
+ * (`"5 @ 225"`, `"AMRAP"`) while the export re-parses them into numbers. `null` is an empty slot. */
+type SlotValue = { p1: unknown; p2: unknown };
 
 /**
- * The per-set values the athlete actually logged, read from a saved-copy exercise. A set
- * counts as performed only when its `param_{i}_made` flag is 1: the saved copy pre-fills the
- * `param_N_data` slots with the prescription, so the presence of data alone does not mean a
- * set was done. `param_{i}_made` is the same per-set flag the logging write sets, and is the
- * only reliable signal (the `completed` flags are often left at 0 on a logged session).
+ * Slot-indexed values for one exercise. With `requireMade`, only slots the athlete logged
+ * (`param_i_made === 1`) — the performed reader; otherwise every slot carrying data — the
+ * prescription reader. Values stay raw; the projectors format or parse them.
  */
-function performedSets(ex: Record<string, unknown>): string[] {
-  const out: string[] = [];
+function slotValues(ex: Record<string, unknown>, requireMade: boolean): Map<number, SlotValue> {
+  const map = new Map<number, SlotValue>();
   for (let i = 1; i <= MAX_PARAM_SLOTS; i += 1) {
-    if (coerceInt(ex[`param_${i}_made`]) !== 1) continue;
+    if (requireMade && coerceInt(ex[`param_${i}_made`]) !== 1) continue;
     const p1 = ex[`param_1_data_${i}`];
     const p2 = ex[`param_2_data_${i}`];
-    const has1 = nonEmpty(p1);
-    const has2 = nonEmpty(p2);
-    if (has1 && has2) out.push(`${p1} @ ${p2}`);
-    else if (has1) out.push(String(p1));
-    else if (has2) out.push(`@ ${p2}`);
+    if (!nonEmpty(p1) && !nonEmpty(p2)) continue;
+    map.set(i, { p1: nonEmpty(p1) ? p1 : null, p2: nonEmpty(p2) ? p2 : null });
   }
-  return out;
+  return map;
 }
 
-function presentExercise(
-  ex: Record<string, unknown>,
-  performedById: Map<number, string[]>,
-): AthleteWorkoutExercise {
-  const instruction =
-    typeof ex.instruction === "string" && ex.instruction !== "" ? ex.instruction : null;
-  const id = coerceInt(ex.id);
-  return {
-    exerciseId: coerceInt(ex.exercise_id),
-    title: typeof ex.title === "string" ? ex.title : "",
-    instruction,
-    units: exerciseUnits(ex.param_1_type, ex.param_2_type),
-    prescribed: prescribedSets(ex),
-    performed: (id !== null ? performedById.get(id) : undefined) ?? [],
-  };
+/** The joined display for a slot, kept verbatim (`"5 @ 225"`, `"AMRAP"`, `"@ 225"`). */
+function fmtSlot(slot: SlotValue): string {
+  const has1 = slot.p1 !== null;
+  const has2 = slot.p2 !== null;
+  if (has1 && has2) return `${slot.p1} @ ${slot.p2}`;
+  if (has1) return String(slot.p1);
+  if (has2) return `@ ${slot.p2}`;
+  return "";
 }
 
-function presentBlock(
-  set: Record<string, unknown>,
-  performedById: Map<number, string[]>,
-): AthleteWorkoutBlock {
-  const exercises = Array.isArray(set.workoutSetExercises) ? set.workoutSetExercises : [];
-  return {
-    order: coerceInt(set.order) ?? 0,
-    title: typeof set.title === "string" && set.title !== "" ? set.title : null,
-    instruction:
-      typeof set.instruction === "string" && set.instruction !== "" ? set.instruction : null,
-    isTest: coerceInt(set.is_test) === 1,
-    exercises: exercises.filter(isRecord).map((ex) => presentExercise(ex, performedById)),
-  };
+/** Every slot carrying data, joined for display (the prescription reader): `["5 @ 225", "AMRAP"]`. */
+function prescribedStrings(ex: Record<string, unknown>): string[] {
+  return [...slotValues(ex, false).values()].map(fmtSlot);
 }
+
+/** The slots the athlete logged (`param_i_made === 1`), joined for display (the performed reader). */
+function performedStrings(ex: Record<string, unknown>): string[] {
+  return [...slotValues(ex, true).values()].map(fmtSlot);
+}
+
+// --- Canonical merged form (private; the source both presenters project from) ---
+
+type MergedSet = { set: number; prescribed: SlotValue | null; performed: SlotValue | null };
+type MergedExerciseMeta = {
+  exerciseId: number | null;
+  title: string;
+  instruction: string | null;
+  units: Array<string | null>;
+};
+type MergedExercise = MergedExerciseMeta & { sets: MergedSet[] };
+type MergedBlock = {
+  order: number;
+  title: string | null;
+  instruction: string | null;
+  isTest: boolean;
+  exercises: MergedExercise[];
+};
+type MergedWorkout = {
+  id: number | null;
+  date: string;
+  title: string;
+  program: string | null;
+  team: string | null;
+  instruction: string | null;
+  logged: boolean;
+  personal: boolean;
+  blocks: MergedBlock[];
+};
 
 /** Every logged set (programmed + athlete-added) in the saved copy, paired with its exercises. */
 function savedSets(
@@ -374,57 +463,94 @@ function savedSets(
 }
 
 /**
- * Map each prescription exercise id to the per-set values the athlete logged. In the saved
- * copy, `workout_set_exercise_id` points back at the prescription exercise's `id`, and the
- * entered values live in the same `param_N_data` slots as a prescription — so the
- * prescription reader works on them unchanged.
+ * Map each prescription exercise id to the slot-indexed values the athlete logged against it. In
+ * the saved copy `workout_set_exercise_id` points back at the prescription exercise's `id`, and the
+ * entered values live in the same `param_N_data` slots as a prescription.
  */
-function performedByExerciseId(
+function performedSlotsByExerciseId(
   sets: Array<{ exercises: Record<string, unknown>[] }>,
-): Map<number, string[]> {
-  const map = new Map<number, string[]>();
+): Map<number, Map<number, SlotValue>> {
+  const map = new Map<number, Map<number, SlotValue>>();
   for (const { exercises } of sets) {
     for (const ex of exercises) {
       const id = coerceInt(ex.workout_set_exercise_id);
       if (id === null) continue;
-      const values = performedSets(ex);
-      if (values.length > 0) map.set(id, values);
+      const slots = slotValues(ex, true);
+      if (slots.size > 0) map.set(id, slots);
     }
   }
   return map;
 }
 
-/** Present a logged set straight from the saved copy (athlete-added or personal work). */
-function presentSavedBlock(
-  set: Record<string, unknown>,
-  exercises: Record<string, unknown>[],
-): AthleteWorkoutBlock {
+/** Align an exercise's prescribed slots with the slots the athlete logged, per set index. */
+function mergeExercise(
+  prescribed: Map<number, SlotValue>,
+  performed: Map<number, SlotValue>,
+  meta: MergedExerciseMeta,
+): MergedExercise {
+  const indices = [...new Set([...prescribed.keys(), ...performed.keys()])].sort((a, b) => a - b);
   return {
-    order: coerceInt(set.order) ?? 0,
-    title: typeof set.title === "string" && set.title !== "" ? set.title : null,
-    instruction:
-      typeof set.instruction === "string" && set.instruction !== "" ? set.instruction : null,
-    isTest: coerceInt(set.is_test) === 1,
-    exercises: exercises.map((ex) => ({
-      exerciseId: coerceInt(ex.exercise_id),
-      title: typeof ex.exercise_title === "string" ? ex.exercise_title : "",
-      instruction:
-        typeof ex.instruction === "string" && ex.instruction !== "" ? ex.instruction : null,
-      units: exerciseUnits(ex.param_1_type, ex.param_2_type),
-      prescribed: [],
-      performed: performedSets(ex),
+    ...meta,
+    sets: indices.map((i) => ({
+      set: i,
+      prescribed: prescribed.get(i) ?? null,
+      performed: performed.get(i) ?? null,
     })),
   };
 }
 
+/** A prescription block, each exercise aligned with the slots the athlete logged against it. */
+function mergePrescriptionBlock(
+  set: Record<string, unknown>,
+  performedById: Map<number, Map<number, SlotValue>>,
+): MergedBlock {
+  const exercises = Array.isArray(set.workoutSetExercises) ? set.workoutSetExercises : [];
+  return {
+    order: coerceInt(set.order) ?? 0,
+    title: str(set.title),
+    instruction: str(set.instruction),
+    isTest: coerceInt(set.is_test) === 1,
+    exercises: exercises.filter(isRecord).map((ex) => {
+      const id = coerceInt(ex.id);
+      const performed = (id !== null ? performedById.get(id) : undefined) ?? new Map();
+      return mergeExercise(slotValues(ex, false), performed, {
+        exerciseId: coerceInt(ex.exercise_id),
+        title: typeof ex.title === "string" ? ex.title : "",
+        instruction: str(ex.instruction),
+        units: exerciseUnits(ex.param_1_type, ex.param_2_type),
+      });
+    }),
+  };
+}
+
+/** A logged block straight from the saved copy (athlete-added or personal work; no prescription). */
+function mergeSavedBlock(
+  set: Record<string, unknown>,
+  exercises: Record<string, unknown>[],
+): MergedBlock {
+  return {
+    order: coerceInt(set.order) ?? 0,
+    title: str(set.title),
+    instruction: str(set.instruction),
+    isTest: coerceInt(set.is_test) === 1,
+    exercises: exercises.map((ex) =>
+      mergeExercise(new Map(), slotValues(ex, true), {
+        exerciseId: coerceInt(ex.exercise_id),
+        title: typeof ex.exercise_title === "string" ? ex.exercise_title : "",
+        instruction: str(ex.instruction),
+        units: exerciseUnits(ex.param_1_type, ex.param_2_type),
+      }),
+    ),
+  };
+}
+
 /**
- * Flatten one `/3.0/athlete/programworkout/range` item into a readable workout, merging the
+ * Flatten one `/3.0/athlete/programworkout/range` item into the canonical merged form, joining the
  * prescription (`summarizedSavedWorkout.workout`) with what the athlete logged
- * (`summarizedSavedWorkout.saved_workout`). Each exercise carries both its `prescribed` and
- * `performed` sets; athlete-added/personal work that has no prescription is appended as its
- * own blocks. No `raw` is needed to see logged results.
+ * (`summarizedSavedWorkout.saved_workout`). Prescription blocks are enriched with logged slots;
+ * athlete-added / personal work with no prescription is appended as its own block.
  */
-export function presentAthleteWorkout(raw: ProgramWorkout): AthleteWorkoutView {
+function mergeAthleteWorkout(raw: ProgramWorkout): MergedWorkout {
   const rec = raw as Record<string, unknown>;
   const ssw = isRecord(rec.summarizedSavedWorkout) ? rec.summarizedSavedWorkout : {};
   const workout = isRecord(ssw.workout) ? ssw.workout : {};
@@ -434,11 +560,11 @@ export function presentAthleteWorkout(raw: ProgramWorkout): AthleteWorkoutView {
   );
 
   const logged = savedSets(saved);
-  const performedById = performedByExerciseId(logged);
+  const performedById = performedSlotsByExerciseId(logged);
 
   // Prescription blocks, each exercise enriched with what the athlete actually logged.
   const blocks = prescriptionSets
-    .map((s) => presentBlock(s, performedById))
+    .map((s) => mergePrescriptionBlock(s, performedById))
     .sort((a, b) => a.order - b.order);
 
   // Logged sets with no matching prescription (athlete-added work, personal sessions).
@@ -453,11 +579,11 @@ export function presentAthleteWorkout(raw: ProgramWorkout): AthleteWorkoutView {
   }
   for (const { set, exercises } of logged) {
     const extra = exercises.filter((ex) => {
-      if (performedSets(ex).length === 0) return false;
+      if (slotValues(ex, true).size === 0) return false;
       const id = coerceInt(ex.workout_set_exercise_id);
       return id === null || !prescribedIds.has(id);
     });
-    if (extra.length > 0) blocks.push(presentSavedBlock(set, extra));
+    if (extra.length > 0) blocks.push(mergeSavedBlock(set, extra));
   }
 
   return {
@@ -467,14 +593,143 @@ export function presentAthleteWorkout(raw: ProgramWorkout): AthleteWorkoutView {
     program: str(rec.program_title),
     team: str(rec.team_title),
     instruction: str(workout.instruction),
-    logged: blocks.some((b) => b.exercises.some((e) => e.performed.length > 0)),
+    logged: blocks.some((b) => b.exercises.some((e) => e.sets.some((s) => s.performed !== null))),
     personal: isPersonalSession(rec),
     blocks,
   };
 }
 
+// --- Readable string view ---
+
+/** The per-set displays for one side (prescribed or performed), in slot order. */
+function sideStrings(sets: MergedSet[], pick: (s: MergedSet) => SlotValue | null): string[] {
+  const out: string[] = [];
+  for (const s of sets) {
+    const slot = pick(s);
+    if (slot) out.push(fmtSlot(slot));
+  }
+  return out;
+}
+
+function toStringExercise(ex: MergedExercise): AthleteWorkoutExercise {
+  return {
+    exerciseId: ex.exerciseId,
+    title: ex.title,
+    instruction: ex.instruction,
+    units: ex.units,
+    prescribed: sideStrings(ex.sets, (s) => s.prescribed),
+    performed: sideStrings(ex.sets, (s) => s.performed),
+  };
+}
+
+function toStringBlock(b: MergedBlock): AthleteWorkoutBlock {
+  return {
+    order: b.order,
+    title: b.title,
+    instruction: b.instruction,
+    isTest: b.isTest,
+    exercises: b.exercises.map(toStringExercise),
+  };
+}
+
+/**
+ * Flatten one range item into a readable workout: each exercise carries its `prescribed` and
+ * `performed` sets as joined `"5 @ 225"` strings; athlete-added/personal work that has no
+ * prescription is appended as its own blocks. No `raw` is needed to see logged results.
+ */
+export function presentAthleteWorkout(raw: ProgramWorkout): AthleteWorkoutView {
+  const w = mergeAthleteWorkout(raw);
+  return {
+    id: w.id,
+    date: w.date,
+    title: w.title,
+    program: w.program,
+    team: w.team,
+    instruction: w.instruction,
+    logged: w.logged,
+    personal: w.personal,
+    blocks: w.blocks.map(toStringBlock),
+  };
+}
+
 export function presentAthleteWorkouts(list: readonly ProgramWorkout[]): AthleteWorkoutView[] {
   return list.map(presentAthleteWorkout);
+}
+
+// --- Structured export view ---
+//
+// The same canonical merge as the string view, but keeping each set's numeric values (reps/weight
+// broken out by unit) instead of the joined `"5 @ 225"` string, so it serializes cleanly to CSV
+// and JSON. The export drops the per-level `instruction` fields the string view carries (they hold
+// no numeric value). Both views come from `mergeAthleteWorkout`, so the merge has a single home.
+
+/** Parse a raw slot cell into an export value: a number when numeric, else the trimmed string,
+ * else null. */
+function paramValue(v: unknown): number | string | null {
+  const n = coerceNum(v);
+  if (n !== null) return n;
+  return nonEmpty(v) ? String(v).trim() : null;
+}
+
+/**
+ * Build one prescribed/performed side of a set, pulling reps/weight out of the two slots by unit.
+ * The range endpoint reports weight under the fixed `lb` param-type code regardless of the
+ * athlete's metric preference, so `lb` is the only weight unit that flows here.
+ */
+function exportSide(slot: SlotValue, units: Array<string | null>): ExportSetSide {
+  const params: ExportSetParam[] = [
+    { unit: units[0] ?? null, value: paramValue(slot.p1) },
+    { unit: units[1] ?? null, value: paramValue(slot.p2) },
+  ];
+  const repsParam = params.find((p) => p.unit === "reps");
+  const weightParam = params.find((p) => p.unit === "lb");
+  return {
+    reps: repsParam?.value ?? null,
+    weight: weightParam?.value ?? null,
+    weightUnit: weightParam?.unit ?? null,
+    params,
+    display: fmtSlot(slot),
+  };
+}
+
+function toExportExercise(ex: MergedExercise): ExportExercise {
+  return {
+    exerciseId: ex.exerciseId,
+    title: ex.title,
+    units: ex.units,
+    sets: ex.sets.map((s) => ({
+      set: s.set,
+      prescribed: s.prescribed ? exportSide(s.prescribed, ex.units) : null,
+      performed: s.performed ? exportSide(s.performed, ex.units) : null,
+    })),
+  };
+}
+
+/** Flatten one workout into the structured export shape (numeric sets), from the same merge as
+ * {@link presentAthleteWorkout}. */
+export function presentAthleteWorkoutExport(raw: ProgramWorkout): WorkoutHistoryExport {
+  const w = mergeAthleteWorkout(raw);
+  return {
+    id: w.id,
+    date: w.date,
+    title: w.title,
+    program: w.program,
+    team: w.team,
+    logged: w.logged,
+    personal: w.personal,
+    blocks: w.blocks.map((b) => ({
+      order: b.order,
+      title: b.title,
+      isTest: b.isTest,
+      exercises: b.exercises.map(toExportExercise),
+    })),
+  };
+}
+
+export function presentAthleteWorkoutsExport(
+  list: readonly ProgramWorkout[],
+): WorkoutHistoryExport[] {
+  return list.map(presentAthleteWorkoutExport);
 }
 
 /** The minimal id scaffold `log-set` / `logForAthlete` needs for one saved workout set. */
@@ -564,8 +819,8 @@ export function presentLogTargets(list: readonly ProgramWorkout[]): LogSetTarget
             savedWorkoutSetExerciseId: id,
             title: exerciseTitle(ex),
             units: exerciseUnits(ex.param_1_type, ex.param_2_type),
-            prescribed: prescribedSets(ex),
-            performed: performedSets(ex),
+            prescribed: prescribedStrings(ex),
+            performed: performedStrings(ex),
           };
         })
         .filter((e): e is NonNullable<typeof e> => e !== null);
@@ -586,15 +841,16 @@ export function presentLogTargets(list: readonly ProgramWorkout[]): LogSetTarget
 }
 
 /**
- * Narrow a presented workout list for the common "what did I actually do" reads. `loggedOnly`
- * keeps only workouts the athlete logged a set on (the reliable signal, not the API's
- * completion flag). `limit` keeps the most recent N by date (newest first). Both are pure
- * post-filters over the presented view; the raw API path is left untouched.
+ * Narrow a workout list for the common "what did I actually do" reads. `loggedOnly` keeps only
+ * workouts the athlete logged a set on (the reliable signal, not the API's completion flag).
+ * `limit` keeps the most recent N by date (newest first). Both are pure post-filters; the raw API
+ * path is left untouched. Generic over the presented (`AthleteWorkoutView`) and exported
+ * (`WorkoutHistoryExport`) shapes, which both carry `date` and `logged`, so one rule serves both.
  */
-export function selectWorkouts(
-  list: readonly AthleteWorkoutView[],
+export function selectWorkouts<T extends { date: string; logged: boolean }>(
+  list: readonly T[],
   opts: { loggedOnly?: boolean; limit?: number } = {},
-): AthleteWorkoutView[] {
+): T[] {
   let out = opts.loggedOnly === true ? list.filter((w) => w.logged) : [...list];
   if (opts.limit !== undefined) {
     out = [...out]

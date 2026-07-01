@@ -13,12 +13,11 @@ import { CLAUDE_AI_CONNECTOR_URL, MCP_URL } from "../data/tools";
 >
   <Header />
   <main id="main" class="home">
-    <div class="shell narrow">
+    <div class="shell home-shell">
       <header class="doc__intro">
         <h1>Connect TrainHeroic to Claude</h1>
         <p class="lead">
-          Claude can read your TrainHeroic data when you sign in with the same email and password you
-          use in the app.
+          Claude reads your TrainHeroic data when you sign in with your app email and password.
         </p>
       </header>
 
@@ -48,25 +47,30 @@ import { CLAUDE_AI_CONNECTOR_URL, MCP_URL } from "../data/tools";
           code={`List my athletes
 What's on the program for Tuesday?
 Show my squat PRs this year
-Draft a back squat workout for next Monday (keep it unpublished)`}
+Draft a back squat workout for next Monday`}
         />
       </section>
 
       <section class="doc">
         <h2>What you can ask</h2>
-        <ul class="doc-list">
-          <li>Coaches can query roster, workouts, teams, analytics, and messages.</li>
-          <li>Athletes can look up history, PRs, working maxes, and today's program.</li>
-          <li>Claude confirms before publishing workouts or sending messages.</li>
-        </ul>
+        <p>
+          Coaches query rosters, workouts, teams, analytics, and messages; athletes look up history,
+          PRs, working maxes, and today's program. Claude confirms before it publishes or sends
+          anything.
+        </p>
       </section>
 
       <section class="doc">
-        <p class="disclaimer">
-          <strong>Unofficial project.</strong> TrainHeroic is a separate company. OAuth stores your
-          login on the hosted connector server.
+        <h2>Export your workout history</h2>
+        <p>
+          Want your data as a spreadsheet? <a href={pageHref("export", Astro.url.pathname)}>Download your
+          full history</a> as CSV, JSON, or text. You sign in right in your browser, and your login never
+          leaves it.
         </p>
-        <p>Integrating in code? See <a href={pageHref("developers", Astro.url.pathname)}>developer docs</a>.</p>
+      </section>
+
+      <section class="doc">
+        <p>Building on the API? See the <a href={pageHref("developers", Astro.url.pathname)}>developer docs</a>.</p>
       </section>
     </div>
   </main>

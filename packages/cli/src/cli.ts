@@ -35,6 +35,7 @@ import {
   fetchAthleteProfileSummary,
   fetchAthleteUser,
   fetchAthleteWorkouts,
+  fetchAthleteWorkoutsChunked,
   fetchCoachAthleteCalendarSummary,
   fetchCoachAthleteWorkouts,
   fetchExerciseHistoryDetail,
@@ -58,6 +59,9 @@ import {
   mapPool,
   queryAnalytics,
   presentAthleteWorkouts,
+  presentAthleteWorkoutsExport,
+  serializeWorkoutHistory,
+  type WorkoutExportFormat,
   presentCoachAthleteTraining,
   presentLogTargets,
   presentExerciseHistory,
@@ -181,7 +185,7 @@ Coach — manage a roster (needs a coach account):
 
 Athlete — the logged-in user's own training (a coach account works too):
   athlete whoami | profile [--metric] | prefs | working-maxes
-  athlete workouts --start Y-M-D --end Y-M-D [--raw] [--logged-only] [--limit N] [--summary]   (reads what you did; for the log ids use 'athlete log-targets')
+  athlete workouts --start Y-M-D --end Y-M-D [--raw] [--logged-only] [--limit N] [--summary] [--format json|csv|text]   (reads what you did; --format exports history with reps/weight broken out; for the log ids use 'athlete log-targets')
   athlete log-targets --start Y-M-D --end Y-M-D [--program <title>|--program-id <id>|--team <id>] [--raw]   (the savedWorkoutSetId + savedWorkoutSetExerciseId log-set needs; --program narrows when several workouts share a date)
   athlete exercises [--q <text>] [--limit N]
   athlete history <exerciseId> [--raw]
@@ -197,6 +201,19 @@ Athlete — the logged-in user's own training (a coach account works too):
 
 function out(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}
+
+// A serialized export payload (CSV/text/JSON) written verbatim to stdout. Still machine-readable —
+// the `--format` flag is an explicit request for that representation, not interleaved prose.
+function outRaw(text: string): void {
+  process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
+}
+
+const EXPORT_FORMATS: readonly WorkoutExportFormat[] = ["json", "csv", "text"];
+
+function asExportFormat(value: string): WorkoutExportFormat {
+  if ((EXPORT_FORMATS as readonly string[]).includes(value)) return value as WorkoutExportFormat;
+  return fail(`--format must be one of ${EXPORT_FORMATS.join(", ")}, got "${value}".`);
 }
 
 function fail(message: string): never {
@@ -581,7 +598,7 @@ async function cmdAthleteExport(client: TrainHeroicClient, a: string[]): Promise
     fetchAthleteProfileSummary(client, userId),
     fetchAthleteUser(client, userId),
     fetchAthletePrefs(client),
-    fetchAthleteWorkouts(client, start, end),
+    fetchAthleteWorkoutsChunked(client, start, end),
     fetchExerciseHistoryList(client),
     fetchWorkingMaxes(client),
   ]);
@@ -755,6 +772,58 @@ async function cmdAthleteSessionRemove(client: TrainHeroicClient, a: string[]): 
   return out({ removed: true, programWorkoutId: id, date: args.date });
 }
 
+async function cmdAthleteWorkouts(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values } = parse(a, {
+    start: { type: "string" },
+    end: { type: "string" },
+    raw: { type: "boolean" },
+    "log-ids": { type: "boolean" },
+    "logged-only": { type: "boolean" },
+    limit: { type: "string" },
+    summary: { type: "boolean" },
+    format: { type: "string" },
+  });
+  const start = isoDate(
+    need(values.start as string | undefined, "athlete workouts --start Y-M-D --end Y-M-D"),
+    "--start",
+  );
+  const end = isoDate(
+    need(values.end as string | undefined, "athlete workouts --start Y-M-D --end Y-M-D"),
+    "--end",
+  );
+  // Validate the flags before any network I/O so a typo'd --format/--limit fails fast.
+  const format = values.format !== undefined ? asExportFormat(values.format as string) : undefined;
+  // --format is a whole-history representation of its own; the raw/log-ids/summary views are
+  // mutually exclusive with it, so reject the combination rather than silently ignoring one.
+  if (
+    format !== undefined &&
+    (values.raw === true || values["log-ids"] === true || values.summary === true)
+  ) {
+    fail("--format cannot be combined with --raw, --log-ids, or --summary.");
+  }
+  const opts: { loggedOnly?: boolean; limit?: number } = {};
+  if (values["logged-only"] === true) opts.loggedOnly = true;
+  if (values.limit !== undefined) {
+    const limit = toInt(values.limit as string, "--limit");
+    if (!Number.isInteger(limit) || limit < 0) fail(`--limit must be a non-negative integer.`);
+    opts.limit = limit;
+  }
+  // Chunked so a multi-year export range does not 504 (a single window delegates to the plain
+  // fetch, so a normal narrow range is unaffected). Matches the website export.
+  const workouts = await fetchAthleteWorkoutsChunked(client, start, end);
+  // --format renders the same history as a downloadable export (json/csv/text): structured numeric
+  // sets (reps/weight broken out), the same shape the website export produces. It runs through the
+  // same selectWorkouts as the default path, so --logged-only/--limit behave identically.
+  if (format !== undefined) {
+    const ex = selectWorkouts(presentAthleteWorkoutsExport(workouts), opts);
+    return outRaw(serializeWorkoutHistory(ex, format).content);
+  }
+  if (values["log-ids"] === true) return out(presentLogTargets(workouts));
+  if (values.raw === true) return out(workouts);
+  const selected = selectWorkouts(presentAthleteWorkouts(workouts), opts);
+  return out(values.summary === true ? summarizeAthleteWorkouts(selected) : selected);
+}
+
 async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<void> {
   const [sub, ...a] = rest;
   switch (sub) {
@@ -771,33 +840,8 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
     }
     case "prefs":
       return out(await fetchAthletePrefs(client));
-    case "workouts": {
-      const { values } = parse(a, {
-        start: { type: "string" },
-        end: { type: "string" },
-        raw: { type: "boolean" },
-        "log-ids": { type: "boolean" },
-        "logged-only": { type: "boolean" },
-        limit: { type: "string" },
-        summary: { type: "boolean" },
-      });
-      const start = isoDate(
-        need(values.start as string | undefined, "athlete workouts --start Y-M-D --end Y-M-D"),
-        "--start",
-      );
-      const end = isoDate(
-        need(values.end as string | undefined, "athlete workouts --start Y-M-D --end Y-M-D"),
-        "--end",
-      );
-      const workouts = await fetchAthleteWorkouts(client, start, end);
-      if (values["log-ids"] === true) return out(presentLogTargets(workouts));
-      if (values.raw === true) return out(workouts);
-      const opts: { loggedOnly?: boolean; limit?: number } = {};
-      if (values["logged-only"] === true) opts.loggedOnly = true;
-      if (values.limit !== undefined) opts.limit = toInt(values.limit as string, "--limit");
-      const selected = selectWorkouts(presentAthleteWorkouts(workouts), opts);
-      return out(values.summary === true ? summarizeAthleteWorkouts(selected) : selected);
-    }
+    case "workouts":
+      return cmdAthleteWorkouts(client, a);
     case "exercises": {
       const { values } = parse(a, { q: { type: "string" }, limit: { type: "string" } });
       const limit = values.limit !== undefined ? toInt(values.limit as string, "--limit") : 20;

@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.3",
+    "@trainheroic-unofficial/js": "workspace:*",
     "astro": "^7.0.4"
   },
   "devDependencies": {
