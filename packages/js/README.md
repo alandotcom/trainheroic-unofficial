@@ -19,6 +19,7 @@ Part of the [trainheroic-unofficial](../../README.md) workspace.
 - [Working with exercises](#working-with-exercises)
 - [Building a workout](#building-a-workout)
 - [Reading athlete training](#reading-athlete-training)
+- [Analytics](#analytics)
 - [The workout encoder](#the-workout-encoder)
 - [Develop](#develop)
 
@@ -139,6 +140,9 @@ The `.` entry imports no `node:*` modules. Anything that touches the filesystem 
   Includes the encoder that turns a `WorkoutSpec` into the API's payload.
 - **Athlete training.** Functions for the logged-in account's own training, covering
   scheduled and completed workouts, per-exercise history, personal records, and working maxes.
+- **Analytics.** Coach analytics reports via `queryAnalytics`, with `analyticsMetricCatalog`
+  and `ANALYTICS_METRIC_KEYS` for discovery. `teamVolume` rolls up per-athlete training
+  summary rows into a team total.
 - **Messaging.** Tools for conversation streams: listing them, reading a stream, and
   building or sending or deleting a comment.
 
@@ -223,6 +227,40 @@ const summary = await fetchAthleteProfileSummary(client, userId);
 
 These work from any session, coach or athlete, since a coach account also carries athlete
 scope.
+
+## Analytics
+
+Coach analytics reports are read-only data pulls. TrainHeroic uses POST for these queries, but
+they do not mutate anything. The `metric` keys in `ANALYTICS_METRIC_KEYS` are the SDK catalog
+— they are not the raw category names from `GET /v5/analytics`. Use `analyticsMetricCatalog()`
+to see each metric's scope and required inputs.
+
+Team metrics (`readiness-team`, `compliance-team`, `lift-progress-team`) need `teamId`.
+Athlete metrics (`readiness-athlete`, `training-summary-athlete`, `lift-1rm-history`,
+`working-max-history`) need one or more `userIds` in a single call (the report returns a row
+per athlete). `readiness-team` takes a single `date`; every other metric takes `dateStart` and
+`dateEnd`. Lift metrics also need `exerciseId`. All dates are `YYYY-MM-DD`.
+
+There is no team-wide training volume metric. Pass every athlete's id to
+`training-summary-athlete`, or call `teamVolume()` to group those rows into a team rollup.
+
+```ts
+import {
+  analyticsMetricCatalog,
+  queryAnalytics,
+} from "@trainheroic-unofficial/js";
+
+// Read-only report (TrainHeroic uses POST for these queries).
+const readiness = await queryAnalytics(client, {
+  metric: "readiness-team",
+  teamId: 42,
+  date: "2026-06-22",
+});
+console.log(readiness);
+
+// Scope + required params for every metric key:
+console.log(analyticsMetricCatalog());
+```
 
 ## The workout encoder
 

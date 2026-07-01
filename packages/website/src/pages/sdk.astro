@@ -92,27 +92,50 @@ if (squat) {
       </section>
 
       <section class="doc" id="analytics">
-        <h2>Analytics and messaging</h2>
+        <h2>Analytics</h2>
+        <p>
+          Analytics reports are read-only data pulls. TrainHeroic uses POST for these queries, but
+          they do not mutate anything.
+        </p>
         <Snippet
           lang="typescript"
           code={`import {
   TrainHeroicClient,
+  analyticsMetricCatalog,
   queryAnalytics,
+} from "${NPM_JS}";
+
+const client = new TrainHeroicClient(email, password);
+
+// Read-only report (TrainHeroic uses POST for these queries).
+const readiness = await queryAnalytics(client, {
+  metric: "readiness-team",
+  teamId: 42,
+  date: "2026-06-22",
+});
+console.log(readiness);
+
+// Scope + required params for every metric key:
+console.log(analyticsMetricCatalog());`}
+        />
+      </section>
+
+      <section class="doc" id="messaging">
+        <h2>Messaging</h2>
+        <Snippet
+          lang="typescript"
+          code={`import {
+  TrainHeroicClient,
   fetchStreams,
   sendComment,
 } from "${NPM_JS}";
 
 const client = new TrainHeroicClient(email, password);
 
-await queryAnalytics(client, {
-  metric: "readiness-team",
-  teamId: 42,
-  date: "2026-06-22",
-});
-
 const team = (await fetchStreams(client)).find((s) => s.kind === "team");
 if (team && typeof team.stream.id === "number") {
-  await sendComment(client, team.stream.id, "Great week.");
+  const comment = await sendComment(client, team.stream.id, "Great week.");
+  console.log(comment);
 }`}
         />
       </section>
