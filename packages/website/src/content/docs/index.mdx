@@ -1,0 +1,41 @@
+---
+title: Connect TrainHeroic to Claude
+description: Connect your TrainHeroic account to Claude.ai. Ask about your roster, programming, and training.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { HOME_PROMPTS } from "../../data/snippets";
+import { CLAUDE_AI_CONNECTOR_URL, MCP_URL } from "../../data/tools";
+
+Claude reads your TrainHeroic data when you sign in with your app email and
+password.
+
+## Set up in Claude.ai
+
+1. Open <a href={CLAUDE_AI_CONNECTOR_URL}>Settings → Connectors → Add custom connector</a>.
+
+2. Paste the connector URL:
+
+   <Code lang="txt" code={MCP_URL} />
+
+3. Sign in with your **TrainHeroic email and password** when Claude asks.
+
+## Try it
+
+Start a chat and ask a question like one of these:
+
+<Code lang="txt" code={HOME_PROMPTS} />
+
+## What you can ask
+
+Coaches query rosters, workouts, teams, analytics, and messages; athletes look
+up history, PRs, working maxes, and today's program. Claude confirms before it
+publishes or sends anything.
+
+## Export your workout history
+
+Want your data as a spreadsheet? [Download your full history](export/) as CSV,
+JSON, or text. You sign in right in your browser, and your login never leaves
+it.
+
+Building on the API? See the [developer docs](developers/).

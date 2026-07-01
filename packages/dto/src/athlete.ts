@@ -471,3 +471,73 @@ export type PresentedExerciseHistory = {
   }>;
   sessions: PresentedExerciseSession[];
 };
+
+// --- Structured workout-history export (for CSV/JSON/text download) ---
+
+/**
+ * One positional parameter of a set, carrying its unit label and raw value. TrainHeroic stores
+ * each set as two generic slots (`param_1`/`param_2`); the unit tells you what the slot means
+ * (`reps`, `lb`, `sec`, `%max`, `RPE`, …). The value is kept raw: a number when the slot holds a
+ * number, or a string for a non-numeric prescription such as `AMRAP` or a rep range like `8-12`.
+ */
+export type ExportSetParam = {
+  unit: string | null;
+  value: number | string | null;
+};
+
+/**
+ * One side (prescribed or performed) of a single set. `reps`/`weight` are pulled out of the two
+ * generic params by unit for the common lifting case; `params` keeps both slots verbatim so a
+ * time/distance/percentage exercise loses nothing. `display` is the readable `"5 @ 225"` form used
+ * by the text export.
+ */
+export type ExportSetSide = {
+  reps: number | string | null;
+  weight: number | string | null;
+  weightUnit: string | null;
+  params: ExportSetParam[];
+  display: string;
+};
+
+/**
+ * A single set of an exercise, aligned by its positional slot (1-based). `prescribed` is what the
+ * coach programmed and `performed` is what the athlete logged; either can be null (a skipped set
+ * has no `performed`; athlete-added work has no `prescribed`).
+ */
+export type ExportSet = {
+  set: number;
+  prescribed: ExportSetSide | null;
+  performed: ExportSetSide | null;
+};
+
+/** An exercise within an exported workout: its unit labels and the per-set prescribed/performed. */
+export type ExportExercise = {
+  exerciseId: number | null;
+  title: string;
+  units: Array<string | null>;
+  sets: ExportSet[];
+};
+
+/** A block (workout set / superset) within an exported workout. */
+export type ExportBlock = {
+  order: number;
+  title: string | null;
+  isTest: boolean;
+  exercises: ExportExercise[];
+};
+
+/**
+ * A single workout flattened for a history export: the same session `presentAthleteWorkout`
+ * produces, but with structured numeric sets (reps/weight broken out) instead of joined strings,
+ * so it serializes cleanly to CSV and JSON. Produced by `presentAthleteWorkoutsExport` in `js`.
+ */
+export type WorkoutHistoryExport = {
+  id: number | null;
+  date: string;
+  title: string;
+  program: string | null;
+  team: string | null;
+  logged: boolean;
+  personal: boolean;
+  blocks: ExportBlock[];
+};

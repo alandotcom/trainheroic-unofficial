@@ -1,0 +1,54 @@
+---
+// Same disclaimer as the bespoke footer (src/components/Footer.astro).
+// The default Starlight footer is skipped: pagination is off and edit
+// links / last-updated are not configured, so it would render empty.
+---
+
+<footer class="docs-footer">
+  <p>Unofficial project. TrainHeroic is a separate company.</p>
+  <div class="docs-footer__links">
+    <a
+      href="https://github.com/alandotcom/trainheroic-unofficial"
+      aria-label="GitHub (opens in new tab)"
+      target="_blank"
+      rel="noopener noreferrer">GitHub</a
+    >
+    <a
+      href="https://www.npmjs.com/org/trainheroic-unofficial"
+      aria-label="npm (opens in new tab)"
+      target="_blank"
+      rel="noopener noreferrer">npm</a
+    >
+    <a href="https://mcp.trainheroic-unofficial.com/mcp">Hosted MCP</a>
+  </div>
+</footer>
+
+<style>
+  .docs-footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--sl-color-gray-5);
+    font-size: 0.875rem;
+    color: var(--sl-color-gray-3);
+  }
+
+  .docs-footer p {
+    margin: 0;
+  }
+
+  .docs-footer a {
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+  }
+
+  .docs-footer a:hover {
+    text-decoration: underline;
+  }
+
+  .docs-footer__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 0.5rem;
+  }
+</style>

@@ -1,0 +1,6 @@
+{/* Light-only site (DESIGN.md): pin the theme and stub the picker API that
+    Starlight scripts expect from the default provider. */}
+<script is:inline>
+  document.documentElement.dataset.theme = "light";
+  window.StarlightThemeProvider = { updatePickers() {} };
+</script>

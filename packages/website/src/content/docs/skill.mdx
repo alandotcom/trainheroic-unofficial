@@ -1,0 +1,35 @@
+---
+title: Claude Code skill
+description: Install the TrainHeroic skill for Claude Code. The agent runs the trainheroic CLI.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { SKILL_CLI_TOUR, SKILL_CREDENTIALS, SKILL_INSTALL_CLI } from "../../data/snippets";
+import { NPM_CLI, SKILL_ATHLETE, SKILL_COACH, SKILL_REPO } from "../../data/tools";
+
+The skill points Claude Code at <code>{NPM_CLI}</code>. Sessions cache to disk
+and commands return JSON.
+
+## Install
+
+<Code lang="sh" code={`npx skills add ${SKILL_REPO}`} />
+
+You can also install the CLI and copy skills into `~/.claude/skills/`:
+
+<Code lang="sh" code={SKILL_INSTALL_CLI} />
+
+## Credentials
+
+<Code lang="sh" code={SKILL_CREDENTIALS} />
+
+The CLI writes the session to `~/.trainheroic/session.json`. Credentials come
+from your shell environment.
+
+## Use in Claude Code
+
+- Coaching: type <code>/{SKILL_COACH}</code>
+- Your own training: type <code>/{SKILL_ATHLETE}</code>
+
+## CLI
+
+<Code lang="sh" code={SKILL_CLI_TOUR} />

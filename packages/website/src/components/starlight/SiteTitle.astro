@@ -1,0 +1,25 @@
+---
+// Same brand mark as the bespoke header (src/components/Header.astro).
+const { siteTitleHref } = Astro.locals.starlightRoute;
+---
+
+<a href={siteTitleHref} class="site-title">trainheroic <span>unofficial</span></a>
+
+<style>
+  .site-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--sl-color-white);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .site-title:hover {
+    color: var(--sl-color-gray-2);
+  }
+
+  .site-title span {
+    color: var(--sl-color-gray-3);
+    font-weight: 500;
+  }
+</style>
