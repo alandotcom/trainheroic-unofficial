@@ -194,12 +194,17 @@ const ATHLETE_EXERCISE_HISTORY_DESC =
   "untouched API object. Get the exercise id from athlete_exercises.";
 
 const ATHLETE_EXERCISES_DESC =
-  "The exercises the athlete has logged (id + title + positional units). Pass q to free-text " +
-  "search by name; use the returned id with athlete_exercise_history, athlete_personal_records, " +
-  "or athlete_exercise_stats (all of which require an exercise id). A common name returns several " +
-  "variants (e.g. plain 'Bench Press' id 1162 vs 'BARBELL BENCH PRESS'); each variant keeps its " +
-  "own separate history and PR board, so prefer the plain canonical entry, and if a PR or trend " +
-  "looks incomplete, the work may be split across variants — check the others.";
+  "The exercises the athlete has logged (id + title + positional units). Call with no arguments to " +
+  "get the athlete's complete catalog, which often runs to several hundred entries; leave limit " +
+  "off when you want the whole list, since a no-q call returns everything by default. Pass q to " +
+  "free-text search by name (returns the top ranked matches, capped by limit, default 20). Use a " +
+  "returned id with athlete_exercise_history, athlete_personal_records, or athlete_exercise_stats " +
+  "(all of which require an exercise id). If a no-q result comes back wrapped with a __truncated " +
+  "marker, you passed a limit smaller than the catalog and are seeing a partial list; re-call " +
+  "without limit for all of it. A common name returns several variants (e.g. plain 'Bench Press' " +
+  "id 1162 vs 'BARBELL BENCH PRESS'); each variant keeps its own separate history and PR board, so " +
+  "prefer the plain canonical entry, and if a PR or trend looks incomplete, the work may be split " +
+  "across variants, so check the others.";
 
 /**
  * Body of the athlete_workouts handler, hoisted to module scope so registerExerciseTools stays
@@ -234,6 +239,49 @@ function runAthleteWorkouts(ctx: AthleteContext, args: WorkoutsArgs) {
   });
 }
 
+/**
+ * Body of the athlete_exercises handler, hoisted to module scope so registerExerciseTools stays
+ * under the oxlint max-lines-per-function cap (mirrors runAthleteWorkouts above).
+ */
+function runAthleteExercises(
+  ctx: AthleteContext,
+  args: { q?: string | undefined; limit?: number | undefined },
+) {
+  const { q, limit } = args;
+  return attempt(async () => {
+    const searching = q !== undefined && q.trim() !== "";
+    const rows = searching
+      ? await searchExerciseHistory(ctx.client, q, limit ?? 20)
+      : await fetchExerciseHistoryList(ctx.client);
+    const items = rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      isCircuit: r.isCircuit ?? false,
+      units: exerciseUnits(r.param1Type, r.param2Type),
+    }));
+    // searchExerciseHistory already ranked-and-capped to limit. The full-catalog branch returns
+    // everything; when a caller passed a limit that clips it, wrap the result in the same
+    // __truncated marker the size budget uses, so a partial catalog never reads as complete (the
+    // earlier silent slice made 200-of-322 look like the whole library).
+    if (!searching && limit !== undefined && items.length > limit) {
+      return jsonResult({
+        items: items.slice(0, limit),
+        __truncated: {
+          returned: limit,
+          total: items.length,
+          omitted: items.length - limit,
+          hint: "Partial catalog: re-call athlete_exercises without limit to get all of them.",
+        },
+      });
+    }
+    return jsonResult(items, {
+      hint: searching
+        ? "Ranked matches for q. Omit q for the full catalog."
+        : "The athlete's full exercise catalog. Pass q to search by name.",
+    });
+  });
+}
+
 /** Workouts, exercise catalog, per-exercise history/PRs/stats. */
 function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: UserId): void {
   server.registerTool(
@@ -261,26 +309,13 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
       description: ATHLETE_EXERCISES_DESC,
       inputSchema: {
         q: z.string().optional(),
-        limit: z.number().int().positive().max(200).optional(),
+        // No max: the full catalog can run to several hundred, and a caller asking for "all" must
+        // be able to express it. jsonResult still budget-bounds an oversized payload.
+        limit: z.number().int().positive().optional(),
       },
       annotations: READ,
     },
-    ({ q, limit }) =>
-      attempt(async () => {
-        const rows =
-          q !== undefined && q.trim() !== ""
-            ? await searchExerciseHistory(ctx.client, q, limit ?? 20)
-            : await fetchExerciseHistoryList(ctx.client);
-        const items = rows.map((r) => ({
-          id: r.id,
-          title: r.title,
-          isCircuit: r.isCircuit ?? false,
-          units: exerciseUnits(r.param1Type, r.param2Type),
-        }));
-        // searchExerciseHistory already applies limit; the full-list branch did not, so cap here.
-        const capped = limit !== undefined ? items.slice(0, limit) : items;
-        return jsonResult(capped, { hint: "Pass q to search by name, or limit to cap the list." });
-      }),
+    (args) => runAthleteExercises(ctx, args),
   );
 
   server.registerTool(
