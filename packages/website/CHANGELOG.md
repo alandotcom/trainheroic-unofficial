@@ -1,5 +1,11 @@
 # @trainheroic-unofficial/website
 
+## 0.0.2
+
+### Patch Changes
+
+- @trainheroic-unofficial/js@1.7.1
+
 ## 0.0.1
 
 ### Patch Changes
