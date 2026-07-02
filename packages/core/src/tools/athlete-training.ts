@@ -39,7 +39,16 @@ import {
 } from "@trainheroic-unofficial/js";
 import type { SessionExercise, TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { confirmGate, NOT_CONFIRMED } from "../confirm";
-import { attempt, DESTRUCTIVE, errorResult, idParam, jsonResult, READ, toId } from "../context";
+import {
+  attempt,
+  clipArray,
+  DESTRUCTIVE,
+  errorResult,
+  idParam,
+  jsonResult,
+  READ,
+  toId,
+} from "../context";
 import { historyInRange } from "../history";
 
 /**
@@ -259,20 +268,20 @@ function runAthleteExercises(
       isCircuit: r.isCircuit ?? false,
       units: exerciseUnits(r.param1Type, r.param2Type),
     }));
-    // searchExerciseHistory already ranked-and-capped to limit. The full-catalog branch returns
-    // everything; when a caller passed a limit that clips it, wrap the result in the same
-    // __truncated marker the size budget uses, so a partial catalog never reads as complete (the
-    // earlier silent slice made 200-of-322 look like the whole library).
+    // The search branch is deliberately silent when it caps: searchExerciseHistory returns the top
+    // `limit` ranked matches, and a top-N search returning N is the point, not a truncated catalog.
+    // The full-catalog branch returns everything; when a caller passed a limit that clips it, wrap
+    // the result in the same __truncated marker the size budget uses (via clipArray), so a partial
+    // catalog never reads as complete (the earlier silent slice made 200-of-322 look like the whole
+    // library).
     if (!searching && limit !== undefined && items.length > limit) {
-      return jsonResult({
-        items: items.slice(0, limit),
-        __truncated: {
-          returned: limit,
-          total: items.length,
-          omitted: items.length - limit,
-          hint: "Partial catalog: re-call athlete_exercises without limit to get all of them.",
-        },
-      });
+      return jsonResult(
+        clipArray(
+          items,
+          limit,
+          "Partial catalog: re-call athlete_exercises without limit to get all of them.",
+        ),
+      );
     }
     return jsonResult(items, {
       hint: searching
