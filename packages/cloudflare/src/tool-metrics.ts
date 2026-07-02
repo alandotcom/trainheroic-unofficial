@@ -20,6 +20,22 @@ export interface RecentToolCall {
 const MAX_RECENT_CALLS = 20;
 
 /**
+ * A durable sink for the recent-call ring buffer. The buffer must outlive the McpAgent's
+ * hibernation / eviction between MCP messages: each cold start re-runs `init()` and rebuilds an
+ * empty in-memory buffer, so an un-persisted buffer is almost always empty by the time
+ * `report_feedback` runs (it fires in a later message than the calls it should describe). Backing
+ * the buffer with DO storage keeps the trail intact across those cold starts.
+ *
+ * `load` seeds the buffer during `init()`; `save` is a fire-and-forget write-through after each
+ * recorded call (the caller keeps the write alive with `ctx.waitUntil`). It holds only the same
+ * non-PII fields as the metrics and spans — never arguments or results.
+ */
+export interface RecentCallStore {
+  load(): Promise<readonly RecentToolCall[]>;
+  save(calls: readonly RecentToolCall[]): void;
+}
+
+/**
  * A mutable handle returned by {@link instrumentToolMetrics}. Set `.surface` to the surface
  * currently registering, before each `registerXxxSurface` call; every tool registered while it
  * holds that value is tagged with it. Each tool belongs to exactly one surface, so this adds a
@@ -28,11 +44,16 @@ const MAX_RECENT_CALLS = 20;
  * `recentCalls` is a per-session ring buffer (oldest first, capped at {@link MAX_RECENT_CALLS})
  * of every tool call as it settles, so the feedback tool can attach "what the user was doing" to a
  * bug report without standing up its own tracking. It holds only the same non-PII fields the
- * metrics and spans do (tool name, surface, ok/error, duration) — never arguments or results.
+ * metrics and spans do (tool name, surface, ok/error, duration), never arguments or results.
+ *
+ * `hydrate` seeds `recentCalls` from the durable store (if one was supplied). Call it once in
+ * `init()` before any tool can run, so the buffer reflects earlier messages of the same session
+ * rather than just this cold-started instance.
  */
 export interface ToolInstrumentation {
   surface: ToolSurface;
   readonly recentCalls: RecentToolCall[];
+  hydrate(): Promise<void>;
 }
 
 /**
@@ -69,11 +90,29 @@ export interface ToolInstrumentation {
  * approximate: Workers advances `Date.now()` only across I/O, which every TrainHeroic-backed
  * tool performs, so the wall-clock spent waiting on the API is captured.
  */
-export function instrumentToolMetrics(server: McpServer, sessionId: string): ToolInstrumentation {
-  const state: ToolInstrumentation = { surface: "athlete", recentCalls: [] };
+export function instrumentToolMetrics(
+  server: McpServer,
+  sessionId: string,
+  store?: RecentCallStore,
+): ToolInstrumentation {
+  const recentCalls: RecentToolCall[] = [];
+  const hydrate = async (): Promise<void> => {
+    if (!store) return;
+    const persisted = await store.load();
+    if (persisted.length === 0) return;
+    // hydrate() runs in init() before any tool call, so the buffer is normally empty here; keep
+    // any in-flight entries by placing the persisted (older) calls first, then trimming to cap.
+    recentCalls.unshift(...persisted);
+    if (recentCalls.length > MAX_RECENT_CALLS) {
+      recentCalls.splice(0, recentCalls.length - MAX_RECENT_CALLS);
+    }
+  };
+  const state: ToolInstrumentation = { surface: "athlete", recentCalls, hydrate };
   const record = (call: RecentToolCall): void => {
-    state.recentCalls.push(call);
-    if (state.recentCalls.length > MAX_RECENT_CALLS) state.recentCalls.shift();
+    recentCalls.push(call);
+    if (recentCalls.length > MAX_RECENT_CALLS) recentCalls.shift();
+    // Write-through so the trail survives DO hibernation between messages (see RecentCallStore).
+    store?.save(recentCalls);
   };
   const original = server.registerTool.bind(server) as (...args: unknown[]) => unknown;
   const patched = (...args: unknown[]): unknown => {

@@ -22,10 +22,20 @@ import { registerAthleteSyncTools } from "./tools/athlete-sync";
 import { registerFeedbackTool } from "./tools/feedback";
 import { registerSyncTools } from "./tools/sync";
 import { instrumentToolMetrics } from "./tool-metrics";
+import type { RecentCallStore, RecentToolCall } from "./tool-metrics";
 import { tagMcpSession } from "./sentry";
 import { registerWorkoutTools } from "@trainheroic-unofficial/core";
 
 type State = Record<string, never>;
+
+/**
+ * DO-storage key for the recent-tool-call ring buffer. One Durable Object backs one MCP session,
+ * so this single key is inherently per-session. The buffer is persisted here (rather than kept
+ * only in memory) because the McpAgent hibernates / evicts the DO between messages and re-runs
+ * `init()` with a fresh instance; without a durable copy the feedback tool would almost always see
+ * an empty trail (see tool-metrics.ts / feedback.ts).
+ */
+const RECENT_CALLS_KEY = "recentToolCalls";
 
 /**
  * The athlete surface: the logged-in user's own training (live tools) plus the D1 history
@@ -119,7 +129,18 @@ abstract class TrainHeroicMCPBase extends McpAgent<Env, State, Props> {
     // opaque session id only — no args/results; see tool-metrics.ts). `this.name` is the
     // per-session DO name (`streamable-http:<mcp-session-id>`), an opaque, non-PII session id.
     // Flip `.surface` around each registration block so every tool is tagged with its tool set.
-    const instrumentation = instrumentToolMetrics(this.server, this.name);
+    //
+    // The recent-call buffer is persisted to this DO's storage so it survives the McpAgent's
+    // hibernation between messages; hydrate() seeds it from earlier messages before any tool runs.
+    const recentCallStore: RecentCallStore = {
+      load: async () => (await this.ctx.storage.get<RecentToolCall[]>(RECENT_CALLS_KEY)) ?? [],
+      // Keep the write alive past the tool call's return, so an eviction right after cannot drop it.
+      save: (calls) => {
+        this.ctx.waitUntil(this.ctx.storage.put(RECENT_CALLS_KEY, [...calls]));
+      },
+    };
+    const instrumentation = instrumentToolMetrics(this.server, this.name, recentCallStore);
+    await instrumentation.hydrate();
 
     const client = new TrainHeroicClient(props.email, props.password);
 

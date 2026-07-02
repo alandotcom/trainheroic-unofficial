@@ -62,6 +62,28 @@ const DEFAULT_ARRAY_HINT =
 const DEFAULT_OBJECT_HINT =
   "Result was truncated to fit the size budget. Request a more specific id or sub-resource.";
 
+/**
+ * Clip an array to its first `keep` items and attach the `__truncated` marker describing what was
+ * dropped. The marker is model-facing (tools instruct the model to key off `__truncated`), so its
+ * shape has exactly one definition here: the size-budget path (`boundedSerialize`) and any tool
+ * that deliberately caps a list (e.g. `athlete_exercises`) emit the same thing.
+ */
+export function clipArray<T>(
+  items: readonly T[],
+  keep: number,
+  hint?: string,
+): { items: T[]; __truncated: { returned: number; total: number; omitted: number; hint: string } } {
+  return {
+    items: items.slice(0, keep),
+    __truncated: {
+      returned: keep,
+      total: items.length,
+      omitted: items.length - keep,
+      hint: hint ?? DEFAULT_ARRAY_HINT,
+    },
+  };
+}
+
 /** Active budget. Overridable via TH_MCP_RESULT_BUDGET on Node; the default on workerd. */
 export function resultBudget(): number {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
@@ -134,16 +156,7 @@ export function boundedSerialize(data: unknown, budget: number, hint?: string): 
   if (Array.isArray(data)) {
     const pieces = data.map((el) => JSON.stringify(el) ?? "null");
     const k = largestPrefixCount(pieces, budget - MARKER_RESERVE);
-    const wrapped = {
-      items: data.slice(0, k),
-      __truncated: {
-        returned: k,
-        total: data.length,
-        omitted: data.length - k,
-        hint: hint ?? DEFAULT_ARRAY_HINT,
-      },
-    };
-    const out = JSON.stringify(wrapped);
+    const out = JSON.stringify(clipArray(data, k, hint));
     if (out.length <= budget) return out;
   } else if (isPlainObject(data)) {
     const key = largestArrayValuedKey(data);
