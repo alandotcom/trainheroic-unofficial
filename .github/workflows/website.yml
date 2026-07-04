@@ -43,7 +43,7 @@ jobs:
           ASTRO_SITE: https://alandotcom.github.io/trainheroic-unofficial
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: packages/website/dist
 
