@@ -18,21 +18,21 @@
     "@cfworker/json-schema": "^4.1.1",
     "@cloudflare/workers-oauth-provider": "^0.8.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@sentry/cloudflare": "^10.62.0",
+    "@sentry/cloudflare": "^10.63.0",
     "@trainheroic-unofficial/core": "workspace:*",
     "@trainheroic-unofficial/db": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
-    "agents": "^0.17.1",
-    "drizzle-orm": "1.0.0-rc.3",
+    "agents": "^0.17.3",
+    "drizzle-orm": "1.0.0-rc.4",
     "hono": "^4.12.27",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.16.20",
-    "@types/node": "^26.0.1",
-    "drizzle-kit": "1.0.0-rc.3",
+    "@cloudflare/vitest-pool-workers": "^0.18.0",
+    "@types/node": "^26.1.0",
+    "drizzle-kit": "1.0.0-rc.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9",
-    "wrangler": "^4.105.0"
+    "wrangler": "^4.107.0"
   }
 }
