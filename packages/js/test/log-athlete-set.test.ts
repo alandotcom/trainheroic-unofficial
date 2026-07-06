@@ -158,6 +158,50 @@ describe("logAthleteSet superset completion (issue 25)", () => {
     expect(result.setCompleted).toBe(false);
   });
 
+  it("does NOT mark a slot performed when only the weight is entered (no reps)", async () => {
+    // Entering target loads (weight in param2) with reps (param1) left blank must not flip the
+    // per-row completion checkmark: a weight without reps is a target, not a performed set. The
+    // weight is still written to the slot (so it shows as a target), but every param_N_made stays 0,
+    // the exercise `completed` flag stays 0, and no savedworkoutset PUT fires — keeping the per-row
+    // state and the block-level completion in agreement (both "not done").
+    const { puts } = stubFetch([exercise(100, "Tempo Back Squat")]);
+
+    const result = await log([
+      {
+        savedWorkoutSetExerciseId: 100,
+        sets: [{ param2: 170 }, { param2: 180 }, { param2: 195 }, { param2: 205 }],
+      },
+    ]);
+
+    const body = puts.find((p) => p.url.includes("/savedworkoutsetexercise/100"))?.body;
+    // The weights persist as targets, but no slot is marked performed and the exercise isn't done.
+    expect(body?.param_2_data_1).toBe("170");
+    expect(body?.param_2_data_4).toBe("205");
+    expect(body?.param_1_made).toBe(0);
+    expect(body?.param_2_made).toBe(0);
+    expect(body?.param_3_made).toBe(0);
+    expect(body?.param_4_made).toBe(0);
+    expect(body?.completed).toBe(0);
+    // No block-completion PUT, and the reported completion matches the un-checked rows.
+    expect(puts.some((p) => p.url.includes("/savedworkoutset/"))).toBe(false);
+    expect(result.setCompleted).toBe(false);
+    expect(result.exercisesLogged).toBe(1);
+  });
+
+  it("marks a slot performed on a reps-only log (no weight)", async () => {
+    // The mirror of the weight-only case: reps alone ARE a performed set (bodyweight work, AMRAPs),
+    // so the slot is made and a single-exercise set completes.
+    const { puts } = stubFetch([exercise(100, "Pull Up")]);
+
+    const result = await log([{ savedWorkoutSetExerciseId: 100, sets: [{ param1: 8 }] }]);
+
+    const body = puts.find((p) => p.url.includes("/savedworkoutsetexercise/100"))?.body;
+    expect(body?.param_1_data_1).toBe("8");
+    expect(body?.param_1_made).toBe(1);
+    expect(body?.completed).toBe(1);
+    expect(result.setCompleted).toBe(true);
+  });
+
   it("targets slots 4-6 and blanks the un-logged prescription slots (issue 23/26)", async () => {
     const ex = exercise(100, "Bench Press");
     [8, 5, 3, 1, 1, 1].forEach((reps, i) => {

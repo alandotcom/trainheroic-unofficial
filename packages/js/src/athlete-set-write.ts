@@ -75,8 +75,10 @@ export function toSetResults(
  * `param_2_data_N` string values plus a `param_N_made` flag.
  *
  * `mode` selects which write this is — the same endpoint serves both:
- *   - `"log"`: the values ARE a performed result, so `param_N_made` is 1 where the slot has data
- *     and the exercise `completed` flag is 1 when any set has logged data.
+ *   - `"log"`: the values ARE a performed result, so `param_N_made` is 1 where the slot has reps
+ *     entered (`param1`) and the exercise `completed` flag is 1 when any set is performed. A slot
+ *     carrying only a weight (`param2`) with no reps is a target, not a performed set, so it stays
+ *     un-made — matching the app, which shows no completion checkmark until reps are logged.
  *   - `"prescribe"`: the values are prescribed targets, written with every `param_N_made` and
  *     `completed` left at 0 so the set is not marked done. This matches what the app sends when a
  *     coach edits an athlete's prescribed reps/weight.
@@ -143,7 +145,11 @@ export function buildExerciseSetPayload(
     if (target) {
       p1 = target.param1 !== undefined ? String(target.param1) : "";
       p2 = target.param2 !== undefined ? String(target.param2) : "";
-      made = performed && (p1 !== "" || p2 !== "") ? 1 : 0;
+      // A set is performed only once its reps (param1) are entered; a weight (param2) alone is a
+      // target, not a completed set. Marking a weight-only slot made would flip the app's per-row
+      // checkmark green while the block-level completion (which needs reps) stays off — the two
+      // disagreeing. Requiring reps keeps the slot un-made until the athlete actually logs them.
+      made = performed && p1 !== "" ? 1 : 0;
     } else if (carryOver && coerceInt(existing?.[`param_${i}_made`]) === 1) {
       p1 = existingSlotData(existing, `param_1_data_${i}`);
       p2 = existingSlotData(existing, `param_2_data_${i}`);
@@ -176,21 +182,20 @@ function exerciseHasLoggedData(ex: Record<string, unknown>): boolean {
   return false;
 }
 
-/** True when a result carries at least one non-empty param value (so it produces a performed slot). */
-function resultHasData(result: SetResult): boolean {
-  return result.sets.some(
-    (s) =>
-      (s.param1 !== undefined && String(s.param1) !== "") ||
-      (s.param2 !== undefined && String(s.param2) !== ""),
-  );
+/** True when a result carries at least one set with reps entered (so it produces a performed slot).
+ * A weight-only set (`param2` set, `param1` blank) is a target, not a performed result, and so does
+ * not count — mirroring the `made` rule in {@link buildExerciseSetPayload}. */
+function resultHasPerformedSet(result: SetResult): boolean {
+  return result.sets.some((s) => s.param1 !== undefined && String(s.param1) !== "");
 }
 
 /**
  * Whether every exercise in a saved workout set now has logged data — either written with data in
  * this call (`loggedIds`) or already carrying a performed slot. Gates the set-completion PUT: a
  * superset/circuit stays open until the last exercise is logged, so completing it on a partial log
- * does not flip its still-empty siblings to "done". An exercise written with only empty values does
- * not count (it would not be marked performed), so an all-empty log never completes the set.
+ * does not flip its still-empty siblings to "done". An exercise written with no reps — empty values,
+ * or a weight (`param2`) with no reps (`param1`) — does not count (it would not be marked performed),
+ * so a no-reps log never completes the set.
  */
 function isSetFullyLogged(
   exercises: readonly Record<string, unknown>[],
@@ -560,7 +565,7 @@ async function writeSetResults(
   let setCompleted = false;
   if (mode === "log") {
     const loggedIds = new Set(
-      results.filter(resultHasData).map((r) => r.savedWorkoutSetExerciseId),
+      results.filter(resultHasPerformedSet).map((r) => r.savedWorkoutSetExerciseId),
     );
     if (isSetFullyLogged(exercises, loggedIds)) {
       const allExerciseIds = exercises
