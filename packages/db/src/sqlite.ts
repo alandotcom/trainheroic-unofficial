@@ -6,7 +6,7 @@
 // imports only the neutral core and `./d1`) never drags them into its bundle.
 import type { DatabaseSync } from "node:sqlite";
 import { drizzle } from "drizzle-orm/node-sqlite";
-import { type DrizzleDb, schema } from "./schema";
+import type { DrizzleDb } from "./schema";
 import { MIGRATIONS, type Migration } from "./migrations";
 import type { BatchExec, BatchStmt, Warehouse } from "./runner";
 
@@ -18,7 +18,7 @@ export { MIGRATIONS, type Migration } from "./migrations";
  * same all-or-nothing commit the D1 adapter gets from `db.batch()`.
  */
 export function makeSqliteWarehouse(sqlite: DatabaseSync): Warehouse {
-  const db = drizzle({ client: sqlite, schema }) as unknown as DrizzleDb;
+  const db = drizzle({ client: sqlite }) as unknown as DrizzleDb;
   const exec: BatchExec = async (statements: readonly BatchStmt[]) => {
     if (statements.length === 0) return;
     sqlite.exec("BEGIN");

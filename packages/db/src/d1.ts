@@ -4,7 +4,7 @@
 // the package — the worker injects `Sentry.instrumentD1WithSentry` through the `instrument` hook,
 // keeping D1 query spans wired without a workerd dependency leaking into the shared core.
 import { type AnyD1Database, drizzle } from "drizzle-orm/d1";
-import { type DrizzleDb, schema } from "./schema";
+import type { DrizzleDb } from "./schema";
 import type { BatchExec, BatchStmt, Warehouse } from "./runner";
 
 /**
@@ -21,7 +21,7 @@ export function makeD1Warehouse<T extends AnyD1Database>(
   opts: { instrument?: (d1: T) => T } = {},
 ): Warehouse {
   const instrument = opts.instrument ?? ((x: T) => x);
-  const db = drizzle(instrument(d1), { schema }) as unknown as DrizzleDb;
+  const db = drizzle(instrument(d1)) as unknown as DrizzleDb;
   // D1's batch() commits a group as one implicit, all-or-nothing transaction. runGroups never
   // passes an empty chunk, but the guard makes that contract explicit (matching the sqlite adapter).
   const batch = (db as unknown as { batch: (s: readonly BatchStmt[]) => Promise<unknown> }).batch;
