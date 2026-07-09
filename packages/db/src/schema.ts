@@ -9,7 +9,7 @@
 // blobs stay `text`) so the query behaviour is identical on D1 and node:sqlite. There is no
 // driver import here (no `drizzle-orm/d1`, no `@sentry/cloudflare`): the handle is built by the
 // adapter entry points (`./d1`, `./sqlite`), so this core stays runtime-neutral.
-import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+import type { SQLiteAsyncDatabase } from "drizzle-orm/sqlite-core";
 import { customType, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 // A REAL column that may hold free-text. Prescribed slot values are numeric when possible but
@@ -334,4 +334,4 @@ export const schema = {
  * it to this type. The only driver-specific operation — atomic batch — is injected separately as a
  * `BatchExec` (see `./runner`), so the stores never touch a driver-only method on this handle.
  */
-export type DrizzleDb = BaseSQLiteDatabase<"sync" | "async", unknown, typeof schema>;
+export type DrizzleDb = SQLiteAsyncDatabase<"sync" | "async", unknown>;
