@@ -65,6 +65,20 @@ describe("athlete input schemas", () => {
     ).toBe(false);
   });
 
+  it("rejects duplicate exercise results even when their id representations differ", () => {
+    const input = {
+      date: "2026-06-01",
+      savedWorkoutSetId: 123,
+      results: [
+        { savedWorkoutSetExerciseId: 9, sets: [{ param1: 5 }] },
+        { savedWorkoutSetExerciseId: "9", sets: [{ param1: 3 }] },
+      ],
+    };
+
+    expect(logSetArgsSchema.safeParse(input).success).toBe(false);
+    expect(coachPrescribeSetArgsSchema.safeParse({ ...input, athleteId: 1 }).success).toBe(false);
+  });
+
   it("accepts an in-range set slot and rejects an out-of-range one", () => {
     const withSlot = (slot: number) =>
       logSetArgsSchema.safeParse({

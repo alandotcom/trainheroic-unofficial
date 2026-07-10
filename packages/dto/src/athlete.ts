@@ -194,6 +194,44 @@ export const loggedSetWithSlotSchema = loggedSetSchema.extend({
   slot: z.number().int().min(1).max(10).optional(),
 });
 
+function requireUniqueExerciseIds(
+  results: readonly { savedWorkoutSetExerciseId: number | string }[],
+  ctx: z.RefinementCtx,
+): void {
+  const seen = new Set<string>();
+  results.forEach((result, index) => {
+    const id = String(result.savedWorkoutSetExerciseId).replace(/^0+(?=\d)/u, "");
+    if (seen.has(id)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `savedWorkoutSetExerciseId ${id} appears more than once; combine its sets into one result.`,
+        path: [index, "savedWorkoutSetExerciseId"],
+      });
+    }
+    seen.add(id);
+  });
+}
+
+const loggedExerciseResultsSchema = z
+  .array(
+    z.object({
+      savedWorkoutSetExerciseId: idArgSchema,
+      sets: z.array(loggedSetWithSlotSchema).min(1),
+    }),
+  )
+  .min(1)
+  .superRefine(requireUniqueExerciseIds);
+
+const prescribedExerciseResultsSchema = z
+  .array(
+    z.object({
+      savedWorkoutSetExerciseId: idArgSchema,
+      sets: z.array(loggedSetSchema).min(1),
+    }),
+  )
+  .min(1)
+  .superRefine(requireUniqueExerciseIds);
+
 /**
  * Args for the set-logging write. `date` (the workout's day) locates the saved
  * workout via the range endpoint; `savedWorkoutSetId` picks the set to complete; `results`
@@ -205,14 +243,7 @@ export const loggedSetWithSlotSchema = loggedSetSchema.extend({
 export const logSetArgsSchema = z.object({
   date: dateString,
   savedWorkoutSetId: idArgSchema,
-  results: z
-    .array(
-      z.object({
-        savedWorkoutSetExerciseId: idArgSchema,
-        sets: z.array(loggedSetWithSlotSchema).min(1),
-      }),
-    )
-    .min(1),
+  results: loggedExerciseResultsSchema,
 });
 export type LogSetArgs = z.infer<typeof logSetArgsSchema>;
 
@@ -236,14 +267,7 @@ export const coachPrescribeSetArgsSchema = z.object({
   date: dateString,
   savedWorkoutSetId: idArgSchema,
   athleteId: idArgSchema,
-  results: z
-    .array(
-      z.object({
-        savedWorkoutSetExerciseId: idArgSchema,
-        sets: z.array(loggedSetSchema).min(1),
-      }),
-    )
-    .min(1),
+  results: prescribedExerciseResultsSchema,
 });
 export type CoachPrescribeSetArgs = z.infer<typeof coachPrescribeSetArgsSchema>;
 
