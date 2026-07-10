@@ -201,6 +201,33 @@ describe("logAthleteSet superset completion (issue 25)", () => {
     expect(result.setCompleted).toBe(false);
   });
 
+  it("uses an incomplete write instead of stale previously-complete state", async () => {
+    const completed = exercise(100, "Back Squat", { 1: 1 });
+    completed.param_1_data_1 = "5";
+    completed.param_2_data_1 = "225";
+    const { puts } = stubFetch([completed]);
+
+    const result = await log([{ savedWorkoutSetExerciseId: 100, sets: [{}] }]);
+
+    const body = puts.find((p) => p.url.includes("/savedworkoutsetexercise/100"))?.body;
+    expect(body?.completed).toBe(0);
+    expect(puts.some((p) => p.url.includes("/savedworkoutset/"))).toBe(false);
+    expect(result.setCompleted).toBe(false);
+  });
+
+  it("rejects duplicate exercise results before writing either one", async () => {
+    const { puts } = stubFetch([exercise(100, "Back Squat")]);
+
+    await expect(
+      log([
+        { savedWorkoutSetExerciseId: 100, sets: [{ param1: 5 }] },
+        { savedWorkoutSetExerciseId: 100, sets: [{ param1: 3 }] },
+      ]),
+    ).rejects.toThrow(/appears more than once/u);
+
+    expect(puts).toHaveLength(0);
+  });
+
   it("does NOT mark a slot performed when only the weight is entered (no reps)", async () => {
     // Entering target loads (weight in param2) with reps (param1) left blank must not flip the
     // per-row completion checkmark: a weight without reps is a target, not a performed set. The
