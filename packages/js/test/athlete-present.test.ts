@@ -411,7 +411,8 @@ describe("buildExerciseSetPayload (slot targeting + preservation)", () => {
     expect(body.param_4_made).toBe(1);
     expect(body.param_2_data_6).toBe("275");
     expect(body.param_6_made).toBe(1);
-    expect(body.completed).toBe(1);
+    // Prescribed slots 1-3 were omitted, so the exercise must stay open.
+    expect(body.completed).toBe(0);
     // The singles did NOT land in slot 1 (no sequential clobber of the ramp positions).
     expect(body.param_2_data_1).not.toBe("245");
   });
@@ -448,7 +449,8 @@ describe("buildExerciseSetPayload (slot targeting + preservation)", () => {
     expect(body.param_1_made).toBe(1);
     expect(body.param_2_data_1).toBe("225");
     expect(body.param_4_made).toBe(1);
-    expect(body.completed).toBe(1);
+    // Slots 2, 3, 5, and 6 are still prescribed but unperformed.
+    expect(body.completed).toBe(0);
   });
 
   it("prescribe ignores the live record and replaces the whole prescription", () => {

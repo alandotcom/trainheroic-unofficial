@@ -32,6 +32,14 @@ function exercise(id: number, title: string, made: Partial<Record<number, 1>> = 
   return ex;
 }
 
+/** Add prescribed reps to the saved-copy slots without marking them performed. */
+function prescribeReps(ex: Record<string, unknown>, reps: readonly number[]) {
+  reps.forEach((value, index) => {
+    ex[`param_1_data_${index + 1}`] = String(value);
+  });
+  return ex;
+}
+
 /** One athlete-range program-workout carrying a single saved set with the given exercises. */
 function dayWithExercises(exercises: Record<string, unknown>[]) {
   return [
@@ -83,6 +91,41 @@ const log = (results: Parameters<typeof logAthleteSet>[1]["results"]) =>
   logAthleteSet(client(), { date: "2026-06-21", savedWorkoutSetId: SET_ID, results });
 
 describe("logAthleteSet superset completion (issue 25)", () => {
+  it("leaves a three-slot circuit open when the current exercise logs only two slots", async () => {
+    const hipThrust = prescribeReps(
+      exercise(100, "Hip Thrust", { 1: 1, 2: 1, 3: 1 }),
+      [15, 15, 15],
+    );
+    hipThrust.param_2_data_1 = "315";
+    hipThrust.param_2_data_2 = "315";
+    hipThrust.param_2_data_3 = "315";
+    const { puts } = stubFetch([
+      hipThrust,
+      prescribeReps(exercise(200, "Single Leg RDL"), [20, 20, 20]),
+      prescribeReps(exercise(300, "Banded Hamstring Curl"), [20, 20, 20]),
+    ]);
+
+    const result = await log([
+      {
+        savedWorkoutSetExerciseId: 200,
+        sets: [
+          { param1: 20, param2: 40 },
+          { param1: 20, param2: 45 },
+        ],
+      },
+    ]);
+
+    const rdl = puts.find((p) => p.url.includes("/savedworkoutsetexercise/200"));
+    expect(rdl?.body.param_1_made).toBe(1);
+    expect(rdl?.body.param_2_made).toBe(1);
+    expect(rdl?.body.param_3_made).toBe(0);
+    expect(rdl?.body.param_1_data_3).toBe("");
+    expect(rdl?.body.completed).toBe(0);
+    expect(puts.some((p) => p.url.includes("/savedworkoutset/"))).toBe(false);
+    expect(puts.some((p) => p.url.includes("/savedworkoutsetexercise/300"))).toBe(false);
+    expect(result.setCompleted).toBe(false);
+  });
+
   it("does NOT mark the block complete when only one exercise of a superset is logged", async () => {
     const { puts } = stubFetch([
       exercise(100, "Alternating DB Bench Press"),

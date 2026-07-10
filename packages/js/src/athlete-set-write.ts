@@ -76,9 +76,10 @@ export function toSetResults(
  *
  * `mode` selects which write this is — the same endpoint serves both:
  *   - `"log"`: the values ARE a performed result, so `param_N_made` is 1 where the slot has reps
- *     entered (`param1`) and the exercise `completed` flag is 1 when any set is performed. A slot
- *     carrying only a weight (`param2`) with no reps is a target, not a performed set, so it stays
- *     un-made — matching the app, which shows no completion checkmark until reps are logged.
+ *     entered (`param1`) and the exercise `completed` flag is 1 only when every active slot is
+ *     performed. A slot carrying only a weight (`param2`) with no reps is a target, not a performed
+ *     set, so it stays un-made — matching the app, which shows no completion checkmark until reps
+ *     are logged.
  *   - `"prescribe"`: the values are prescribed targets, written with every `param_N_made` and
  *     `completed` left at 0 so the set is not marked done. This matches what the app sends when a
  *     coach edits an athlete's prescribed reps/weight.
@@ -137,8 +138,14 @@ export function buildExerciseSetPayload(
     workout_set_exercise_id: workoutSetExerciseId,
   };
   let anyMade = false;
+  let allActiveSlotsMade = true;
   for (let i = 1; i <= MAX_PARAM_SLOTS; i += 1) {
     const target = bySlot.get(i);
+    const active =
+      target !== undefined ||
+      existingSlotData(existing, `param_1_data_${i}`) !== "" ||
+      existingSlotData(existing, `param_2_data_${i}`) !== "" ||
+      coerceInt(existing?.[`param_${i}_made`]) === 1;
     let p1: string;
     let p2: string;
     let made: number;
@@ -160,11 +167,12 @@ export function buildExerciseSetPayload(
       made = 0;
     }
     if (made === 1) anyMade = true;
+    if (active && made !== 1) allActiveSlotsMade = false;
     body[`param_${i}_made`] = made;
     body[`param_1_data_${i}`] = p1;
     body[`param_2_data_${i}`] = p2;
   }
-  body.completed = performed && anyMade ? 1 : 0;
+  body.completed = performed && anyMade && allActiveSlotsMade ? 1 : 0;
   return body;
 }
 
@@ -174,36 +182,34 @@ function existingSlotData(existing: Record<string, unknown> | undefined, key: st
   return v === undefined || v === null ? "" : String(v);
 }
 
-/** True when a saved-copy exercise already carries a performed slot (any `param_N_made` === 1). */
-function exerciseHasLoggedData(ex: Record<string, unknown>): boolean {
+/** True when every data-bearing slot on a saved-copy exercise is marked performed. */
+function exerciseIsFullyLogged(ex: Record<string, unknown>): boolean {
+  let anyActive = false;
   for (let i = 1; i <= MAX_PARAM_SLOTS; i += 1) {
-    if (coerceInt(ex[`param_${i}_made`]) === 1) return true;
+    const active =
+      existingSlotData(ex, `param_1_data_${i}`) !== "" ||
+      existingSlotData(ex, `param_2_data_${i}`) !== "" ||
+      coerceInt(ex[`param_${i}_made`]) === 1;
+    if (!active) continue;
+    anyActive = true;
+    if (coerceInt(ex[`param_${i}_made`]) !== 1) return false;
   }
-  return false;
-}
-
-/** True when a result carries at least one set with reps entered (so it produces a performed slot).
- * A weight-only set (`param2` set, `param1` blank) is a target, not a performed result, and so does
- * not count — mirroring the `made` rule in {@link buildExerciseSetPayload}. */
-function resultHasPerformedSet(result: SetResult): boolean {
-  return result.sets.some((s) => s.param1 !== undefined && String(s.param1) !== "");
+  return anyActive;
 }
 
 /**
- * Whether every exercise in a saved workout set now has logged data — either written with data in
- * this call (`loggedIds`) or already carrying a performed slot. Gates the set-completion PUT: a
- * superset/circuit stays open until the last exercise is logged, so completing it on a partial log
- * does not flip its still-empty siblings to "done". An exercise written with no reps — empty values,
- * or a weight (`param2`) with no reps (`param1`) — does not count (it would not be marked performed),
- * so a no-reps log never completes the set.
+ * Whether every exercise in a saved workout set is fully logged — either completed by its projected
+ * payload in this call (`completedIds`) or already carrying made flags for every data-bearing slot.
+ * This gates the set-completion PUT so a partial exercise cannot close a superset/circuit and cause
+ * TrainHeroic to backfill its omitted slots or untouched siblings.
  */
 function isSetFullyLogged(
   exercises: readonly Record<string, unknown>[],
-  loggedIds: ReadonlySet<number>,
+  completedIds: ReadonlySet<number>,
 ): boolean {
   return exercises.every((ex) => {
     const id = coerceInt(ex.id);
-    return (id !== null && loggedIds.has(id)) || exerciseHasLoggedData(ex);
+    return (id !== null && completedIds.has(id)) || exerciseIsFullyLogged(ex);
   });
 }
 
@@ -507,6 +513,7 @@ async function writeSetResults(
 
   // Step 1: PUT each exercise's data to its own endpoint.
   let exercisesWritten = 0;
+  const completedIds = new Set<number>();
   for (const result of results) {
     const ex = exercises.find((e) => coerceInt(e.id) === result.savedWorkoutSetExerciseId);
     if (!ex) {
@@ -529,7 +536,7 @@ async function writeSetResults(
           `savedWorkoutSetExerciseId, not an exercise_id — re-read the ids from athlete_saved_workouts.`,
       );
     }
-    const body = {
+    const body: Record<string, unknown> = {
       ...buildExerciseSetPayload(
         result.savedWorkoutSetExerciseId,
         savedWorkoutSetId,
@@ -540,6 +547,7 @@ async function writeSetResults(
       ),
       ...extra,
     };
+    if (body.completed === 1) completedIds.add(result.savedWorkoutSetExerciseId);
     const res = await client.request(
       "PUT",
       `/1.0/${target.role}/savedworkoutsetexercise/${result.savedWorkoutSetExerciseId}${suffix}`,
@@ -564,10 +572,7 @@ async function writeSetResults(
   // open, so it is skipped.
   let setCompleted = false;
   if (mode === "log") {
-    const loggedIds = new Set(
-      results.filter(resultHasPerformedSet).map((r) => r.savedWorkoutSetExerciseId),
-    );
-    if (isSetFullyLogged(exercises, loggedIds)) {
+    if (isSetFullyLogged(exercises, completedIds)) {
       const allExerciseIds = exercises
         .map((e) => coerceInt(e.id))
         .filter((n): n is number => n !== null);
