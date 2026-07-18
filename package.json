@@ -27,9 +27,9 @@
     "release": "pnpm run build && changeset publish"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.0",
-    "oxfmt": "^0.57.0",
-    "oxlint": "^1.72.0",
-    "typescript": "^6.0.3"
+    "@changesets/cli": "^2.31.1",
+    "oxfmt": "^0.59.0",
+    "oxlint": "^1.74.0",
+    "typescript": "^7.0.2"
   }
 }
