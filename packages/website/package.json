@@ -18,7 +18,7 @@
     "@astrojs/sitemap": "^3.7.3",
     "@astrojs/starlight": "^0.41.3",
     "@trainheroic-unofficial/js": "workspace:*",
-    "astro": "^7.0.6"
+    "astro": "^7.1.0"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
