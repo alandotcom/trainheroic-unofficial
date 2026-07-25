@@ -38,9 +38,9 @@
     "drizzle-orm": "1.0.0-rc.4"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
-    "tsdown": "^0.22.3",
-    "typescript": "^6.0.3",
+    "@types/node": "^26.1.1",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }
 }
