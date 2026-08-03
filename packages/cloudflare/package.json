@@ -24,7 +24,7 @@
     "@trainheroic-unofficial/js": "workspace:*",
     "agents": "^0.17.3",
     "drizzle-orm": "1.0.0-rc.4",
-    "hono": "^4.12.28",
+    "hono": "^4.12.29",
     "zod": "^4.4.3"
   },
   "devDependencies": {
