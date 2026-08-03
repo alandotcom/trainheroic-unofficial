@@ -528,22 +528,23 @@ This creates A1: Back Squat, A2: Front Squat displayed as a superset.
 ```
 
 **Parameter types (param_1_type / param_2_type):**
-| Value | Type | Display |
-|-------|------|---------|
-| 0 | None | (no parameter) |
-| 1 | Weight | `225 lb` |
-| 2 | Weight (% of max) | `75%` |
-| 3 | Reps | `5` |
-| 4 | Time (seconds) | `1:00` |
-| 5 | Distance (yards) | `50yd` |
-| 6 | Distance (meters) | `50m` |
-| 7 | Height | `inches` |
-| 10 | Distance (miles) | miles |
-| 11 | Distance (feet) | feet |
-| 12 | Height (inches) | inches |
-| 13 | Heart Rate | bpm |
-| 14 | RPE | rating |
-| 18 | Time (seconds, alt) | `0:30` |
+
+| Value | Type                | Display        |
+| ----- | ------------------- | -------------- |
+| 0     | None                | (no parameter) |
+| 1     | Weight              | `225 lb`       |
+| 2     | Weight (% of max)   | `75%`          |
+| 3     | Reps                | `5`            |
+| 4     | Time (seconds)      | `1:00`         |
+| 5     | Distance (yards)    | `50yd`         |
+| 6     | Distance (meters)   | `50m`          |
+| 7     | Height              | `inches`       |
+| 10    | Distance (miles)    | miles          |
+| 11    | Distance (feet)     | feet           |
+| 12    | Height (inches)     | inches         |
+| 13    | Heart Rate          | bpm            |
+| 14    | RPE                 | rating         |
+| 18    | Time (seconds, alt) | `0:30`         |
 
 > **The unit is fixed per exercise — you cannot set it at prescribe time (verified).**
 > On save the API discards the `param_1_type`/`param_2_type` you send and restores
@@ -1189,12 +1190,13 @@ With weight (`param_2_type: 1`):
 Displays as: `2 x 40yd @ 50lb`
 
 **Distance type values:**
-| param type | Unit |
-|-----------|------|
-| 5 | yards |
-| 6 | meters |
-| 10 | miles |
-| 11 | feet |
+
+| param type | Unit   |
+| ---------- | ------ |
+| 5          | yards  |
+| 6          | meters |
+| 10         | miles  |
+| 11         | feet   |
 
 Existing distance exercises: 193 in library (e.g. Sled Push, Bear Crawl, Sprint, Carioca, Run)
 

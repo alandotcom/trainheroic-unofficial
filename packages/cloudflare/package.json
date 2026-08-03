@@ -16,23 +16,23 @@
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
-    "@cloudflare/workers-oauth-provider": "^0.8.1",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@sentry/cloudflare": "^10.63.0",
+    "@cloudflare/workers-oauth-provider": "^0.8.3",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@sentry/cloudflare": "^10.69.0",
     "@trainheroic-unofficial/core": "workspace:*",
     "@trainheroic-unofficial/db": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
-    "agents": "^0.17.3",
+    "agents": "^0.20.1",
     "drizzle-orm": "1.0.0-rc.4",
-    "hono": "^4.12.28",
+    "hono": "^4.12.33",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.18.0",
-    "@types/node": "^26.1.0",
+    "@cloudflare/vitest-pool-workers": "^0.20.1",
+    "@types/node": "^26.1.2",
     "drizzle-kit": "1.0.0-rc.4",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10",
-    "wrangler": "^4.107.0"
+    "wrangler": "^4.118.0"
   }
 }
