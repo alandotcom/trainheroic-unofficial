@@ -29,6 +29,9 @@ const FRESH_CHECK_MS = 60 * 1000;
 const PRUNE_FLOOR = 100;
 // 12 columns per row; keep rows-per-statement under D1's 100 bound-param limit.
 const UPSERT_CHUNK = 8;
+// How many upsert statements to hold and commit per exec(). Bounds DO/Worker heap during a
+// full library refresh (see refresh()); matches runBatches' default chunk size.
+const WRITE_BATCH = 100;
 // How many LIKE matches to pull before app-side ranking decides the final order.
 const SEARCH_CANDIDATES = 200;
 
@@ -100,14 +103,22 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
     checkResponse(exerciseLibraryResponseSchema, list, "exercise library");
 
     const generation = Number((await this.#meta(org, "sync_generation")) ?? "0") + 1;
-    // Commit the row upserts and the generation bump in one atomic batch, so a crash can never
-    // leave rows written at a generation the meta never recorded (which would break the
-    // prune-to-match self-healing). A crash before the prune just leaves prunable rows
-    // for the next run, since the generation is already durable.
-    await this.exec([
-      ...chunk(list, UPSERT_CHUNK).map((c) => this.#upsertStmt(org, c, generation)),
-      this.#setMetaStmt(org, "sync_generation", String(generation)),
-    ]);
+    // Upsert in bounded batches — never materialize one giant statement array. A full library
+    // can be thousands of rows; holding every Drizzle builder at once OOMs the MCP Durable
+    // Object isolate (128 MB). Generation meta is written only after all upserts land; a crash
+    // mid-way leaves some rows at `generation` while meta still points at the previous value,
+    // and the next refresh re-upserts then prunes self-heal. A crash after the meta bump but
+    // before prune just leaves prunable stale rows for the next run.
+    const pending: BatchStmt[] = [];
+    for (const c of chunk(list, UPSERT_CHUNK)) {
+      pending.push(this.#upsertStmt(org, c, generation));
+      if (pending.length >= WRITE_BATCH) {
+        await this.exec(pending);
+        pending.length = 0;
+      }
+    }
+    pending.push(this.#setMetaStmt(org, "sync_generation", String(generation)));
+    await this.exec(pending);
 
     let pruned = 0;
     if (list.length >= PRUNE_FLOOR) {
