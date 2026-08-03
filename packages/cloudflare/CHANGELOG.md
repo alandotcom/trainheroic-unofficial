@@ -1,5 +1,15 @@
 # @trainheroic-unofficial/cloudflare
 
+## 1.7.4
+
+### Patch Changes
+
+- e677387: Fix Durable Object OOM during full exercise-library refresh: upsert in bounded batches instead of materializing every Drizzle statement at once (Sentry TRAINHEROIC-MCP-K).
+- Updated dependencies [e677387]
+  - @trainheroic-unofficial/db@1.7.4
+  - @trainheroic-unofficial/js@1.7.4
+  - @trainheroic-unofficial/core@1.7.4
+
 ## 1.7.3
 
 ### Patch Changes

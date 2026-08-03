@@ -1,5 +1,12 @@
 # @trainheroic-unofficial/core
 
+## 1.7.4
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@1.7.4
+- @trainheroic-unofficial/js@1.7.4
+
 ## 1.7.3
 
 ### Patch Changes
