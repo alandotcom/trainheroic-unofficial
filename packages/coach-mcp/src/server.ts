@@ -2,15 +2,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import process from "node:process";
 import type { ToolContext } from "@trainheroic-unofficial/core";
-import { registerAnalyticsTools } from "@trainheroic-unofficial/core";
-import { registerAthleteTools } from "@trainheroic-unofficial/core";
-import { registerExerciseTools } from "@trainheroic-unofficial/core";
-import { registerMainLiftTools } from "@trainheroic-unofficial/core";
-import { registerMessagingTools } from "@trainheroic-unofficial/core";
-import { registerReadTools } from "@trainheroic-unofficial/core";
-import { registerTeamTools } from "@trainheroic-unofficial/core";
-import { SERVER_INSTRUCTIONS } from "@trainheroic-unofficial/core";
-import { registerWorkoutTools } from "@trainheroic-unofficial/core";
+import { registerCoachTools, SERVER_INSTRUCTIONS } from "@trainheroic-unofficial/core";
 import { ExerciseLibrary, TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
 import pkg from "../package.json" with { type: "json" };
@@ -37,14 +29,7 @@ function main(): void {
       { name: "trainheroic-local", version: pkg.version },
       { instructions: SERVER_INSTRUCTIONS },
     );
-    registerReadTools(server, ctx);
-    registerMainLiftTools(server, ctx);
-    registerAthleteTools(server, ctx);
-    registerTeamTools(server, ctx);
-    registerAnalyticsTools(server, ctx);
-    registerExerciseTools(server, ctx);
-    registerWorkoutTools(server, ctx);
-    registerMessagingTools(server, ctx);
+    registerCoachTools(server, ctx);
     return server;
   });
 }

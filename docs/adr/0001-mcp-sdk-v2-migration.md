@@ -33,3 +33,6 @@ v1, and pushed `elicitInput` inside `confirmGate`.
 - Clients that relied solely on pushed elicitation without `confirm: true` need
   MRTR-capable clients or must pass `confirm: true`.
 - Application state (D1 warehouse, OAuth grant props) is unchanged.
+- Follow-up cleanup (PR review): `McpVariant` instead of boolean surface flags;
+  ALS-backed Env for module-level handlers; `registerCoachTools` in `core`;
+  `confirmGate` returns `ToolHandlerResult | undefined`; no isolate-global recent-call map.

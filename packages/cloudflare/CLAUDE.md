@@ -21,11 +21,11 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   enables Client ID Metadata Documents (CIMD); Dynamic Client Registration (`/register`) is
   kept for the deprecation window. `resourceMetadata.resource` is pinned to the canonical
   hosted URL (`https://mcp.trainheroic-unofficial.com/mcp`).
-- `src/mcp.ts`: the MCP SDK v2 server factories. `createTrainHeroicServer` builds a fresh
-  `McpServer` per request (credentials from the OAuth grant via `getMcpAuthContext`);
-  `mcpApiHandler` wraps it in `createMcpHandler` for one path variant. Surfaces are selected
-  by the route — full (athlete + coach, role-aware), coach-only, or athlete-only. There are
-  no MCP Durable Objects (see `docs/adr/0001-mcp-sdk-v2-migration.md`, issue #73).
+- `src/mcp.ts`: MCP SDK v2 server factories. One module-level `createMcpHandler` per
+  `McpVariant` (`full` | `coach` | `athlete`); Env is supplied per request via
+  `AsyncLocalStorage`. Credentials come from the OAuth grant via `getMcpAuthContext`.
+  Coach tools register through `registerCoachTools` from `core`. No MCP Durable Objects
+  (see `docs/adr/0001-mcp-sdk-v2-migration.md`, issue #73).
 - `src/auth/`: the `/authorize` login flow, the login page, and the crypto helpers.
 - `src/store/`: the per-tenant D1 layer. `ExerciseStore` implements the SDK's `ExerciseIndex`
   interface (the hosted counterpart to the in-memory `ExerciseLibrary`); the programming and
@@ -38,20 +38,14 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
 - `src/tools/feedback.ts`: the `report_feedback` tool — a cross-cutting bug/feedback reporter
   registered on every variant (tagged surface `system`). It routes the report to Sentry's user
   feedback channel (`Sentry.captureFeedback`) when a DSN is set, and falls back to a structured
-  `console.log` otherwise. Hosted-only because it leans on the Worker's Sentry setup and the
-  isolate-local recent-call ring buffer from `tool-metrics.ts`. The report inlines the user's
-  message plus non-PII context (correlation id `user:<thUserId>`, role, version/release, the
-  last few tool calls) so it reads on its own; the reporter's email rides along as the
-  feedback contact.
+  `console.log` otherwise. Hosted-only because it leans on the Worker's Sentry setup. The report
+  inlines the user's message plus non-PII context (correlation id `user:<thUserId>`, role,
+  version/release); the reporter's email rides along as the feedback contact.
 - `src/tool-metrics.ts`: patches the `registerTool` seam (once, while building the server) so
   every tool call emits aggregate Sentry metrics (`mcp.tool.call`, `mcp.tool.duration_ms`,
-  tagged by tool + surface + ok/error) and runs inside its own `mcp.tool/<name>` span (a named,
-  timed row in the trace waterfall, tagged with tool, surface, ok/error status, and
-  `user:<thUserId>`; errors marked red). It also stamps the `mcp.session` tag on the scope and
-  keeps a small isolate-local ring buffer of recent calls (tool, surface, ok/error, duration —
-  no args/results) keyed by TrainHeroic user id, which `feedback.ts` reads. Best-effort within
-  a warm isolate (not durable across recycles). Lives here, not in `core`, so the shared tool
-  layer stays Sentry-agnostic.
+  tagged by tool + surface + ok/error) and runs inside its own `mcp.tool/<name>` span (tagged
+  with tool, surface, ok/error, and `user:<thUserId>`). Lives here, not in `core`, so the shared
+  tool layer stays Sentry-agnostic.
 - `src/sentry.ts`: the shared Sentry config (`sentryOptions(env)`) used by `withSentry` (the
   handler in `index.ts`). Sends the error + user email, aggregate metrics, and traces
   (`SENTRY_TRACES_SAMPLE_RATE` var, default 1). Without MCP protocol sessions, traces and

@@ -477,12 +477,12 @@ function registerSessionTools(server: McpServer, ctx: AthleteContext): void {
     ({ programWorkoutId, date, confirm }, extra) =>
       attempt(async () => {
         const id = toId(programWorkoutId);
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Permanently remove personal session ${id} on ${date}? This deletes the session and anything logged in it.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         // removePersonalWorkout re-reads the day and refuses a coach-scheduled workout (the guard
         // lives at the delete itself); attempt turns its throw into a self-correcting error result.
         await removePersonalWorkout(ctx.client, { programWorkoutId: id, date });
@@ -534,12 +534,12 @@ function registerLogTool(server: McpServer, ctx: AthleteContext): void {
     },
     ({ date, exercises, confirm }, extra) =>
       attempt(async () => {
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Log a session of ${exercises.length} exercise(s) on ${date}? This writes to your coach-visible training log.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         const res = await logAdHocSession(ctx.client, {
           date,
           exercises: mapSessionExercises(exercises),
@@ -581,12 +581,12 @@ function registerLogTool(server: McpServer, ctx: AthleteContext): void {
     },
     ({ date, savedWorkoutSetId, results, confirm }, extra) =>
       attempt(async () => {
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Log results to saved workout set ${toId(savedWorkoutSetId)} on ${date}? This writes to your coach-visible training log.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         return jsonResult(
           await logAthleteSet(ctx.client, {
             date,
@@ -626,12 +626,12 @@ function registerSwapTool(server: McpServer, ctx: AthleteContext): void {
       attempt(async () => {
         const sweId = toId(savedWorkoutSetExerciseId);
         const exId = toId(exerciseId);
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Swap the exercise in your saved workout slot ${sweId} to exercise ${exId}? This changes what that slot is prescribed (your copy only).`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         return jsonResult(
           await swapAthleteExercise(ctx.client, {
             savedWorkoutSetExerciseId: sweId,

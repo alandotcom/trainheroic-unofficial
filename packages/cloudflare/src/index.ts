@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/cloudflare";
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { authHandler } from "./auth/handler";
-import { ATHLETE_SURFACES, COACH_SURFACES, FULL_SURFACES, mcpApiHandler } from "./mcp";
+import { athleteMcpHandler, coachMcpHandler, fullMcpHandler } from "./mcp";
 import { sentryOptions, tagMcpUser } from "./sentry";
 
 const CANONICAL_MCP_RESOURCE = "https://mcp.trainheroic-unofficial.com/mcp";
@@ -9,13 +9,10 @@ const CANONICAL_MCP_RESOURCE = "https://mcp.trainheroic-unofficial.com/mcp";
 const provider = new OAuthProvider({
   // Most specific routes first: `apiHandlers` is matched by prefix in insertion order, so
   // `/mcp/coach` and `/mcp/athlete` must precede `/mcp` or they'd be swallowed by it.
-  //   /mcp         → full role-aware surface (production)
-  //   /mcp/coach   → coaching tools only
-  //   /mcp/athlete → athlete training tools only
   apiHandlers: {
-    "/mcp/coach": mcpApiHandler("/mcp/coach", COACH_SURFACES),
-    "/mcp/athlete": mcpApiHandler("/mcp/athlete", ATHLETE_SURFACES),
-    "/mcp": mcpApiHandler("/mcp", FULL_SURFACES),
+    "/mcp/coach": coachMcpHandler,
+    "/mcp/athlete": athleteMcpHandler,
+    "/mcp": fullMcpHandler,
   },
   defaultHandler: authHandler,
   authorizeEndpoint: "/authorize",
@@ -40,7 +37,7 @@ export function isLoginAttempt(request: Request, pathname: string): boolean {
   return pathname === "/authorize" && request.method === "POST";
 }
 
-// Best-effort, per-colo edge rate limiting before any auth or Durable Object work. Keyed by
+// Best-effort, per-colo edge rate limiting before any auth or MCP work. Keyed by
 // the only trustworthy client IP behind Cloudflare (CF-Connecting-IP; never X-Forwarded-For).
 async function isRateLimited(request: Request, env: Env): Promise<boolean> {
   const pathname = new URL(request.url).pathname;
@@ -60,16 +57,12 @@ function tooManyRequests(): Response {
 const handler = {
   fetch: async (request: Request, env: Env, ctx: ExecutionContext): Promise<Response> => {
     if (await isRateLimited(request, env)) return tooManyRequests();
-    // When a modern client still sends a legacy session header, tag for log correlation only;
-    // protocol sessions are gone on the createMcpHandler path (ADR 0001).
+    // Legacy clients may still send mcp-session-id; tag for log correlation only.
     const sessionId = request.headers.get("mcp-session-id");
     if (sessionId) tagMcpUser(`legacy-session:${sessionId}`);
     return provider.fetch(request, env, ctx);
   },
   scheduled: async (_controller: ScheduledController, env: Env): Promise<void> => {
-    // KV hygiene: drop expired/orphaned grants, tokens, and client registrations. Log the
-    // result so the unattended job is observable, and rethrow on failure so a stuck purge
-    // shows as a failed cron invocation rather than silent KV growth.
     try {
       const result = await provider.purgeExpiredData(env, { batchSize: 100 });
       console.log("oauth purge complete", result);
@@ -80,7 +73,4 @@ const handler = {
   },
 } satisfies ExportedHandler<Env>;
 
-// Report errors from the top-level fetch and scheduled handlers (rate limiting, the OAuth
-// flow, the cron purge). The user email is not known at this layer (it lives encrypted in
-// the OAuth grant), so these events carry the error without it.
 export default Sentry.withSentry(sentryOptions, handler);

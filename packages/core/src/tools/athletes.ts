@@ -71,12 +71,12 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
         if (list.length === 0) return errorResult("Provide at least one email address to invite.");
         const id = toId(teamId);
 
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Invite ${list.join(", ")} to team ${id}? This emails them a real TrainHeroic invitation.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
 
         const res = await inviteAthletes(
           ctx.client,
@@ -100,12 +100,12 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
     ({ athleteIds, confirm }, extra) =>
       attempt(async () => {
         const ids = athleteIds.map(toId);
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Archive athlete(s) ${ids.join(", ")}? They leave the active roster (data is kept and restorable).`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         return apiCall(ctx, "PUT", "/v5/athletes/archive", { body: { athleteIds: ids } });
       }),
   );
@@ -225,12 +225,12 @@ function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
     ({ athleteId, date, savedWorkoutSetId, results, confirm }, extra) =>
       attempt(async () => {
         const aId = toId(athleteId);
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Log results to athlete ${aId}'s saved workout set ${toId(savedWorkoutSetId)} on ${date}? This writes to their coach-visible training log.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         return jsonResult(
           await logForAthlete(ctx.client, {
             athleteId: aId,
@@ -261,12 +261,12 @@ function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
     ({ athleteId, date, exercises, confirm }, extra) =>
       attempt(async () => {
         const aId = toId(athleteId);
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Log a session of ${exercises.length} exercise(s) for athlete ${aId} on ${date}? This writes to their coach-visible training log.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         return jsonResult(
           await logSessionForAthlete(ctx.client, {
             athleteId: aId,
@@ -304,12 +304,12 @@ function registerAthleteSwapTool(server: McpServer, ctx: ToolContext): void {
       attempt(async () => {
         const sweId = toId(savedWorkoutSetExerciseId);
         const exId = toId(exerciseId);
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Swap the exercise in saved workout slot ${sweId} to exercise ${exId}? This changes what this athlete is prescribed (their copy only).`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         return jsonResult(
           await swapAthleteExercise(ctx.client, {
             savedWorkoutSetExerciseId: sweId,
@@ -350,12 +350,12 @@ function registerAthletePrescribeTool(server: McpServer, ctx: ToolContext): void
     ({ athleteId, date, savedWorkoutSetId, results, confirm }, extra) =>
       attempt(async () => {
         const aId = toId(athleteId);
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Set prescribed values on athlete ${aId}'s saved workout set ${toId(savedWorkoutSetId)} on ${date}? This changes what this athlete is prescribed (their copy only); it does not mark the set done.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         return jsonResult(
           await prescribeForAthlete(ctx.client, {
             athleteId: aId,

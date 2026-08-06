@@ -89,12 +89,12 @@ function registerWrites(server: McpServer, ctx: ToolContext): void {
     ({ streamId, text, replyTo, confirm }, extra) =>
       attempt(async () => {
         const id = toId(streamId);
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Send this message to stream ${id}? It is athlete-facing and immediate.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         const comment = await sendComment(
           ctx.client,
           id,
@@ -115,12 +115,12 @@ function registerWrites(server: McpServer, ctx: ToolContext): void {
     },
     ({ streamId, commentId, confirm }, extra) =>
       attempt(async () => {
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Delete comment ${toId(commentId)} from stream ${toId(streamId)}? Acts on the live account.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         return jsonResult({
           deleted: true,
           response: await deleteComment(ctx.client, toId(streamId), toId(commentId)),

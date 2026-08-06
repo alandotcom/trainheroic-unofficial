@@ -91,12 +91,12 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
     },
     ({ programId, date, pwId, confirm }, extra) =>
       attempt(async () => {
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Publish session ${pwId} on ${date}? This is athlete-facing and immediate.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         await publishSession(ctx.client, pwId);
         return jsonResult({
           published: pwId,
@@ -120,12 +120,12 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
     },
     ({ programId, pwId, confirm }, extra) =>
       attempt(async () => {
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Delete session ${pwId}? This removes it from the live calendar and is hard to undo.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         await removeSession(ctx.client, programId, pwId);
         return jsonResult({ removed: pwId });
       }),
@@ -143,12 +143,12 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
     },
     ({ pwId, confirm }, extra) =>
       attempt(async () => {
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Unpublish session ${pwId}? Athletes will no longer see it.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         return apiCall(ctx, "POST", `/2.0/coach/calendar/programWorkout/unPublish/${pwId}`);
       }),
   );

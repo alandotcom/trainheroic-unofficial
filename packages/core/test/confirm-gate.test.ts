@@ -37,8 +37,6 @@ function mcpCtx(inputResponses?: Record<string, unknown>): ServerContext {
   return { mcpReq: { inputResponses } } as unknown as ServerContext;
 }
 
-// Every gated coach tool, with the minimal args that reach the confirmGate call. The gate is
-// the first network-touching step in each handler, so a blocked call never reaches the API.
 const GATED: Array<{ reg: Register; name: string; args: Record<string, unknown> }> = [
   { reg: registerAthleteTools, name: "athlete_invite", args: { teamId: 1, emails: ["a@b.com"] } },
   { reg: registerAthleteTools, name: "athlete_archive", args: { athleteIds: [1] } },

@@ -1,5 +1,8 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 
+/** TrainHeroic account role carried in the OAuth grant props. */
+export type AccountRole = "coach" | "athlete";
+
 /**
  * Per-grant data attached at authorization time. Stored end-to-end encrypted by
  * workers-oauth-provider (the issued OAuth token is the key material), so it is the
@@ -10,9 +13,14 @@ export type Props = {
   thUserId: number;
   email: string;
   password: string;
-  role: string;
+  role: AccountRole;
   scope: string;
 };
+
+/** Narrow a TrainHeroic login role string to the two roles this server cares about. */
+export function toAccountRole(role: string): AccountRole {
+  return role === "coach" ? "coach" : "athlete";
+}
 
 declare global {
   // Secrets/vars from .dev.vars (and `wrangler secret put`) that wrangler types does

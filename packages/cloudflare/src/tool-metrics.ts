@@ -9,33 +9,9 @@ import { tagMcpUser } from "./sentry";
  */
 export type ToolSurface = "athlete" | "coach" | "system";
 
-/** One entry in the recent-calls ring buffer: what ran, on which surface, and how it ended. */
-export interface RecentToolCall {
-  tool: string;
-  surface: ToolSurface;
-  status: "ok" | "error";
-  ms: number;
-}
-
-/** How many recent tool calls to retain per user for bug-report context. */
-const MAX_RECENT_CALLS = 20;
-
 /**
- * Isolate-local recent-call buffers keyed by TrainHeroic user id. Protocol sessions are gone on
- * the createMcpHandler path, so this is best-effort within a warm isolate (not durable across
- * isolate recycles). Holds only non-PII fields — never arguments or results.
- */
-const recentByUser = new Map<number, RecentToolCall[]>();
-
-/** Snapshot of recent tool calls for a user (oldest first), for `report_feedback`. */
-export function recentCallsForUser(thUserId: number): readonly RecentToolCall[] {
-  return recentByUser.get(thUserId) ?? [];
-}
-
-/**
- * A mutable handle returned by {@link instrumentToolMetrics}. Set `.surface` to the surface
- * currently registering, before each `registerXxxSurface` call; every tool registered while it
- * holds that value is tagged with it.
+ * A mutable handle returned by {@link instrumentToolMetrics}. Set `.surface` before each
+ * registration block; every tool registered while it holds that value is tagged with it.
  */
 export interface ToolInstrumentation {
   surface: ToolSurface;
@@ -44,19 +20,15 @@ export interface ToolInstrumentation {
 /**
  * Wrap every tool registered on `server` with aggregate Sentry metrics and per-call spans.
  * Correlation uses `user:<thUserId>` (see sentry.ts). Lives here so `core` stays Sentry-agnostic.
+ *
+ * Recent-call history for feedback is intentionally not retained: protocol sessions are gone,
+ * and Sentry tool spans already carry the same non-PII tags for a user's activity.
  */
 export function instrumentToolMetrics(
   server: McpServer,
   correlationId: string,
-  thUserId: number,
 ): ToolInstrumentation {
   const state: ToolInstrumentation = { surface: "athlete" };
-  const record = (call: RecentToolCall): void => {
-    const buf = recentByUser.get(thUserId) ?? [];
-    buf.push(call);
-    if (buf.length > MAX_RECENT_CALLS) buf.shift();
-    recentByUser.set(thUserId, buf);
-  };
   const original = server.registerTool.bind(server) as (...args: unknown[]) => unknown;
   const patched = (...args: unknown[]): unknown => {
     const name = typeof args[0] === "string" ? args[0] : "unknown";
@@ -68,7 +40,6 @@ export function instrumentToolMetrics(
         name,
         surface,
         correlationId,
-        record,
         handler as (...handlerArgs: unknown[]) => unknown,
       );
     }
@@ -93,7 +64,6 @@ function wrapHandler(
   name: string,
   surface: ToolSurface,
   correlationId: string,
-  record: (call: RecentToolCall) => void,
   handler: (...handlerArgs: unknown[]) => unknown,
 ): (...handlerArgs: unknown[]) => unknown {
   return (...handlerArgs: unknown[]): unknown => {
@@ -107,7 +77,6 @@ function wrapHandler(
         unit: "millisecond",
         attributes: { tool: name, surface },
       });
-      record({ tool: name, surface, status, ms });
     };
 
     return Sentry.startSpan(

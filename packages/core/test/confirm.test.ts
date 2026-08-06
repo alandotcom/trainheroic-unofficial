@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type {
-  CallToolResult,
-  InputRequiredResult,
-  ServerContext,
-} from "@modelcontextprotocol/server";
+import type { CallToolResult, ServerContext } from "@modelcontextprotocol/server";
 import { isInputRequiredResult } from "@modelcontextprotocol/server";
-import { confirmGate } from "../src/confirm";
+import { confirmGate, NOT_CONFIRMED } from "../src/confirm";
 
 function fakeCtx(inputResponses?: Record<string, unknown>): ServerContext {
   return {
@@ -16,53 +12,51 @@ function fakeCtx(inputResponses?: Record<string, unknown>): ServerContext {
 }
 
 describe("confirmGate", () => {
-  it("returns confirmed on an explicit confirm flag without eliciting", () => {
-    const gate = confirmGate(fakeCtx(), "msg", true);
-    expect(gate.status).toBe("confirmed");
+  it("returns undefined on an explicit confirm flag", () => {
+    expect(confirmGate(fakeCtx(), "msg", true)).toBeUndefined();
   });
 
-  it("returns needs_input on first call without confirm", () => {
-    const gate = confirmGate(fakeCtx(), "Delete this?", undefined);
-    expect(gate.status).toBe("needs_input");
-    if (gate.status !== "needs_input") return;
-    expect(isInputRequiredResult(gate.result)).toBe(true);
-    const result = gate.result as InputRequiredResult;
-    expect(result.inputRequests?.confirm).toBeDefined();
+  it("returns input_required on first call without confirm", () => {
+    const blocked = confirmGate(fakeCtx(), "Delete this?", undefined);
+    expect(blocked).toBeDefined();
+    expect(isInputRequiredResult(blocked)).toBe(true);
   });
 
-  it("returns confirmed when elicitation was accepted with confirm:true", () => {
-    const gate = confirmGate(
-      fakeCtx({
-        confirm: { action: "accept", content: { confirm: true } },
-      }),
-      "msg",
-      undefined,
-    );
-    expect(gate.status).toBe("confirmed");
+  it("returns undefined when elicitation was accepted with confirm:true", () => {
+    expect(
+      confirmGate(
+        fakeCtx({
+          confirm: { action: "accept", content: { confirm: true } },
+        }),
+        "msg",
+        undefined,
+      ),
+    ).toBeUndefined();
   });
 
-  it("returns denied when elicitation was declined", () => {
-    const gate = confirmGate(
+  it("returns an error result when elicitation was declined", () => {
+    const blocked = confirmGate(
       fakeCtx({
         confirm: { action: "decline" },
       }),
       "msg",
       undefined,
     );
-    expect(gate.status).toBe("denied");
-    if (gate.status !== "denied") return;
-    const result = gate.result as CallToolResult;
-    expect(result.isError).toBe(true);
+    expect((blocked as CallToolResult).isError).toBe(true);
+    expect((blocked as CallToolResult).content?.[0]).toMatchObject({
+      type: "text",
+      text: NOT_CONFIRMED,
+    });
   });
 
-  it("returns denied when accepted but confirm is not true", () => {
-    const gate = confirmGate(
+  it("returns an error result when accepted but confirm is not true", () => {
+    const blocked = confirmGate(
       fakeCtx({
         confirm: { action: "accept", content: { confirm: false } },
       }),
       "msg",
       undefined,
     );
-    expect(gate.status).toBe("denied");
+    expect((blocked as CallToolResult).isError).toBe(true);
   });
 });

@@ -52,12 +52,12 @@ export function registerTeamTools(server: McpServer, ctx: ToolContext): void {
     ({ teamId, confirm }, extra) =>
       attempt(async () => {
         const id = toId(teamId);
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Delete team ${id}? This removes the team and its calendar from the live account.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         return apiCall(ctx, "DELETE", `/v5/teams/${id}`);
       }),
   );
@@ -89,12 +89,12 @@ export function registerTeamTools(server: McpServer, ctx: ToolContext): void {
     ({ codeId, confirm }, extra) =>
       attempt(async () => {
         const id = toId(codeId);
-        const gate = confirmGate(
+        const blocked = confirmGate(
           extra,
           `Delete team join code ${id}? Athletes can no longer use it to join.`,
           confirm,
         );
-        if (gate.status !== "confirmed") return gate.result;
+        if (blocked) return blocked;
         return apiCall(ctx, "DELETE", `/v5/teamCodes/${id}`);
       }),
   );
