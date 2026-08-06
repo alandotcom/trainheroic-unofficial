@@ -31,9 +31,11 @@ export a `registerXxxTools(server, ctx)` function.
 - Annotate honestly with the `READ` / `SYNC` / `DESTRUCTIVE` presets. These are advisory
   hints to the client and are not the enforcement mechanism.
 - Gate every destructive or athlete-facing action with `confirmGate` from `src/confirm.ts`.
-  It prefers MCP elicitation, accepts an explicit `confirm: true` argument when the client
-  cannot elicit, and fails closed. The `destructiveHint` annotation does not enforce
-  anything on its own.
+  It returns `undefined` to proceed, or a `ToolHandlerResult` to return (`input_required` /
+  MRTR elicitation, or an in-band denial). Prefer `const blocked = confirmGate(...); if
+(blocked) return blocked;`. Clients that already pass `confirm: true` skip elicitation.
+- Coach servers should call `registerCoachTools(server, ctx)` rather than enumerating the
+  individual coach `registerXxxTools` functions.
 
 When you add a tool, register it in the matching module (or a new module wired into
 `index.ts`), and both servers pick it up the next time they call its register function.

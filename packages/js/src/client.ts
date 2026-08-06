@@ -34,22 +34,44 @@ export type ClientResult<T = unknown> = {
   data: T;
 };
 
+export type ClientOptions = {
+  /**
+   * Called with each newly acquired session token — the cold login and the post-401 re-login
+   * both fire it. Callers that outlive the client (the hosted Worker's per-request factory, the
+   * CLI's on-disk cache) use this to hold the token, so the next client can be seeded with it
+   * instead of logging in again.
+   */
+  onSession?: (sessionId: string) => void;
+};
+
 /**
- * Authenticated TrainHeroic API client. Holds the coach credentials (from the grant's
- * encrypted props) and a lazily-acquired session token cached in memory for the life
- * of the Durable Object instance. On a 401/403 it re-logs in once and retries, since
+ * Authenticated TrainHeroic API client. Holds the credentials (on the hosted Worker, from the
+ * grant's encrypted props) and a lazily-acquired session token cached in memory for the life of
+ * *this client instance* — nothing longer. On a 401/403 it re-logs in once and retries, since
  * TrainHeroic has no refresh token and sessions expire after ~1-2h.
+ *
+ * Anything that wants a session to outlive one client owns that itself: pass a previously
+ * acquired token as `sessionId` and keep the new one via `options.onSession`. That matters
+ * wherever clients are short-lived — the hosted Worker builds one per HTTP request, and each CLI
+ * invocation is a fresh process — because otherwise every operation replays the password.
  */
 export class TrainHeroicClient {
   readonly #email: string;
   readonly #password: string;
+  readonly #onSession: ((sessionId: string) => void) | undefined;
   #sessionId: string | null;
   #loginInFlight: Promise<string> | null = null;
 
-  constructor(email: string, password: string, sessionId: string | null = null) {
+  constructor(
+    email: string,
+    password: string,
+    sessionId: string | null = null,
+    options: ClientOptions = {},
+  ) {
     this.#email = email;
     this.#password = password;
     this.#sessionId = sessionId;
+    this.#onSession = options.onSession;
   }
 
   get sessionId(): string | null {
@@ -72,6 +94,12 @@ export class TrainHeroicClient {
     const session = await loginTrainHeroic(this.#email, this.#password);
     if (!session) throw new TrainHeroicAuthError("TrainHeroic login failed");
     this.#sessionId = session.sessionId;
+    // Never let a caller's cache bookkeeping break the request that acquired the token.
+    try {
+      this.#onSession?.(this.#sessionId);
+    } catch {
+      /* ignore */
+    }
     return this.#sessionId;
   }
 

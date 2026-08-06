@@ -1,16 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { instrumentToolMetrics } from "../src/tool-metrics";
-import type { RecentCallStore, RecentToolCall } from "../src/tool-metrics";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/server";
+import { inputRequired } from "@modelcontextprotocol/server";
+import { instrumentToolMetrics, toolOutcome } from "../src/tool-metrics";
 
 type Handler = (args: unknown, extra: unknown) => unknown;
 
-/**
- * A server whose `registerTool` stores the handler the instrumentation hands it — i.e. the wrapped
- * handler — so a test can invoke it and observe the side effects of the wrapper (the ring buffer).
- * Sentry is left uninitialized here, so its spans/metrics are no-ops; only the buffer is exercised.
- */
 function recordingServer(): { server: McpServer; handlers: Map<string, Handler> } {
   const handlers = new Map<string, Handler>();
   const server = {
@@ -27,144 +22,73 @@ const errResult = (): CallToolResult => ({
   isError: true,
   content: [{ type: "text", text: "bad" }],
 });
-
-describe("instrumentToolMetrics recent-call buffer", () => {
-  it("records a completed call with its registration-time surface", () => {
-    const { server, handlers } = recordingServer();
-    const inst = instrumentToolMetrics(server, "sess-1");
-    inst.surface = "athlete";
-    server.registerTool("foo", {}, () => okResult());
-
-    handlers.get("foo")?.({}, {});
-
-    expect(inst.recentCalls).toEqual([
-      { tool: "foo", surface: "athlete", status: "ok", ms: expect.any(Number) },
-    ]);
+/** What `confirmGate` returns on the first call of any gated tool. */
+const elicitation = () =>
+  inputRequired({
+    inputRequests: {
+      confirm: inputRequired.elicit({
+        message: "Confirm?",
+        requestedSchema: {
+          type: "object",
+          properties: { confirm: { type: "boolean" } },
+          required: ["confirm"],
+        },
+      }),
+    },
   });
 
-  it("marks an in-band { isError: true } result as an error", () => {
+describe("instrumentToolMetrics", () => {
+  it("wraps registered tools without throwing on ok results", () => {
     const { server, handlers } = recordingServer();
-    const inst = instrumentToolMetrics(server, "sess-2");
-    inst.surface = "coach";
-    server.registerTool("bar", {}, () => errResult());
-
-    handlers.get("bar")?.({}, {});
-
-    expect(inst.recentCalls.at(-1)).toMatchObject({
-      tool: "bar",
-      surface: "coach",
-      status: "error",
+    const metrics = instrumentToolMetrics(server, "user:1");
+    metrics.run("athlete", () => {
+      server.registerTool("foo", {}, () => okResult());
     });
+    expect(handlers.get("foo")?.({}, {})).toEqual(okResult());
   });
 
-  it("records a thrown handler as an error and still rethrows", () => {
+  it("rethrows from a throwing handler", () => {
     const { server, handlers } = recordingServer();
-    const inst = instrumentToolMetrics(server, "sess-3");
-    inst.surface = "system";
-    server.registerTool("boom", {}, () => {
-      throw new Error("nope");
+    const metrics = instrumentToolMetrics(server, "user:2");
+    metrics.run("system", () => {
+      server.registerTool("boom", {}, () => {
+        throw new Error("nope");
+      });
     });
-
     expect(() => handlers.get("boom")?.({}, {})).toThrow("nope");
-    expect(inst.recentCalls.at(-1)).toMatchObject({
-      tool: "boom",
-      surface: "system",
-      status: "error",
-    });
   });
 
-  it("caps the buffer, dropping the oldest entries", () => {
+  it("accepts in-band error results", () => {
     const { server, handlers } = recordingServer();
-    const inst = instrumentToolMetrics(server, "sess-4");
-    inst.surface = "athlete";
-    server.registerTool("t", {}, () => okResult());
-    const handler = handlers.get("t");
+    const metrics = instrumentToolMetrics(server, "user:3");
+    metrics.run("coach", () => {
+      server.registerTool("bar", {}, () => errResult());
+    });
+    expect(handlers.get("bar")?.({}, {})).toEqual(errResult());
+  });
 
-    for (let i = 0; i < 25; i++) handler?.({}, {});
-
-    // MAX_RECENT_CALLS is 20; the buffer keeps the most recent 20, oldest first.
-    expect(inst.recentCalls).toHaveLength(20);
-    expect(inst.recentCalls.every((c) => c.tool === "t")).toBe(true);
+  it("passes an MRTR elicitation round through unchanged", () => {
+    const { server, handlers } = recordingServer();
+    const metrics = instrumentToolMetrics(server, "user:4");
+    metrics.run("coach", () => {
+      server.registerTool("gated", {}, () => elicitation());
+    });
+    expect(toolOutcome(handlers.get("gated")?.({}, {}))).toBe("input_required");
   });
 });
 
-/** An in-memory RecentCallStore that captures every write-through, standing in for DO storage. */
-function fakeStore(seed: readonly RecentToolCall[] = []): {
-  store: RecentCallStore;
-  saved: RecentToolCall[][];
-} {
-  const saved: RecentToolCall[][] = [];
-  const store: RecentCallStore = {
-    load: () => Promise.resolve(seed),
-    // Snapshot each save; the wrapper passes its live array, so copy to freeze the moment.
-    save: (calls) => {
-      saved.push([...calls]);
-    },
-  };
-  return { store, saved };
-}
-
-describe("instrumentToolMetrics durable buffer", () => {
-  it("hydrate() seeds the buffer from the store, oldest first", async () => {
-    const seed: RecentToolCall[] = [
-      { tool: "athlete_workouts", surface: "athlete", status: "ok", ms: 100 },
-      { tool: "athlete_log_set", surface: "athlete", status: "error", ms: 50 },
-    ];
-    const { server, handlers } = recordingServer();
-    const { store } = fakeStore(seed);
-    const inst = instrumentToolMetrics(server, "sess-h", store);
-    await inst.hydrate();
-
-    // A later call in this (cold-started) instance appends after the rehydrated trail.
-    inst.surface = "athlete";
-    server.registerTool("athlete_prefs", {}, () => okResult());
-    handlers.get("athlete_prefs")?.({}, {});
-
-    expect(inst.recentCalls.map((c) => c.tool)).toEqual([
-      "athlete_workouts",
-      "athlete_log_set",
-      "athlete_prefs",
-    ]);
+describe("toolOutcome", () => {
+  it("classifies a plain result as ok", () => {
+    expect(toolOutcome(okResult())).toBe("ok");
   });
 
-  it("hydrate() keeps only the most recent entries when the seed exceeds the cap", async () => {
-    const seed: RecentToolCall[] = Array.from({ length: 25 }, (_, i) => ({
-      tool: `t${i}`,
-      surface: "athlete" as const,
-      status: "ok" as const,
-      ms: i,
-    }));
-    const { server } = recordingServer();
-    const inst = instrumentToolMetrics(server, "sess-cap", fakeStore(seed).store);
-    await inst.hydrate();
-
-    expect(inst.recentCalls).toHaveLength(20);
-    // The oldest five (t0..t4) are dropped; t5 is now the head.
-    expect(inst.recentCalls[0]?.tool).toBe("t5");
-    expect(inst.recentCalls.at(-1)?.tool).toBe("t24");
+  it("classifies the in-band isError convention as an error", () => {
+    expect(toolOutcome(errResult())).toBe("error");
   });
 
-  it("writes the buffer through to the store on every recorded call", () => {
-    const { server, handlers } = recordingServer();
-    const { store, saved } = fakeStore();
-    const inst = instrumentToolMetrics(server, "sess-w", store);
-    inst.surface = "coach";
-    server.registerTool("get_team", {}, () => okResult());
-    const handler = handlers.get("get_team");
-
-    handler?.({}, {});
-    handler?.({}, {});
-
-    expect(saved).toHaveLength(2);
-    expect(saved[0]).toHaveLength(1);
-    expect(saved[1]).toHaveLength(2);
-    expect(saved[1]?.at(-1)).toMatchObject({ tool: "get_team", surface: "coach", status: "ok" });
-  });
-
-  it("hydrate() is a no-op without a store", async () => {
-    const { server } = recordingServer();
-    const inst = instrumentToolMetrics(server, "sess-none");
-    await expect(inst.hydrate()).resolves.toBeUndefined();
-    expect(inst.recentCalls).toEqual([]);
+  it("classifies an elicitation round as neither", () => {
+    // Every gated tool returns this on its first call and does the work on the client's retry.
+    // Counting it as a completed call would double each destructive tool's call metric.
+    expect(toolOutcome(elicitation())).toBe("input_required");
   });
 });

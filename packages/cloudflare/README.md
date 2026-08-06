@@ -4,7 +4,7 @@ The hosted, multi-tenant [TrainHeroic](https://www.trainheroic.com) [MCP](https:
 
 **To use the public hosted server**, see the [root README](../../README.md); it connects directly from your MCP client.
 
-**To self-host your own instance**, follow [DEPLOY.md](./DEPLOY.md). You need a Cloudflare account on the Workers Paid plan, which this server requires for [Durable Objects](https://developers.cloudflare.com/durable-objects/) (one per session, holding the MCP agent), D1, and a [cron trigger](https://developers.cloudflare.com/workers/configuration/cron-triggers/) (a scheduled purge job).
+**To self-host your own instance**, follow [DEPLOY.md](./DEPLOY.md). You need a Cloudflare account on the Workers Paid plan, which this server requires for [D1](https://developers.cloudflare.com/d1/) and a [cron trigger](https://developers.cloudflare.com/workers/configuration/cron-triggers/) (a scheduled OAuth KV purge).
 
 ---
 

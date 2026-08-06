@@ -26,7 +26,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "@trainheroic-unofficial/core": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
     "zod": "^4.4.3"

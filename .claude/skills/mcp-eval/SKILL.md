@@ -34,6 +34,7 @@ pnpm eval:mcp                   # MCP surface only (EVAL_SURFACES=mcp)
 pnpm eval:cli                   # CLI surface only
 EVAL_MODEL=haiku pnpm eval      # weaker model — the description-tuning signal
 EVAL_K=1 pnpm eval              # one run per scenario (fast smoke)
+EVAL_CONCURRENCY=10 pnpm eval   # wider than the default 5 runs in flight
 
 # one scenario / one bank query, by vitest -t:
 RUN_EVALS=1 pnpm --filter @trainheroic-unofficial/eval exec vitest run evals/coach-many-programs.eval.ts
@@ -41,7 +42,13 @@ RUN_EVALS=1 pnpm --filter @trainheroic-unofficial/eval exec vitest run evals/coa
 ```
 
 Env knobs: `RUN_EVALS=1` (gate; the `pnpm eval*` scripts set it), `EVAL_SURFACES` (`mcp`|`cli`),
-`EVAL_MODEL` (`sonnet` default | `haiku`), `EVAL_K` (runs per scenario), `EVAL_THRESHOLD`.
+`EVAL_MODEL` (`sonnet` default | `haiku`), `EVAL_EFFORT` (`claude --effort` level, `low` default;
+`off` omits it), `EVAL_CONCURRENCY` (runs in flight at once, default 5), `EVAL_K` (runs per
+scenario), `EVAL_THRESHOLD`.
+
+Runs are parallel: a scenario's K runs fire at once, each against its own fake backend, capped
+suite-wide by `EVAL_CONCURRENCY`. Progress lines interleave, so read the `[eval <scenario>/<surface>]`
+prefix rather than assuming order.
 
 **Two kinds of scenario.** Named failure-mode scenarios (`evals/coach-*.eval.ts`,
 `evals/athlete-*.eval.ts`) target one known way the agent fails with a tailored grader — they are

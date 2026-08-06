@@ -25,7 +25,7 @@ const writeScenarios = bankScenarios({
   today,
 });
 
-describe.skipIf(!gate.enabled)("coach query bank", () => {
+describe.skipIf(!gate.enabled).concurrent("coach query bank", () => {
   for (const scenario of [...readScenarios, ...writeScenarios]) {
     for (const surface of scenarioSurfaces(scenario)) {
       it(`${surface} — ${scenario.name}: ${scenario.query}`, async () => {

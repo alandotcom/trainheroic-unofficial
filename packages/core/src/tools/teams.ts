@@ -1,7 +1,7 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { confirmGate, NOT_CONFIRMED } from "../confirm";
-import { apiCall, attempt, DESTRUCTIVE, errorResult, idParam, toId } from "../context";
+import { confirmGate } from "../confirm";
+import { apiCall, attempt, DESTRUCTIVE, idParam, toId } from "../context";
 import type { ToolContext } from "../context";
 
 // Additive writes (create, rename, add code) are not gated, matching exercise_create.
@@ -52,13 +52,12 @@ export function registerTeamTools(server: McpServer, ctx: ToolContext): void {
     ({ teamId, confirm }, extra) =>
       attempt(async () => {
         const id = toId(teamId);
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const blocked = confirmGate(
+          extra,
           `Delete team ${id}? This removes the team and its calendar from the live account.`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (blocked) return blocked;
         return apiCall(ctx, "DELETE", `/v5/teams/${id}`);
       }),
   );
@@ -90,13 +89,12 @@ export function registerTeamTools(server: McpServer, ctx: ToolContext): void {
     ({ codeId, confirm }, extra) =>
       attempt(async () => {
         const id = toId(codeId);
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const blocked = confirmGate(
+          extra,
           `Delete team join code ${id}? Athletes can no longer use it to join.`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (blocked) return blocked;
         return apiCall(ctx, "DELETE", `/v5/teamCodes/${id}`);
       }),
   );

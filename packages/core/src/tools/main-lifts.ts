@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { fetchAthleteMainLiftPRs, fetchRosterMainLiftPRs } from "@trainheroic-unofficial/js";
 import { type ToolContext, READ, attempt, idParam, jsonResult, toId } from "../context";

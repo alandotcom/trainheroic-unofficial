@@ -9,6 +9,7 @@ import { loginTrainHeroic } from "@trainheroic-unofficial/js";
 import { account } from "@trainheroic-unofficial/db";
 import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import type { Props } from "../types";
+import { toAccountRole } from "../types";
 import { randomToken, safeEqual, signPayload, verifyPayload } from "./crypto";
 import { renderLoginPage } from "./login-page";
 
@@ -161,7 +162,7 @@ app.post("/authorize", async (c) => {
     thUserId: session.thUserId,
     email,
     password,
-    role: session.role,
+    role: toAccountRole(session.role),
     scope: session.scope,
   };
 

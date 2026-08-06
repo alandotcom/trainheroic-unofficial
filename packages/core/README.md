@@ -26,12 +26,12 @@ D1-backed store).
 Install it alongside the MCP SDK and the `js` client (both peers you construct from):
 
 ```bash
-npm install @trainheroic-unofficial/core @trainheroic-unofficial/js @modelcontextprotocol/sdk
+npm install @trainheroic-unofficial/core @trainheroic-unofficial/js @modelcontextprotocol/server@2.0.0
 ```
 
 ```ts
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { TrainHeroicClient, ExerciseLibrary } from "@trainheroic-unofficial/js";
 import {
   registerReadTools,
@@ -46,14 +46,15 @@ const client = new TrainHeroicClient(
   process.env.TRAINHEROIC_PASSWORD!,
 );
 const index = new ExerciseLibrary(client);
-const server = new McpServer({ name: "trainheroic", version: "1.0.0" });
 
-const ctx: ToolContext = { client, index };
-registerReadTools(server, ctx);
-registerExerciseTools(server, ctx);
-registerWorkoutTools(server, ctx);
-// ...register the rest, then connect the server to a transport:
-await server.connect(new StdioServerTransport());
+serveStdio(() => {
+  const server = new McpServer({ name: "trainheroic", version: "1.0.0" });
+  const ctx: ToolContext = { client, index };
+  registerReadTools(server, ctx);
+  registerExerciseTools(server, ctx);
+  registerWorkoutTools(server, ctx);
+  return server;
+});
 ```
 
 Because the context depends on the `ExerciseIndex` interface rather than a concrete store, the
@@ -80,8 +81,9 @@ training tools that the athlete server registers.)
 Tools return their result in-band. A failure comes back as an error result the model can read
 and self-correct from. Reads are annotated read-only. Athlete-facing or
 destructive actions (publish, unpublish, remove, send, delete, archive, team/code delete) pass
-through a confirmation gate. The gate prefers MCP elicitation; when the client cannot elicit,
-it accepts an explicit `confirm: true` argument. It fails closed if neither condition is met.
+through a confirmation gate. The gate prefers MCP multi-round-trip elicitation
+(`input_required`); when the client already confirmed, it accepts an explicit
+`confirm: true` argument. It fails closed if neither condition is met.
 
 The D1-backed warehouse sync tools live in the `cloudflare` package because they depend on its storage.
 

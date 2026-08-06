@@ -97,8 +97,7 @@ Setup:
   install-skill   copy the Claude Code skills to ~/.claude/skills/
 
 Shared:
-  whoami                                                          the logged-in account
-  request <METHOD> <path> [json] [--base coach|apis] [--file f]   raw API call (--base defaults to coach)
+  whoami   the logged-in account
 
 Coach — manage a roster (needs a coach account):
   coach head-coach | athletes | programs | teams | notifications | analytics
@@ -301,27 +300,6 @@ function idList(value: string, label: string): number[] {
 
 function library(client: TrainHeroicClient): ExerciseLibrary {
   return new ExerciseLibrary(client, new JsonFileLibraryCache());
-}
-
-async function cmdRequest(client: TrainHeroicClient, rest: string[]): Promise<void> {
-  const { values, positionals } = parse(rest, {
-    base: { type: "string" },
-    file: { type: "string" },
-  });
-  const method = need(positionals[0], "request <METHOD> <path> [json]").toUpperCase();
-  const path = need(positionals[1], "request <METHOD> <path> [json]");
-  const base = values.base as ApiBase | undefined;
-  if (base !== undefined && base !== "coach" && base !== "apis")
-    fail("--base must be coach or apis.");
-  const opts: { base?: ApiBase; body?: unknown } = {};
-  if (base !== undefined) opts.base = base;
-  if (method !== "GET" && method !== "DELETE") {
-    if (positionals[2] !== undefined || values.file !== undefined || !process.stdin.isTTY) {
-      opts.body = await jsonInput(positionals[2], values.file as string | undefined);
-    }
-  }
-  const res = await client.request(method, path, opts);
-  out({ status: res.status, ok: res.ok, data: res.data });
 }
 
 async function cmdExercise(client: TrainHeroicClient, rest: string[]): Promise<void> {
@@ -1573,8 +1551,6 @@ async function dispatch(client: TrainHeroicClient, group: string, rest: string[]
     // Shared: role-agnostic.
     case "whoami":
       return out(await get(client, "/user/simple"));
-    case "request":
-      return cmdRequest(client, rest);
     // Coaching (roster) commands live under `coach`; the athlete's own training under `athlete`.
     case "coach":
       return cmdCoach(client, rest);

@@ -1,7 +1,10 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, InputRequiredResult } from "@modelcontextprotocol/server";
 import { idArgSchema } from "@trainheroic-unofficial/dto";
 import type { ExerciseIndex } from "@trainheroic-unofficial/js";
 import type { RequestOptions, TrainHeroicClient } from "@trainheroic-unofficial/js";
+
+/** What a tool handler may return: a finished result or an MRTR input round. */
+export type ToolHandlerResult = CallToolResult | InputRequiredResult;
 
 /** A tool argument that accepts a numeric id as a number or a string of digits. */
 export const idParam = idArgSchema;
@@ -31,8 +34,14 @@ export type ToolContext = {
   index: ExerciseIndex;
 };
 
-/** Run a tool body, converting thrown errors into an in-band tool error. */
-export async function attempt(fn: () => Promise<CallToolResult>): Promise<CallToolResult> {
+/**
+ * Run a tool body, converting thrown errors into an in-band tool error. Generic so a caller that
+ * only ever produces a `CallToolResult` keeps that narrower type instead of widening to the
+ * MRTR union — that is what lets `apiCall` delegate here rather than repeat this catch.
+ */
+export async function attempt<T extends ToolHandlerResult>(
+  fn: () => Promise<T>,
+): Promise<T | CallToolResult> {
   try {
     return await fn();
   } catch (err) {

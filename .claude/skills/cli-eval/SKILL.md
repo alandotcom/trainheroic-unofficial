@@ -26,6 +26,7 @@ read mode so a read eval can't commit a write. Run the CLI surface:
 pnpm eval:cli                   # every scenario on the CLI surface (EVAL_SURFACES=cli)
 EVAL_MODEL=haiku pnpm eval:cli  # weaker model — the help/flag-wording signal
 EVAL_K=1 pnpm eval:cli          # fast smoke
+EVAL_CONCURRENCY=10 pnpm eval:cli  # wider than the default 5 runs in flight
 
 # one scenario, CLI surface:
 RUN_EVALS=1 EVAL_SURFACES=cli pnpm --filter @trainheroic-unofficial/eval exec vitest run evals/coach-bank.eval.ts

@@ -10,3 +10,4 @@ export * from "./tools/analytics";
 export * from "./tools/exercises";
 export * from "./tools/workout";
 export * from "./tools/messaging";
+export * from "./tools/coach";

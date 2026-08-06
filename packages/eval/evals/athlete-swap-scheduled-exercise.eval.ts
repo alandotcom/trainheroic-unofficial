@@ -121,7 +121,7 @@ const scenario: Scenario = {
 
 const gate = evalGate();
 
-describe.skipIf(!gate.enabled)(scenario.name, () => {
+describe.skipIf(!gate.enabled).concurrent(scenario.name, () => {
   for (const surface of scenarioSurfaces(scenario)) {
     it(`${surface}: swaps a prescribed exercise in a coach-scheduled workout`, async () => {
       const r = await runScenario(scenario, surface);

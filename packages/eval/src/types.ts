@@ -47,7 +47,8 @@ export type RunTranscript = {
   raw: string[];
 };
 
-export type RunOptions = { model: string; mode: Mode; timeoutMs?: number };
+/** `effort` is the `claude --effort` level; omitted means the flag is not passed at all. */
+export type RunOptions = { model: string; mode: Mode; effort?: string; timeoutMs?: number };
 
 /**
  * A surface driver: given the fake backend URL and a question, run one headless `claude -p` and

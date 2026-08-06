@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { athleteWorkoutRangeArgsSchema, dateString } from "@trainheroic-unofficial/js";
 import type { TrainHeroicClient } from "@trainheroic-unofficial/js";

@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/cloudflare";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { tagMcpSession } from "./sentry";
+import type { McpServer } from "@modelcontextprotocol/server";
+import { isInputRequiredResult } from "@modelcontextprotocol/server";
+import { tagMcpUser } from "./sentry";
 
 /**
  * Which tool set a tool belongs to. A coach session also registers the athlete surface; `system`
@@ -8,186 +9,116 @@ import { tagMcpSession } from "./sentry";
  */
 export type ToolSurface = "athlete" | "coach" | "system";
 
-/** One entry in the recent-calls ring buffer: what ran, on which surface, and how it ended. */
-export interface RecentToolCall {
-  tool: string;
-  surface: ToolSurface;
-  status: "ok" | "error";
-  ms: number;
-}
-
-/** How many recent tool calls to retain per session for bug-report context. */
-const MAX_RECENT_CALLS = 20;
-
 /**
- * A durable sink for the recent-call ring buffer. The buffer must outlive the McpAgent's
- * hibernation / eviction between MCP messages: each cold start re-runs `init()` and rebuilds an
- * empty in-memory buffer, so an un-persisted buffer is almost always empty by the time
- * `report_feedback` runs (it fires in a later message than the calls it should describe). Backing
- * the buffer with DO storage keeps the trail intact across those cold starts.
- *
- * `load` seeds the buffer during `init()`; `save` is a fire-and-forget write-through after each
- * recorded call (the caller keeps the write alive with `ctx.waitUntil`). It holds only the same
- * non-PII fields as the metrics and spans — never arguments or results.
- */
-export interface RecentCallStore {
-  load(): Promise<readonly RecentToolCall[]>;
-  save(calls: readonly RecentToolCall[]): void;
-}
-
-/**
- * A mutable handle returned by {@link instrumentToolMetrics}. Set `.surface` to the surface
- * currently registering, before each `registerXxxSurface` call; every tool registered while it
- * holds that value is tagged with it. Each tool belongs to exactly one surface, so this adds a
- * queryable dimension at zero extra metric cardinality.
- *
- * `recentCalls` is a per-session ring buffer (oldest first, capped at {@link MAX_RECENT_CALLS})
- * of every tool call as it settles, so the feedback tool can attach "what the user was doing" to a
- * bug report without standing up its own tracking. It holds only the same non-PII fields the
- * metrics and spans do (tool name, surface, ok/error, duration), never arguments or results.
- *
- * `hydrate` seeds `recentCalls` from the durable store (if one was supplied). Call it once in
- * `init()` before any tool can run, so the buffer reflects earlier messages of the same session
- * rather than just this cold-started instance.
+ * Handle returned by {@link instrumentToolMetrics}. Use {@link ToolInstrumentation.run} around
+ * each registration block so tools pick up the right surface tag.
  */
 export interface ToolInstrumentation {
-  surface: ToolSurface;
-  readonly recentCalls: RecentToolCall[];
-  hydrate(): Promise<void>;
+  run(surface: ToolSurface, fn: () => void): void;
 }
 
 /**
- * Wrap every tool registered on `server` with two kinds of telemetry:
- *   - Aggregate metrics: `mcp.tool.call` (counter, tagged by `tool`, `surface`, `status`) and
- *     `mcp.tool.duration_ms` (distribution, tagged by `tool`, `surface`).
- *   - Per-call tracing: each call runs inside its own `mcp.tool/<name>` span (op `mcp.tool`), so
- *     it shows up as a named, timed row in the trace waterfall rather than as bare attributes on
- *     the request span. The span carries the tool name, surface, opaque `sessionId`, and an
- *     ok/error `mcp.status`; an errored call (thrown or in-band `{ isError: true }`) is marked
- *     with Sentry's error status so it shows red. The enclosing DO request span and the
- *     per-message isolation scope are also tagged with `mcp.session`, so every trace and error
- *     event from one MCP session shares a key the trace explorer can filter on (a single MCP
- *     session spans many requests/traces — one tied-together waterfall is not possible, so a
- *     shared `mcp.session` dimension is how they are correlated; see agent.ts and index.ts for
- *     the matching tags on the DO init/error scopes and the worker-level request span).
- *     Aggregation stays the metrics' job; per-session drill-down stays the trace's job.
+ * Wrap every tool registered on `server` with aggregate Sentry metrics and per-call spans.
+ * Correlation uses `user:<thUserId>` (see sentry.ts). Lives here so `core` stays Sentry-agnostic.
  *
- * The returned handle's `surface` is read at registration time (synchronously, while a surface's
- * tools register), so the caller flips it around each registration block — see agent.ts.
- *
- * Privacy: the only attributes are the tool name, surface, an ok/error status, and the session id
- * — never the tool arguments or result payloads, which can carry athlete PII. This keeps the
- * Sentry privacy invariant intact (see sentry.ts). No-op when SENTRY_DSN is unset (`startSpan`,
- * `setTag`, and the metrics calls all become no-ops), and the metrics and spans flush on
- * `ctx.waitUntil` via the DO's Sentry instrumentation, like the auth flow.
- *
- * This lives here, not in `core`, so the shared tool layer stays transport- and Sentry-agnostic
- * (the local stdio servers reuse it without pulling in `@sentry/cloudflare`). Patching the single
- * `registerTool` seam covers every surface — coach, athlete, and the D1 sync tools — at once.
- *
- * A tool error is counted when the handler throws OR returns an in-band `{ isError: true }`
- * result (the `attempt`/`errorResult` convention the model self-corrects on). Durations are
- * approximate: Workers advances `Date.now()` only across I/O, which every TrainHeroic-backed
- * tool performs, so the wall-clock spent waiting on the API is captured.
+ * Recent-call history for feedback is intentionally not retained: protocol sessions are gone,
+ * and Sentry tool spans already carry the same non-PII tags for a user's activity.
  */
 export function instrumentToolMetrics(
   server: McpServer,
-  sessionId: string,
-  store?: RecentCallStore,
+  correlationId: string,
 ): ToolInstrumentation {
-  const recentCalls: RecentToolCall[] = [];
-  const hydrate = async (): Promise<void> => {
-    if (!store) return;
-    const persisted = await store.load();
-    if (persisted.length === 0) return;
-    // hydrate() runs in init() before any tool call, so the buffer is normally empty here; keep
-    // any in-flight entries by placing the persisted (older) calls first, then trimming to cap.
-    recentCalls.unshift(...persisted);
-    if (recentCalls.length > MAX_RECENT_CALLS) {
-      recentCalls.splice(0, recentCalls.length - MAX_RECENT_CALLS);
-    }
-  };
-  const state: ToolInstrumentation = { surface: "athlete", recentCalls, hydrate };
-  const record = (call: RecentToolCall): void => {
-    recentCalls.push(call);
-    if (recentCalls.length > MAX_RECENT_CALLS) recentCalls.shift();
-    // Write-through so the trail survives DO hibernation between messages (see RecentCallStore).
-    store?.save(recentCalls);
-  };
+  let surface: ToolSurface = "athlete";
   const original = server.registerTool.bind(server) as (...args: unknown[]) => unknown;
   const patched = (...args: unknown[]): unknown => {
     const name = typeof args[0] === "string" ? args[0] : "unknown";
-    const surface = state.surface;
+    const taggedSurface = surface;
     const lastIndex = args.length - 1;
     const handler = args[lastIndex];
     if (typeof handler === "function") {
       args[lastIndex] = wrapHandler(
         name,
-        surface,
-        sessionId,
-        record,
+        taggedSurface,
+        correlationId,
         handler as (...handlerArgs: unknown[]) => unknown,
       );
     }
     return original(...args);
   };
   (server as unknown as { registerTool: unknown }).registerTool = patched;
-  return state;
+  return {
+    run(next: ToolSurface, fn: () => void): void {
+      const prev = surface;
+      surface = next;
+      try {
+        fn();
+      } finally {
+        surface = prev;
+      }
+    },
+  };
 }
 
-function isErrorResult(result: unknown): boolean {
-  return (
+/** How a settled tool invocation is classified for metrics and span status. */
+export type ToolOutcome = "ok" | "error" | "input_required";
+
+/**
+ * Classify what a tool handler returned.
+ *
+ * `input_required` is its own outcome, not a success: every gated tool now returns an MRTR
+ * elicitation round on its first invocation and does the work on the client's retry, so counting
+ * that round as a completed call would double every destructive tool's `mcp.tool.call` count and
+ * pollute the duration distribution with near-zero samples. An error is either a thrown handler
+ * or the in-band `{ isError: true }` convention the model self-corrects on.
+ */
+export function toolOutcome(result: unknown): ToolOutcome {
+  if (isInputRequiredResult(result)) return "input_required";
+  const isError =
     typeof result === "object" &&
     result !== null &&
-    (result as { isError?: unknown }).isError === true
-  );
+    (result as { isError?: unknown }).isError === true;
+  return isError ? "error" : "ok";
 }
 
 /**
  * Sentry's error span-status code (the OTEL `SpanStatusCode.ERROR`). Inlined rather than imported
- * from `@sentry/core` to keep the dependency surface to the single `@sentry/cloudflare` meta-package
- * (`@sentry/core` is only a transitive dependency here).
+ * from `@sentry/core` to keep the dependency surface to the single `@sentry/cloudflare`
+ * meta-package (`@sentry/core` is only a transitive dependency here).
  */
 const SPAN_STATUS_ERROR = 2;
 
 function wrapHandler(
   name: string,
   surface: ToolSurface,
-  sessionId: string,
-  record: (call: RecentToolCall) => void,
+  correlationId: string,
   handler: (...handlerArgs: unknown[]) => unknown,
 ): (...handlerArgs: unknown[]) => unknown {
   return (...handlerArgs: unknown[]): unknown => {
-    // Tag the enclosing DO request span and this per-message isolation scope with the session, so
-    // the transaction and any error captured during the call carry the same `mcp.session` key the
-    // tool span below does (each per-message invocation gets a fresh scope; see tagMcpSession).
-    tagMcpSession(sessionId);
+    tagMcpUser(correlationId);
 
+    // Durations are approximate: Workers advances `Date.now()` only across I/O, which every
+    // TrainHeroic-backed tool performs, so the wall-clock spent waiting on the API is captured.
     const start = Date.now();
-    const recordMetrics = (status: "ok" | "error"): void => {
+    const recordMetrics = (status: ToolOutcome): void => {
+      // An elicitation round has not run the tool, so it belongs in neither the call count nor
+      // the duration distribution. Its span still records the outcome (below).
+      if (status === "input_required") return;
       const ms = Date.now() - start;
       Sentry.metrics.count("mcp.tool.call", 1, { attributes: { tool: name, surface, status } });
       Sentry.metrics.distribution("mcp.tool.duration_ms", ms, {
         unit: "millisecond",
         attributes: { tool: name, surface },
       });
-      // Append to the session ring buffer so the feedback tool can report recent activity. Done
-      // here (not in metrics) so it accrues even when SENTRY_DSN is unset and the metrics no-op.
-      record({ tool: name, surface, status, ms });
     };
 
-    // Run the call inside its own span so it is a named, timed row in the trace waterfall. Sentry
-    // ends the span when this callback returns — or, for an async handler, when the returned
-    // promise settles — so the span duration tracks the tool's wall-clock (bounded by the same
-    // I/O-advance limit as the metric duration above).
     return Sentry.startSpan(
       {
         name: `mcp.tool/${name}`,
         op: "mcp.tool",
-        attributes: { "mcp.tool": name, "mcp.surface": surface, "mcp.session": sessionId },
+        attributes: { "mcp.tool": name, "mcp.surface": surface, "mcp.session": correlationId },
       },
       (span): unknown => {
-        const settle = (status: "ok" | "error"): void => {
+        const settle = (status: ToolOutcome): void => {
           recordMetrics(status);
           span.setAttribute("mcp.status", status);
           // A thrown/rejected handler already trips Sentry's error status; mark the in-band
@@ -208,7 +139,7 @@ function wrapHandler(
         if (result instanceof Promise) {
           return result.then(
             (resolved: unknown) => {
-              settle(isErrorResult(resolved) ? "error" : "ok");
+              settle(toolOutcome(resolved));
               return resolved;
             },
             (err: unknown) => {
@@ -218,7 +149,7 @@ function wrapHandler(
           );
         }
 
-        settle(isErrorResult(result) ? "error" : "ok");
+        settle(toolOutcome(result));
         return result;
       },
     );

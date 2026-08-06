@@ -1,11 +1,13 @@
-// The scenario runner. Boots the fake backend, drives a scenario K times through one surface's
-// driver (MCP or CLI), grades each run from the normalized tool-call trace, and reports the
-// pass-rate against a threshold. Because both drivers produce the same RunTranscript and the
-// graders work on canonical capability names, a scenario runs unchanged on either surface — the
-// parity that lets MCP and CLI be compared directly.
+// The scenario runner. Drives a scenario K times through one surface's driver (MCP or CLI), grades
+// each run from the normalized tool-call trace, and reports the pass-rate against a threshold.
+// Because both drivers produce the same RunTranscript and the graders work on canonical capability
+// names, a scenario runs unchanged on either surface — the parity that lets MCP and CLI be compared
+// directly. The K runs go out in parallel, each with its own fake backend, capped by the shared
+// EVAL_CONCURRENCY gate in ./limit.
 
 import { spawnSync } from "node:child_process";
 import { startBackend } from "./fake-backend";
+import { withSlot } from "./limit";
 import { cliDriver } from "./surfaces/cli";
 import { mcpDriver } from "./surfaces/mcp";
 import type { Driver, Grade, Role, RunTranscript, Scenario, Surface } from "./types";
@@ -30,38 +32,61 @@ function resolveModel(override?: string): string {
   return override ?? process.env.EVAL_MODEL ?? "sonnet";
 }
 
+/**
+ * The reasoning effort handed to `claude --effort`. Evals want the cheap, fast end of the model:
+ * the point is whether the surface is usable, not how hard the model can think. `EVAL_EFFORT=off`
+ * omits the flag entirely (for a model or CLI build that does not take one).
+ */
+function resolveEffort(override?: string): string | null {
+  const level = override ?? process.env.EVAL_EFFORT ?? "low";
+  return level === "off" ? null : level;
+}
+
+/** One graded run: the transcript, its grade, and the routing gaps its own backend saw. */
+type Attempt = { grade: Grade; t: RunTranscript; unmatched: string[] };
+
 /** Run a scenario K times on one surface against a fresh backend; returns the pass-rate + report. */
 export async function runScenario(
   scenario: Scenario,
   surface: Surface,
-  opts: { model?: string; k?: number; threshold?: number } = {},
+  opts: { model?: string; k?: number; threshold?: number; effort?: string } = {},
 ): Promise<ScenarioResult> {
   const driver = driverFor(surface, scenario.role ?? "coach");
   const model = resolveModel(opts.model);
+  const effort = resolveEffort(opts.effort);
   const k = opts.k ?? (Number(process.env.EVAL_K) || scenario.k || 5);
   const threshold =
     opts.threshold ?? (Number(process.env.EVAL_THRESHOLD) || scenario.threshold || 0.6);
 
   const mode = scenario.mode ?? "read";
-  const backend = await startBackend(scenario.dataset);
-  const runs: Array<{ grade: Grade; t: RunTranscript }> = [];
-  try {
-    for (let i = 0; i < k; i += 1) {
-      // Clear read-after-write state so a scenario's K runs don't bleed into each other.
-      backend.reset();
-      const writesBefore = backend.writes.length;
-      const t = await driver.runOnce(backend.url, scenario.query, scenario.today, { model, mode });
-      // The backend is shared across this scenario's K runs; attribute only THIS run's writes.
-      t.writes = backend.writes.slice(writesBefore);
+
+  // Each run gets its own backend so the K runs can go out at once: writes are attributed by which
+  // backend recorded them, and the read-after-write state (the in-flight personal session) belongs
+  // to exactly one run. Datasets are read-only, so the K backends share one dataset object.
+  async function attempt(i: number): Promise<Attempt> {
+    const backend = await startBackend(scenario.dataset);
+    try {
+      const t = await driver.runOnce(backend.url, scenario.query, scenario.today, {
+        model,
+        mode,
+        ...(effort === null ? {} : { effort }),
+      });
+      t.writes = backend.writes;
       const grade = scenario.grade(t);
-      runs.push({ grade, t });
+      // Lines from concurrent runs interleave; the scenario/surface prefix keeps them attributable.
       process.stderr.write(
         `[eval ${scenario.name}/${surface}] run ${i + 1}/${k} (${model}): ${grade.pass ? "PASS" : "FAIL"} — ${grade.reason}\n`,
       );
+      return { grade, t, unmatched: backend.unmatched };
+    } finally {
+      await backend.close();
     }
-  } finally {
-    await backend.close();
   }
+
+  // Promise.all preserves order, so the report still lists runs 1..K as declared.
+  const runs = await Promise.all(
+    Array.from({ length: k }, (_unused, i) => withSlot(() => attempt(i))),
+  );
 
   const passes = runs.filter((r) => r.grade.pass).length;
   const rate = passes / k;
@@ -71,7 +96,7 @@ export async function runScenario(
     rate,
     threshold,
     totalCostUsd,
-    unmatched: backend.unmatched,
+    unmatched: runs.flatMap((r) => r.unmatched),
   });
   return { name: scenario.name, surface, model, k, threshold, passes, rate, totalCostUsd, report };
 }

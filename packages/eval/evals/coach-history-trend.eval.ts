@@ -40,7 +40,7 @@ const scenario: Scenario = {
   },
 };
 
-describe.skipIf(!gate.enabled)(scenario.name, () => {
+describe.skipIf(!gate.enabled).concurrent(scenario.name, () => {
   for (const surface of scenarioSurfaces(scenario)) {
     it(`${surface}: navigates two years of history to describe a lift trend`, async () => {
       const r = await runScenario(scenario, surface);

@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { RecentToolCall } from "../src/tool-metrics";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 
-// Control whether the SDK looks "configured" and capture what gets sent, without standing up a
-// real Sentry client. `vi.hoisted` so the handles exist when the hoisted `vi.mock` factory runs.
 const sentry = vi.hoisted(() => ({
   isEnabled: vi.fn(() => true),
   captureFeedback: vi.fn((..._args: unknown[]): string => "evt_abc123"),
@@ -23,7 +20,6 @@ import { registerFeedbackTool } from "../src/tools/feedback";
 
 type Handler = (args: Record<string, unknown>, extra: unknown) => CallToolResult;
 
-/** Capture the registered tool's config and handler so the body can be invoked directly. */
 function captureServer(): {
   server: McpServer;
   registered: { name: string; config: { annotations?: Record<string, unknown> }; handler: Handler };
@@ -40,19 +36,13 @@ function captureServer(): {
   return { server, registered };
 }
 
-const RECENT: RecentToolCall[] = [
-  { tool: "athlete_workouts", surface: "athlete", status: "ok", ms: 120 },
-  { tool: "athlete_log_set", surface: "athlete", status: "error", ms: 80 },
-];
-
 function deps() {
   return {
     email: "user@example.com",
-    role: "coach",
-    sessionId: "streamable-http:sess-1",
+    role: "coach" as const,
+    correlationId: "user:42",
     version: "9.9.9",
     release: "rel-1",
-    recentCalls: () => RECENT,
   };
 }
 
@@ -107,14 +97,14 @@ describe("report_feedback tool", () => {
     expect(params.tags).toMatchObject({
       "feedback.kind": "bug",
       "mcp.role": "coach",
-      "mcp.session": "streamable-http:sess-1",
+      "mcp.session": "user:42",
     });
-    // The body inlines the structured detail and the recent-call trail so it reads on its own.
     expect(params.message).toContain("athlete_workouts returned nothing");
     expect(params.message).toContain("Expected: this week's sessions");
     expect(params.message).toContain("Actual: an empty list");
-    expect(params.message).toContain("athlete_log_set [athlete] error 80ms");
+    expect(params.message).toContain("correlation: user:42");
     expect(params.message).toContain("release: rel-1");
+    expect(params.message).not.toContain("recent tool calls");
 
     const json = resultJson(result);
     expect(json).toMatchObject({ status: "sent", reference: "evt_abc123" });
