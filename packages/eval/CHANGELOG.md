@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/eval
 
+## 2.0.1
+
+### Patch Changes
+
+- bb488b9: Bump hono to 4.13.0 (cloudflare, eval) and @hono/node-server to 2.1.0 (eval).
+  - @trainheroic-unofficial/dto@2.0.1
+  - @trainheroic-unofficial/js@2.0.1
+
 ## 2.0.0
 
 ### Patch Changes
