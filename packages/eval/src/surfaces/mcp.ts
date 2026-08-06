@@ -56,6 +56,7 @@ function makeRunOnce(role: Role) {
       buildPrompt(query, today, mcpPreamble(cfg.prefix), role, opts.mode),
       "--model",
       opts.model,
+      ...(opts.effort ? ["--effort", opts.effort] : []),
       "--strict-mcp-config",
       "--mcp-config",
       cfgPath,

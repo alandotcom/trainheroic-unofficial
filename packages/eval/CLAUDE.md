@@ -19,8 +19,10 @@ to one canonical capability name, so a single grader covers both surfaces.
 ## The pieces (file → role)
 
 - `src/types.ts` — the `Scenario`, `RunTranscript`, `ToolCall`, `WriteRecord`, `Grade` types.
-- `src/harness.ts` — `runScenario(scenario, surface)` (K-loop + threshold), `evalGate()`,
-  `scenarioSurfaces()`.
+- `src/harness.ts` — `runScenario(scenario, surface)` (parallel K-loop + threshold), `evalGate()`,
+  `scenarioSurfaces()`. Each of the K runs owns its own backend, so write attribution is per-run.
+- `src/limit.ts` — the `EVAL_CONCURRENCY` gate (default 5) every run passes through. One vitest
+  worker (see `vitest.config.ts`) is what keeps that cap global.
 - `src/fake-backend.ts` — the Hono route table. Reads come from the `Dataset`; `registerWrites`
   records every mutating request into `transcript.writes` and returns a plausible success. A
   `notFound` → 501 handler records routing gaps in `unmatched` (a non-empty `unmatched` is a bug).
@@ -58,7 +60,9 @@ is the canonical write example):
 
 ```ts
 const gate = evalGate();
-describe.skipIf(!gate.enabled)(scenario.name, () => {
+// .concurrent so this file's tests overlap; runScenario's K runs are already parallel, and both
+// feed the one EVAL_CONCURRENCY gate in src/limit.ts.
+describe.skipIf(!gate.enabled).concurrent(scenario.name, () => {
   for (const surface of scenarioSurfaces(scenario)) {
     it(`${surface}: <what it should do>`, async () => {
       const r = await runScenario(scenario, surface);
@@ -125,5 +129,6 @@ EVAL_K=1 EVAL_MODEL=haiku pnpm eval   # fast, weaker-model usability signal
 RUN_EVALS=1 pnpm exec vitest run evals/<name>.eval.ts   # one scenario
 ```
 
-Env knobs: `RUN_EVALS` (gate), `EVAL_SURFACES`, `EVAL_MODEL` (`sonnet`|`haiku`), `EVAL_K`,
-`EVAL_THRESHOLD`. The skills `mcp-eval` and `cli-eval` drive this harness.
+Env knobs: `RUN_EVALS` (gate), `EVAL_SURFACES`, `EVAL_MODEL` (`sonnet`|`haiku`), `EVAL_EFFORT`
+(`claude --effort` level, default `low`; `off` omits it), `EVAL_CONCURRENCY` (runs in flight,
+default 5), `EVAL_K`, `EVAL_THRESHOLD`. The skills `mcp-eval` and `cli-eval` drive this harness.

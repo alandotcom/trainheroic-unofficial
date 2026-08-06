@@ -38,7 +38,7 @@ const scenario: Scenario = {
   },
 };
 
-describe.skipIf(!gate.enabled)(scenario.name, () => {
+describe.skipIf(!gate.enabled).concurrent(scenario.name, () => {
   for (const surface of scenarioSurfaces(scenario)) {
     it(`${surface}: athlete navigates two years of their own history`, async () => {
       const r = await runScenario(scenario, surface);

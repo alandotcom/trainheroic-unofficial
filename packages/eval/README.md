@@ -45,6 +45,11 @@ shape lives in one place. The spawned MCP server / CLI reaches the app because t
    `coach athlete-workouts` → `athlete_saved_workouts`). So one grader works on both surfaces.
 4. `runScenario(scenario, surface)` runs K times and asserts a pass-rate threshold (the K-loop
    absorbs LLM nondeterminism). The EVAL REPORT and call traces are attached to the failure message.
+   The K runs go out **in parallel**, each with its own fake backend, so writes and read-after-write
+   state belong to exactly one run. `src/limit.ts` caps how many runs are in flight across the whole
+   suite at `EVAL_CONCURRENCY` (default 5); everything runs in one vitest worker so that cap is
+   global. Progress lines from concurrent runs interleave — the `[eval <scenario>/<surface>]` prefix
+   is what makes them attributable.
 
 ## Running
 
@@ -58,14 +63,16 @@ pnpm eval:mcp                   # MCP surface only (EVAL_SURFACES=mcp)
 pnpm eval:cli                   # CLI surface only (EVAL_SURFACES=cli)
 EVAL_MODEL=haiku pnpm eval      # weaker model — the usability signal
 EVAL_K=1 pnpm eval              # one run per scenario per surface (fast smoke)
+EVAL_CONCURRENCY=10 pnpm eval   # wider — 10 claude processes in flight instead of 5
 
 # a single scenario
 RUN_EVALS=1 pnpm --filter @trainheroic-unofficial/eval exec vitest run evals/coach-many-programs.eval.ts
 ```
 
 Env knobs: `RUN_EVALS` (gate), `EVAL_SURFACES` (`mcp` | `cli` | both), `EVAL_MODEL`
-(`sonnet` | `haiku`, default `sonnet`), `EVAL_K` (runs per scenario), `EVAL_THRESHOLD` (override the
-pass-rate bar).
+(`sonnet` | `haiku`, default `sonnet`), `EVAL_EFFORT` (the `claude --effort` level, default `low`;
+`off` omits the flag), `EVAL_CONCURRENCY` (runs in flight at once, default 5), `EVAL_K` (runs per
+scenario), `EVAL_THRESHOLD` (override the pass-rate bar).
 
 ## Scenarios
 

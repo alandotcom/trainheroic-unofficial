@@ -32,7 +32,7 @@ const scenario: Scenario = {
   },
 };
 
-describe.skipIf(!gate.enabled)(scenario.name, () => {
+describe.skipIf(!gate.enabled).concurrent(scenario.name, () => {
   for (const surface of scenarioSurfaces(scenario)) {
     it(`${surface}: asks which bodybuilding program instead of guessing`, async () => {
       const r = await runScenario(scenario, surface);

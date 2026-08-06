@@ -140,7 +140,7 @@ const scenario: Scenario = {
 
 const gate = evalGate();
 
-describe.skipIf(!gate.enabled)(scenario.name, () => {
+describe.skipIf(!gate.enabled).concurrent(scenario.name, () => {
   for (const surface of scenarioSurfaces(scenario)) {
     it(`${surface}: logs one superset exercise without completing the block`, async () => {
       const r = await runScenario(scenario, surface);

@@ -43,7 +43,7 @@ const scenario: Scenario = {
   },
 };
 
-describe.skipIf(!gate.enabled)(scenario.name, () => {
+describe.skipIf(!gate.enabled).concurrent(scenario.name, () => {
   for (const surface of scenarioSurfaces(scenario)) {
     it(`${surface}: reads the target ids then prescribes the set (#18 write path)`, async () => {
       const r = await runScenario(scenario, surface);

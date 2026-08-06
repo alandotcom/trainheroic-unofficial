@@ -37,7 +37,7 @@ const scenario: Scenario = {
   },
 };
 
-describe.skipIf(!gate.enabled)(scenario.name, () => {
+describe.skipIf(!gate.enabled).concurrent(scenario.name, () => {
   for (const surface of scenarioSurfaces(scenario)) {
     it(`${surface}: answers "what did they do today" via the date-precise tool`, async () => {
       const r = await runScenario(scenario, surface);

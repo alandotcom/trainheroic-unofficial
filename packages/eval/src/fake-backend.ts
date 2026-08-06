@@ -21,8 +21,6 @@ export type BackendHandle = {
   unmatched: string[];
   /** Every mutating request, in order — what a write-mode grader asserts against. */
   writes: WriteRecord[];
-  /** Clear per-run read-after-write state (the in-flight ad-hoc session). Call between K runs. */
-  reset: () => void;
   close: () => Promise<void>;
 };
 
@@ -34,7 +32,8 @@ function intParam(value: string | undefined): number | null {
 
 /** One in-flight ad-hoc personal session (athlete_log_session): created, then exercises added, then
  * read back by the range so the log write can find it. The single bit of read-after-write state the
- * backend keeps — enough for the create→add→log flow without a full stateful store. */
+ * backend keeps — enough for the create→add→log flow without a full stateful store. It needs no
+ * clearing between runs because each run gets its own backend. */
 type PersonalSession = { date: string; exercises: Array<{ exerciseId: number }> };
 
 function personalRangeWorkout(p: PersonalSession): Record<string, unknown> {
@@ -321,9 +320,6 @@ export function startBackend(dataset: Dataset): Promise<BackendHandle> {
         requests,
         unmatched,
         writes,
-        reset: () => {
-          personal.current = null;
-        },
         close: () =>
           new Promise<void>((res, rej) => {
             server.close((err) => {
