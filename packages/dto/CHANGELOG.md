@@ -1,5 +1,7 @@
 # @trainheroic-unofficial/dto
 
+## 2.0.0
+
 ## 1.7.4
 
 ## 1.7.3
