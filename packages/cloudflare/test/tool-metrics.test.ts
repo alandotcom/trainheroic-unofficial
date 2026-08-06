@@ -25,27 +25,30 @@ const errResult = (): CallToolResult => ({
 describe("instrumentToolMetrics", () => {
   it("wraps registered tools without throwing on ok results", () => {
     const { server, handlers } = recordingServer();
-    const inst = instrumentToolMetrics(server, "user:1");
-    inst.surface = "athlete";
-    server.registerTool("foo", {}, () => okResult());
+    const metrics = instrumentToolMetrics(server, "user:1");
+    metrics.run("athlete", () => {
+      server.registerTool("foo", {}, () => okResult());
+    });
     expect(handlers.get("foo")?.({}, {})).toEqual(okResult());
   });
 
   it("rethrows from a throwing handler", () => {
     const { server, handlers } = recordingServer();
-    const inst = instrumentToolMetrics(server, "user:2");
-    inst.surface = "system";
-    server.registerTool("boom", {}, () => {
-      throw new Error("nope");
+    const metrics = instrumentToolMetrics(server, "user:2");
+    metrics.run("system", () => {
+      server.registerTool("boom", {}, () => {
+        throw new Error("nope");
+      });
     });
     expect(() => handlers.get("boom")?.({}, {})).toThrow("nope");
   });
 
   it("accepts in-band error results", () => {
     const { server, handlers } = recordingServer();
-    const inst = instrumentToolMetrics(server, "user:3");
-    inst.surface = "coach";
-    server.registerTool("bar", {}, () => errResult());
+    const metrics = instrumentToolMetrics(server, "user:3");
+    metrics.run("coach", () => {
+      server.registerTool("bar", {}, () => errResult());
+    });
     expect(handlers.get("bar")?.({}, {})).toEqual(errResult());
   });
 });

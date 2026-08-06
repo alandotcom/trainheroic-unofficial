@@ -22,10 +22,10 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   kept for the deprecation window. `resourceMetadata.resource` is pinned to the canonical
   hosted URL (`https://mcp.trainheroic-unofficial.com/mcp`).
 - `src/mcp.ts`: MCP SDK v2 server factories. One module-level `createMcpHandler` per
-  `McpVariant` (`full` | `coach` | `athlete`); Env is supplied per request via
-  `AsyncLocalStorage`. Credentials come from the OAuth grant via `getMcpAuthContext`.
-  Coach tools register through `registerCoachTools` from `core`. No MCP Durable Objects
-  (see `docs/adr/0001-mcp-sdk-v2-migration.md`, issue #73).
+  `McpVariant` (`full` | `coach` | `athlete`); bindings come from
+  `import { env } from "cloudflare:workers"`. Credentials come from the OAuth grant via
+  `getMcpAuthContext`. Coach tools register through `registerCoachTools` from `core`. No
+  MCP Durable Objects (see `docs/adr/0001-mcp-sdk-v2-migration.md`, issue #73).
 - `src/auth/`: the `/authorize` login flow, the login page, and the crypto helpers.
 - `src/store/`: the per-tenant D1 layer. `ExerciseStore` implements the SDK's `ExerciseIndex`
   interface (the hosted counterpart to the in-memory `ExerciseLibrary`); the programming and
@@ -56,7 +56,9 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
 
 ## Invariants and gotchas
 
-- workerd only. Use Web-standard APIs; do not import `node:*` or `@trainheroic-unofficial/js/node`.
+- workerd only. Use Web-standard APIs and `cloudflare:*` modules; do not import `node:*` or
+  `@trainheroic-unofficial/js/node`. Prefer `import { env } from "cloudflare:workers"` over
+  threading Worker `env` through every call.
 - Every D1 store is scoped per tenant by `org_id`. New tables and queries must keep that
   scoping, or one coach's data leaks into another's.
 - Credentials live only in the encrypted grant `props`, never in logs, the user id, or

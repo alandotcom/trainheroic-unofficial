@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "node:async_hooks";
+import { env } from "cloudflare:workers";
 import * as Sentry from "@sentry/cloudflare";
 import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler, getMcpAuthContext } from "agents/mcp/server";
@@ -22,14 +22,8 @@ import { mcpUserKey, tagMcpUser } from "./sentry";
 /** Path variants exposed by the Worker. `/mcp` is role-aware; the others scope to one surface. */
 export type McpVariant = "full" | "coach" | "athlete";
 
-/** Request-scoped Env for the MCP factory (createMcpHandler ignores the Worker env arg). */
-const envStore = new AsyncLocalStorage<Env>();
-
-function requireEnv(): Env {
-  const env = envStore.getStore();
-  if (!env) throw new Error("MCP handler invoked outside env context");
-  return env;
-}
+/** Production Host for MCP. Localhost / workers.dev are already allowed by the Agents wrapper. */
+const PRODUCTION_MCP_HOSTNAME = "mcp.trainheroic-unofficial.com";
 
 function readProps(): Props {
   const auth = getMcpAuthContext();
@@ -52,14 +46,14 @@ function isProps(value: unknown): value is Props {
   );
 }
 
-function registerAthleteSurface(server: McpServer, env: Env, client: TrainHeroicClient): void {
+function registerAthleteSurface(server: McpServer, client: TrainHeroicClient): void {
   const warehouse = makeD1Warehouse(env.TH_DB, { instrument: Sentry.instrumentD1WithSentry });
   registerAthleteTrainingTools(server, { client });
   // Stores resolve userId lazily when null.
   registerAthleteSyncTools(server, warehouse, client, null);
 }
 
-function registerCoachSurface(server: McpServer, env: Env, client: TrainHeroicClient): void {
+function registerCoachSurface(server: McpServer, client: TrainHeroicClient): void {
   const warehouse = makeD1Warehouse(env.TH_DB, { instrument: Sentry.instrumentD1WithSentry });
   // Stores resolve orgId lazily when null.
   const ctx: ToolContext = { client, index: new ExerciseStore(warehouse, client, null) };
@@ -69,10 +63,10 @@ function registerCoachSurface(server: McpServer, env: Env, client: TrainHeroicCl
 
 /**
  * Build a fresh MCP server for one request (SDK v2 factory).
- * Credentials come from the OAuth grant via {@link getMcpAuthContext}; Env via {@link envStore}.
+ * Credentials come from the OAuth grant via {@link getMcpAuthContext}; bindings via
+ * `import { env } from "cloudflare:workers"`.
  */
-async function createTrainHeroicServer(variant: McpVariant): Promise<McpServer> {
-  const env = requireEnv();
+function createTrainHeroicServer(variant: McpVariant): McpServer {
   const props = readProps();
   const correlationId = mcpUserKey(props.thUserId);
 
@@ -84,20 +78,20 @@ async function createTrainHeroicServer(variant: McpVariant): Promise<McpServer> 
     { instructions: SERVER_INSTRUCTIONS },
   );
 
-  const instrumentation = instrumentToolMetrics(server, correlationId);
+  const metrics = instrumentToolMetrics(server, correlationId);
   const client = new TrainHeroicClient(props.email, props.password);
 
   const wantAthlete = variant === "full" || variant === "athlete";
   const wantCoach = (variant === "full" || variant === "coach") && props.role === "coach";
 
   if (wantAthlete) {
-    withSurface(instrumentation, "athlete", () => registerAthleteSurface(server, env, client));
+    metrics.run("athlete", () => registerAthleteSurface(server, client));
   }
   if (wantCoach) {
-    withSurface(instrumentation, "coach", () => registerCoachSurface(server, env, client));
+    metrics.run("coach", () => registerCoachSurface(server, client));
   }
 
-  withSurface(instrumentation, "system", () => {
+  metrics.run("system", () => {
     registerFeedbackTool(server, {
       email: props.email,
       role: props.role,
@@ -110,30 +104,19 @@ async function createTrainHeroicServer(variant: McpVariant): Promise<McpServer> 
   return server;
 }
 
-function withSurface(
-  instrumentation: { surface: "athlete" | "coach" | "system" },
-  surface: "athlete" | "coach" | "system",
-  fn: () => void,
-): void {
-  const prev = instrumentation.surface;
-  instrumentation.surface = surface;
-  try {
-    fn();
-  } finally {
-    instrumentation.surface = prev;
-  }
-}
-
 /**
- * Module-level handlers (one per variant). Constructed once; Env is supplied via ALS per request.
- * Do not pass `allowedHostnames` — the Agents wrapper already allows localhost / workers.dev,
- * and production Host checks belong to Cloudflare routing.
+ * Module-level handlers (one per variant). Bindings come from `cloudflare:workers` env.
+ * Thin `{ fetch }` adapter so OAuthProvider's apiHandlers get a Worker-shaped handler
+ * (StatelessMcpHandler's own `.fetch` takes request options, not Worker env).
  */
 function makeHandler(route: string, variant: McpVariant) {
-  const handler = createMcpHandler(() => createTrainHeroicServer(variant), { route });
+  const handler = createMcpHandler(() => createTrainHeroicServer(variant), {
+    route,
+    allowedHostnames: [PRODUCTION_MCP_HOSTNAME],
+  });
   return {
-    fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-      return envStore.run(env, () => handler(request, env, ctx));
+    fetch(request: Request, workerEnv: Env, ctx: ExecutionContext): Promise<Response> {
+      return handler(request, workerEnv, ctx);
     },
   };
 }

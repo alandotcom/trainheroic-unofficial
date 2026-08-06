@@ -24,8 +24,13 @@ v1, and pushed `elicitInput` inside `confirmGate`.
 4. OAuth enables Client ID Metadata Documents (CIMD) and pins
    `resourceMetadata.resource` to the canonical hosted `/mcp` URL; keep DCR
    (`/register`) until the 2027 sunset.
-5. Sentry correlation uses `user:<thUserId>` instead of `mcp-session-id`.
-   Feedback recent-calls live in an isolate-local ring buffer keyed by user id.
+5. Sentry correlation uses `user:<thUserId>` (`mcp.session` tag) instead of
+   `mcp-session-id`. Feedback reports the same correlation id; there is no
+   recent-call ring buffer — Sentry tool spans already carry the non-PII trail.
+6. Module-level MCP handlers read Worker bindings via
+   `import { env } from "cloudflare:workers"` (no `AsyncLocalStorage`, no
+   per-request handler rebuild). Host checks include the production MCP
+   hostname via `allowedHostnames`.
 
 ## Consequences
 
@@ -33,6 +38,5 @@ v1, and pushed `elicitInput` inside `confirmGate`.
 - Clients that relied solely on pushed elicitation without `confirm: true` need
   MRTR-capable clients or must pass `confirm: true`.
 - Application state (D1 warehouse, OAuth grant props) is unchanged.
-- Follow-up cleanup (PR review): `McpVariant` instead of boolean surface flags;
-  ALS-backed Env for module-level handlers; `registerCoachTools` in `core`;
-  `confirmGate` returns `ToolHandlerResult | undefined`; no isolate-global recent-call map.
+- Coach tool registration is centralized in `registerCoachTools` (`core`);
+  `confirmGate` returns `ToolHandlerResult | undefined` (`undefined` = proceed).

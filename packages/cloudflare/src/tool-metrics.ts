@@ -10,11 +10,11 @@ import { tagMcpUser } from "./sentry";
 export type ToolSurface = "athlete" | "coach" | "system";
 
 /**
- * A mutable handle returned by {@link instrumentToolMetrics}. Set `.surface` before each
- * registration block; every tool registered while it holds that value is tagged with it.
+ * Handle returned by {@link instrumentToolMetrics}. Use {@link ToolInstrumentation.run} around
+ * each registration block so tools pick up the right surface tag.
  */
 export interface ToolInstrumentation {
-  surface: ToolSurface;
+  run(surface: ToolSurface, fn: () => void): void;
 }
 
 /**
@@ -28,17 +28,17 @@ export function instrumentToolMetrics(
   server: McpServer,
   correlationId: string,
 ): ToolInstrumentation {
-  const state: ToolInstrumentation = { surface: "athlete" };
+  let surface: ToolSurface = "athlete";
   const original = server.registerTool.bind(server) as (...args: unknown[]) => unknown;
   const patched = (...args: unknown[]): unknown => {
     const name = typeof args[0] === "string" ? args[0] : "unknown";
-    const surface = state.surface;
+    const taggedSurface = surface;
     const lastIndex = args.length - 1;
     const handler = args[lastIndex];
     if (typeof handler === "function") {
       args[lastIndex] = wrapHandler(
         name,
-        surface,
+        taggedSurface,
         correlationId,
         handler as (...handlerArgs: unknown[]) => unknown,
       );
@@ -46,7 +46,17 @@ export function instrumentToolMetrics(
     return original(...args);
   };
   (server as unknown as { registerTool: unknown }).registerTool = patched;
-  return state;
+  return {
+    run(next: ToolSurface, fn: () => void): void {
+      const prev = surface;
+      surface = next;
+      try {
+        fn();
+      } finally {
+        surface = prev;
+      }
+    },
+  };
 }
 
 function isErrorResult(result: unknown): boolean {
