@@ -4,7 +4,7 @@ A one-time setup to deploy the Worker to your Cloudflare account.
 
 ## Prerequisites
 
-- A Cloudflare account on the Workers Paid plan (Durable Objects + D1 + cron).
+- A Cloudflare account on the Workers Paid plan (D1 + cron).
 - `wrangler` authenticated: `pnpm exec wrangler login`.
 - `pnpm install` run in this directory.
 
@@ -77,9 +77,10 @@ Add the deployed Streamable HTTP endpoint to your client:
 https://trainheroic-mcp.<your-subdomain>.workers.dev/mcp
 ```
 
-The client runs dynamic client registration and the OAuth flow automatically. The
-browser opens the TrainHeroic login page; after sign-in the client receives its token
-and the tools become available.
+The client runs the OAuth flow automatically (prefer Client ID Metadata Documents /
+CIMD; Dynamic Client Registration at `/register` remains for the deprecation window).
+The browser opens the TrainHeroic login page; after sign-in the client receives its
+token and the tools become available.
 
 MCP Inspector and the Cloudflare AI Playground connect to the URL directly. Claude Desktop
 needs the `mcp-remote` bridge with `--transport http-only`:
@@ -103,10 +104,9 @@ needs the `mcp-remote` bridge with `--transport http-only`:
 
 ## Notes
 
-- **Custom domain.** The library derives the protected-resource `resource` from the
-  request origin, which is correct for the `workers.dev` host. Behind a custom domain
-  that differs from the Worker hostname, set `resourceMetadata.resource` in
-  `src/index.ts` to the canonical `/mcp` URL.
+- **Protected resource metadata.** `resourceMetadata.resource` in `src/index.ts` is pinned
+  to the canonical hosted URL `https://mcp.trainheroic-unofficial.com/mcp`. Keep that value
+  aligned with the public MCP endpoint clients connect to.
 - **Rate limiting.** Two native bindings in `wrangler.jsonc` under `ratelimits`
   (`LOGIN_RATE_LIMITER` for the login surface, `MCP_RATE_LIMITER` for `/mcp`), keyed on client
   IP at the edge. Tune `limit`/`period` (period is 10 or 60); rerun `pnpm cf-typegen` after
@@ -117,11 +117,11 @@ needs the `mcp-remote` bridge with `--transport http-only`:
   sessions (signed `oauth_req` + CSRF). Existing OAuth grants/tokens are unaffected
   (they are keyed by the library's own KV state).
 - **Error monitoring (Sentry).** Configured in `src/sentry.ts` and gated on the `SENTRY_DSN`
-  secret. `withSentry` reports errors from the top-level fetch and cron handlers;
-  `instrumentDurableObjectWithSentry` reports errors from inside the MCP Durable Object, tagged
-  with the signed-in user's email. By design the only data sent is the error and that email:
+  secret. `withSentry` reports errors from the top-level fetch and cron handlers; the MCP
+  factory (`src/mcp.ts`) attaches the signed-in user's email and correlates traces on
+  `mcp.session` = `user:<thUserId>`. By design the only data sent is the error and that email:
   `sendDefaultPii` is off (no IPs/cookies/auth headers), request bodies are never captured
-  (so the login POST password cannot leak), and performance tracing is off. Readable stack
-  traces come from source map upload, which `pnpm deploy` does automatically when
-  `SENTRY_AUTH_TOKEN` is set (see step 4). The Sentry org/project default to
-  `alan-zy`/`trainheroic-mcp` and are overridable via `SENTRY_ORG`/`SENTRY_PROJECT`.
+  (so the login POST password cannot leak). Readable stack traces come from source map
+  upload, which `pnpm deploy` does automatically when `SENTRY_AUTH_TOKEN` is set (see step 4).
+  The Sentry org/project default to `alan-zy`/`trainheroic-mcp` and are overridable via
+  `SENTRY_ORG`/`SENTRY_PROJECT`.

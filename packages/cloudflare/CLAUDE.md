@@ -17,12 +17,15 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
 - `src/index.ts`: the OAuth provider wiring, the per-IP edge rate limiting that runs before
   `provider.fetch`, and the scheduled (cron) purge. The provider's `apiHandlers` mount three
   variant paths (most-specific first, since matching is prefix-ordered): `/mcp` (full),
-  `/mcp/coach`, `/mcp/athlete` — each to its own Sentry-wrapped DO class/binding.
-- `src/agent.ts`: the `McpAgent` Durable Object. An abstract `TrainHeroicMCPBase` does the work
-  in `init()` (one instance per client session; throws if the grant props are missing); three
-  concrete subclasses set which surfaces register — `TrainHeroicMCP` (athlete + coach, role-aware),
-  `CoachMCP` (coach only), `AthleteMCP` (athlete only). Each is a separate DO class because the
-  path is invisible to the DO; the binding is the only way it learns which variant it is.
+  `/mcp/coach`, `/mcp/athlete` — each to a `createMcpHandler` factory from `mcp.ts`. OAuth
+  enables Client ID Metadata Documents (CIMD); Dynamic Client Registration (`/register`) is
+  kept for the deprecation window. `resourceMetadata.resource` is pinned to the canonical
+  hosted URL (`https://mcp.trainheroic-unofficial.com/mcp`).
+- `src/mcp.ts`: the MCP SDK v2 server factories. `createTrainHeroicServer` builds a fresh
+  `McpServer` per request (credentials from the OAuth grant via `getMcpAuthContext`);
+  `mcpApiHandler` wraps it in `createMcpHandler` for one path variant. Surfaces are selected
+  by the route — full (athlete + coach, role-aware), coach-only, or athlete-only. There are
+  no MCP Durable Objects (see `docs/adr/0001-mcp-sdk-v2-migration.md`, issue #73).
 - `src/auth/`: the `/authorize` login flow, the login page, and the crypto helpers.
 - `src/store/`: the per-tenant D1 layer. `ExerciseStore` implements the SDK's `ExerciseIndex`
   interface (the hosted counterpart to the in-memory `ExerciseLibrary`); the programming and
@@ -36,25 +39,25 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   registered on every variant (tagged surface `system`). It routes the report to Sentry's user
   feedback channel (`Sentry.captureFeedback`) when a DSN is set, and falls back to a structured
   `console.log` otherwise. Hosted-only because it leans on the Worker's Sentry setup and the
-  per-session recent-call ring buffer from `tool-metrics.ts`. The report inlines the user's message
-  plus non-PII context (session id, role, version/release, the last few tool calls) so it reads on
-  its own; the reporter's email rides along as the feedback contact.
-- `src/tool-metrics.ts`: patches the `registerTool` seam (once, in `init()`) so every tool call
-  emits aggregate Sentry metrics (`mcp.tool.call`, `mcp.tool.duration_ms`, tagged by tool +
-  surface + ok/error) and runs inside its own `mcp.tool/<name>` span (a named, timed row in the
-  trace waterfall, tagged with tool, surface, ok/error status, and the opaque mcp-session-id;
-  errors marked red). It also stamps the `mcp.session` tag on the enclosing DO transaction and
-  scope, and keeps a small per-session ring buffer of recent calls (tool, surface, ok/error,
-  duration — no args/results) on the returned instrumentation handle, which `feedback.ts` reads.
-  Lives here, not in `core`, so the shared tool layer stays Sentry-agnostic.
-- `src/sentry.ts`: the shared Sentry config (`sentryOptions(env)`) used by both `withSentry`
-  (the handler in `index.ts`) and `instrumentDurableObjectWithSentry` (the DO export). Sends the
-  error + user email, aggregate metrics, and traces (`SENTRY_TRACES_SAMPLE_RATE` var, default 1).
-  A single MCP session spans many requests/traces, so they are correlated by a shared `mcp.session`
-  tag (worker request span in `index.ts`, DO init/error scopes in `agent.ts`, tool calls in
-  `tool-metrics.ts`) rather than one merged trace; see the invariant below. D1 queries are traced
-  separately via `Sentry.instrumentD1WithSentry`, applied once inside `makeDb` (`store/schema.ts`),
-  since the DO wrapper does not auto-instrument D1.
+  isolate-local recent-call ring buffer from `tool-metrics.ts`. The report inlines the user's
+  message plus non-PII context (correlation id `user:<thUserId>`, role, version/release, the
+  last few tool calls) so it reads on its own; the reporter's email rides along as the
+  feedback contact.
+- `src/tool-metrics.ts`: patches the `registerTool` seam (once, while building the server) so
+  every tool call emits aggregate Sentry metrics (`mcp.tool.call`, `mcp.tool.duration_ms`,
+  tagged by tool + surface + ok/error) and runs inside its own `mcp.tool/<name>` span (a named,
+  timed row in the trace waterfall, tagged with tool, surface, ok/error status, and
+  `user:<thUserId>`; errors marked red). It also stamps the `mcp.session` tag on the scope and
+  keeps a small isolate-local ring buffer of recent calls (tool, surface, ok/error, duration —
+  no args/results) keyed by TrainHeroic user id, which `feedback.ts` reads. Best-effort within
+  a warm isolate (not durable across recycles). Lives here, not in `core`, so the shared tool
+  layer stays Sentry-agnostic.
+- `src/sentry.ts`: the shared Sentry config (`sentryOptions(env)`) used by `withSentry` (the
+  handler in `index.ts`). Sends the error + user email, aggregate metrics, and traces
+  (`SENTRY_TRACES_SAMPLE_RATE` var, default 1). Without MCP protocol sessions, traces and
+  errors correlate on `mcp.session` = `user:<thUserId>` (opaque numeric id, stamped in the MCP
+  factory and tool-metrics). D1 queries are traced separately via
+  `Sentry.instrumentD1WithSentry`, applied once inside `makeDb` (`store/schema.ts`).
 - `migrations/`: the D1 schema, applied in order.
 
 ## Invariants and gotchas
@@ -68,15 +71,15 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   values; `ALLOWED_EMAILS` and `SENTRY_DSN` are optional secrets. Credentials are never a deploy
   secret here: each user enters them at login and they live in the OAuth grant's encrypted `props`.
 - Sentry is privacy-constrained on purpose: the data it sends is the error, the user email,
-  aggregate metrics/traces (tool name, surface, ok/error, opaque session id), and — only when the
-  user explicitly files one — a `report_feedback` report (the user's own message plus that same
-  non-PII context, with their email as the contact). `src/sentry.ts` keeps `sendDefaultPii` off and
-  forces `httpServerIntegration`'s `maxRequestBodySize: "none"` so request bodies (the login POST
-  password) are never captured; the email is attached via `Sentry.setUser` in `agent.ts` (`init()`
-  and the `onError` override, because each per-message DO invocation gets a fresh isolation scope).
-  With no `SENTRY_DSN` the SDK is disabled and every Sentry call is a no-op (the feedback tool then
-  logs the report to `console` instead). Keep new PII out of error paths and out of tool
-  args/results sent to Sentry, and do not set the user to anything but the email.
+  aggregate metrics/traces (tool name, surface, ok/error, opaque `user:<thUserId>`), and — only
+  when the user explicitly files one — a `report_feedback` report (the user's own message plus
+  that same non-PII context, with their email as the contact). `src/sentry.ts` keeps
+  `sendDefaultPii` off and forces `httpServerIntegration`'s `maxRequestBodySize: "none"` so
+  request bodies (the login POST password) are never captured; the email is attached via
+  `Sentry.setUser` in the MCP factory (`mcp.ts`). With no `SENTRY_DSN` the SDK is disabled and
+  every Sentry call is a no-op (the feedback tool then logs the report to `console` instead).
+  Keep new PII out of error paths and out of tool args/results sent to Sentry, and do not set
+  the user to anything but the email.
 - Migrations are append-only. Add a new numbered file; do not edit a migration that has
   already been applied. After changing bindings, run `pnpm cf-typegen`. `migrations/` is the
   source of truth for the live DB — Drizzle does NOT generate it. When a migration changes a
@@ -86,8 +89,7 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
 - Rate limiting lives at the edge in `src/index.ts` (keyed by `CF-Connecting-IP`), backed by
   two `ratelimits` bindings in `wrangler.jsonc` (`LOGIN_RATE_LIMITER`, `MCP_RATE_LIMITER`).
   It is best-effort and per-colo. Keep it out of `core` so the shared tools stay
-  transport-agnostic; per-identity limiting would have to live in the DO. Re-run
-  `pnpm cf-typegen` after editing the block.
+  transport-agnostic. Re-run `pnpm cf-typegen` after editing the block.
 - Tools that are not storage-specific belong in `core`, so the local server gets them too.
   Only add a tool here when it genuinely needs D1 or the Worker environment.
 
