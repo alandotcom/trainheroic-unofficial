@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { instrumentToolMetrics } from "../src/tool-metrics";
-import type { RecentCallStore, RecentToolCall } from "../src/tool-metrics";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/server";
+import { instrumentToolMetrics, recentCallsForUser } from "../src/tool-metrics";
 
 type Handler = (args: unknown, extra: unknown) => unknown;
 
@@ -28,29 +27,36 @@ const errResult = (): CallToolResult => ({
   content: [{ type: "text", text: "bad" }],
 });
 
+let nextUserId = 1;
+function uniqueUserId(): number {
+  return nextUserId++;
+}
+
 describe("instrumentToolMetrics recent-call buffer", () => {
   it("records a completed call with its registration-time surface", () => {
+    const userId = uniqueUserId();
     const { server, handlers } = recordingServer();
-    const inst = instrumentToolMetrics(server, "sess-1");
+    const inst = instrumentToolMetrics(server, `user:${userId}`, userId);
     inst.surface = "athlete";
     server.registerTool("foo", {}, () => okResult());
 
     handlers.get("foo")?.({}, {});
 
-    expect(inst.recentCalls).toEqual([
+    expect(recentCallsForUser(userId)).toEqual([
       { tool: "foo", surface: "athlete", status: "ok", ms: expect.any(Number) },
     ]);
   });
 
   it("marks an in-band { isError: true } result as an error", () => {
+    const userId = uniqueUserId();
     const { server, handlers } = recordingServer();
-    const inst = instrumentToolMetrics(server, "sess-2");
+    const inst = instrumentToolMetrics(server, `user:${userId}`, userId);
     inst.surface = "coach";
     server.registerTool("bar", {}, () => errResult());
 
     handlers.get("bar")?.({}, {});
 
-    expect(inst.recentCalls.at(-1)).toMatchObject({
+    expect(recentCallsForUser(userId).at(-1)).toMatchObject({
       tool: "bar",
       surface: "coach",
       status: "error",
@@ -58,15 +64,16 @@ describe("instrumentToolMetrics recent-call buffer", () => {
   });
 
   it("records a thrown handler as an error and still rethrows", () => {
+    const userId = uniqueUserId();
     const { server, handlers } = recordingServer();
-    const inst = instrumentToolMetrics(server, "sess-3");
+    const inst = instrumentToolMetrics(server, `user:${userId}`, userId);
     inst.surface = "system";
     server.registerTool("boom", {}, () => {
       throw new Error("nope");
     });
 
     expect(() => handlers.get("boom")?.({}, {})).toThrow("nope");
-    expect(inst.recentCalls.at(-1)).toMatchObject({
+    expect(recentCallsForUser(userId).at(-1)).toMatchObject({
       tool: "boom",
       surface: "system",
       status: "error",
@@ -74,97 +81,16 @@ describe("instrumentToolMetrics recent-call buffer", () => {
   });
 
   it("caps the buffer, dropping the oldest entries", () => {
+    const userId = uniqueUserId();
     const { server, handlers } = recordingServer();
-    const inst = instrumentToolMetrics(server, "sess-4");
+    const inst = instrumentToolMetrics(server, `user:${userId}`, userId);
     inst.surface = "athlete";
     server.registerTool("t", {}, () => okResult());
     const handler = handlers.get("t");
 
     for (let i = 0; i < 25; i++) handler?.({}, {});
 
-    // MAX_RECENT_CALLS is 20; the buffer keeps the most recent 20, oldest first.
-    expect(inst.recentCalls).toHaveLength(20);
-    expect(inst.recentCalls.every((c) => c.tool === "t")).toBe(true);
-  });
-});
-
-/** An in-memory RecentCallStore that captures every write-through, standing in for DO storage. */
-function fakeStore(seed: readonly RecentToolCall[] = []): {
-  store: RecentCallStore;
-  saved: RecentToolCall[][];
-} {
-  const saved: RecentToolCall[][] = [];
-  const store: RecentCallStore = {
-    load: () => Promise.resolve(seed),
-    // Snapshot each save; the wrapper passes its live array, so copy to freeze the moment.
-    save: (calls) => {
-      saved.push([...calls]);
-    },
-  };
-  return { store, saved };
-}
-
-describe("instrumentToolMetrics durable buffer", () => {
-  it("hydrate() seeds the buffer from the store, oldest first", async () => {
-    const seed: RecentToolCall[] = [
-      { tool: "athlete_workouts", surface: "athlete", status: "ok", ms: 100 },
-      { tool: "athlete_log_set", surface: "athlete", status: "error", ms: 50 },
-    ];
-    const { server, handlers } = recordingServer();
-    const { store } = fakeStore(seed);
-    const inst = instrumentToolMetrics(server, "sess-h", store);
-    await inst.hydrate();
-
-    // A later call in this (cold-started) instance appends after the rehydrated trail.
-    inst.surface = "athlete";
-    server.registerTool("athlete_prefs", {}, () => okResult());
-    handlers.get("athlete_prefs")?.({}, {});
-
-    expect(inst.recentCalls.map((c) => c.tool)).toEqual([
-      "athlete_workouts",
-      "athlete_log_set",
-      "athlete_prefs",
-    ]);
-  });
-
-  it("hydrate() keeps only the most recent entries when the seed exceeds the cap", async () => {
-    const seed: RecentToolCall[] = Array.from({ length: 25 }, (_, i) => ({
-      tool: `t${i}`,
-      surface: "athlete" as const,
-      status: "ok" as const,
-      ms: i,
-    }));
-    const { server } = recordingServer();
-    const inst = instrumentToolMetrics(server, "sess-cap", fakeStore(seed).store);
-    await inst.hydrate();
-
-    expect(inst.recentCalls).toHaveLength(20);
-    // The oldest five (t0..t4) are dropped; t5 is now the head.
-    expect(inst.recentCalls[0]?.tool).toBe("t5");
-    expect(inst.recentCalls.at(-1)?.tool).toBe("t24");
-  });
-
-  it("writes the buffer through to the store on every recorded call", () => {
-    const { server, handlers } = recordingServer();
-    const { store, saved } = fakeStore();
-    const inst = instrumentToolMetrics(server, "sess-w", store);
-    inst.surface = "coach";
-    server.registerTool("get_team", {}, () => okResult());
-    const handler = handlers.get("get_team");
-
-    handler?.({}, {});
-    handler?.({}, {});
-
-    expect(saved).toHaveLength(2);
-    expect(saved[0]).toHaveLength(1);
-    expect(saved[1]).toHaveLength(2);
-    expect(saved[1]?.at(-1)).toMatchObject({ tool: "get_team", surface: "coach", status: "ok" });
-  });
-
-  it("hydrate() is a no-op without a store", async () => {
-    const { server } = recordingServer();
-    const inst = instrumentToolMetrics(server, "sess-none");
-    await expect(inst.hydrate()).resolves.toBeUndefined();
-    expect(inst.recentCalls).toEqual([]);
+    expect(recentCallsForUser(userId)).toHaveLength(20);
+    expect(recentCallsForUser(userId).every((c) => c.tool === "t")).toBe(true);
   });
 });

@@ -26,9 +26,9 @@ importers:
 
   packages/athlete-mcp:
     dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.30.0
-        version: 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/server':
+        specifier: 2.0.0
+        version: 2.0.0
       '@trainheroic-unofficial/core':
         specifier: workspace:*
         version: link:../core
@@ -91,9 +91,9 @@ importers:
       '@cloudflare/workers-oauth-provider':
         specifier: ^0.8.3
         version: 0.8.3
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.30.0
-        version: 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/server':
+        specifier: 2.0.0
+        version: 2.0.0
       '@sentry/cloudflare':
         specifier: ^10.69.0
         version: 10.69.0(@cloudflare/workers-types@4.20260620.1)(wrangler@4.118.0(@cloudflare/workers-types@4.20260620.1))
@@ -140,9 +140,9 @@ importers:
 
   packages/coach-mcp:
     dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.30.0
-        version: 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/server':
+        specifier: 2.0.0
+        version: 2.0.0
       '@trainheroic-unofficial/core':
         specifier: workspace:*
         version: link:../core
@@ -174,9 +174,9 @@ importers:
       '@cfworker/json-schema':
         specifier: ^4.1.1
         version: 4.1.1
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.30.0
-        version: 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/server':
+        specifier: 2.0.0
+        version: 2.0.0
       '@trainheroic-unofficial/dto':
         specifier: workspace:*
         version: link:../dto

@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { coerceInt } from "@trainheroic-unofficial/js";
 import { MessagingStore, ProgrammingStore, type Warehouse } from "@trainheroic-unofficial/db";

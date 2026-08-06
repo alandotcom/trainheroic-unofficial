@@ -1,5 +1,5 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import process from "node:process";
 import type { ToolContext } from "@trainheroic-unofficial/core";
 import { registerAnalyticsTools } from "@trainheroic-unofficial/core";
@@ -18,7 +18,7 @@ import pkg from "../package.json" with { type: "json" };
 // Single-user local MCP server over stdio. No OAuth and no database: credentials come
 // from the environment and the exercise library is cached on disk (JSON). Launch it from
 // an MCP client (command + args + env). The hosted Cloudflare path lives in cloudflare/.
-async function main(): Promise<void> {
+function main(): void {
   const email = process.env.TRAINHEROIC_EMAIL;
   const password = process.env.TRAINHEROIC_PASSWORD;
   if (!email || !password) {
@@ -32,20 +32,21 @@ async function main(): Promise<void> {
     index: new ExerciseLibrary(client, new JsonFileLibraryCache()),
   };
 
-  const server = new McpServer(
-    { name: "trainheroic-local", version: pkg.version },
-    { instructions: SERVER_INSTRUCTIONS },
-  );
-  registerReadTools(server, ctx);
-  registerMainLiftTools(server, ctx);
-  registerAthleteTools(server, ctx);
-  registerTeamTools(server, ctx);
-  registerAnalyticsTools(server, ctx);
-  registerExerciseTools(server, ctx);
-  registerWorkoutTools(server, ctx);
-  registerMessagingTools(server, ctx);
-
-  await server.connect(new StdioServerTransport());
+  serveStdio(() => {
+    const server = new McpServer(
+      { name: "trainheroic-local", version: pkg.version },
+      { instructions: SERVER_INSTRUCTIONS },
+    );
+    registerReadTools(server, ctx);
+    registerMainLiftTools(server, ctx);
+    registerAthleteTools(server, ctx);
+    registerTeamTools(server, ctx);
+    registerAnalyticsTools(server, ctx);
+    registerExerciseTools(server, ctx);
+    registerWorkoutTools(server, ctx);
+    registerMessagingTools(server, ctx);
+    return server;
+  });
 }
 
-await main();
+main();

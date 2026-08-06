@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   coachLogSessionArgsSchema,
@@ -20,7 +20,7 @@ import {
   swapAthleteExercise,
 } from "@trainheroic-unofficial/js";
 import { mapSessionExercises } from "./athlete-training";
-import { confirmGate, NOT_CONFIRMED } from "../confirm";
+import { confirmGate } from "../confirm";
 import {
   apiCall,
   attempt,
@@ -71,13 +71,12 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
         if (list.length === 0) return errorResult("Provide at least one email address to invite.");
         const id = toId(teamId);
 
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const gate = confirmGate(
+          extra,
           `Invite ${list.join(", ")} to team ${id}? This emails them a real TrainHeroic invitation.`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (gate.status !== "confirmed") return gate.result;
 
         const res = await inviteAthletes(
           ctx.client,
@@ -101,13 +100,12 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
     ({ athleteIds, confirm }, extra) =>
       attempt(async () => {
         const ids = athleteIds.map(toId);
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const gate = confirmGate(
+          extra,
           `Archive athlete(s) ${ids.join(", ")}? They leave the active roster (data is kept and restorable).`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (gate.status !== "confirmed") return gate.result;
         return apiCall(ctx, "PUT", "/v5/athletes/archive", { body: { athleteIds: ids } });
       }),
   );
@@ -227,13 +225,12 @@ function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
     ({ athleteId, date, savedWorkoutSetId, results, confirm }, extra) =>
       attempt(async () => {
         const aId = toId(athleteId);
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const gate = confirmGate(
+          extra,
           `Log results to athlete ${aId}'s saved workout set ${toId(savedWorkoutSetId)} on ${date}? This writes to their coach-visible training log.`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (gate.status !== "confirmed") return gate.result;
         return jsonResult(
           await logForAthlete(ctx.client, {
             athleteId: aId,
@@ -264,13 +261,12 @@ function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
     ({ athleteId, date, exercises, confirm }, extra) =>
       attempt(async () => {
         const aId = toId(athleteId);
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const gate = confirmGate(
+          extra,
           `Log a session of ${exercises.length} exercise(s) for athlete ${aId} on ${date}? This writes to their coach-visible training log.`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (gate.status !== "confirmed") return gate.result;
         return jsonResult(
           await logSessionForAthlete(ctx.client, {
             athleteId: aId,
@@ -308,13 +304,12 @@ function registerAthleteSwapTool(server: McpServer, ctx: ToolContext): void {
       attempt(async () => {
         const sweId = toId(savedWorkoutSetExerciseId);
         const exId = toId(exerciseId);
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const gate = confirmGate(
+          extra,
           `Swap the exercise in saved workout slot ${sweId} to exercise ${exId}? This changes what this athlete is prescribed (their copy only).`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (gate.status !== "confirmed") return gate.result;
         return jsonResult(
           await swapAthleteExercise(ctx.client, {
             savedWorkoutSetExerciseId: sweId,
@@ -355,13 +350,12 @@ function registerAthletePrescribeTool(server: McpServer, ctx: ToolContext): void
     ({ athleteId, date, savedWorkoutSetId, results, confirm }, extra) =>
       attempt(async () => {
         const aId = toId(athleteId);
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const gate = confirmGate(
+          extra,
           `Set prescribed values on athlete ${aId}'s saved workout set ${toId(savedWorkoutSetId)} on ${date}? This changes what this athlete is prescribed (their copy only); it does not mark the set done.`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (gate.status !== "confirmed") return gate.result;
         return jsonResult(
           await prescribeForAthlete(ctx.client, {
             athleteId: aId,

@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { registerAthleteTrainingTools } from "@trainheroic-unofficial/core";
 import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";

@@ -1,42 +1,68 @@
 import { describe, expect, it } from "vitest";
+import type {
+  CallToolResult,
+  InputRequiredResult,
+  ServerContext,
+} from "@modelcontextprotocol/server";
+import { isInputRequiredResult } from "@modelcontextprotocol/server";
 import { confirmGate } from "../src/confirm";
 
-type Server = Parameters<typeof confirmGate>[0];
-
-function fakeServer(elicitInput: (...args: unknown[]) => Promise<unknown>): Server {
-  return { server: { elicitInput } } as unknown as Server;
+function fakeCtx(inputResponses?: Record<string, unknown>): ServerContext {
+  return {
+    mcpReq: {
+      inputResponses,
+    },
+  } as unknown as ServerContext;
 }
 
 describe("confirmGate", () => {
-  it("returns true on an explicit confirm flag without eliciting", async () => {
-    let called = false;
-    const server = fakeServer(async () => {
-      called = true;
-      return { action: "accept" };
-    });
-    expect(await confirmGate(server, "r1", "msg", true)).toBe(true);
-    expect(called).toBe(false);
+  it("returns confirmed on an explicit confirm flag without eliciting", () => {
+    const gate = confirmGate(fakeCtx(), "msg", true);
+    expect(gate.status).toBe("confirmed");
   });
 
-  it("returns true when the user accepts via elicitation", async () => {
-    const server = fakeServer(async () => ({ action: "accept", content: { confirm: true } }));
-    expect(await confirmGate(server, "r1", "msg", undefined)).toBe(true);
+  it("returns needs_input on first call without confirm", () => {
+    const gate = confirmGate(fakeCtx(), "Delete this?", undefined);
+    expect(gate.status).toBe("needs_input");
+    if (gate.status !== "needs_input") return;
+    expect(isInputRequiredResult(gate.result)).toBe(true);
+    const result = gate.result as InputRequiredResult;
+    expect(result.inputRequests?.confirm).toBeDefined();
   });
 
-  it("returns false when elicitation is declined", async () => {
-    const server = fakeServer(async () => ({ action: "decline" }));
-    expect(await confirmGate(server, "r1", "msg", undefined)).toBe(false);
+  it("returns confirmed when elicitation was accepted with confirm:true", () => {
+    const gate = confirmGate(
+      fakeCtx({
+        confirm: { action: "accept", content: { confirm: true } },
+      }),
+      "msg",
+      undefined,
+    );
+    expect(gate.status).toBe("confirmed");
   });
 
-  it("returns false when accepted but confirm is not true", async () => {
-    const server = fakeServer(async () => ({ action: "accept", content: { confirm: false } }));
-    expect(await confirmGate(server, "r1", "msg", undefined)).toBe(false);
+  it("returns denied when elicitation was declined", () => {
+    const gate = confirmGate(
+      fakeCtx({
+        confirm: { action: "decline" },
+      }),
+      "msg",
+      undefined,
+    );
+    expect(gate.status).toBe("denied");
+    if (gate.status !== "denied") return;
+    const result = gate.result as CallToolResult;
+    expect(result.isError).toBe(true);
   });
 
-  it("fails closed when elicitation is unsupported (throws)", async () => {
-    const server = fakeServer(async () => {
-      throw new Error("elicitation not supported");
-    });
-    expect(await confirmGate(server, undefined, "msg", undefined)).toBe(false);
+  it("returns denied when accepted but confirm is not true", () => {
+    const gate = confirmGate(
+      fakeCtx({
+        confirm: { action: "accept", content: { confirm: false } },
+      }),
+      "msg",
+      undefined,
+    );
+    expect(gate.status).toBe("denied");
   });
 });

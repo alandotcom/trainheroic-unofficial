@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { commentDraftSchema } from "@trainheroic-unofficial/dto";
 import {
@@ -8,8 +8,8 @@ import {
   readLive,
   sendComment,
 } from "@trainheroic-unofficial/js";
-import { confirmGate, NOT_CONFIRMED } from "../confirm";
-import { attempt, DESTRUCTIVE, errorResult, idParam, jsonResult, READ, toId } from "../context";
+import { confirmGate } from "../confirm";
+import { attempt, DESTRUCTIVE, idParam, jsonResult, READ, toId } from "../context";
 import type { ToolContext } from "../context";
 
 function registerReads(server: McpServer, ctx: ToolContext): void {
@@ -89,13 +89,12 @@ function registerWrites(server: McpServer, ctx: ToolContext): void {
     ({ streamId, text, replyTo, confirm }, extra) =>
       attempt(async () => {
         const id = toId(streamId);
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const gate = confirmGate(
+          extra,
           `Send this message to stream ${id}? It is athlete-facing and immediate.`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (gate.status !== "confirmed") return gate.result;
         const comment = await sendComment(
           ctx.client,
           id,
@@ -116,13 +115,12 @@ function registerWrites(server: McpServer, ctx: ToolContext): void {
     },
     ({ streamId, commentId, confirm }, extra) =>
       attempt(async () => {
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const gate = confirmGate(
+          extra,
           `Delete comment ${toId(commentId)} from stream ${toId(streamId)}? Acts on the live account.`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (gate.status !== "confirmed") return gate.result;
         return jsonResult({
           deleted: true,
           response: await deleteComment(ctx.client, toId(streamId), toId(commentId)),

@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/cloudflare";
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { errorResult, jsonResult } from "@trainheroic-unofficial/core";
 import type { RecentToolCall } from "../tool-metrics";
 

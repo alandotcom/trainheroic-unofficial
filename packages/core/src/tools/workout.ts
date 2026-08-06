@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { type BlockSpec, blockSpecSchema, parseWorkoutDate } from "@trainheroic-unofficial/dto";
 import {
@@ -10,7 +10,7 @@ import {
   readSession,
   removeSession,
 } from "@trainheroic-unofficial/js";
-import { confirmGate, NOT_CONFIRMED } from "../confirm";
+import { confirmGate } from "../confirm";
 import { apiCall, attempt, errorResult, jsonResult } from "../context";
 import type { ToolContext } from "../context";
 
@@ -91,13 +91,12 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
     },
     ({ programId, date, pwId, confirm }, extra) =>
       attempt(async () => {
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const gate = confirmGate(
+          extra,
           `Publish session ${pwId} on ${date}? This is athlete-facing and immediate.`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (gate.status !== "confirmed") return gate.result;
         await publishSession(ctx.client, pwId);
         return jsonResult({
           published: pwId,
@@ -121,13 +120,12 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
     },
     ({ programId, pwId, confirm }, extra) =>
       attempt(async () => {
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const gate = confirmGate(
+          extra,
           `Delete session ${pwId}? This removes it from the live calendar and is hard to undo.`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (gate.status !== "confirmed") return gate.result;
         await removeSession(ctx.client, programId, pwId);
         return jsonResult({ removed: pwId });
       }),
@@ -145,13 +143,12 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
     },
     ({ pwId, confirm }, extra) =>
       attempt(async () => {
-        const ok = await confirmGate(
-          server,
-          extra.requestId,
+        const gate = confirmGate(
+          extra,
           `Unpublish session ${pwId}? Athletes will no longer see it.`,
           confirm,
         );
-        if (!ok) return errorResult(NOT_CONFIRMED);
+        if (gate.status !== "confirmed") return gate.result;
         return apiCall(ctx, "POST", `/2.0/coach/calendar/programWorkout/unPublish/${pwId}`);
       }),
   );

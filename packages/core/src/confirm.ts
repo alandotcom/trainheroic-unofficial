@@ -1,37 +1,60 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type {
+  CallToolResult,
+  InputRequiredResult,
+  ServerContext,
+} from "@modelcontextprotocol/server";
+import { acceptedContent, inputRequired, inputResponse } from "@modelcontextprotocol/server";
+import { errorResult } from "./context";
 
 export const NOT_CONFIRMED =
   "Not confirmed. Re-run with confirm:true, or connect a client that supports MCP elicitation.";
 
+/** Outcome of {@link confirmGate}: proceed, deny, or return an MRTR input round. */
+export type ConfirmGateResult =
+  | { status: "confirmed" }
+  | { status: "denied"; result: CallToolResult }
+  | { status: "needs_input"; result: InputRequiredResult };
+
 /**
- * Confirm a destructive/athlete-facing action. Prefers MCP elicitation (an
- * in-the-moment user prompt); falls back to an explicit confirm:true argument when
- * the client does not support elicitation. Never proceeds without one of the two.
+ * Confirm a destructive/athlete-facing action.
+ *
+ * Prefers MCP multi-round-trip elicitation (`input_required`); falls back to an explicit
+ * `confirm:true` argument when the client already confirmed. Never proceeds without one of the two.
+ *
+ * Written once in the 2026 `inputRequired` style: modern clients retry with `inputResponses`;
+ * 2025-era sessionful clients are served by the SDK's legacy shim (pushed `elicitation/create`).
+ * Stateless legacy HTTP cannot push mid-call — those clients must pass `confirm:true`.
  */
-export async function confirmGate(
-  server: McpServer,
-  requestId: string | number | undefined,
+export function confirmGate(
+  ctx: ServerContext,
   message: string,
   confirmArg: boolean | undefined,
-): Promise<boolean> {
-  if (confirmArg === true) return true;
-  try {
-    const result = await server.server.elicitInput(
-      {
-        message,
-        requestedSchema: {
-          type: "object",
-          properties: { confirm: { type: "boolean", title: "Confirm", description: message } },
-          required: ["confirm"],
-        },
-      },
-      requestId === undefined ? undefined : { relatedRequestId: requestId },
-    );
-    return result.action === "accept" && result.content?.confirm === true;
-  } catch (err) {
-    // Elicitation unsupported by the client, or it errored. Fail closed; log so the
-    // supported-but-errored case is diagnosable rather than silently a decline.
-    console.warn("MCP elicitation unavailable; treating as not confirmed", err);
-    return false;
+): ConfirmGateResult {
+  if (confirmArg === true) return { status: "confirmed" };
+
+  const accepted = acceptedContent<{ confirm?: boolean }>(ctx.mcpReq.inputResponses, "confirm");
+  if (accepted?.confirm === true) return { status: "confirmed" };
+
+  const view = inputResponse(ctx.mcpReq.inputResponses, "confirm");
+  if (view.kind !== "missing") {
+    return { status: "denied", result: errorResult(NOT_CONFIRMED) };
   }
+
+  return {
+    status: "needs_input",
+    result: inputRequired({
+      inputRequests: {
+        confirm: inputRequired.elicit({
+          message,
+          requestedSchema: {
+            type: "object",
+            properties: {
+              confirm: { type: "boolean", title: "Confirm", description: message },
+            },
+            required: ["confirm"],
+          },
+        }),
+      },
+    }),
+  };
 }

@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { ANALYTICS_METRIC_KEYS, definedProps, queryAnalytics } from "@trainheroic-unofficial/js";
 import { attempt, idParam, jsonResult, READ, toId } from "../context";

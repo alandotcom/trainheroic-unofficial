@@ -1,5 +1,5 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import process from "node:process";
 import { registerAthleteTrainingTools, SERVER_INSTRUCTIONS } from "@trainheroic-unofficial/core";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
@@ -10,7 +10,7 @@ import pkg from "../package.json" with { type: "json" };
 // training (history, workouts, PRs, working maxes) and so need only the client. Credentials
 // come from the environment. The hosted Cloudflare path lives in cloudflare/; the coach
 // counterpart is coach-mcp/.
-async function main(): Promise<void> {
+function main(): void {
   const email = process.env.TRAINHEROIC_EMAIL;
   const password = process.env.TRAINHEROIC_PASSWORD;
   if (!email || !password) {
@@ -20,13 +20,14 @@ async function main(): Promise<void> {
 
   const client = new TrainHeroicClient(email, password);
 
-  const server = new McpServer(
-    { name: "trainheroic-athlete", version: pkg.version },
-    { instructions: SERVER_INSTRUCTIONS },
-  );
-  registerAthleteTrainingTools(server, { client });
-
-  await server.connect(new StdioServerTransport());
+  serveStdio(() => {
+    const server = new McpServer(
+      { name: "trainheroic-athlete", version: pkg.version },
+      { instructions: SERVER_INSTRUCTIONS },
+    );
+    registerAthleteTrainingTools(server, { client });
+    return server;
+  });
 }
 
-await main();
+main();

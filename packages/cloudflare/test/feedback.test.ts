@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import type { RecentToolCall } from "../src/tool-metrics";
 
 // Control whether the SDK looks "configured" and capture what gets sent, without standing up a
@@ -49,7 +49,7 @@ function deps() {
   return {
     email: "user@example.com",
     role: "coach",
-    sessionId: "streamable-http:sess-1",
+    sessionId: "user:42",
     version: "9.9.9",
     release: "rel-1",
     recentCalls: () => RECENT,
@@ -107,7 +107,7 @@ describe("report_feedback tool", () => {
     expect(params.tags).toMatchObject({
       "feedback.kind": "bug",
       "mcp.role": "coach",
-      "mcp.session": "streamable-http:sess-1",
+      "mcp.session": "user:42",
     });
     // The body inlines the structured detail and the recent-call trail so it reads on its own.
     expect(params.message).toContain("athlete_workouts returned nothing");

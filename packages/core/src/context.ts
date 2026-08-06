@@ -1,7 +1,10 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, InputRequiredResult } from "@modelcontextprotocol/server";
 import { idArgSchema } from "@trainheroic-unofficial/dto";
 import type { ExerciseIndex } from "@trainheroic-unofficial/js";
 import type { RequestOptions, TrainHeroicClient } from "@trainheroic-unofficial/js";
+
+/** What a tool handler may return: a finished result or an MRTR input round. */
+export type ToolHandlerResult = CallToolResult | InputRequiredResult;
 
 /** A tool argument that accepts a numeric id as a number or a string of digits. */
 export const idParam = idArgSchema;
@@ -32,7 +35,7 @@ export type ToolContext = {
 };
 
 /** Run a tool body, converting thrown errors into an in-band tool error. */
-export async function attempt(fn: () => Promise<CallToolResult>): Promise<CallToolResult> {
+export async function attempt(fn: () => Promise<ToolHandlerResult>): Promise<ToolHandlerResult> {
   try {
     return await fn();
   } catch (err) {
@@ -207,7 +210,7 @@ export async function apiCall(
   options?: RequestOptions,
   hint?: string,
 ): Promise<CallToolResult> {
-  return attempt(async () => {
+  try {
     const res = await ctx.client.request(method, path, options);
     if (!res.ok) {
       const raw = typeof res.data === "string" ? res.data : (JSON.stringify(res.data) ?? "");
@@ -215,5 +218,7 @@ export async function apiCall(
       return errorResult(`TrainHeroic API error (HTTP ${res.status}): ${detail}`);
     }
     return jsonResult(res.data, { hint });
-  });
+  } catch (err) {
+    return errorResult(err instanceof Error ? err.message : String(err));
+  }
 }

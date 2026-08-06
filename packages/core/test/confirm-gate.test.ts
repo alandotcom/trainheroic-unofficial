@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
+import { isInputRequiredResult } from "@modelcontextprotocol/server";
 import { registerAthleteTools } from "../src/tools/athletes";
 import { registerMessagingTools } from "../src/tools/messaging";
 import { registerTeamTools } from "../src/tools/teams";
@@ -8,22 +9,21 @@ import type { ToolContext } from "../src/context";
 
 type Handler = (
   args: Record<string, unknown>,
-  extra: { requestId?: string },
-) => Promise<{ isError?: boolean }>;
+  ctx: ServerContext,
+) => Promise<{ isError?: boolean } | unknown>;
 
 type Register = (server: McpServer, ctx: ToolContext) => void;
 
-/** A fake McpServer that captures registered tool handlers and stubs elicitation. */
-function harness(elicit: () => Promise<unknown>) {
+/** A fake McpServer that captures registered tool handlers. */
+function harness() {
   const handlers = new Map<string, Handler>();
   const server = {
-    server: { elicitInput: elicit },
     registerTool: (name: string, _cfg: unknown, handler: Handler) => handlers.set(name, handler),
   } as unknown as McpServer;
   return { server, handlers };
 }
 
-function ctx(onRequest: () => void): ToolContext {
+function toolCtx(onRequest: () => void): ToolContext {
   const client = {
     request: async () => {
       onRequest();
@@ -33,11 +33,9 @@ function ctx(onRequest: () => void): ToolContext {
   return { client, index: {} } as unknown as ToolContext;
 }
 
-const DECLINE = async () => ({ action: "decline" });
-const UNAVAILABLE = async () => {
-  throw new Error("client does not support elicitation");
-};
-const ACCEPT = async () => ({ action: "accept", content: { confirm: true } });
+function mcpCtx(inputResponses?: Record<string, unknown>): ServerContext {
+  return { mcpReq: { inputResponses } } as unknown as ServerContext;
+}
 
 // Every gated coach tool, with the minimal args that reach the confirmGate call. The gate is
 // the first network-touching step in each handler, so a blocked call never reaches the API.
@@ -57,45 +55,42 @@ const GATED: Array<{ reg: Register; name: string; args: Record<string, unknown> 
   { reg: registerWorkoutTools, name: "session_unpublish", args: { pwId: 2 } },
 ];
 
-function run(
-  reg: Register,
-  name: string,
-  elicit: () => Promise<unknown>,
-  args: Record<string, unknown>,
-) {
+function run(reg: Register, name: string, args: Record<string, unknown>) {
   let called = false;
-  const { server, handlers } = harness(elicit);
+  const { server, handlers } = harness();
   reg(
     server,
-    ctx(() => {
+    toolCtx(() => {
       called = true;
     }),
   );
   const handler = handlers.get(name);
   expect(handler, `${name} should be registered`).toBeDefined();
-  return { run: () => handler!(args, { requestId: "r1" }), called: () => called };
+  return {
+    run: (ctx: ServerContext) => handler!(args, ctx),
+    called: () => called,
+  };
 }
 
 describe("every gated coach tool fails closed without confirmation", () => {
   for (const t of GATED) {
     it(`${t.name}: declined elicitation → blocked, no API call`, async () => {
-      const probe = run(t.reg, t.name, DECLINE, t.args);
-      const res = await probe.run();
-      expect(res.isError, `${t.name} must be blocked`).toBe(true);
+      const probe = run(t.reg, t.name, t.args);
+      const res = await probe.run(mcpCtx({ confirm: { action: "decline" } }));
+      expect((res as { isError?: boolean }).isError, `${t.name} must be blocked`).toBe(true);
       expect(probe.called(), `${t.name} must not hit the API`).toBe(false);
     });
 
-    it(`${t.name}: elicitation unavailable → blocked (fail closed)`, async () => {
-      const probe = run(t.reg, t.name, UNAVAILABLE, t.args);
-      const res = await probe.run();
-      expect(res.isError, `${t.name} must fail closed`).toBe(true);
+    it(`${t.name}: no confirm → needs_input (MRTR), no API call`, async () => {
+      const probe = run(t.reg, t.name, t.args);
+      const res = await probe.run(mcpCtx());
+      expect(isInputRequiredResult(res), `${t.name} must request input`).toBe(true);
       expect(probe.called(), `${t.name} must not hit the API`).toBe(false);
     });
 
-    it(`${t.name}: confirm:true opens the gate → API called (and never elicits)`, async () => {
-      // The elicit stub throws if touched, proving confirm:true short-circuits elicitation.
-      const probe = run(t.reg, t.name, UNAVAILABLE, { ...t.args, confirm: true });
-      await probe.run();
+    it(`${t.name}: confirm:true opens the gate → API called`, async () => {
+      const probe = run(t.reg, t.name, { ...t.args, confirm: true });
+      await probe.run(mcpCtx());
       expect(probe.called(), `${t.name} should hit the API when confirmed`).toBe(true);
     });
   }
@@ -103,9 +98,11 @@ describe("every gated coach tool fails closed without confirmation", () => {
 
 describe("accepted elicitation opens the gate", () => {
   it("athlete_archive calls the API once elicitation is accepted", async () => {
-    const probe = run(registerAthleteTools, "athlete_archive", ACCEPT, { athleteIds: [123] });
-    const res = await probe.run();
+    const probe = run(registerAthleteTools, "athlete_archive", { athleteIds: [123] });
+    const res = await probe.run(
+      mcpCtx({ confirm: { action: "accept", content: { confirm: true } } }),
+    );
     expect(probe.called()).toBe(true);
-    expect(res.isError).toBeUndefined();
+    expect((res as { isError?: boolean }).isError).toBeUndefined();
   });
 });
