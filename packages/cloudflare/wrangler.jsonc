@@ -3,7 +3,11 @@
   "name": "trainheroic-mcp",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-19",
-  "compatibility_flags": ["nodejs_compat"],
+  // `global_fetch_strictly_public` is required by workers-oauth-provider for Client ID Metadata
+  // Documents (it makes every outbound fetch go over the public internet, so a CIMD URL cannot
+  // be pointed at an internal address). All of this Worker's outbound traffic is public already
+  // (TrainHeroic, Sentry); D1 and KV are bindings, not fetch.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "observability": {
     "enabled": true
   },

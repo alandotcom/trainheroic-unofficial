@@ -34,8 +34,14 @@ export type ToolContext = {
   index: ExerciseIndex;
 };
 
-/** Run a tool body, converting thrown errors into an in-band tool error. */
-export async function attempt(fn: () => Promise<ToolHandlerResult>): Promise<ToolHandlerResult> {
+/**
+ * Run a tool body, converting thrown errors into an in-band tool error. Generic so a caller that
+ * only ever produces a `CallToolResult` keeps that narrower type instead of widening to the
+ * MRTR union — that is what lets `apiCall` delegate here rather than repeat this catch.
+ */
+export async function attempt<T extends ToolHandlerResult>(
+  fn: () => Promise<T>,
+): Promise<T | CallToolResult> {
   try {
     return await fn();
   } catch (err) {
@@ -210,7 +216,7 @@ export async function apiCall(
   options?: RequestOptions,
   hint?: string,
 ): Promise<CallToolResult> {
-  try {
+  return attempt(async () => {
     const res = await ctx.client.request(method, path, options);
     if (!res.ok) {
       const raw = typeof res.data === "string" ? res.data : (JSON.stringify(res.data) ?? "");
@@ -218,7 +224,5 @@ export async function apiCall(
       return errorResult(`TrainHeroic API error (HTTP ${res.status}): ${detail}`);
     }
     return jsonResult(res.data, { hint });
-  } catch (err) {
-    return errorResult(err instanceof Error ? err.message : String(err));
-  }
+  });
 }

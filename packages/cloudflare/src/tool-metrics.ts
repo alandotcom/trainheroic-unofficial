@@ -59,15 +59,32 @@ export function instrumentToolMetrics(
   };
 }
 
-function isErrorResult(result: unknown): boolean {
-  if (isInputRequiredResult(result)) return false;
-  return (
+/** How a settled tool invocation is classified for metrics and span status. */
+export type ToolOutcome = "ok" | "error" | "input_required";
+
+/**
+ * Classify what a tool handler returned.
+ *
+ * `input_required` is its own outcome, not a success: every gated tool now returns an MRTR
+ * elicitation round on its first invocation and does the work on the client's retry, so counting
+ * that round as a completed call would double every destructive tool's `mcp.tool.call` count and
+ * pollute the duration distribution with near-zero samples. An error is either a thrown handler
+ * or the in-band `{ isError: true }` convention the model self-corrects on.
+ */
+export function toolOutcome(result: unknown): ToolOutcome {
+  if (isInputRequiredResult(result)) return "input_required";
+  const isError =
     typeof result === "object" &&
     result !== null &&
-    (result as { isError?: unknown }).isError === true
-  );
+    (result as { isError?: unknown }).isError === true;
+  return isError ? "error" : "ok";
 }
 
+/**
+ * Sentry's error span-status code (the OTEL `SpanStatusCode.ERROR`). Inlined rather than imported
+ * from `@sentry/core` to keep the dependency surface to the single `@sentry/cloudflare`
+ * meta-package (`@sentry/core` is only a transitive dependency here).
+ */
 const SPAN_STATUS_ERROR = 2;
 
 function wrapHandler(
@@ -79,8 +96,13 @@ function wrapHandler(
   return (...handlerArgs: unknown[]): unknown => {
     tagMcpUser(correlationId);
 
+    // Durations are approximate: Workers advances `Date.now()` only across I/O, which every
+    // TrainHeroic-backed tool performs, so the wall-clock spent waiting on the API is captured.
     const start = Date.now();
-    const recordMetrics = (status: "ok" | "error"): void => {
+    const recordMetrics = (status: ToolOutcome): void => {
+      // An elicitation round has not run the tool, so it belongs in neither the call count nor
+      // the duration distribution. Its span still records the outcome (below).
+      if (status === "input_required") return;
       const ms = Date.now() - start;
       Sentry.metrics.count("mcp.tool.call", 1, { attributes: { tool: name, surface, status } });
       Sentry.metrics.distribution("mcp.tool.duration_ms", ms, {
@@ -96,9 +118,11 @@ function wrapHandler(
         attributes: { "mcp.tool": name, "mcp.surface": surface, "mcp.session": correlationId },
       },
       (span): unknown => {
-        const settle = (status: "ok" | "error"): void => {
+        const settle = (status: ToolOutcome): void => {
           recordMetrics(status);
           span.setAttribute("mcp.status", status);
+          // A thrown/rejected handler already trips Sentry's error status; mark the in-band
+          // `{ isError: true }` convention too so both failure modes show red in the waterfall.
           if (status === "error") {
             span.setStatus({ code: SPAN_STATUS_ERROR, message: "tool_error" });
           }
@@ -115,7 +139,7 @@ function wrapHandler(
         if (result instanceof Promise) {
           return result.then(
             (resolved: unknown) => {
-              settle(isErrorResult(resolved) ? "error" : "ok");
+              settle(toolOutcome(resolved));
               return resolved;
             },
             (err: unknown) => {
@@ -125,7 +149,7 @@ function wrapHandler(
           );
         }
 
-        settle(isErrorResult(result) ? "error" : "ok");
+        settle(toolOutcome(result));
         return result;
       },
     );

@@ -31,6 +31,8 @@ login.
   `session-cache.ts`.
 - Keep domain logic in `js`. The CLI should stay a thin adapter; if a command needs new API
   behavior, add it to the SDK and call it here.
+- Every endpoint gets a typed command. No raw-request escape hatch — one existed and was
+  removed. A missing capability is a new command in `js` and here.
 
 ## Commands
 

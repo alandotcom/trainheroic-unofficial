@@ -104,9 +104,16 @@ needs the `mcp-remote` bridge with `--transport http-only`:
 
 ## Notes
 
-- **Protected resource metadata.** `resourceMetadata.resource` in `src/index.ts` is pinned
-  to the canonical hosted URL `https://mcp.trainheroic-unofficial.com/mcp`. Keep that value
-  aligned with the public MCP endpoint clients connect to.
+- **Protected resource metadata.** `resourceMetadata.resource` is deliberately left unset in
+  `src/index.ts`, so the library derives the RFC 9728 identifier from the request. That is
+  correct on every origin (custom domain, `workers.dev`, localhost) and for each of the three
+  mount paths. Do not pin it: a fixed value would advertise `/mcp` to a client that connected
+  to `/mcp/coach`, and would bind every issued token's audience to one origin, so any other
+  origin gets a 401 `Invalid audience`.
+- **Client ID Metadata Documents.** `clientIdMetadataDocumentEnabled` requires the
+  `global_fetch_strictly_public` compatibility flag in `wrangler.jsonc`. The two move together:
+  without the flag the provider advertises CIMD as unsupported and throws (a 500) on any
+  URL-shaped `client_id` instead of answering a clean `invalid_client`.
 - **Rate limiting.** Two native bindings in `wrangler.jsonc` under `ratelimits`
   (`LOGIN_RATE_LIMITER` for the login surface, `MCP_RATE_LIMITER` for `/mcp`), keyed on client
   IP at the edge. Tune `limit`/`period` (period is 10 or 60); rerun `pnpm cf-typegen` after

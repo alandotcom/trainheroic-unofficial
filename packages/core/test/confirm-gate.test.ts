@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { isInputRequiredResult } from "@modelcontextprotocol/server";
+import { registerAthleteTrainingTools } from "../src/tools/athlete-training";
 import { registerAthleteTools } from "../src/tools/athletes";
 import { registerMessagingTools } from "../src/tools/messaging";
 import { registerTeamTools } from "../src/tools/teams";
@@ -12,7 +13,11 @@ type Handler = (
   ctx: ServerContext,
 ) => Promise<{ isError?: boolean } | unknown>;
 
-type Register = (server: McpServer, ctx: ToolContext) => void;
+/**
+ * Coach registrars take the full `ToolContext`; the athlete-training registrar takes only
+ * `{ client }`. The fake context below satisfies both, so one table can cover every gated tool.
+ */
+type Register = (server: McpServer, ctx: never) => void;
 
 /** A fake McpServer that captures registered tool handlers. */
 function harness() {
@@ -51,6 +56,49 @@ const GATED: Array<{ reg: Register; name: string; args: Record<string, unknown> 
   },
   { reg: registerWorkoutTools, name: "session_remove", args: { programId: 1, pwId: 2 } },
   { reg: registerWorkoutTools, name: "session_unpublish", args: { pwId: 2 } },
+  // Coach writes into an athlete's own log / prescription.
+  {
+    reg: registerAthleteTools,
+    name: "log_athlete_set",
+    args: { athleteId: 1, date: "2026-06-21", savedWorkoutSetId: 2, results: [] },
+  },
+  {
+    reg: registerAthleteTools,
+    name: "coach_log_session",
+    args: { athleteId: 1, date: "2026-06-21", exercises: [{ exerciseId: 3, sets: [{ reps: 5 }] }] },
+  },
+  {
+    reg: registerAthleteTools,
+    name: "swap_athlete_exercise",
+    args: { savedWorkoutSetExerciseId: 1, exerciseId: 2 },
+  },
+  {
+    reg: registerAthleteTools,
+    name: "prescribe_athlete_set",
+    args: { athleteId: 1, date: "2026-06-21", savedWorkoutSetId: 2, results: [] },
+  },
+  // The athlete surface is registered for EVERY hosted account, so an ungated write here is
+  // reachable by every user — these gates matter most.
+  {
+    reg: registerAthleteTrainingTools,
+    name: "athlete_session_remove",
+    args: { programWorkoutId: 1, date: "2026-06-21" },
+  },
+  {
+    reg: registerAthleteTrainingTools,
+    name: "athlete_log_session",
+    args: { date: "2026-06-21", exercises: [{ exerciseId: 3, sets: [{ reps: 5 }] }] },
+  },
+  {
+    reg: registerAthleteTrainingTools,
+    name: "athlete_log_set",
+    args: { date: "2026-06-21", savedWorkoutSetId: 2, results: [] },
+  },
+  {
+    reg: registerAthleteTrainingTools,
+    name: "athlete_swap_exercise",
+    args: { savedWorkoutSetExerciseId: 1, exerciseId: 2 },
+  },
 ];
 
 function run(reg: Register, name: string, args: Record<string, unknown>) {
@@ -60,7 +108,7 @@ function run(reg: Register, name: string, args: Record<string, unknown>) {
     server,
     toolCtx(() => {
       called = true;
-    }),
+    }) as never,
   );
   const handler = handlers.get(name);
   expect(handler, `${name} should be registered`).toBeDefined();

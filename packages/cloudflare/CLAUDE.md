@@ -18,14 +18,25 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   `provider.fetch`, and the scheduled (cron) purge. The provider's `apiHandlers` mount three
   variant paths (most-specific first, since matching is prefix-ordered): `/mcp` (full),
   `/mcp/coach`, `/mcp/athlete` — each to a `createMcpHandler` factory from `mcp.ts`. OAuth
-  enables Client ID Metadata Documents (CIMD); Dynamic Client Registration (`/register`) is
-  kept for the deprecation window. `resourceMetadata.resource` is pinned to the canonical
-  hosted URL (`https://mcp.trainheroic-unofficial.com/mcp`).
+  enables Client ID Metadata Documents (CIMD), which requires the `global_fetch_strictly_public`
+  compatibility flag in `wrangler.jsonc` — enable the two together or not at all. Dynamic Client
+  Registration (`/register`) is kept for the deprecation window. `resourceMetadata.resource` is
+  left unset so the library derives it per request, which is the only value correct for all
+  three mount paths and every origin.
 - `src/mcp.ts`: MCP SDK v2 server factories. One module-level `createMcpHandler` per
   `McpVariant` (`full` | `coach` | `athlete`); bindings come from
   `import { env } from "cloudflare:workers"`. Credentials come from the OAuth grant via
-  `getMcpAuthContext`. Coach tools register through `registerCoachTools` from `core`. No
-  MCP Durable Objects (see `docs/adr/0001-mcp-sdk-v2-migration.md`, issue #73).
+  `getMcpAuthContext`, narrowed by `parseProps` (which normalizes `role` rather than rejecting
+  it, so grants issued before `AccountRole` existed keep working). `selectSurfaces` is the
+  authorization boundary — an athlete account never gets coach tools — and is pinned by
+  `test/mcp.test.ts`. Coach tools register through `registerCoachTools` from `core`. The
+  factory runs once per HTTP request, so a module-level `sessionCache` keyed by `thUserId`
+  holds the TrainHeroic session token; without it every tool call would replay the user's
+  password against `/auth`. Pass `onerror` to `createMcpHandler` for anything that must reach
+  Sentry — the SDK catches errors and answers 500 without rethrowing, so `withSentry` in
+  `index.ts` never sees them. Do not pass `allowedHostnames`: it replaces the SDK's
+  localhost/`workers.dev` defaults rather than adding to them, which 403s local dev. No MCP
+  Durable Objects (see `docs/adr/0001-mcp-sdk-v2-migration.md`, issue #73).
 - `src/auth/`: the `/authorize` login flow, the login page, and the crypto helpers.
 - `src/store/`: the per-tenant D1 layer. `ExerciseStore` implements the SDK's `ExerciseIndex`
   interface (the hosted counterpart to the in-memory `ExerciseLibrary`); the programming and

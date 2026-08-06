@@ -78,18 +78,6 @@ trainheroic coach workout build --program 988 --date 2026-6-22 --file day.json
 trainheroic coach workout build --program 988 --date 2026-6-22 --file day.json --publish --yes
 ```
 
-### Raw requests
-
-For an endpoint with no dedicated command, call it directly:
-
-```bash
-trainheroic request GET /user/simple
-trainheroic request POST /some/path '{"key":"value"}' --base apis
-```
-
-`--base` selects the host: `coach` (the default, `api.trainheroic.com`) or `apis`
-(`apis.trainheroic.com`). The body can be inline JSON (as above) or `--file <path>`.
-
 ## Conventions
 
 - Output is JSON on stdout; errors go to stderr with a non-zero exit code and a readable
