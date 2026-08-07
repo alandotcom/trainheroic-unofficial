@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrainHeroicClient } from "../src/client";
-import { fetchAthleteCalendar } from "../src/athlete";
+import {
+  fetchCoachAthleteCalendar,
+  resolveBuildProgramId,
+} from "../src/coach-athlete-calendar";
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -13,7 +16,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("fetchAthleteCalendar", () => {
+describe("fetchCoachAthleteCalendar", () => {
   it("GETs /v5/calendars/athletes/{id}?year=&month= and returns programId", async () => {
     let calledUrl = "";
     vi.stubGlobal(
@@ -29,7 +32,7 @@ describe("fetchAthleteCalendar", () => {
         });
       }),
     );
-    const cal = await fetchAthleteCalendar(
+    const cal = await fetchCoachAthleteCalendar(
       new TrainHeroicClient("a@b.com", "pw"),
       2897391,
       2026,
@@ -53,7 +56,46 @@ describe("fetchAthleteCalendar", () => {
       }),
     );
     await expect(
-      fetchAthleteCalendar(new TrainHeroicClient("a@b.com", "pw"), 1, 2026, 8),
+      fetchCoachAthleteCalendar(new TrainHeroicClient("a@b.com", "pw"), 1, 2026, 8),
     ).rejects.toThrow(/HTTP 400/u);
+  });
+});
+
+describe("resolveBuildProgramId", () => {
+  it("returns programId when given explicitly", async () => {
+    const id = await resolveBuildProgramId(new TrainHeroicClient("a@b.com", "pw"), {
+      programId: 42,
+    });
+    expect(id).toBe(42);
+  });
+
+  it("rejects both programId and athleteId", async () => {
+    await expect(
+      resolveBuildProgramId(new TrainHeroicClient("a@b.com", "pw"), {
+        programId: 1,
+        athleteId: 2,
+      }),
+    ).rejects.toThrow(/not both/u);
+  });
+
+  it("rejects neither", async () => {
+    await expect(
+      resolveBuildProgramId(new TrainHeroicClient("a@b.com", "pw"), {}),
+    ).rejects.toThrow(/Provide programId/u);
+  });
+
+  it("resolves athleteId via calendar fetch", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+        return json({ id: 5060391, title: "Sarah", type: 5, group_id: 1 });
+      }),
+    );
+    const id = await resolveBuildProgramId(new TrainHeroicClient("a@b.com", "pw"), {
+      athleteId: 2897391,
+      date: "2026-8-26",
+    });
+    expect(id).toBe(5060391);
   });
 });

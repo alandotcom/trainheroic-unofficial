@@ -6,11 +6,11 @@
 // `node:*` here — this runs unchanged on workerd.
 import { coerceInt, coerceNum, mapPool } from "./exercise-util";
 import {
-  fetchCoachAthleteWorkouts,
   fetchExerciseHistoryDetail,
   presentAthleteWorkouts,
   presentExerciseHistory,
 } from "./athlete";
+import { fetchCoachAthleteWorkouts } from "./coach-athlete-calendar";
 import { fetchCoachRoster } from "./coach";
 import type { TrainHeroicClient } from "./client";
 

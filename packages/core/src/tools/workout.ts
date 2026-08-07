@@ -6,16 +6,16 @@ import {
   type BuildOptions,
   collectAdvisories,
   copySession,
-  fetchAthleteCalendar,
   publishSession,
   readSession,
   removeSession,
+  resolveBuildProgramId,
 } from "@trainheroic-unofficial/js";
 import { confirmGate } from "../confirm";
 import { apiCall, attempt, errorResult, idParam, jsonResult, toId } from "../context";
 import type { ToolContext } from "../context";
 
-/** Build a draft, read it back, and publish it. */
+/** Build a draft session (workout_build). */
 function registerBuild(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "workout_build",
@@ -46,32 +46,18 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         if (date === undefined && timelineDay === undefined) {
           return errorResult("Provide either date (YYYY-M-D) or timelineDay.");
         }
-        if (programId === undefined && athleteId === undefined) {
-          return errorResult("Provide programId (team calendar) or athleteId (athlete calendar).");
-        }
-        if (programId !== undefined && athleteId !== undefined) {
-          return errorResult("Pass programId or athleteId, not both.");
-        }
-        if (athleteId !== undefined && date === undefined) {
-          return errorResult("athleteId requires date (YYYY-M-D) to resolve the athlete calendar.");
-        }
-
-        let resolvedProgramId = programId;
-        if (athleteId !== undefined && date !== undefined) {
-          const [y, m] = parseWorkoutDate(date);
-          const cal = await fetchAthleteCalendar(ctx.client, toId(athleteId), y, m);
-          resolvedProgramId = cal.programId;
-        }
-        if (resolvedProgramId === undefined) {
-          return errorResult("Could not resolve programId.");
-        }
+        const resolveArgs: {
+          programId?: number;
+          athleteId?: number;
+          date?: string;
+        } = {};
+        if (programId !== undefined) resolveArgs.programId = programId;
+        if (athleteId !== undefined) resolveArgs.athleteId = toId(athleteId);
+        if (date !== undefined) resolveArgs.date = date;
+        const resolved = await resolveBuildProgramId(ctx.client, resolveArgs);
 
         const typed = blocks as BlockSpec[];
-        const opts: BuildOptions = {
-          programId: resolvedProgramId,
-          blocks: typed,
-          publish: false,
-        };
+        const opts: BuildOptions = { programId: resolved, blocks: typed, publish: false };
         if (date !== undefined) opts.date = parseWorkoutDate(date);
         if (timelineDay !== undefined) opts.timelineDay = timelineDay;
         if (instruction !== undefined) opts.instruction = instruction;
@@ -79,11 +65,11 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         const advisories = await collectAdvisories(typed, ctx.index);
         const built = await buildSession(ctx.client, opts);
         const readback = opts.date
-          ? await readSession(ctx.client, resolvedProgramId, opts.date, built.pwId)
+          ? await readSession(ctx.client, resolved, opts.date, built.pwId)
           : null;
         return jsonResult({
           ...built,
-          programId: resolvedProgramId,
+          programId: resolved,
           published: false,
           advisories,
           readback,
@@ -91,7 +77,10 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         });
       }),
   );
+}
 
+/** Read-back and publish for a built session. */
+function registerReadPublish(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "workout_read",
     {
@@ -228,5 +217,6 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
 /** Workout building, read-back, publishing, and the session calendar lifecycle. */
 export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void {
   registerBuild(server, ctx);
+  registerReadPublish(server, ctx);
   registerLifecycle(server, ctx);
 }
