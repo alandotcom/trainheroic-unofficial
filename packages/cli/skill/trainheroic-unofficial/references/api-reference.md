@@ -1320,15 +1320,21 @@ Saves an existing session as a reusable template in the session library. No requ
 
 #### `PUT /v5/teams/{teamId}`
 
-Updates team properties like title.
+Updates team properties. `title` is required by the API (HTTP 400 without it). Optional
+`group_program` re-points the team at an existing parent program/calendar (e.g. another
+team's `group_program` from `GET /1.0/coach/teams`).
 
 **Request body:**
 
 ```json
 {
-  "title": "New Team Name"
+  "title": "New Team Name",
+  "group_program": 4713234
 }
 ```
+
+`team_create` always auto-creates a calendar; to attach a new team to an existing calendar,
+create the team then `team_update` / `coach team-update --group-program <id>`.
 
 #### `POST /1.0/coach/team/updatePublishSettings`
 

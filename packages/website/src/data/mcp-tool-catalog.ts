@@ -57,7 +57,7 @@ export const TOOL_SUMMARIES: Record<string, string> = {
   swap_athlete_exercise: "Swap an exercise in a session",
   prescribe_athlete_set: "Override prescribed sets",
   team_create: "Create a team",
-  team_update: "Rename or update a team",
+  team_update: "Rename a team or reassign its calendar",
   team_delete: "Delete a team",
   team_code_create: "Create a join code",
   team_code_delete: "Delete a join code",

@@ -48,6 +48,7 @@ import {
   fetchTeamAthleteIds,
   fetchWorkingMaxes,
   inviteAthletes,
+  updateTeam,
   logAdHocSession,
   logAthleteSet,
   logForAthlete,
@@ -144,7 +145,7 @@ Coach — manage a roster (needs a coach account):
 
   teams & join codes:
   coach team-create --title "..."
-  coach team-update --team <id> --title "..."
+  coach team-update --team <id> [--title "..."] [--group-program <id>]
   coach team-delete --team <id> --yes
   coach team-code-create --team <id> [--type N]
   coach team-code-delete --code <id> --yes        (--code is the id from team-code-create, not the join-code number)
@@ -1258,11 +1259,21 @@ async function cmdCoachTeamCreate(client: TrainHeroicClient, a: string[]): Promi
 }
 
 async function cmdCoachTeamUpdate(client: TrainHeroicClient, a: string[]): Promise<void> {
-  const usage = 'coach team-update --team <id> --title "..."';
-  const { values } = parse(a, { team: { type: "string" }, title: { type: "string" } });
+  const usage =
+    'coach team-update --team <id> [--title "..."] [--group-program <id>]  (at least one of --title / --group-program)';
+  const { values } = parse(a, {
+    team: { type: "string" },
+    title: { type: "string" },
+    "group-program": { type: "string" },
+  });
   const teamId = toInt(need(values.team as string | undefined, usage), "--team");
-  const title = need(values.title as string | undefined, usage);
-  return out(await mutate(client, "PUT", `/v5/teams/${teamId}`, { title }));
+  const title = values.title as string | undefined;
+  const groupProgramRaw = values["group-program"] as string | undefined;
+  if (title === undefined && groupProgramRaw === undefined) fail(usage);
+  const args: { teamId: number; title?: string; groupProgram?: number } = { teamId };
+  if (title !== undefined) args.title = title;
+  if (groupProgramRaw !== undefined) args.groupProgram = toInt(groupProgramRaw, "--group-program");
+  return out(await updateTeam(client, args));
 }
 
 async function cmdCoachTeamDelete(client: TrainHeroicClient, a: string[]): Promise<void> {
