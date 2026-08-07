@@ -11,9 +11,26 @@ describe("workout schemas", () => {
     expect(blockSpecSchema.parse(block).title).toBe("Primary");
   });
 
-  it("rejects a block without a title or exercises", () => {
+  it("rejects a block without a title", () => {
     expect(() => blockSpecSchema.parse({ exercises: [] })).toThrow();
+  });
+
+  it("rejects a block missing the exercises field", () => {
     expect(() => blockSpecSchema.parse({ title: "x" })).toThrow();
+  });
+
+  it("rejects an empty-exercise block without instruction", () => {
+    expect(() => blockSpecSchema.parse({ title: "Prep", exercises: [] })).toThrow(/instruction/iu);
+  });
+
+  it("accepts a text-only Circuit / Conditioning block (empty exercises + instruction)", () => {
+    const block = blockSpecSchema.parse({
+      title: "Prep",
+      exercises: [],
+      instruction: "3 rounds: 10 air squats, 10 push-ups, 200m run",
+    });
+    expect(block.exercises).toEqual([]);
+    expect(block.instruction).toMatch(/3 rounds/u);
   });
 
   it("rejects an exercise missing an id", () => {

@@ -6,8 +6,9 @@
 
 import { parseWorkoutDate } from "@trainheroic-unofficial/dto";
 import type { TeamVolumeAthlete, TeamVolumeReport } from "@trainheroic-unofficial/dto";
-import { coerceInt } from "./exercise-util";
 import type { TrainHeroicClient } from "./client";
+import { coerceInt } from "./exercise-util";
+import { calendarWriteError } from "./workout-session";
 
 export const DEFAULT_INVITE_MESSAGE = "Follow these steps and you'll be set up and ready to go!";
 
@@ -111,14 +112,18 @@ export async function copySession(
   const [year, month, day] = parseWorkoutDate(args.toDate);
   const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
   const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  const res = await client.request("POST", "/2.0/coach/calendar/copyProgramWorkout", {
+  const path = "/2.0/coach/calendar/copyProgramWorkout";
+  const res = await client.request("POST", path, {
     body: {
       toProgramId: args.toProgramId,
       pwId: args.pwId,
       toDate: { date: iso, day, month, year, dayOfWeek, isToday: false },
     },
   });
-  if (!res.ok) throw new Error(`Copy session failed (HTTP ${res.status}).`);
+  if (!res.ok) {
+    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    throw calendarWriteError("POST", path, res.status, detail);
+  }
   return res.data;
 }
 

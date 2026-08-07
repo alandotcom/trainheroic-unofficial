@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBlockPayload,
+  defaultBlockType,
   makeExercise,
   repsList,
   resolveLeaderboard,
@@ -132,8 +133,8 @@ describe("buildBlockPayload", () => {
   it("orders blocks, keys them, and encodes leaderboards", () => {
     const payload = buildBlockPayload(
       [
-        { title: "A", exercises: [] },
-        { title: "B", exercises: [], leaderboard: "reps" },
+        { title: "A", exercises: [{ id: 1, reps: [5] }] },
+        { title: "B", exercises: [{ id: 2, reps: [3] }], leaderboard: "reps" },
       ],
       500,
     );
@@ -146,6 +147,42 @@ describe("buildBlockPayload", () => {
       is_redzone: null,
     });
     expect(payload[1]).toMatchObject({ order: 2, title: "B", redzone_type: 2, is_redzone: 1 });
+  });
+
+  it("defaults text-only blocks to Conditioning type 1 and keeps the instruction", () => {
+    const payload = buildBlockPayload(
+      [
+        {
+          title: "Prep Circuit",
+          instruction: "3 rounds for quality:\n10 air squats\n10 push-ups",
+          exercises: [],
+        },
+      ],
+      500,
+    );
+    expect(payload[0]).toMatchObject({
+      order: 1,
+      type: 1,
+      title: "Prep Circuit",
+      instruction: "3 rounds for quality:\n10 air squats\n10 push-ups",
+      exercises: [],
+    });
+  });
+
+  it("honors an explicit type on a text-only block", () => {
+    const payload = buildBlockPayload(
+      [{ title: "Note", type: 4, instruction: "Rest day notes", exercises: [] }],
+      1,
+    );
+    expect(payload[0]?.type).toBe(4);
+  });
+});
+
+describe("defaultBlockType", () => {
+  it("returns Conditioning for text-only blocks and Hypertrophy otherwise", () => {
+    expect(defaultBlockType({ title: "A", exercises: [], instruction: "x" })).toBe(1);
+    expect(defaultBlockType({ title: "A", exercises: [{ id: 1 }] })).toBe(2);
+    expect(defaultBlockType({ title: "A", type: 4, exercises: [{ id: 1 }] })).toBe(4);
   });
 });
 

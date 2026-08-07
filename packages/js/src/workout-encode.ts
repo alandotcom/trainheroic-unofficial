@@ -194,6 +194,19 @@ export function makeExercise(
   return entry;
 }
 
+/** Block `type` values the coach calendar accepts (verified in workout-creation.md). */
+export const BLOCK_TYPE_CONDITIONING = 1;
+export const BLOCK_TYPE_HYPERTROPHY = 2;
+
+/**
+ * Default block type: text-only (empty exercises) blocks are Conditioning / Circuit (type 1);
+ * structured exercise blocks default to Hypertrophy (type 2). An explicit `type` always wins.
+ */
+export function defaultBlockType(block: BlockSpec): number {
+  if (block.type !== undefined) return block.type;
+  return block.exercises.length === 0 ? BLOCK_TYPE_CONDITIONING : BLOCK_TYPE_HYPERTROPHY;
+}
+
 export function buildBlockPayload(
   blocks: readonly BlockSpec[],
   workoutId: number,
@@ -203,7 +216,7 @@ export function buildBlockPayload(
     return {
       workout_id: workoutId,
       order: i + 1,
-      type: b.type ?? 2,
+      type: defaultBlockType(b),
       instruction: b.instruction ?? "",
       is_redzone: lb.isRedzone,
       redzone_type: lb.redzoneType,

@@ -22,9 +22,13 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
       title: "Build a workout session (draft)",
       description:
         "Build an UNPUBLISHED session from a spec (program -> session -> blocks -> exercises). " +
-        "Two exercises in one block become a superset. Add a block 'leaderboard' for a Red-Zone " +
-        "score, or a top-level 'instruction' for the session note (Coach Instructions). Returns " +
-        "the draft ids, a read-back, and unit advisories. Review, then workout_publish.",
+        "Works on team/group program calendars (and the authenticated coach's own personal " +
+        "calendar). Writing to another athlete's Coach Plan / personal_cal calendar is not " +
+        "supported (createWorkoutForDay returns HTTP 500). Two exercises in one block become a " +
+        "superset. A block with empty exercises and a non-empty block instruction is a text-only " +
+        "Circuit / Conditioning block (type 1). Add a block 'leaderboard' for a Red-Zone score, " +
+        "or a top-level 'instruction' for the session note (Coach Instructions). Returns the " +
+        "draft ids, a read-back, and unit advisories. Review, then workout_publish.",
       inputSchema: {
         programId: z.number(),
         date: z.string().optional(),
@@ -101,6 +105,11 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         return jsonResult({
           published: pwId,
           readback: await readSession(ctx.client, programId, parseWorkoutDate(date), pwId),
+          note:
+            "Published. Verify with workout_read (same programId/date/pwId). Do not use " +
+            "athlete_workouts to check a coach-published team session — that tool is the " +
+            "authenticated user's own athlete calendar, not a roster athlete's schedule. For a " +
+            "roster athlete's view use athlete_saved_workouts.",
         });
       }),
   );
@@ -159,7 +168,9 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
       title: "Copy a session to a date",
       description:
         "Copy/repeat a session to a target date on a program (POST .../copyProgramWorkout). " +
-        "toDate is YYYY-M-D. Creates a new session; review and publish it separately.",
+        "toDate is YYYY-M-D. Creates a new session; review and publish it separately. " +
+        "Team/group (and own personal) calendars only — copying onto another athlete's " +
+        "personal_cal / Coach Plan toProgramId fails with HTTP 500.",
       inputSchema: { toProgramId: z.number(), pwId: z.number(), toDate: z.string() },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },

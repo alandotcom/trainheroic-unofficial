@@ -148,13 +148,17 @@ function registerProfileTools(
 // functions below stay under the oxlint max-lines-per-function cap.
 
 const ATHLETE_WORKOUTS_DESC =
-  "Workouts in an inclusive YYYY-MM-DD window, flattened to blocks/exercises. Each exercise " +
-  "carries both its `prescribed` sets (what the program called for) and `performed` sets (what " +
-  "the athlete actually logged); each workout has a top-level `logged` flag. Use " +
-  "`performed`/`logged` to tell what was recorded or done. That is the reliable signal: a " +
-  "session can hold logged sets while the API's own completion flags stay 0, and an empty " +
-  "`performed` means nothing was logged for that exercise. For 'did I record anything / what " +
-  "did I do', set loggedOnly:true to return only sessions with logged sets (it keeps whole " +
+  "Workouts on the AUTHENTICATED user's own athlete calendar in an inclusive YYYY-MM-DD " +
+  "window, flattened to blocks/exercises. When a coach account calls this, it returns the " +
+  "coach's own training schedule — not a roster athlete's. To inspect a roster athlete use " +
+  "athlete_saved_workouts (or athlete_training for a month overview); to verify a coach-" +
+  "published team session from the calendar side use workout_read. " +
+  "Each exercise carries both its `prescribed` sets (what the program called for) and " +
+  "`performed` sets (what the athlete actually logged); each workout has a top-level `logged` " +
+  "flag. Use `performed`/`logged` to tell what was recorded or done. That is the reliable " +
+  "signal: a session can hold logged sets while the API's own completion flags stay 0, and an " +
+  "empty `performed` means nothing was logged for that exercise. For 'did I record anything / " +
+  "what did I do', set loggedOnly:true to return only sessions with logged sets (it keeps whole " +
   "sessions that have any logged set, so individual exercises inside can still show empty " +
   "`performed`; it also shrinks a large result); limit returns the most recent N workouts " +
   "(newest first). For a high-level overview ('what's on my schedule this week', 'what have I " +
