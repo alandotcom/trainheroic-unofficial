@@ -1,5 +1,11 @@
 # @trainheroic-unofficial/dto
 
+## 2.0.2
+
+### Patch Changes
+
+- d76fe73: Support text-only Circuit / Conditioning blocks in workout_build, clarify personal_cal coach-write errors, and add a live-api-probe skill.
+
 ## 2.0.1
 
 ## 2.0.0
