@@ -20,9 +20,7 @@ describe("workout schemas", () => {
   });
 
   it("rejects an empty-exercise block without instruction", () => {
-    expect(() => blockSpecSchema.parse({ title: "Prep", exercises: [] })).toThrow(
-      /instruction/iu,
-    );
+    expect(() => blockSpecSchema.parse({ title: "Prep", exercises: [] })).toThrow(/instruction/iu);
   });
 
   it("accepts a text-only Circuit / Conditioning block (empty exercises + instruction)", () => {
