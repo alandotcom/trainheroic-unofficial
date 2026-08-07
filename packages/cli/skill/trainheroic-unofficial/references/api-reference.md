@@ -373,7 +373,7 @@ Deletes a custom exercise. No request body needed. Only works on exercises where
 | POST   | `/v5/sessions/template`                                                               | **Create session template** (library)                             |
 | DELETE | `/v5/sessions/template/{sessionId}`                                                   | **Delete session template**                                       |
 | POST   | `/2.0/coach/calendar/workout/createWorkoutForTimelineDay/{programId}/{day}/null`      | **Create session in program** (timeline)                          |
-| POST   | `/2.0/coach/calendar/workout/createWorkoutForDay/{calendarId}/{year}/{month}/{day}/0` | **Create session on team calendar date**                          |
+| POST   | `/2.0/coach/calendar/workout/createWorkoutForDay/{calendarId}/{year}/{month}/{day}/0` | **Create session on calendar date** (team or athlete calendar) |
 | POST   | `/2.0/coach/calendar/saveProgramWorkoutSets`                                          | **Add block to session**                                          |
 | POST   | `/2.0/coach/calendar/saveWorkoutSetExercises`                                         | **Add exercise to block** (with prescription)                     |
 | POST   | `/2.0/coach/calendar/programWorkout/publish`                                          | **Publish session**                                               |
@@ -1013,6 +1013,7 @@ These are used by the mobile app / athlete-facing client (documented in `train-h
 | GET    | `/1.0/athlete/savedworkoutset/{id}`                     | Saved workout set                              |
 | GET    | `/1.0/athlete/savedworkout/{id}`                        | Saved workout                                  |
 | GET    | `/1.0/user/userInfo`                                    | User info                                      |
+| GET    | `/v5/calendars/athletes/{id}?year=&month=`              | **Athlete coach calendar** (program id for CREATE SESSION) |
 | GET    | `/v5/calendars/athletes/{id}/coachAthleteTeam`          | Coach-athlete team calendar                    |
 | GET    | `/v5/users/{id}/workingMaxes/{id1}`                     | Specific working max                           |
 | GET    | `/v5/programs/new`                                      | New programs                                   |

@@ -30,6 +30,7 @@ import {
   deleteComment,
   ExerciseLibrary,
   fetchAthleteMainLiftPRs,
+  fetchAthleteCalendar,
   fetchRosterMainLiftPRs,
   fetchAthletePrefs,
   fetchAthleteProfileSummary,
@@ -171,7 +172,7 @@ Coach — manage a roster (needs a coach account):
 
   workouts (spec: {"blocks":[{"title","exercises":[{"id","sets"?,"reps"?,"weight"?,"rpe"?}]}],"instruction"?};
             reps/weight may be a scalar or per-set array; omit --publish to leave a draft):
-  coach workout build --program <id> (--date Y-M-D | --timeline-day <n>) [--publish --yes] <spec.json>|--file f
+  coach workout build (--program <id> | --athlete <id>) (--date Y-M-D | --timeline-day <n>) [--publish --yes] <spec.json>|--file f
   coach workout read --program <id> --date Y-M-D --pw <id>
   coach workout publish --pw <id> --yes
   coach workout remove --program <id> --pw <id> --yes
@@ -356,18 +357,34 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
     case "build": {
       const { values, positionals } = parse(a, {
         program: { type: "string" },
+        athlete: { type: "string" },
         date: { type: "string" },
         "timeline-day": { type: "string" },
         publish: { type: "boolean" },
         yes: { type: "boolean" },
         file: { type: "string" },
       });
-      const programId = toInt(
-        need(values.program as string | undefined, "coach workout build --program <id> ..."),
-        "--program",
-      );
+      const usage =
+        "coach workout build (--program <id> | --athlete <id>) (--date Y-M-D | --timeline-day <n>) ...";
+      const programRaw = values.program as string | undefined;
+      const athleteRaw = values.athlete as string | undefined;
+      if ((programRaw === undefined) === (athleteRaw === undefined)) {
+        fail(`${usage} (pass exactly one of --program / --athlete)`);
+      }
       if (values.date === undefined && values["timeline-day"] === undefined) {
         fail("provide --date YYYY-M-D or --timeline-day <n>.");
+      }
+      if (athleteRaw !== undefined && values.date === undefined) {
+        fail("--athlete requires --date YYYY-M-D to resolve the athlete calendar.");
+      }
+      let programId: number;
+      if (athleteRaw !== undefined) {
+        const athleteId = toInt(athleteRaw, "--athlete");
+        const dateParts = parseDate(values.date as string);
+        const cal = await fetchAthleteCalendar(client, athleteId, dateParts[0], dateParts[1]);
+        programId = cal.programId;
+      } else {
+        programId = toInt(need(programRaw, usage), "--program");
       }
       const parsed = await jsonInput(positionals[0], values.file as string | undefined);
       // Accept a bare blocks array or a {blocks, instruction} object; validate strictly.
@@ -391,7 +408,7 @@ async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<vo
       const readback = opts.date
         ? await readSession(client, programId, opts.date, built.pwId)
         : null;
-      return out({ ...built, published: publish, advisories: advice, readback });
+      return out({ ...built, programId, published: publish, advisories: advice, readback });
     }
     case "read": {
       const { values } = parse(a, {

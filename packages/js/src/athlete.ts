@@ -343,6 +343,49 @@ export function fetchCoachAthleteCalendarSummary(
   );
 }
 
+/** A roster athlete's coach-writable calendar (from `GET /v5/calendars/athletes/{id}`). */
+export type AthleteCalendar = {
+  programId: number;
+  title: string;
+  /** Program type: 5 = individual athlete calendar, 4 = coach own calendar (observed). */
+  type: number | null;
+  groupId: number | null;
+};
+
+/**
+ * Resolve a roster athlete's coach-writable calendar program id
+ * (`GET /v5/calendars/athletes/{athleteId}?year=&month=`).
+ *
+ * Year and month are required by the API (HTTP 400 without them); the returned `programId` is
+ * stable for the athlete, so any month works. This is the calendar the coach web app writes
+ * with `createWorkoutForDay` when you open an athlete from My Athletes → calendar — distinct
+ * from athlete-created `personal_cal` ad-hoc sessions.
+ */
+export async function fetchAthleteCalendar(
+  client: TrainHeroicClient,
+  athleteId: number,
+  year: number,
+  month: number,
+): Promise<AthleteCalendar> {
+  const path = `/v5/calendars/athletes/${athleteId}?year=${year}&month=${month}`;
+  const res = await client.request<unknown>("GET", path);
+  if (!res.ok) {
+    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    throw new Error(`GET ${path} failed (HTTP ${res.status}): ${detail}`);
+  }
+  if (!isRecord(res.data)) throw new Error("Unexpected athlete calendar response.");
+  const programId = coerceInt(res.data.id);
+  if (programId === null || programId <= 0) {
+    throw new Error(`Athlete calendar for ${athleteId} did not include a program id.`);
+  }
+  return {
+    programId,
+    title: str(res.data.title) ?? "",
+    type: coerceInt(res.data.type),
+    groupId: coerceInt(res.data.group_id),
+  };
+}
+
 export function fetchLeaderboard(
   client: TrainHeroicClient,
   workoutId: number,
