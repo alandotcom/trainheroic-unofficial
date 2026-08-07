@@ -1,8 +1,9 @@
 // Coach write/query operations that carry real request-shaping logic, owned here so the MCP
 // tools (core) and the CLI share one implementation rather than duplicating it. Thin
-// single-request CRUD (team create/update/delete, team-code, archive/restore, session
+// single-request CRUD (team create/delete, team-code, archive/restore, session
 // unpublish/save-as-template) is left to the callers' own `request`/`apiCall` — there is no
-// behavior to centralize there.
+// behavior to centralize there. Team update lives here because re-pointing `group_program`
+// requires a title (API 400 without one), so we may need a GET-then-PUT.
 
 import { parseWorkoutDate } from "@trainheroic-unofficial/dto";
 import type { TeamVolumeAthlete, TeamVolumeReport } from "@trainheroic-unofficial/dto";
@@ -98,6 +99,50 @@ export async function inviteAthletes(
     throw new Error(`Invite failed (HTTP ${invite.status}): ${detail}`);
   }
   return { teamId: args.teamId, invited: valid, result: invite.data };
+}
+
+/**
+ * Update a team's title and/or reassign its calendar (`PUT /v5/teams/{teamId}`).
+ *
+ * The live API accepts `group_program` to point the team at an existing parent program /
+ * calendar (e.g. another team's `group_program` from `list_teams`), but rejects a body that
+ * has only `group_program` (HTTP 400 "Invalid parameters"). When `title` is omitted we read
+ * the current title first so callers can re-link without renaming.
+ */
+export async function updateTeam(
+  client: TrainHeroicClient,
+  args: { teamId: number; title?: string; groupProgram?: number },
+): Promise<unknown> {
+  if (args.title === undefined && args.groupProgram === undefined) {
+    throw new Error("Provide title and/or groupProgram.");
+  }
+  let title = args.title;
+  if (title === undefined) {
+    const existing = await client.request<unknown>("GET", `/v5/teams/${args.teamId}`);
+    if (!existing.ok) {
+      const detail =
+        typeof existing.data === "string" ? existing.data : JSON.stringify(existing.data);
+      throw new Error(`GET /v5/teams/${args.teamId} failed (HTTP ${existing.status}): ${detail}`);
+    }
+    const rec =
+      existing.data && typeof existing.data === "object"
+        ? (existing.data as { title?: unknown })
+        : null;
+    title = typeof rec?.title === "string" ? rec.title : "";
+    if (title.trim() === "") {
+      throw new Error(
+        `Could not read current title for team ${args.teamId}; pass title explicitly.`,
+      );
+    }
+  }
+  const body: { title: string; group_program?: number } = { title };
+  if (args.groupProgram !== undefined) body.group_program = args.groupProgram;
+  const res = await client.request("PUT", `/v5/teams/${args.teamId}`, { body });
+  if (!res.ok) {
+    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    throw new Error(`PUT /v5/teams/${args.teamId} failed (HTTP ${res.status}): ${detail}`);
+  }
+  return res.data;
 }
 
 /**

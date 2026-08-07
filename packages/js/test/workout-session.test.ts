@@ -189,7 +189,7 @@ describe("buildSession", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("hints at personal_cal when createWorkoutForDay returns HTTP 500", async () => {
+  it("hints at athlete calendar resolution when createWorkoutForDay returns HTTP 500", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -205,7 +205,7 @@ describe("buildSession", () => {
         date: [2026, 8, 1],
         blocks: [{ title: "A", exercises: [{ id: 1, reps: [5] }] }],
       }),
-    ).rejects.toThrow(/personal calendar|personal_cal|Coach Plan/iu);
+    ).rejects.toThrow(/calendars\/athletes|coach-writable|programId/iu);
   });
 });
 

@@ -47,11 +47,10 @@ export function calendarWriteError(
     return new Error(base);
   }
   return new Error(
-    `${base}. This often means the program is another athlete's Coach Plan / personal ` +
-      "calendar (personal_cal), which the coach calendar write endpoints do not support — " +
-      "workout_build and session_copy work on team/group programs (and the coach's own " +
-      "personal calendar), but there is currently no coach-facing tool to create sessions on " +
-      "another athlete's personal calendar.",
+    `${base}. This often means the programId is not a coach-writable calendar — use a ` +
+      "team/group programId (list_teams → group_program) or resolve a roster athlete's " +
+      "calendar via GET /v5/calendars/athletes/{athleteId}?year=&month= (workout_build " +
+      "athleteId). Athlete-created personal_cal ad-hoc sessions are a different surface.",
   );
 }
 

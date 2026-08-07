@@ -54,14 +54,15 @@ cleanup finished **and** temp script gone.
 | Target | How to get an id | Coach `createWorkoutForDay` |
 |--------|------------------|-----------------------------|
 | Team / group program | `team-create` → `programId` / `group_program` | Works |
-| Own personal calendar | `createPersonalWorkout` → day's `program_id` | Works (self) |
-| Another athlete's Coach Plan / `personal_cal` | Roster athlete with Coach Plan | Typically HTTP 500 — the #75/#76 gap |
+| Roster athlete coach calendar | `GET /v5/calendars/athletes/{athleteId}?year=&month=` → `id` (type 5) | Works — same path as coach web "CREATE SESSION" |
+| Own personal calendar | `createPersonalWorkout` → day's `program_id` (type 4) | Works (self) |
+| Athlete-created `personal_cal` ad-hoc row | Not a coach write target | N/A |
 
 `personal.groupId` from `createPersonalWorkout` is **not** the same as the day's
 `program_id`. Use `program_id` from `fetchAthleteWorkouts` when probing self.
 
-Demo/seeded athletes are often on a team program (`personal_cal: false`), not
-Coach Plan — they will not reproduce other-athlete personal_cal failures.
+Demo athletes with "0 Teams" still have a type-5 coach calendar via
+`/v5/calendars/athletes/{id}` — do not confuse that with `personal_cal` workout rows.
 
 ## Gotchas
 

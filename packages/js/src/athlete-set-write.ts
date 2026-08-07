@@ -10,7 +10,8 @@ import {
   exerciseIsFullyLogged,
   type SetWriteMode,
 } from "./exercise-set-payload";
-import { fetchAthleteWorkouts, fetchCoachAthleteWorkouts } from "./athlete";
+import { fetchAthleteWorkouts } from "./athlete";
+import { fetchCoachAthleteWorkouts } from "./coach-athlete-calendar";
 import type { TrainHeroicClient } from "./client";
 import type { ProgramWorkout } from "@trainheroic-unofficial/dto";
 

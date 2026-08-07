@@ -300,8 +300,8 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
       title: "Get program detail",
       description:
         "Full nested program structure (blocks + sessions) live from the API, by program id. " +
-        "Team/group programs only — Coach Plan / personal_cal program ids typically return " +
-        "HTTP 401 Cannot access program.",
+        "Works for team calendars and athlete coach calendars (type 5 from " +
+        "/v5/calendars/athletes/{id}). Some unrelated ids return HTTP 401 Cannot access program.",
       inputSchema: { programId: idParam },
       annotations: READ,
     },

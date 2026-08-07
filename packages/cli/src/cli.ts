@@ -47,7 +47,9 @@ import {
   fetchStreams,
   fetchTeamAthleteIds,
   fetchWorkingMaxes,
+  resolveBuildProgramId,
   inviteAthletes,
+  updateTeam,
   logAdHocSession,
   logAthleteSet,
   logForAthlete,
@@ -144,7 +146,7 @@ Coach — manage a roster (needs a coach account):
 
   teams & join codes:
   coach team-create --title "..."
-  coach team-update --team <id> --title "..."
+  coach team-update --team <id> [--title "..."] [--group-program <id>]
   coach team-delete --team <id> --yes
   coach team-code-create --team <id> [--type N]
   coach team-code-delete --code <id> --yes        (--code is the id from team-code-create, not the join-code number)
@@ -170,7 +172,7 @@ Coach — manage a roster (needs a coach account):
 
   workouts (spec: {"blocks":[{"title","exercises":[{"id","sets"?,"reps"?,"weight"?,"rpe"?}]}],"instruction"?};
             reps/weight may be a scalar or per-set array; omit --publish to leave a draft):
-  coach workout build --program <id> (--date Y-M-D | --timeline-day <n>) [--publish --yes] <spec.json>|--file f
+  coach workout build (--program <id> | --athlete <id>) (--date Y-M-D | --timeline-day <n>) [--publish --yes] <spec.json>|--file f
   coach workout read --program <id> --date Y-M-D --pw <id>
   coach workout publish --pw <id> --yes
   coach workout remove --program <id> --pw <id> --yes
@@ -349,49 +351,61 @@ async function cmdExercise(client: TrainHeroicClient, rest: string[]): Promise<v
   }
 }
 
+async function cmdWorkoutBuild(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values, positionals } = parse(a, {
+    program: { type: "string" },
+    athlete: { type: "string" },
+    date: { type: "string" },
+    "timeline-day": { type: "string" },
+    publish: { type: "boolean" },
+    yes: { type: "boolean" },
+    file: { type: "string" },
+  });
+  const usage =
+    "coach workout build (--program <id> | --athlete <id>) (--date Y-M-D | --timeline-day <n>) ...";
+  const programRaw = values.program as string | undefined;
+  const athleteRaw = values.athlete as string | undefined;
+  if (values.date === undefined && values["timeline-day"] === undefined) {
+    fail("provide --date YYYY-M-D or --timeline-day <n>.");
+  }
+  let programId: number;
+  try {
+    programId = await resolveBuildProgramId(client, {
+      ...(programRaw !== undefined ? { programId: toInt(programRaw, "--program") } : {}),
+      ...(athleteRaw !== undefined ? { athleteId: toInt(athleteRaw, "--athlete") } : {}),
+      ...(values.date !== undefined ? { date: values.date as string } : {}),
+    });
+  } catch (err) {
+    fail(err instanceof Error ? `${usage}: ${err.message}` : String(err));
+  }
+  const parsed = await jsonInput(positionals[0], values.file as string | undefined);
+  // Accept a bare blocks array or a {blocks, instruction} object; validate strictly.
+  const spec = validate(
+    workoutSpecSchema,
+    Array.isArray(parsed) ? { blocks: parsed } : parsed,
+    "workout spec",
+    "run 'trainheroic skill' for the workout spec format and copy-paste examples.",
+  );
+  const publish = values.publish === true;
+  if (publish && values.yes !== true)
+    fail("publishing is athlete-facing; add --yes to build and publish.");
+  const opts: BuildOptions = { programId, blocks: spec.blocks, publish };
+  if (values.date !== undefined) opts.date = parseDate(values.date as string);
+  if (values["timeline-day"] !== undefined) {
+    opts.timelineDay = toInt(values["timeline-day"] as string, "--timeline-day");
+  }
+  if (spec.instruction !== undefined) opts.instruction = spec.instruction;
+  const advice = await collectAdvisories(spec.blocks, library(client));
+  const built = await buildSession(client, opts);
+  const readback = opts.date ? await readSession(client, programId, opts.date, built.pwId) : null;
+  return out({ ...built, programId, published: publish, advisories: advice, readback });
+}
+
 async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<void> {
   const [sub, ...a] = rest;
   switch (sub) {
-    case "build": {
-      const { values, positionals } = parse(a, {
-        program: { type: "string" },
-        date: { type: "string" },
-        "timeline-day": { type: "string" },
-        publish: { type: "boolean" },
-        yes: { type: "boolean" },
-        file: { type: "string" },
-      });
-      const programId = toInt(
-        need(values.program as string | undefined, "coach workout build --program <id> ..."),
-        "--program",
-      );
-      if (values.date === undefined && values["timeline-day"] === undefined) {
-        fail("provide --date YYYY-M-D or --timeline-day <n>.");
-      }
-      const parsed = await jsonInput(positionals[0], values.file as string | undefined);
-      // Accept a bare blocks array or a {blocks, instruction} object; validate strictly.
-      const spec = validate(
-        workoutSpecSchema,
-        Array.isArray(parsed) ? { blocks: parsed } : parsed,
-        "workout spec",
-        "run 'trainheroic skill' for the workout spec format and copy-paste examples.",
-      );
-      const publish = values.publish === true;
-      if (publish && values.yes !== true)
-        fail("publishing is athlete-facing; add --yes to build and publish.");
-      const opts: BuildOptions = { programId, blocks: spec.blocks, publish };
-      if (values.date !== undefined) opts.date = parseDate(values.date as string);
-      if (values["timeline-day"] !== undefined) {
-        opts.timelineDay = toInt(values["timeline-day"] as string, "--timeline-day");
-      }
-      if (spec.instruction !== undefined) opts.instruction = spec.instruction;
-      const advice = await collectAdvisories(spec.blocks, library(client));
-      const built = await buildSession(client, opts);
-      const readback = opts.date
-        ? await readSession(client, programId, opts.date, built.pwId)
-        : null;
-      return out({ ...built, published: publish, advisories: advice, readback });
-    }
+    case "build":
+      return cmdWorkoutBuild(client, a);
     case "read": {
       const { values } = parse(a, {
         program: { type: "string" },
@@ -1258,11 +1272,21 @@ async function cmdCoachTeamCreate(client: TrainHeroicClient, a: string[]): Promi
 }
 
 async function cmdCoachTeamUpdate(client: TrainHeroicClient, a: string[]): Promise<void> {
-  const usage = 'coach team-update --team <id> --title "..."';
-  const { values } = parse(a, { team: { type: "string" }, title: { type: "string" } });
+  const usage =
+    'coach team-update --team <id> [--title "..."] [--group-program <id>]  (at least one of --title / --group-program)';
+  const { values } = parse(a, {
+    team: { type: "string" },
+    title: { type: "string" },
+    "group-program": { type: "string" },
+  });
   const teamId = toInt(need(values.team as string | undefined, usage), "--team");
-  const title = need(values.title as string | undefined, usage);
-  return out(await mutate(client, "PUT", `/v5/teams/${teamId}`, { title }));
+  const title = values.title as string | undefined;
+  const groupProgramRaw = values["group-program"] as string | undefined;
+  if (title === undefined && groupProgramRaw === undefined) fail(usage);
+  const args: { teamId: number; title?: string; groupProgram?: number } = { teamId };
+  if (title !== undefined) args.title = title;
+  if (groupProgramRaw !== undefined) args.groupProgram = toInt(groupProgramRaw, "--group-program");
+  return out(await updateTeam(client, args));
 }
 
 async function cmdCoachTeamDelete(client: TrainHeroicClient, a: string[]): Promise<void> {

@@ -1,7 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/server";
+import { updateTeam } from "@trainheroic-unofficial/js";
 import { z } from "zod";
 import { confirmGate } from "../confirm";
-import { apiCall, attempt, DESTRUCTIVE, idParam, toId } from "../context";
+import { apiCall, attempt, DESTRUCTIVE, idParam, jsonResult, toId } from "../context";
 import type { ToolContext } from "../context";
 
 // Additive writes (create, rename, add code) are not gated, matching exercise_create.
@@ -20,7 +21,8 @@ export function registerTeamTools(server: McpServer, ctx: ToolContext): void {
       description:
         "Create a team (POST /1.0/coach/team/createWithTitleAndCode). Also creates the team's " +
         "calendar/program. Returns the new team including its calendar id. Use the team id with " +
-        "athlete_invite.",
+        "athlete_invite. To point a new team at an existing calendar instead of its auto-created " +
+        "one, follow up with team_update groupProgram.",
       inputSchema: { title: z.string().min(1) },
       annotations: ADDITIVE,
     },
@@ -31,12 +33,29 @@ export function registerTeamTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "team_update",
     {
-      title: "Rename a team",
-      description: "Update a team's settings, e.g. its title (PUT /v5/teams/{teamId}).",
-      inputSchema: { teamId: idParam, title: z.string().min(1) },
+      title: "Update a team",
+      description:
+        "Update a team's title and/or reassign its calendar (PUT /v5/teams/{teamId}). " +
+        "Pass groupProgram (a program/calendar id — typically another team's group_program from " +
+        "list_teams, or get_team) to point this team at an existing parent program. At least one " +
+        "of title or groupProgram is required; when only groupProgram is set the current title " +
+        "is preserved.",
+      inputSchema: {
+        teamId: idParam,
+        title: z.string().min(1).optional(),
+        groupProgram: idParam.optional(),
+      },
       annotations: ADDITIVE,
     },
-    ({ teamId, title }) => apiCall(ctx, "PUT", `/v5/teams/${toId(teamId)}`, { body: { title } }),
+    ({ teamId, title, groupProgram }) =>
+      attempt(async () => {
+        const args: { teamId: number; title?: string; groupProgram?: number } = {
+          teamId: toId(teamId),
+        };
+        if (title !== undefined) args.title = title;
+        if (groupProgram !== undefined) args.groupProgram = toId(groupProgram);
+        return jsonResult(await updateTeam(ctx.client, args));
+      }),
   );
 
   server.registerTool(

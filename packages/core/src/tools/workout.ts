@@ -9,12 +9,13 @@ import {
   publishSession,
   readSession,
   removeSession,
+  resolveBuildProgramId,
 } from "@trainheroic-unofficial/js";
 import { confirmGate } from "../confirm";
-import { apiCall, attempt, errorResult, jsonResult } from "../context";
+import { apiCall, attempt, errorResult, idParam, jsonResult, toId } from "../context";
 import type { ToolContext } from "../context";
 
-/** Build a draft, read it back, and publish it. */
+/** Build a draft session (workout_build). */
 function registerBuild(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "workout_build",
@@ -22,15 +23,17 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
       title: "Build a workout session (draft)",
       description:
         "Build an UNPUBLISHED session from a spec (program -> session -> blocks -> exercises). " +
-        "Works on team/group program calendars (and the authenticated coach's own personal " +
-        "calendar). Writing to another athlete's Coach Plan / personal_cal calendar is not " +
-        "supported (createWorkoutForDay returns HTTP 500). Two exercises in one block become a " +
+        "Pass programId for a team/group calendar (list_teams → group_program), or athleteId " +
+        "to write on that roster athlete's coach calendar (resolved via " +
+        "/v5/calendars/athletes/{id} — the same calendar the coach web app opens from My " +
+        "Athletes). athleteId requires date. Two exercises in one block become a " +
         "superset. A block with empty exercises and a non-empty block instruction is a text-only " +
         "Circuit / Conditioning block (type 1). Add a block 'leaderboard' for a Red-Zone score, " +
         "or a top-level 'instruction' for the session note (Coach Instructions). Returns the " +
         "draft ids, a read-back, and unit advisories. Review, then workout_publish.",
       inputSchema: {
-        programId: z.number(),
+        programId: z.number().optional(),
+        athleteId: idParam.optional(),
         date: z.string().optional(),
         timelineDay: z.number().optional(),
         blocks: z.array(blockSpecSchema),
@@ -38,13 +41,23 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
-    ({ programId, date, timelineDay, blocks, instruction }) =>
+    ({ programId, athleteId, date, timelineDay, blocks, instruction }) =>
       attempt(async () => {
         if (date === undefined && timelineDay === undefined) {
           return errorResult("Provide either date (YYYY-M-D) or timelineDay.");
         }
+        const resolveArgs: {
+          programId?: number;
+          athleteId?: number;
+          date?: string;
+        } = {};
+        if (programId !== undefined) resolveArgs.programId = programId;
+        if (athleteId !== undefined) resolveArgs.athleteId = toId(athleteId);
+        if (date !== undefined) resolveArgs.date = date;
+        const resolved = await resolveBuildProgramId(ctx.client, resolveArgs);
+
         const typed = blocks as BlockSpec[];
-        const opts: BuildOptions = { programId, blocks: typed, publish: false };
+        const opts: BuildOptions = { programId: resolved, blocks: typed, publish: false };
         if (date !== undefined) opts.date = parseWorkoutDate(date);
         if (timelineDay !== undefined) opts.timelineDay = timelineDay;
         if (instruction !== undefined) opts.instruction = instruction;
@@ -52,10 +65,11 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         const advisories = await collectAdvisories(typed, ctx.index);
         const built = await buildSession(ctx.client, opts);
         const readback = opts.date
-          ? await readSession(ctx.client, programId, opts.date, built.pwId)
+          ? await readSession(ctx.client, resolved, opts.date, built.pwId)
           : null;
         return jsonResult({
           ...built,
+          programId: resolved,
           published: false,
           advisories,
           readback,
@@ -63,7 +77,10 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         });
       }),
   );
+}
 
+/** Read-back and publish for a built session. */
+function registerReadPublish(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "workout_read",
     {
@@ -124,7 +141,11 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
       description:
         "Delete a session from the live calendar (also the way to replace a date: remove then " +
         "build). Hard to undo. Requires confirmation (elicitation, or confirm:true).",
-      inputSchema: { programId: z.number(), pwId: z.number(), confirm: z.boolean().optional() },
+      inputSchema: {
+        programId: z.number(),
+        pwId: z.number(),
+        confirm: z.boolean().optional(),
+      },
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     ({ programId, pwId, confirm }, extra) =>
@@ -169,8 +190,8 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
       description:
         "Copy/repeat a session to a target date on a program (POST .../copyProgramWorkout). " +
         "toDate is YYYY-M-D. Creates a new session; review and publish it separately. " +
-        "Team/group (and own personal) calendars only — copying onto another athlete's " +
-        "personal_cal / Coach Plan toProgramId fails with HTTP 500.",
+        "toProgramId may be a team group_program or an athlete calendar program id " +
+        "(from /v5/calendars/athletes/{athleteId}?year=&month= / workout_build athleteId).",
       inputSchema: { toProgramId: z.number(), pwId: z.number(), toDate: z.string() },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -196,5 +217,6 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
 /** Workout building, read-back, publishing, and the session calendar lifecycle. */
 export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void {
   registerBuild(server, ctx);
+  registerReadPublish(server, ctx);
   registerLifecycle(server, ctx);
 }

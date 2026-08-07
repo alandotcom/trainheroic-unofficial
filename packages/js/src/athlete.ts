@@ -305,44 +305,6 @@ export async function fetchAthleteWorkoutsChunked(
   return mergeWorkoutsById(pages);
 }
 
-/**
- * A coach's view of a roster athlete's scheduled + completed workouts in an inclusive
- * YYYY-MM-DD window (`/3.0/coach/athlete/programworkout/range/{athleteId}`). Returns the same
- * `ProgramWorkout[]` shape as `fetchAthleteWorkouts`, so the same presenters and
- * `findSavedWorkoutSet` apply — it just reads another athlete's data through the coach surface.
- */
-export function fetchCoachAthleteWorkouts(
-  client: TrainHeroicClient,
-  athleteId: number,
-  startDate: string,
-  endDate: string,
-): Promise<ProgramWorkout[]> {
-  return getArray(
-    client,
-    `/3.0/coach/athlete/programworkout/range/${athleteId}?startDate=${startDate}&endDate=${endDate}`,
-    "coach athlete workouts",
-  );
-}
-
-/**
- * A coach's month view of a roster athlete's logged sessions
- * (`/2.0/coach/athlete/calendar/summary`). The trailing path segment is required by the API but
- * ignored (any value returns the whole month); it mirrors the coach web app, which sends 7. The
- * `userId` in each row is the roster athlete, not the calling coach.
- */
-export function fetchCoachAthleteCalendarSummary(
-  client: TrainHeroicClient,
-  athleteId: number,
-  year: number,
-  month: number,
-): Promise<unknown[]> {
-  return getArray(
-    client,
-    `/2.0/coach/athlete/calendar/summary/${athleteId}/${year}/${month}/7`,
-    "coach athlete calendar summary",
-  );
-}
-
 export function fetchLeaderboard(
   client: TrainHeroicClient,
   workoutId: number,
