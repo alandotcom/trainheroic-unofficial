@@ -29,7 +29,12 @@ describe("fetchAthleteCalendar", () => {
         });
       }),
     );
-    const cal = await fetchAthleteCalendar(new TrainHeroicClient("a@b.com", "pw"), 2897391, 2026, 8);
+    const cal = await fetchAthleteCalendar(
+      new TrainHeroicClient("a@b.com", "pw"),
+      2897391,
+      2026,
+      8,
+    );
     expect(calledUrl).toContain("/v5/calendars/athletes/2897391?year=2026&month=8");
     expect(cal).toEqual({
       programId: 5060391,

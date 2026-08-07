@@ -83,8 +83,8 @@ describe("updateTeam", () => {
   });
 
   it("rejects when neither title nor groupProgram is provided", async () => {
-    await expect(updateTeam(new TrainHeroicClient("a@b.com", "pw"), { teamId: 10 })).rejects.toThrow(
-      /title and\/or groupProgram/iu,
-    );
+    await expect(
+      updateTeam(new TrainHeroicClient("a@b.com", "pw"), { teamId: 10 }),
+    ).rejects.toThrow(/title and\/or groupProgram/iu);
   });
 });
