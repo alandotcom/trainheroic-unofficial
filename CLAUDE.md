@@ -183,6 +183,12 @@ storage-specific (the D1 warehouse syncs are the current example).
 
 ## Agent skills
 
+### Live API probe
+
+Verify undocumented TrainHeroic request/response shapes against a real `.env`
+account (API archaeology). See `.claude/skills/live-api-probe/SKILL.md`. Distinct
+from `mcp-eval` / `cli-eval` (those measure agent usability).
+
 ### Issue tracker
 
 Issues are tracked in GitHub Issues (`alandotcom/trainheroic-unofficial`) via the `gh` CLI. See `docs/agents/issue-tracker.md`.

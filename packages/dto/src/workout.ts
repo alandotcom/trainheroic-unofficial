@@ -27,14 +27,32 @@ export const leaderboardSpecSchema = z.union([
 ]);
 export type LeaderboardSpec = z.infer<typeof leaderboardSpecSchema>;
 
-/** A block (group of exercises); two exercises render as a superset. */
-export const blockSpecSchema = z.object({
-  title: z.string(),
-  type: z.number().optional(),
-  instruction: z.string().optional(),
-  leaderboard: leaderboardSpecSchema.optional(),
-  exercises: z.array(exerciseSpecSchema),
-});
+/**
+ * A block (group of exercises); two exercises render as a superset.
+ * Empty `exercises` is allowed only with a non-empty `instruction` — that is TrainHeroic's
+ * free-text Circuit / Conditioning block (type 1): title + instruction blurb, no linked lifts.
+ */
+export const blockSpecSchema = z
+  .object({
+    title: z.string(),
+    type: z.number().optional(),
+    instruction: z.string().optional(),
+    leaderboard: leaderboardSpecSchema.optional(),
+    exercises: z.array(exerciseSpecSchema),
+  })
+  .superRefine((block, ctx) => {
+    if (block.exercises.length > 0) return;
+    const instr = block.instruction?.trim() ?? "";
+    if (instr === "") {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "A block with no exercises needs a non-empty instruction (text-only Circuit / " +
+          "Conditioning block). Otherwise provide at least one exercise.",
+        path: ["exercises"],
+      });
+    }
+  });
 export type BlockSpec = z.infer<typeof blockSpecSchema>;
 
 /** A full session spec: the blocks plus an optional session note (Coach Instructions). */
@@ -78,6 +96,8 @@ export type ReadExercise = {
 export type ReadBlock = {
   order: number;
   title: string;
+  /** Block-level coach note (free-text Circuit / conditioning blurbs live here). */
+  instruction: string;
   leaderboard: string | null;
   exercises: ReadExercise[];
 };

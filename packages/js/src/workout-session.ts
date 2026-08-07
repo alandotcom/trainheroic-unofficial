@@ -3,6 +3,7 @@
 
 import {
   type BlockSpec,
+  blockSpecSchema,
   programsEditResponseSchema,
   type ReadBlock,
   type ReadExercise,
@@ -10,6 +11,7 @@ import {
   sessionCreateResponseSchema,
   type WorkoutDate,
 } from "@trainheroic-unofficial/dto";
+import { z } from "zod";
 import type { TrainHeroicClient } from "./client";
 import { coerceInt, unitLabel } from "./exercise-util";
 import { checkResponse } from "./response-check";
@@ -25,6 +27,34 @@ export type BuildOptions = {
   instruction?: string;
 };
 
+/**
+ * Coach calendar writes (`createWorkoutForDay`, timeline create, `copyProgramWorkout`) 500/401
+ * on personal calendars (Coach Plan / `personal_cal`). Shared by `buildSession` and
+ * `copySession` so the hint stays in one place.
+ */
+export function calendarWriteError(
+  method: string,
+  path: string,
+  status: number,
+  detail: string,
+): Error {
+  const base = `${method} ${path} failed (HTTP ${status}): ${detail}`;
+  const isCalendarWrite =
+    path.includes("/createWorkoutForDay/") ||
+    path.includes("/createWorkoutForTimelineDay/") ||
+    path.includes("/copyProgramWorkout");
+  if (!isCalendarWrite || (status !== 500 && status !== 401)) {
+    return new Error(base);
+  }
+  return new Error(
+    `${base}. This often means the program is another athlete's Coach Plan / personal ` +
+      "calendar (personal_cal), which the coach calendar write endpoints do not support — " +
+      "workout_build and session_copy work on team/group programs (and the coach's own " +
+      "personal calendar), but there is currently no coach-facing tool to create sessions on " +
+      "another athlete's personal calendar.",
+  );
+}
+
 async function req<T = unknown>(
   client: TrainHeroicClient,
   method: string,
@@ -34,7 +64,7 @@ async function req<T = unknown>(
   const res = await client.request<T>(method, path, body === undefined ? undefined : { body });
   if (!res.ok) {
     const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
-    throw new Error(`${method} ${path} failed (HTTP ${res.status}): ${detail}`);
+    throw calendarWriteError(method, path, res.status, detail);
   }
   return res.data;
 }
@@ -52,6 +82,8 @@ export async function buildSession(
   client: TrainHeroicClient,
   opts: BuildOptions,
 ): Promise<{ pwId: number; workoutId: number }> {
+  // dto schema is the single empty-block / Circuit invariant (SDK callers may bypass MCP zod).
+  const blocks = z.array(blockSpecSchema).parse(opts.blocks);
   const sess = await req<Record<string, unknown>>(client, "POST", createPath(opts), {});
   checkResponse(sessionCreateResponseSchema, sess, "session create");
   const workoutId = Number(sess.workout_id);
@@ -61,13 +93,15 @@ export async function buildSession(
     client,
     "POST",
     "/2.0/coach/calendar/saveProgramWorkoutSets",
-    buildBlockPayload(opts.blocks, workoutId),
+    buildBlockPayload(blocks, workoutId),
   );
   const byOrder = new Map(created.map((b) => [b.order, b.id]));
 
-  // Build all exercise payloads first (global key counter), then submit per block.
+  // Build exercise payloads first (global key counter), then submit per non-empty block.
+  // Skip empty payloads: posting [] to saveWorkoutSetExercises makes the API insert a blank
+  // placeholder exercise and can drop the block instruction (breaks text-only Circuit blocks).
   let counter = 0;
-  const payloads = opts.blocks.map((block, i) => {
+  const payloads = blocks.map((block, i) => {
     const wsid = byOrder.get(i + 1);
     if (wsid === undefined) throw new Error(`No saved block for order ${i + 1}.`);
     return block.exercises.map((ex, j) => {
@@ -76,7 +110,9 @@ export async function buildSession(
     });
   });
   await Promise.all(
-    payloads.map((p) => req(client, "POST", "/2.0/coach/calendar/saveWorkoutSetExercises", p)),
+    payloads
+      .filter((p) => p.length > 0)
+      .map((p) => req(client, "POST", "/2.0/coach/calendar/saveWorkoutSetExercises", p)),
   );
 
   // Session note (Coach Instructions). Set before publish so it leaves the draft/published
@@ -167,10 +203,19 @@ function readBlock(b: Record<string, unknown>): ReadBlock {
   const rawExercises = Array.isArray(b.exercises)
     ? (b.exercises as Array<Record<string, unknown>>)
     : [];
+  // Coach edit-GET often returns a null-id placeholder row on text-only Circuit / Conditioning
+  // blocks (type 1). Those are UI templates, not saved exercises — drop them on read-back.
   const exercises = rawExercises
+    .filter((ex) => coerceInt(ex.id) !== null || str(ex.title) !== "")
     .sort((a, e) => Number(a.order) - Number(e.order))
     .map((ex) => readExercise(ex));
-  return { order: Number(b.order), title: str(b.title), leaderboard, exercises };
+  return {
+    order: Number(b.order),
+    title: str(b.title),
+    instruction: str(b.instruction),
+    leaderboard,
+    exercises,
+  };
 }
 
 function readExercise(ex: Record<string, unknown>): ReadExercise {
