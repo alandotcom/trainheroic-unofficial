@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrainHeroicClient } from "../src/client";
-import {
-  fetchCoachAthleteCalendar,
-  resolveBuildProgramId,
-} from "../src/coach-athlete-calendar";
+import { fetchCoachAthleteCalendar, resolveBuildProgramId } from "../src/coach-athlete-calendar";
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -79,9 +76,9 @@ describe("resolveBuildProgramId", () => {
   });
 
   it("rejects neither", async () => {
-    await expect(
-      resolveBuildProgramId(new TrainHeroicClient("a@b.com", "pw"), {}),
-    ).rejects.toThrow(/Provide programId/u);
+    await expect(resolveBuildProgramId(new TrainHeroicClient("a@b.com", "pw"), {})).rejects.toThrow(
+      /Provide programId/u,
+    );
   });
 
   it("resolves athleteId via calendar fetch", async () => {
