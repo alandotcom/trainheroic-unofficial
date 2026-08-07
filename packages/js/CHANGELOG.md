@@ -1,5 +1,15 @@
 # @trainheroic-unofficial/js
 
+## 2.1.0
+
+### Minor Changes
+
+- 28bb2fe: Allow team_update to reassign a team's calendar via groupProgram, and workout_build athleteId to write on a roster athlete's coach calendar (GET /v5/calendars/athletes/{id}).
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@2.1.0
+
 ## 2.0.2
 
 ### Patch Changes
