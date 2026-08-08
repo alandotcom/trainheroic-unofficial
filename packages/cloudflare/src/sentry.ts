@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/cloudflare";
 import type { CloudflareOptions } from "@sentry/cloudflare";
+import type { TrainHeroicHttpError, TrainHeroicHttpErrorHandler } from "@trainheroic-unofficial/js";
 
 /**
  * Shared Sentry configuration for the Worker fetch handler (wrapped with `withSentry` in
@@ -67,4 +68,39 @@ export function mcpUserKey(thUserId: number): string {
 export function tagMcpUser(key: string): void {
   Sentry.setTag("mcp.session", key);
   Sentry.getActiveSpan()?.setAttribute("mcp.session", key);
+}
+
+/**
+ * Report a final non-2xx TrainHeroic response as an error event. Fetch resolves normally for
+ * HTTP failures, so neither `withSentry` nor the MCP handler's `onerror` sees these unless the
+ * SDK surfaces them through its observability hook.
+ */
+function captureTrainHeroicHttpError(error: TrainHeroicHttpError): void {
+  Sentry.captureException(error, {
+    tags: {
+      "upstream.service": "trainheroic",
+      "http.request.method": error.method,
+      "http.response.status_code": String(error.status),
+      "server.address": error.host,
+    },
+  });
+}
+
+/** Bind every upstream error event to the TrainHeroic account that made the request. */
+export function trainHeroicHttpErrorReporter(email: string): TrainHeroicHttpErrorHandler {
+  return (error) => {
+    Sentry.withScope((scope) => {
+      scope.setUser({ email });
+      captureTrainHeroicHttpError(error);
+    });
+  };
+}
+
+/** Invalid credentials are expected on the interactive login form; report every other failure. */
+export function trainHeroicLoginErrorReporter(email: string): TrainHeroicHttpErrorHandler {
+  const report = trainHeroicHttpErrorReporter(email);
+  return (error) => {
+    if (error.status === 401 || error.status === 403) return;
+    return report(error);
+  };
 }

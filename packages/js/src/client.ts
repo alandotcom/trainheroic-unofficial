@@ -1,4 +1,6 @@
 import { loginTrainHeroic } from "./auth";
+import { notifyHttpError } from "./http-error";
+import type { TrainHeroicHttpErrorHandler } from "./http-error";
 
 const DEFAULT_COACH_BASE = "https://api.trainheroic.com";
 const DEFAULT_APIS_BASE = "https://apis.trainheroic.com";
@@ -42,6 +44,12 @@ export type ClientOptions = {
    * instead of logging in again.
    */
   onSession?: (sessionId: string) => void;
+  /**
+   * Called once when a login or API request finishes with a non-2xx response. Transient 401/403
+   * API responses that succeed after the built-in re-login are not reported. The callback is
+   * best-effort: telemetry failures never change the API result returned to the caller.
+   */
+  onHttpError?: TrainHeroicHttpErrorHandler;
 };
 
 /**
@@ -59,6 +67,7 @@ export class TrainHeroicClient {
   readonly #email: string;
   readonly #password: string;
   readonly #onSession: ((sessionId: string) => void) | undefined;
+  readonly #onHttpError: TrainHeroicHttpErrorHandler | undefined;
   #sessionId: string | null;
   #loginInFlight: Promise<string> | null = null;
 
@@ -72,6 +81,7 @@ export class TrainHeroicClient {
     this.#password = password;
     this.#sessionId = sessionId;
     this.#onSession = options.onSession;
+    this.#onHttpError = options.onHttpError;
   }
 
   get sessionId(): string | null {
@@ -91,7 +101,11 @@ export class TrainHeroicClient {
   }
 
   async #login(): Promise<string> {
-    const session = await loginTrainHeroic(this.#email, this.#password);
+    const session = await loginTrainHeroic(
+      this.#email,
+      this.#password,
+      this.#onHttpError ? { onHttpError: this.#onHttpError } : {},
+    );
     if (!session) throw new TrainHeroicAuthError("TrainHeroic login failed");
     this.#sessionId = session.sessionId;
     // Never let a caller's cache bookkeeping break the request that acquired the token.
@@ -123,6 +137,10 @@ export class TrainHeroicClient {
       if (this.#sessionId === session) this.#sessionId = null;
       session = await this.#ensureSession();
       res = await this.#send(method, url, session, options.body);
+    }
+
+    if (!res.ok) {
+      notifyHttpError(this.#onHttpError, method, url, res.status);
     }
 
     const text = await res.text();

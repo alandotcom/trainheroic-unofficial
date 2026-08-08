@@ -1,3 +1,6 @@
+import { notifyHttpError } from "./http-error";
+import type { TrainHeroicHttpErrorHandler } from "./http-error";
+
 const DEFAULT_AUTH_URL = "https://apis.trainheroic.com/auth";
 
 /**
@@ -29,6 +32,11 @@ type AuthResponse = {
   role?: string;
 };
 
+export type LoginOptions = {
+  /** Called for every non-2xx login response; callback failures never change the result. */
+  onHttpError?: TrainHeroicHttpErrorHandler;
+};
+
 /**
  * Authenticate against TrainHeroic. Returns the session bundle, or null on bad
  * credentials. TrainHeroic returns only { id, scope, role, session_id } (verified in
@@ -38,8 +46,10 @@ type AuthResponse = {
 export async function loginTrainHeroic(
   email: string,
   password: string,
+  options: LoginOptions = {},
 ): Promise<TrainHeroicSession | null> {
-  const res = await fetch(authUrl(), {
+  const url = authUrl();
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -48,7 +58,10 @@ export async function loginTrainHeroic(
     body: new URLSearchParams({ email, password }).toString(),
   });
 
-  if (!res.ok) return null;
+  if (!res.ok) {
+    notifyHttpError(options.onHttpError, "POST", url, res.status);
+    return null;
+  }
 
   const data = (await res.json().catch(() => null)) as AuthResponse | null;
   if (!data || typeof data.id !== "number" || !data.session_id) return null;

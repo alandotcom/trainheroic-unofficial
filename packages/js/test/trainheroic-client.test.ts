@@ -13,6 +13,37 @@ afterEach(() => {
 });
 
 describe("TrainHeroicClient", () => {
+  it.each([400, 500])(
+    "reports a final HTTP %i response without changing the result",
+    async (status) => {
+      const onHttpError = vi.fn();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => json({ error: "upstream rejected the request" }, status)),
+      );
+      const client = new TrainHeroicClient("a@b.com", "pw", "live-session", {
+        onHttpError,
+      });
+
+      const result = await client.request("POST", "/v5/workouts/private@example.com?preview=true", {
+        body: { private: "payload" },
+      });
+
+      expect(result).toMatchObject({ ok: false, status });
+      expect(onHttpError).toHaveBeenCalledOnce();
+      expect(onHttpError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "TrainHeroicHttpError",
+          method: "POST",
+          host: "api.trainheroic.com",
+          status,
+        }),
+      );
+      expect(String(onHttpError.mock.calls[0]?.[0])).not.toContain("private@example.com");
+      expect(String(onHttpError.mock.calls[0]?.[0])).not.toContain("preview");
+    },
+  );
+
   it("logs in lazily then issues the request", async () => {
     const calls: string[] = [];
     vi.stubGlobal(
@@ -53,6 +84,25 @@ describe("TrainHeroicClient", () => {
     expect(logins).toBe(1);
     expect(dataCalls).toBe(2);
     expect(client.sessionId).toBe("s1");
+  });
+
+  it("does not report a transient 401 when re-login succeeds", async () => {
+    const onHttpError = vi.fn();
+    let dataCalls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "fresh-session" });
+        dataCalls += 1;
+        return dataCalls === 1 ? json({ error: "expired" }, 401) : json({ ok: true });
+      }),
+    );
+    const client = new TrainHeroicClient("a@b.com", "pw", "stale-session", {
+      onHttpError,
+    });
+
+    expect((await client.request("GET", "/v5/athletes")).ok).toBe(true);
+    expect(onHttpError).not.toHaveBeenCalled();
   });
 
   it("shares one login across concurrent cold requests", async () => {
