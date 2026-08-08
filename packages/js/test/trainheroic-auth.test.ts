@@ -13,6 +13,32 @@ afterEach(() => {
 });
 
 describe("loginTrainHeroic", () => {
+  it.each([400, 500])(
+    "reports an HTTP %i response without exposing credentials",
+    async (status) => {
+      const onHttpError = vi.fn();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response("upstream error", { status })),
+      );
+
+      expect(
+        await loginTrainHeroic("private@example.com", "very-secret", { onHttpError }),
+      ).toBeNull();
+      expect(onHttpError).toHaveBeenCalledOnce();
+      expect(onHttpError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "TrainHeroicHttpError",
+          method: "POST",
+          host: "apis.trainheroic.com",
+          status,
+        }),
+      );
+      expect(String(onHttpError.mock.calls[0]?.[0])).not.toContain("private@example.com");
+      expect(String(onHttpError.mock.calls[0]?.[0])).not.toContain("very-secret");
+    },
+  );
+
   it("returns the session bundle on success", async () => {
     vi.stubGlobal(
       "fetch",
@@ -28,12 +54,14 @@ describe("loginTrainHeroic", () => {
     });
   });
 
-  it("returns null on an HTTP error", async () => {
+  it("reports a credential rejection to the caller", async () => {
+    const onHttpError = vi.fn();
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response("nope", { status: 401 })),
     );
-    expect(await loginTrainHeroic("a@b.com", "bad")).toBeNull();
+    expect(await loginTrainHeroic("a@b.com", "bad", { onHttpError })).toBeNull();
+    expect(onHttpError).toHaveBeenCalledWith(expect.objectContaining({ status: 401 }));
   });
 
   it("returns null when session_id is missing", async () => {

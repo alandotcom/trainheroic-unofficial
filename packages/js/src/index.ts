@@ -1,6 +1,8 @@
 export * from "@trainheroic-unofficial/dto";
 export * from "./auth";
 export * from "./client";
+export { TrainHeroicHttpError } from "./http-error";
+export type { TrainHeroicHttpErrorHandler } from "./http-error";
 export * from "./response-check";
 export * from "./exercise-util";
 export * from "./athlete";

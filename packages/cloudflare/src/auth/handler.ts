@@ -12,6 +12,7 @@ import type { Props } from "../types";
 import { toAccountRole } from "../types";
 import { randomToken, safeEqual, signPayload, verifyPayload } from "./crypto";
 import { renderLoginPage } from "./login-page";
+import { trainHeroicLoginErrorReporter } from "../sentry";
 
 const CSRF_COOKIE = "th_csrf";
 const CSRF_TTL_SECONDS = 600;
@@ -152,7 +153,9 @@ app.post("/authorize", async (c) => {
     );
   }
 
-  const session = await loginTrainHeroic(email, password);
+  const session = await loginTrainHeroic(email, password, {
+    onHttpError: trainHeroicLoginErrorReporter(email),
+  });
   if (!session) {
     Sentry.metrics.count("auth.login.failed", 1);
     return renderLogin(c, oauthReq, client, 401, "Invalid TrainHeroic email or password.");

@@ -110,6 +110,21 @@ const client = new TrainHeroicClient(
 If the reused token has expired, the next request gets a 401/403; the client logs in once with
 the credentials, retries, and updates `client.sessionId` to the new token.
 
+The optional fourth constructor argument can persist renewed sessions and report final HTTP
+failures without coupling the SDK to a telemetry vendor:
+
+```ts
+const client = new TrainHeroicClient(email, password, savedSession, {
+  onSession: saveSession,
+  onHttpError: (error) => telemetry.captureException(error),
+});
+```
+
+`onHttpError` receives a `TrainHeroicHttpError` containing only the method, status, and host.
+Paths, query strings, bodies, credentials, and session tokens are excluded. A transient 401/403
+that succeeds after automatic re-login does not call the hook, and synchronous or asynchronous
+hook failures never change the request result.
+
 ## Two entry points
 
 ```ts
