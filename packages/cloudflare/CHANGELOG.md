@@ -1,5 +1,15 @@
 # @trainheroic-unofficial/cloudflare
 
+## 2.1.1
+
+### Patch Changes
+
+- 3c60f9d: Harden the hosted OAuth flow for workers-oauth-provider 0.10: return safe authorization error redirects, report CIMD resolution failures without leaking request details, and preserve concurrent device grants for CIMD clients.
+- Updated dependencies [448d5de]
+  - @trainheroic-unofficial/js@2.1.1
+  - @trainheroic-unofficial/core@2.1.1
+  - @trainheroic-unofficial/db@2.1.1
+
 ## 2.1.0
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @trainheroic-unofficial/js
 
+## 2.1.1
+
+### Patch Changes
+
+- 448d5de: Add a sanitized HTTP-error callback to the TrainHeroic client and login helper so hosts can report final upstream 4xx/5xx responses without exposing paths, credentials, bodies, query strings, or session tokens.
+  - @trainheroic-unofficial/dto@2.1.1
+
 ## 2.1.0
 
 ### Minor Changes
