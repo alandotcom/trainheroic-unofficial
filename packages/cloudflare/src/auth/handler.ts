@@ -1,18 +1,24 @@
-import type { AuthRequest, ClientInfo } from "@cloudflare/workers-oauth-provider";
+import {
+  AuthorizationError,
+  CimdFetchError,
+  type AuthRequest,
+  type ClientInfo,
+} from "@cloudflare/workers-oauth-provider";
 import * as Sentry from "@sentry/cloudflare";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { sql } from "drizzle-orm";
-import { loginTrainHeroic } from "@trainheroic-unofficial/js";
+import { loginTrainHeroic, type TrainHeroicSession } from "@trainheroic-unofficial/js";
 import { account } from "@trainheroic-unofficial/db";
 import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import type { Props } from "../types";
 import { toAccountRole } from "../types";
 import { randomToken, safeEqual, signPayload, verifyPayload } from "./crypto";
 import { renderLoginPage } from "./login-page";
-import { trainHeroicLoginErrorReporter } from "../sentry";
+import { completeTrainHeroicAuthorization } from "./oauth-provider-compat";
+import { reportOAuthInternalError, trainHeroicLoginErrorReporter } from "../sentry";
 
 const CSRF_COOKIE = "th_csrf";
 const CSRF_TTL_SECONDS = 600;
@@ -43,6 +49,75 @@ function redirectOrigin(redirectUri: string): string | undefined {
     return new URL(redirectUri).origin;
   } catch {
     return undefined;
+  }
+}
+
+function localAuthorizationErrorResponse(c: AppContext, error: unknown): Response {
+  setSecurityHeaders(c);
+  if (error instanceof AuthorizationError) {
+    return c.text(error.description, 400);
+  }
+  if (error instanceof CimdFetchError) {
+    reportOAuthInternalError({
+      code: "server_error",
+      status: 502,
+      category: "client-id-metadata-document",
+      reason: "metadata_resolution_failed",
+    });
+    return c.text("OAuth client metadata is temporarily unavailable", 502);
+  }
+  Sentry.captureException(error, { tags: { "oauth.operation": "authorization" } });
+  return c.text("Authorization service unavailable", 500);
+}
+
+function authorizationRequestErrorResponse(c: AppContext, error: unknown): Response {
+  if (!(error instanceof AuthorizationError) || !error.redirectUri) {
+    return localAuthorizationErrorResponse(c, error);
+  }
+
+  setSecurityHeaders(c);
+  const redirect = new URL(error.redirectUri);
+  redirect.searchParams.set("error", error.code);
+  redirect.searchParams.set("error_description", error.description);
+  if (error.state) redirect.searchParams.set("state", error.state);
+  if (error.issuer) redirect.searchParams.set("iss", error.issuer);
+  return c.redirect(redirect.toString(), 302);
+}
+
+async function recordAccount(
+  c: AppContext,
+  session: TrainHeroicSession,
+  email: string,
+): Promise<boolean> {
+  // Best-effort tenant registry (last_seen); never blocks login. RETURNING created_at
+  // distinguishes a first-time signup from a returning login.
+  const now = Date.now();
+  try {
+    const row = await makeD1Warehouse(c.env.TH_DB, { instrument: Sentry.instrumentD1WithSentry })
+      .db.insert(account)
+      .values({
+        thUserId: session.thUserId,
+        orgId: null,
+        email,
+        role: session.role,
+        createdAt: now,
+        lastSeen: now,
+      })
+      .onConflictDoUpdate({
+        target: account.thUserId,
+        set: {
+          email: sql`excluded.email`,
+          role: sql`excluded.role`,
+          lastSeen: sql`excluded.last_seen`,
+        },
+      })
+      .returning({ createdAt: account.createdAt })
+      .get();
+    return row?.createdAt === now;
+  } catch (err) {
+    // No credentials here — thUserId only.
+    console.warn("account registry upsert failed (non-fatal)", { thUserId: session.thUserId, err });
+    return false;
   }
 }
 
@@ -98,10 +173,15 @@ app.get("/authorize", async (c) => {
   let oauthReq: AuthRequest;
   try {
     oauthReq = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
-  } catch {
-    return c.text("Invalid authorization request", 400);
+  } catch (error) {
+    return authorizationRequestErrorResponse(c, error);
   }
-  const client = await c.env.OAUTH_PROVIDER.lookupClient(oauthReq.clientId);
+  let client: ClientInfo | null;
+  try {
+    client = await c.env.OAUTH_PROVIDER.lookupClient(oauthReq.clientId);
+  } catch (error) {
+    return localAuthorizationErrorResponse(c, error);
+  }
   if (!client) return c.text("Unknown client", 400);
   return renderLogin(c, oauthReq, client, 200);
 });
@@ -126,7 +206,12 @@ app.post("/authorize", async (c) => {
   if (!(await safeEqual(signed.csrf, csrfField))) return c.text("Invalid CSRF token", 403);
   const oauthReq = signed.req;
 
-  const client = await c.env.OAUTH_PROVIDER.lookupClient(oauthReq.clientId);
+  let client: ClientInfo | null;
+  try {
+    client = await c.env.OAUTH_PROVIDER.lookupClient(oauthReq.clientId);
+  } catch (error) {
+    return localAuthorizationErrorResponse(c, error);
+  }
   if (!client) return c.text("Unknown client", 400);
 
   const email = field("email").trim();
@@ -169,47 +254,14 @@ app.post("/authorize", async (c) => {
     scope: session.scope,
   };
 
-  const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
-    request: oauthReq,
-    userId: String(session.thUserId),
-    metadata: { label: email },
-    scope: oauthReq.scope,
-    props,
-  });
-
-  // Best-effort tenant registry (last_seen); never blocks login. No credentials here.
-  // RETURNING created_at distinguishes a first-time signup (row's created_at == the now we
-  // just bound) from a returning login (created_at is older, since it's never updated on
-  // conflict), so we can emit the two metrics separately below.
-  const now = Date.now();
-  let isNewAccount = false;
+  let redirectTo: string;
   try {
-    const row = await makeD1Warehouse(c.env.TH_DB, { instrument: Sentry.instrumentD1WithSentry })
-      .db.insert(account)
-      .values({
-        thUserId: session.thUserId,
-        orgId: null,
-        email,
-        role: session.role,
-        createdAt: now,
-        lastSeen: now,
-      })
-      .onConflictDoUpdate({
-        target: account.thUserId,
-        set: {
-          email: sql`excluded.email`,
-          role: sql`excluded.role`,
-          lastSeen: sql`excluded.last_seen`,
-        },
-      })
-      .returning({ createdAt: account.createdAt })
-      .get();
-    isNewAccount = row?.createdAt === now;
-  } catch (err) {
-    // Best-effort: never block login, but log so a persistently-failing registry write
-    // (e.g. schema drift) is diagnosable. No credentials here — thUserId only.
-    console.warn("account registry upsert failed (non-fatal)", { thUserId: session.thUserId, err });
+    redirectTo = await completeTrainHeroicAuthorization(c.env.OAUTH_PROVIDER, oauthReq, props);
+  } catch (error) {
+    return localAuthorizationErrorResponse(c, error);
   }
+
+  const isNewAccount = await recordAccount(c, session, email);
 
   // Aggregate usage metrics. Role is the only attribute — no email/PII (see sentry.ts privacy
   // invariant). No-op when SENTRY_DSN is unset, so local dev and tests are untouched.

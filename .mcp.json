@@ -7,6 +7,10 @@
     "trainheroic-local-coach": {
       "command": "bash",
       "args": ["scripts/mcp-eval-server.sh", "coach"]
+    },
+    "trainheroic-remote": {
+      "type": "http",
+      "url": "http://localhost:8787/mcp"
     }
   }
 }
