@@ -1,6 +1,15 @@
 import * as Sentry from "@sentry/cloudflare";
 import type { CloudflareOptions } from "@sentry/cloudflare";
+import type { OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
 import type { TrainHeroicHttpError, TrainHeroicHttpErrorHandler } from "@trainheroic-unofficial/js";
+
+type OAuthProviderError = Parameters<NonNullable<OAuthProviderOptions["onError"]>>[0];
+type OAuthInternalError = {
+  code: string;
+  status: number;
+  category: string;
+  reason: string;
+};
 
 /**
  * Shared Sentry configuration for the Worker fetch handler (wrapped with `withSentry` in
@@ -54,6 +63,29 @@ export function sentryOptions(env: Env): CloudflareOptions {
 /** Opaque correlation key for a signed-in user (`user:<thUserId>`). */
 export function mcpUserKey(thUserId: number): string {
   return `user:${thUserId}`;
+}
+
+/** Report an application-owned OAuth diagnostic without request URLs or upstream detail. */
+export function reportOAuthInternalError(error: OAuthInternalError): void {
+  Sentry.captureException(new Error("OAuth provider internal error"), {
+    tags: {
+      "oauth.error.code": error.code,
+      "oauth.error.status": String(error.status),
+      "oauth.internal.category": error.category,
+      "oauth.internal.reason": error.reason,
+    },
+  });
+}
+
+/** Adapt the provider's diagnostic callback to the application's privacy-safe reporter. */
+export function oauthProviderErrorReporter(error: OAuthProviderError): void {
+  if (!error.internal) return;
+  reportOAuthInternalError({
+    code: error.code,
+    status: error.status,
+    category: error.internal.category,
+    reason: error.internal.reason,
+  });
 }
 
 /**

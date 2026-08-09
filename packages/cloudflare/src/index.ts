@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/cloudflare";
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { authHandler } from "./auth/handler";
 import { athleteMcpHandler, coachMcpHandler, fullMcpHandler } from "./mcp";
-import { sentryOptions } from "./sentry";
+import { oauthProviderErrorReporter, sentryOptions } from "./sentry";
 
 const provider = new OAuthProvider({
   // Most specific routes first: `apiHandlers` is matched by prefix in insertion order, so
@@ -31,8 +31,12 @@ const provider = new OAuthProvider({
     scopes_supported: ["mcp"],
   },
   scopesSupported: ["mcp"],
-  // Spec requires S256; the library defaults this to true for back-compat.
+  // Keep the spec-required S256-only policy explicit (also the provider's 0.9+ default).
   allowPlainPKCE: false,
+  // OAuth wire errors remain generic; report only the provider's tagged internal diagnosis.
+  // The reporter deliberately omits the Request and diagnostic detail to keep URLs and secrets
+  // out of Sentry.
+  onError: oauthProviderErrorReporter,
 });
 
 // Credential-attempt surface: a tight per-IP budget guards brute force and registration

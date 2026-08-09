@@ -28,7 +28,7 @@ pnpm build        # tsdown build of all publishable packages
 pnpm typecheck    # tsc --noEmit everywhere
 pnpm test         # vitest in every package
 pnpm lint         # oxlint --deny-warnings
-pnpm fmt          # oxfmt (this repo uses oxfmt, not prettier, despite .prettierignore)
+pnpm fmt          # oxfmt — run before every commit (CI fails on fmt:check)
 pnpm check        # fmt:check + lint + typecheck + test; run this before considering work done
 pnpm website:dev  # Astro docs site at http://localhost:4321
 pnpm website:build
@@ -171,6 +171,9 @@ storage-specific (the D1 warehouse syncs are the current example).
 
 ## Conventions
 
+- Before every commit: run `pnpm fmt` on touched packages (or `pnpm check`). CI runs
+  `fmt:check` first and fails the job on any oxfmt drift — unformatted new files are a
+  common agent miss.
 - Build tooling: tsdown for the publishable packages (each has a `tsdown.config.ts`), wrangler
   for the Worker. Lint and format are oxlint plus oxfmt, configured in `.oxlintrc.json`
   (note `max-lines-per-function` warns at 120). TypeScript is strict with
