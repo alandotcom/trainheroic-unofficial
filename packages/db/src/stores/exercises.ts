@@ -76,10 +76,6 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
     return cursorUpsertStmt(this.db, org, resource, scopeId, { generation });
   }
 
-  async #count(org: number): Promise<number> {
-    return this.db.$count(exercise, eq(exercise.orgId, org));
-  }
-
   // -- sync ----------------------------------------------------------------
 
   async ensureFresh(): Promise<void> {
@@ -296,21 +292,31 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
 
   async stats(): Promise<Record<string, unknown>> {
     const org = await this.org();
-    const total = await this.#count(org);
-    const custom = await this.db.$count(
-      exercise,
-      and(eq(exercise.orgId, org), eq(exercise.canEdit, 1)),
-    );
-    const cursors = await this.db
-      .select({
-        resource: syncState.resource,
-        scope_id: syncState.scopeId,
-        cursor: syncState.cursor,
-        synced_at: syncState.syncedAt,
-        generation: syncState.generation,
-      })
-      .from(syncState)
-      .where(eq(syncState.orgId, org));
-    return { org_id: org, exercises: total, custom, cursors };
+    const [counts, cursors] = await Promise.all([
+      this.db
+        .select({
+          total: sql<number>`count(*)`,
+          custom: sql<number>`coalesce(sum(case when ${exercise.canEdit} = 1 then 1 else 0 end), 0)`,
+        })
+        .from(exercise)
+        .where(eq(exercise.orgId, org))
+        .get(),
+      this.db
+        .select({
+          resource: syncState.resource,
+          scope_id: syncState.scopeId,
+          cursor: syncState.cursor,
+          synced_at: syncState.syncedAt,
+          generation: syncState.generation,
+        })
+        .from(syncState)
+        .where(eq(syncState.orgId, org)),
+    ]);
+    return {
+      org_id: org,
+      exercises: counts?.total ?? 0,
+      custom: counts?.custom ?? 0,
+      cursors,
+    };
   }
 }

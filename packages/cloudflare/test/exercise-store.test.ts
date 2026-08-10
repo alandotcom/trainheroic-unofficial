@@ -4,6 +4,7 @@ import schemaSql from "../../db/migrations/0001_init.sql?raw";
 import { ExerciseStore } from "@trainheroic-unofficial/db";
 import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
+import { observeD1Queries } from "./d1-query-observer";
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -185,6 +186,23 @@ describe("ExerciseStore safety + write-through", () => {
 
     const requests = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
     expect(requests.filter((url) => url.includes("/v5/exerciseLibrary/all"))).toHaveLength(1);
+  });
+
+  it("reads exercise counts and sync cursors in two queries", async () => {
+    mockApi([
+      { id: 1, title: "Back Squat", param_1_type: 3 },
+      { id: 2, title: "Custom Move", param_1_type: 3, can_edit: 1 },
+    ]);
+    await newStore().refresh();
+    const observed = observeD1Queries(env.TH_DB);
+    const store = new ExerciseStore(
+      makeD1Warehouse(observed.database),
+      new TrainHeroicClient("a@b.com", "pw"),
+      7,
+    );
+
+    expect(await store.stats()).toMatchObject({ exercises: 2, custom: 1 });
+    expect(observed.queries.filter((query) => query.startsWith("select"))).toHaveLength(2);
   });
 
   it("scopes rows by org", async () => {
