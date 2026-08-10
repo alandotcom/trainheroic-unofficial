@@ -1,9 +1,11 @@
-import { and, desc, eq, sql } from "drizzle-orm";
-import { fetchStreams } from "@trainheroic-unofficial/js";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { chunk, coerceInt, fetchStreams, isRecord } from "@trainheroic-unofficial/js";
 import { OrgScopedStore } from "../base";
 import { type BatchStmt, cursorUpsertStmt } from "../runner";
 import { messageComment, messageStream, syncState } from "../schema";
-import { coerceInt, isRecord } from "@trainheroic-unofficial/js";
+
+// org_id and resource consume two of D1's 100 bound parameters.
+const CURSOR_QUERY_IDS = 98;
 
 export type StreamSyncResult = {
   stream: number;
@@ -92,32 +94,34 @@ export class MessagingStore extends OrgScopedStore {
     }
   }
 
-  async #cursor(org: number, sid: number): Promise<string> {
-    const row = await this.db
-      .select({ cursor: syncState.cursor })
-      .from(syncState)
-      .where(
-        and(
-          eq(syncState.orgId, org),
-          eq(syncState.resource, "messaging"),
-          eq(syncState.scopeId, sid),
-        ),
-      )
-      .get();
-    return row?.cursor ?? "";
+  async #cursors(org: number, streamIds: readonly number[]): Promise<Map<number, string>> {
+    const cursors = new Map<number, string>();
+    for (const ids of chunk([...new Set(streamIds)], CURSOR_QUERY_IDS)) {
+      const rows = await this.db
+        .select({ streamId: syncState.scopeId, cursor: syncState.cursor })
+        .from(syncState)
+        .where(
+          and(
+            eq(syncState.orgId, org),
+            eq(syncState.resource, "messaging"),
+            inArray(syncState.scopeId, ids),
+          ),
+        );
+      for (const row of rows) cursors.set(row.streamId, row.cursor ?? "");
+    }
+    return cursors;
   }
 
-  async syncStream(
+  async #syncStream(
+    org: number,
     s: Record<string, unknown>,
     kind: string,
-    full = false,
+    cursor: string,
   ): Promise<StreamSyncResult> {
-    const org = await this.org();
     const sid = coerceInt(s.id) ?? 0;
     const title = String(s.title ?? "");
     const stmts: BatchStmt[] = [this.#upsertStreamStmt(org, sid, kind, s)];
 
-    const cursor = full ? "" : await this.#cursor(org, sid);
     const res = await this.client.request<unknown>(
       "GET",
       `/v5/messaging/streams/${sid}/comments?lastCommentId=${encodeURIComponent(cursor)}`,
@@ -153,12 +157,27 @@ export class MessagingStore extends OrgScopedStore {
     return { stream: sid, title, kind, new: count };
   }
 
+  async syncStream(
+    s: Record<string, unknown>,
+    kind: string,
+    full = false,
+  ): Promise<StreamSyncResult> {
+    const org = await this.org();
+    const sid = coerceInt(s.id) ?? 0;
+    const cursors = full ? new Map<number, string>() : await this.#cursors(org, [sid]);
+    return this.#syncStream(org, s, kind, cursors.get(sid) ?? "");
+  }
+
   async syncAll(full = false): Promise<StreamSyncResult[]> {
+    const org = await this.org();
     const streams = await this.listStreams();
+    const streamIds = streams.map(({ stream }) => coerceInt(stream.id) ?? 0);
+    const cursors = full ? new Map<number, string>() : await this.#cursors(org, streamIds);
     const out: StreamSyncResult[] = [];
     for (const { stream, kind } of streams) {
       try {
-        out.push(await this.syncStream(stream, kind, full));
+        const sid = coerceInt(stream.id) ?? 0;
+        out.push(await this.#syncStream(org, stream, kind, cursors.get(sid) ?? ""));
       } catch (err) {
         out.push({
           stream: coerceInt(stream.id) ?? 0,
