@@ -218,13 +218,15 @@ export async function mapPool<T, R>(
  * The exercise-library surface the tools depend on, so the tools work over either a
  * D1-backed mirror (hosted, multi-tenant) or an in-memory cache (local, single-user).
  */
+export type ExerciseDefaults = { param1: number | null; param2: number | null };
+
 export interface ExerciseIndex {
   ensureFresh(): Promise<void>;
   refresh(): Promise<Record<string, unknown>>;
   resolve(name: string): Promise<ResolveResult>;
   search(query: string, limit?: number): Promise<ExerciseView[]>;
   get(id: number): Promise<Record<string, unknown> | null>;
-  defaults(id: number): Promise<{ param1: number | null; param2: number | null } | null>;
+  defaultsMany(ids: readonly number[]): Promise<Map<number, ExerciseDefaults>>;
   create(body: Record<string, unknown>): Promise<Record<string, unknown>>;
   recordDelete(id: number): Promise<void>;
   stats(): Promise<Record<string, unknown>>;

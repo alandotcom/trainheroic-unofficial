@@ -10,6 +10,7 @@ import {
   asExerciseList,
   buildSearchText,
   coerceInt,
+  type ExerciseDefaults,
   type ExerciseIndex,
   presentExercise,
   rankSearch,
@@ -135,9 +136,13 @@ export class ExerciseLibrary implements ExerciseIndex {
     return presentExercise(s.raw);
   }
 
-  async defaults(id: number): Promise<{ param1: number | null; param2: number | null } | null> {
-    const s = this.#byId.get(id);
-    return s ? { param1: s.param_1_type, param2: s.param_2_type } : null;
+  async defaultsMany(ids: readonly number[]): Promise<Map<number, ExerciseDefaults>> {
+    const result = new Map<number, ExerciseDefaults>();
+    for (const id of ids) {
+      const s = this.#byId.get(id);
+      if (s) result.set(id, { param1: s.param_1_type, param2: s.param_2_type });
+    }
+    return result;
   }
 
   async search(query: string, limit = 20): Promise<ExerciseView[]> {

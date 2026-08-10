@@ -82,6 +82,20 @@ describe("ExerciseStore refresh + reads", () => {
     expect(ex).not.toHaveProperty("param_1_type");
     expect(ex).not.toHaveProperty("param_2_type");
   });
+
+  it("loads defaults for multiple exercise ids at once", async () => {
+    const store = newStore();
+    await store.refresh();
+
+    const defaults = await store.defaultsMany([1, 1162, 999, 1]);
+
+    expect(defaults).toEqual(
+      new Map([
+        [1, { param1: 3, param2: 1 }],
+        [1162, { param1: 3, param2: 1 }],
+      ]),
+    );
+  });
 });
 
 describe("ExerciseStore safety + write-through", () => {

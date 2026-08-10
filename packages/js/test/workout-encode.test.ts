@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBlockPayload,
+  collectAdvisories,
   defaultBlockType,
   makeExercise,
   repsList,
@@ -207,5 +208,38 @@ describe("unitAdvisory", () => {
     const a = unitAdvisory("Press", { id: 1, reps: [5] }, { param1: 3, param2: 1 });
     expect(a.notes).toHaveLength(0);
     expect(a.warnings).toHaveLength(0);
+  });
+});
+
+describe("collectAdvisories", () => {
+  it("loads defaults for all unique exercise ids in one bulk request", async () => {
+    let requestedIds: readonly number[] = [];
+    const index = {
+      ensureFresh: async () => undefined,
+      defaultsMany: async (ids: readonly number[]) => {
+        requestedIds = ids;
+        return new Map([
+          [1, { param1: 3, param2: 1 }],
+          [2, { param1: 10, param2: null }],
+        ]);
+      },
+    };
+
+    const result = await collectAdvisories(
+      [
+        {
+          title: "Strength",
+          exercises: [
+            { id: 1, reps: 5 },
+            { id: 2, reps: 400 },
+            { id: 1, reps: 3 },
+          ],
+        },
+      ],
+      index,
+    );
+
+    expect(requestedIds).toEqual([1, 2]);
+    expect(result.notes).toHaveLength(1);
   });
 });
