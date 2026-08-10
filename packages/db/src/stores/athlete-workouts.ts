@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lt, lte, sql, type SQL } from "drizzle-orm";
 import {
   chunk,
   coerceInt,
@@ -19,6 +19,17 @@ export type WorkoutSyncResult = {
   from: string;
   to: string;
 };
+
+export type StoredWorkoutRow = {
+  id: number;
+  date: string | null;
+  title: string | null;
+  program_title: string | null;
+  team_title: string | null;
+  logged: boolean;
+};
+
+export type WorkoutListCursor = { date: string | null; id: number };
 
 /** Athlete workouts zone: scheduled + completed workouts, flattened to exercise rows. */
 export class AthleteWorkoutStore extends AthleteScopedStore {
@@ -110,33 +121,45 @@ export class AthleteWorkoutStore extends AthleteScopedStore {
     startDate?: string,
     endDate?: string,
     limit = 100,
-    before?: { date: string; id: number },
-  ): Promise<unknown[]> {
+    before?: WorkoutListCursor,
+  ): Promise<StoredWorkoutRow[]> {
     const user = await this.user();
-    const conditions = [eq(athleteWorkout.userId, user)];
+    const conditions: SQL[] = [eq(athleteWorkout.userId, user)];
     if (startDate !== undefined) conditions.push(gte(athleteWorkout.date, startDate));
     if (endDate !== undefined) conditions.push(lte(athleteWorkout.date, endDate));
-    if (before !== undefined) {
-      conditions.push(
-        or(
-          lt(athleteWorkout.date, before.date),
-          and(eq(athleteWorkout.date, before.date), lt(athleteWorkout.id, before.id)),
-        )!,
+    const columns = {
+      id: athleteWorkout.id,
+      date: athleteWorkout.date,
+      title: athleteWorkout.title,
+      program_title: athleteWorkout.programTitle,
+      team_title: athleteWorkout.teamTitle,
+      logged: athleteWorkout.logged,
+    };
+    const read = (extra: readonly SQL[], take: number) =>
+      this.db
+        .select(columns)
+        .from(athleteWorkout)
+        .where(and(...conditions, ...extra))
+        .orderBy(desc(athleteWorkout.date), desc(athleteWorkout.id))
+        .limit(take);
+
+    let rows;
+    if (before === undefined) {
+      rows = await read([], limit);
+    } else if (before.date === null) {
+      rows = await read([isNull(athleteWorkout.date), lt(athleteWorkout.id, before.id)], limit);
+    } else {
+      rows = await read(
+        [
+          isNotNull(athleteWorkout.date),
+          sql`(${athleteWorkout.date}, ${athleteWorkout.id}) < (${before.date}, ${before.id})`,
+        ],
+        limit,
       );
+      if (rows.length < limit && startDate === undefined && endDate === undefined) {
+        rows.push(...(await read([isNull(athleteWorkout.date)], limit - rows.length)));
+      }
     }
-    const rows = await this.db
-      .select({
-        id: athleteWorkout.id,
-        date: athleteWorkout.date,
-        title: athleteWorkout.title,
-        program_title: athleteWorkout.programTitle,
-        team_title: athleteWorkout.teamTitle,
-        logged: athleteWorkout.logged,
-      })
-      .from(athleteWorkout)
-      .where(and(...conditions))
-      .orderBy(desc(athleteWorkout.date), desc(athleteWorkout.id))
-      .limit(limit);
     return rows.map((row) => ({ ...row, logged: row.logged === 1 }));
   }
 

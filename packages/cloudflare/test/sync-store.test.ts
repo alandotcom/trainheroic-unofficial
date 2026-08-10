@@ -217,6 +217,14 @@ describe("ProgrammingStore", () => {
 
     const store = new ProgrammingStore(makeD1Warehouse(env.TH_DB), client(), 7);
     await store.syncCalendar(111, "Prog A");
+    await env.TH_DB.batch([
+      env.TH_DB.prepare(
+        "INSERT INTO program_session (org_id, id, program_id, date) VALUES (7, 9004, 111, NULL)",
+      ),
+      env.TH_DB.prepare(
+        "INSERT INTO program_session (org_id, id, program_id, date) VALUES (7, 9005, 111, NULL)",
+      ),
+    ]);
     const first = await store.getProgramSessions(111, 2);
     const cursor = first[1];
     if (!cursor?.date) throw new Error("Expected a dated session cursor");
@@ -224,8 +232,13 @@ describe("ProgrammingStore", () => {
       date: cursor.date,
       id: cursor.id,
     });
+    const nullTail = await store.getProgramSessions(111, 2, {
+      date: next[1]!.date,
+      id: next[1]!.id,
+    });
     expect(first.map((row) => row.id)).toEqual([9003, 9002]);
-    expect(next.map((row) => row.id)).toEqual([9001]);
+    expect(next.map((row) => row.id)).toEqual([9001, 9005]);
+    expect(nullTail.map((row) => row.id)).toEqual([9004]);
   });
 });
 
@@ -295,8 +308,8 @@ describe("MessagingStore", () => {
     expect(again.new).toBe(1);
   });
 
-  it("loads incremental cursors with constant query count as streams grow", async () => {
-    const streams = Array.from({ length: 20 }, (_, index) => ({
+  it("loads incremental cursors in bounded 98-id chunks", async () => {
+    const streams = Array.from({ length: 99 }, (_, index) => ({
       id: 1_000 + index,
       title: `Team ${index}`,
       teamId: index,
@@ -318,10 +331,10 @@ describe("MessagingStore", () => {
 
     const result = await new MessagingStore(warehouse, client(), 7).syncAll();
 
-    expect(result).toHaveLength(20);
+    expect(result).toHaveLength(99);
     expect(
       observed.queries.filter((query) => query.toLowerCase().includes('from "sync_state"')),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
   });
 
   it("writes message comments in bounded multi-row statements", async () => {
@@ -375,11 +388,11 @@ describe("MessagingStore", () => {
         if (url.includes("/comments")) return json([]);
         if (url.includes("/v5/messaging/streams")) {
           return json({
-            teams: Array.from({ length: 3 }, (_, index) => ({
+            teams: Array.from({ length: 5 }, (_, index) => ({
               id: 800 + index,
               title: `Team ${index}`,
               teamId: index,
-              lastViewed: index,
+              ...(index < 3 ? { lastViewed: index + 1 } : {}),
             })),
             athletes: [],
             programs: [],
@@ -392,6 +405,49 @@ describe("MessagingStore", () => {
 
     const store = new MessagingStore(makeD1Warehouse(env.TH_DB), client(), 7);
     await store.syncAll();
-    expect(await store.streams(2)).toHaveLength(2);
+    const first = (await store.streams(2)) as Array<{ id: number; last_viewed: number | null }>;
+    const next = (await store.streams(2, {
+      lastViewed: first[1]!.last_viewed,
+      id: first[1]!.id,
+    })) as Array<{ id: number; last_viewed: number | null }>;
+    const nullTail = await store.streams(2, {
+      lastViewed: next[1]!.last_viewed,
+      id: next[1]!.id,
+    });
+
+    expect(first.map((row) => row.id)).toEqual([802, 801]);
+    expect(next.map((row) => row.id)).toEqual([800, 804]);
+    expect((nullTail as Array<{ id: number }>).map((row) => row.id)).toEqual([803]);
+  });
+
+  it("paginates from timestamped comments through a null timestamp tail", async () => {
+    stubMessaging();
+    const store = new MessagingStore(makeD1Warehouse(env.TH_DB), client(), 7);
+    await store.syncAll();
+    await env.TH_DB.batch([
+      env.TH_DB.prepare(
+        "INSERT INTO message_comment (org_id, id, stream_id, ts) VALUES (7, 3, 700, NULL)",
+      ),
+      env.TH_DB.prepare(
+        "INSERT INTO message_comment (org_id, id, stream_id, ts) VALUES (7, 4, 700, NULL)",
+      ),
+      env.TH_DB.prepare(
+        "INSERT INTO message_comment (org_id, id, stream_id, ts) VALUES (7, 6, 700, NULL)",
+      ),
+    ]);
+
+    const first = (await store.history(700, 2)) as Array<{ id: number; ts: number | null }>;
+    const next = (await store.history(700, 2, {
+      ts: first[1]!.ts,
+      id: first[1]!.id,
+    })) as Array<{ id: number; ts: number | null }>;
+    const nullTail = await store.history(700, 2, {
+      ts: next[1]!.ts,
+      id: next[1]!.id,
+    });
+
+    expect(first.map((row) => row.id)).toEqual([2, 1]);
+    expect(next.map((row) => row.id)).toEqual([6, 4]);
+    expect((nullTail as Array<{ id: number }>).map((row) => row.id)).toEqual([3]);
   });
 });

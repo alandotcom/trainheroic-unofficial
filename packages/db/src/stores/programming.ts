@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, lt, sql, type SQL } from "drizzle-orm";
 import { OrgScopedStore } from "../base";
 import { type BatchStmt, cursorUpsertStmt, mapPool } from "../runner";
 import { block, prescribedSet, program, programSession } from "../schema";
@@ -63,6 +63,7 @@ export type ProgramSessionRow = {
   title: string | null;
   published: number;
 };
+export type ProgramSessionCursor = { date: string | null; id: number };
 
 /** Programming zone: prescribed programs -> sessions -> blocks -> sets. Accumulate-only. */
 export class ProgrammingStore extends OrgScopedStore {
@@ -329,29 +330,38 @@ export class ProgrammingStore extends OrgScopedStore {
   async getProgramSessions(
     programId: number,
     limit = 200,
-    before?: { date: string; id: number },
+    before?: ProgramSessionCursor,
   ): Promise<ProgramSessionRow[]> {
     const org = await this.org();
     const conditions = [eq(programSession.orgId, org), eq(programSession.programId, programId)];
-    if (before !== undefined) {
-      conditions.push(
-        or(
-          lt(programSession.date, before.date),
-          and(eq(programSession.date, before.date), lt(programSession.id, before.id)),
-        )!,
-      );
+    const columns = {
+      id: programSession.id,
+      date: programSession.date,
+      title: programSession.title,
+      published: programSession.published,
+    };
+    const read = (extra: readonly SQL[], take: number) =>
+      this.db
+        .select(columns)
+        .from(programSession)
+        .where(and(...conditions, ...extra))
+        .orderBy(desc(programSession.date), desc(programSession.id))
+        .limit(take);
+
+    if (before === undefined) return read([], limit);
+    if (before.date === null) {
+      return read([isNull(programSession.date), lt(programSession.id, before.id)], limit);
     }
-    const rows = await this.db
-      .select({
-        id: programSession.id,
-        date: programSession.date,
-        title: programSession.title,
-        published: programSession.published,
-      })
-      .from(programSession)
-      .where(and(...conditions))
-      .orderBy(desc(programSession.date), desc(programSession.id))
-      .limit(limit);
+    const rows = await read(
+      [
+        isNotNull(programSession.date),
+        sql`(${programSession.date}, ${programSession.id}) < (${before.date}, ${before.id})`,
+      ],
+      limit,
+    );
+    if (rows.length < limit) {
+      rows.push(...(await read([isNull(programSession.date)], limit - rows.length)));
+    }
     return rows;
   }
 

@@ -79,6 +79,30 @@ describe("applyMigrations", () => {
         args: [7, 700, 50],
         index: "idx_mcomment_stream",
       },
+      {
+        sql: "SELECT id, date FROM athlete_workout WHERE user_id = ? AND date IS NOT NULL AND (date, id) < (?, ?) ORDER BY date DESC, id DESC LIMIT ?",
+        args: [USER, "2026-06-01", 10, 100],
+        index: "idx_aworkout_date",
+        seek: "(date,id)<(?,?)",
+      },
+      {
+        sql: "SELECT id, date FROM program_session WHERE org_id = ? AND program_id = ? AND date IS NOT NULL AND (date, id) < (?, ?) ORDER BY date DESC, id DESC LIMIT ?",
+        args: [7, 111, "2026-06-01", 20, 200],
+        index: "idx_psession_program",
+        seek: "(date,id)<(?,?)",
+      },
+      {
+        sql: "SELECT id, last_viewed FROM message_stream WHERE org_id = ? AND last_viewed IS NOT NULL AND (last_viewed, id) < (?, ?) ORDER BY last_viewed DESC, id DESC LIMIT ?",
+        args: [7, 100, 30, 50],
+        index: "idx_mstream_viewed",
+        seek: "(last_viewed,id)<(?,?)",
+      },
+      {
+        sql: "SELECT id, ts FROM message_comment WHERE org_id = ? AND stream_id = ? AND ts IS NOT NULL AND (ts, id) < (?, ?) ORDER BY ts DESC, id DESC LIMIT ?",
+        args: [7, 700, 100, 40, 50],
+        index: "idx_mcomment_stream",
+        seek: "(ts,id)<(?,?)",
+      },
     ];
 
     for (const query of queries) {
@@ -88,6 +112,7 @@ describe("applyMigrations", () => {
       const detail = plan.map((row) => row.detail).join("\n");
       expect(detail).toContain(query.index);
       expect(detail).not.toContain("USE TEMP B-TREE");
+      if ("seek" in query) expect(detail).toContain(query.seek);
     }
   });
 });
