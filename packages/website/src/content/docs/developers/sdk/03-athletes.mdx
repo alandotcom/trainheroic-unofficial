@@ -1,0 +1,38 @@
+---
+title: Read athlete training
+description: Query the signed-in athlete's profile, workout history, lift history, PRs, and working maxes.
+---
+
+Athlete helpers read the training data attached to the signed-in account. They work for athlete
+accounts and for a coach reading their own athlete scope.
+
+```ts
+import {
+  fetchAthleteProfileSummary,
+  fetchExerciseHistoryDetail,
+  fetchPersonalRecords,
+  resolveAthleteUserId,
+  searchExerciseHistory,
+} from "@trainheroic-unofficial/js";
+
+const userId = await resolveAthleteUserId(client);
+const profile = await fetchAthleteProfileSummary(client, userId);
+
+const [squat] = await searchExerciseHistory(client, "back squat", 1);
+if (squat) {
+  const exerciseId = Number(squat.id);
+  const history = await fetchExerciseHistoryDetail(client, exerciseId, userId);
+  const records = await fetchPersonalRecords(client, exerciseId);
+  console.log({ profile, history, records });
+}
+```
+
+## Available reads
+
+- Scheduled and completed workouts in a date range.
+- Exercise search over lifts the athlete has logged.
+- Detailed history and personal records for one exercise.
+- Working maxes, exercise stats as of a date, benchmark leaderboards, and profile totals.
+
+For a full portable archive, use the CLI's `trainheroic athlete export` command or the
+[browser export](/export).

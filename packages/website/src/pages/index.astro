@@ -1,0 +1,320 @@
+---
+import Footer from "../components/Footer.astro";
+import GoalIndex from "../components/GoalIndex.astro";
+import Header from "../components/Header.astro";
+import Layout from "../layouts/Layout.astro";
+import { pageHref } from "../lib/paths.ts";
+
+const MCP_ENDPOINT = "https://mcp.trainheroic-unofficial.com/mcp";
+
+interface ProofFact {
+  label: string;
+  value: string;
+  code?: boolean;
+  copy?: boolean;
+  relativeWindow?: boolean;
+}
+
+interface Proof {
+  id: string;
+  label: string;
+  statement: string;
+  facts: ProofFact[];
+  action: { href: string; label: string };
+  aside?: { href: string; label: string };
+}
+
+const proofs: Proof[] = [
+  {
+    id: "mcp",
+    label: "Hosted MCP",
+    statement: "Get the last four weeks of training.",
+    facts: [
+      { label: "Your prompt", value: "Show my training over the last four weeks." },
+      { label: "Endpoint", value: MCP_ENDPOINT, code: true, copy: true },
+    ],
+    action: { href: "/connect", label: "Connect hosted MCP" },
+    aside: { href: "/developers/mcp", label: "See every MCP option" },
+  },
+  {
+    id: "cli",
+    label: "CLI",
+    statement: "Get the last four weeks of training.",
+    facts: [
+      {
+        label: "Read workouts",
+        value: "trainheroic athlete workouts --start YYYY-MM-DD --end YYYY-MM-DD --summary",
+        code: true,
+        relativeWindow: true,
+      },
+      {
+        label: "Export history",
+        value: "trainheroic athlete export --out ./my-training",
+        code: true,
+      },
+    ],
+    action: { href: "/developers/cli", label: "Use the CLI" },
+  },
+  {
+    id: "sdk",
+    label: "SDK",
+    statement: "Get the last four weeks of training.",
+    facts: [
+      {
+        label: "Import",
+        value: 'import { fetchAthleteWorkouts } from "@trainheroic-unofficial/js";',
+        code: true,
+      },
+      {
+        label: "Query",
+        value: "const workouts = await fetchAthleteWorkouts(client, startDate, endDate);",
+        code: true,
+      },
+    ],
+    action: { href: "/developers/sdk/athletes", label: "Build with the SDK" },
+  },
+  {
+    id: "export",
+    label: "Export",
+    statement: "Get the last four weeks of training.",
+    facts: [
+      { label: "Choose", value: "A date range and the sessions you want to keep." },
+      { label: "Download", value: "CSV, JSON, or plain text in your browser." },
+    ],
+    action: { href: "/export", label: "Open browser export" },
+  },
+];
+
+---
+
+<Layout
+  directionContract
+  title="TrainHeroic beyond the app"
+  description="One unofficial toolkit for using TrainHeroic with AI, code, and your own data."
+>
+  <Header />
+
+  <main class="home" id="main">
+    <section class="home-hero" aria-labelledby="home-title">
+      <div class="home-thesis">
+        <h1 id="home-title">
+          <span class="product-name product-name--desktop">TrainHeroic,</span>
+          <span class="product-name product-name--mobile">Train<wbr />Heroic,</span><br />beyond the
+          app.
+        </h1>
+        <p>One unofficial toolkit for using TrainHeroic with AI, code, and your own data.</p>
+      </div>
+
+      <GoalIndex variant="mobile" />
+
+      <div class="home-proof" data-home-proof>
+        <div class="proof-tabs" role="tablist" aria-label="Ways to use the toolkit">
+          {
+            proofs.map((proof, index) => (
+              <button
+                aria-controls={`proof-panel-${proof.id}`}
+                aria-selected={index === 0 ? "true" : "false"}
+                class="proof-tab"
+                id={`proof-tab-${proof.id}`}
+                role="tab"
+                tabindex={index === 0 ? 0 : -1}
+                type="button"
+              >
+                {proof.label}
+              </button>
+            ))
+          }
+        </div>
+
+        <div class="proof-panels">
+          {
+            proofs.map((proof, index) => (
+              <section
+                aria-labelledby={`proof-tab-${proof.id}`}
+                class="proof-panel"
+                hidden={index !== 0}
+                id={`proof-panel-${proof.id}`}
+                role="tabpanel"
+                tabindex="0"
+              >
+                <p class="proof-panel__statement">{proof.statement}</p>
+
+                <dl class="proof-facts">
+                  {proof.facts.map((fact) => (
+                    <div class="proof-fact">
+                      <dt>{fact.label}</dt>
+                      <dd>
+                        {
+                          fact.code ? (
+                            <code
+                              data-copy-source={fact.copy ? "true" : undefined}
+                              data-relative-window={fact.relativeWindow ? "true" : undefined}
+                              tabindex={fact.copy ? -1 : undefined}
+                            >
+                              {fact.value}
+                            </code>
+                          ) : (
+                            fact.value
+                          )
+                        }
+                        {fact.copy && (
+                          <button class="proof-copy" data-copy={fact.value} type="button">
+                            <span data-copy-label>Copy endpoint</span>
+                          </button>
+                        )}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+
+                <div class="proof-actions">
+                  <a class="proof-action" href={pageHref(proof.action.href, "/")}>
+                    {proof.action.label}
+                  </a>
+                  {proof.aside && (
+                    <a class="proof-aside" href={pageHref(proof.aside.href, "/")}>
+                      {proof.aside.label}
+                    </a>
+                  )}
+                </div>
+
+                {
+                  proof.id === "mcp" && (
+                    <div class="proof-context">
+                      <p>
+                        Coach accounts add roster, programming, analytics, and messaging; every
+                        account includes its own training and history.
+                      </p>
+                      <p>
+                        Existing TrainHeroic account required. Your client receives an OAuth access
+                        token—not your TrainHeroic password, which stays in encrypted grant data.
+                        <a href={pageHref("/privacy", "/")}>How credentials work</a>
+                      </p>
+                    </div>
+                  )
+                }
+              </section>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <GoalIndex variant="desktop" />
+
+    <aside class="home-disclosure">
+      <p>
+        Requires an existing TrainHeroic account. This project uses undocumented APIs and is not
+        affiliated with or endorsed by TrainHeroic.
+      </p>
+      <div>
+        <a href={pageHref("/capabilities", "/")}>Capabilities</a>
+        <a href={pageHref("/privacy", "/")}>Privacy and credentials</a>
+      </div>
+    </aside>
+
+    <p class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-copy-status></p>
+  </main>
+
+  <Footer />
+</Layout>
+
+<script>
+  const formatLocalDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const windowEnd = new Date();
+  const windowStart = new Date(windowEnd);
+  windowStart.setDate(windowStart.getDate() - 28);
+
+  for (const command of document.querySelectorAll<HTMLElement>("[data-relative-window]")) {
+    command.textContent = `trainheroic athlete workouts --start ${formatLocalDate(windowStart)} --end ${formatLocalDate(windowEnd)} --summary`;
+  }
+
+  const proof = document.querySelector<HTMLElement>("[data-home-proof]");
+
+  if (proof) {
+    const tabs = [...proof.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const panels = [...proof.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+
+    const selectTab = (tab: HTMLButtonElement, moveFocus = false) => {
+      for (const candidate of tabs) {
+        const selected = candidate === tab;
+        candidate.setAttribute("aria-selected", String(selected));
+        candidate.tabIndex = selected ? 0 : -1;
+      }
+
+      for (const panel of panels) {
+        panel.hidden = panel.id !== tab.getAttribute("aria-controls");
+      }
+
+      if (moveFocus) tab.focus();
+    };
+
+    for (const [index, tab] of tabs.entries()) {
+      tab.addEventListener("click", () => selectTab(tab));
+      tab.addEventListener("keydown", (event) => {
+        let next = index;
+        if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+        else if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+        else if (event.key === "Home") next = 0;
+        else if (event.key === "End") next = tabs.length - 1;
+        else return;
+
+        event.preventDefault();
+        const nextTab = tabs[next];
+        if (nextTab) selectTab(nextTab, true);
+      });
+    }
+  }
+
+  const copyText = async (value: string) => {
+    if (!navigator.clipboard) throw new Error("Clipboard access is unavailable.");
+    await navigator.clipboard.writeText(value);
+  };
+
+  let copyResetTimer: number | undefined;
+
+  document.addEventListener("click", async (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-copy]");
+    if (!button) return;
+
+    const label = button.querySelector<HTMLElement>("[data-copy-label]");
+    const source = button.closest("dd")?.querySelector<HTMLElement>("[data-copy-source]");
+    const status = document.querySelector<HTMLElement>("[data-copy-status]");
+    const value = button.dataset.copy;
+    if (!label || !status || !value) return;
+
+    if (copyResetTimer !== undefined) window.clearTimeout(copyResetTimer);
+
+    try {
+      await copyText(value);
+      label.textContent = "Copied";
+      status.textContent = "MCP endpoint copied.";
+      button.dataset.state = "success";
+    } catch {
+      label.textContent = "Copy manually";
+      status.textContent =
+        "Automatic copy failed. The endpoint is selected; press Control+C or Command+C.";
+      button.dataset.state = "error";
+
+      if (source) {
+        const range = document.createRange();
+        range.selectNodeContents(source);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        source.focus();
+      }
+    }
+
+    copyResetTimer = window.setTimeout(() => {
+      label.textContent = "Copy endpoint";
+      delete button.dataset.state;
+    }, 4000);
+  });
+</script>

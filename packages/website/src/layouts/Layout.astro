@@ -7,12 +7,14 @@ interface Props {
   path?: string;
   image?: string;
   imageAlt?: string;
+  directionContract?: boolean;
 }
 
 const SITE_NAME = "trainheroic-unofficial";
+const SITE_URL = new URL("https://trainheroic-unofficial.com");
 const DEFAULT_OG_IMAGE = "og-image.png";
 const DEFAULT_OG_IMAGE_ALT =
-  "trainheroic-unofficial - Connect TrainHeroic to Claude via MCP";
+  "trainheroic unofficial — TrainHeroic beyond the app, across AI, CLI, SDK, and export";
 
 const {
   title,
@@ -20,11 +22,13 @@ const {
   path = sitePath(Astro.url.pathname),
   image = DEFAULT_OG_IMAGE,
   imageAlt = DEFAULT_OG_IMAGE_ALT,
+  directionContract = false,
 } = Astro.props;
 
 const pageTitle = `${title} · ${SITE_NAME}`;
-const canonical = new URL(path === "/" ? "" : path.slice(1), Astro.site);
-const ogImage = new URL(withBase(image), Astro.site);
+const site = Astro.site ?? SITE_URL;
+const canonical = new URL(path === "/" ? "" : path.slice(1), site);
+const ogImage = new URL(withBase(image), site);
 ---
 
 <!doctype html>
@@ -36,7 +40,7 @@ const ogImage = new URL(withBase(image), Astro.site);
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="theme-color" content="#f3f1e9" />
     <link rel="canonical" href={canonical} />
     <link rel="icon" type="image/svg+xml" href={pageHref("favicon.svg", Astro.url.pathname)} />
     <link
@@ -63,6 +67,20 @@ const ogImage = new URL(withBase(image), Astro.site);
     <meta name="twitter:image:alt" content={imageAlt} />
   </head>
   <body>
+    {
+      directionContract && (
+        <Fragment
+          set:html={`<!--
+      THESIS: One TrainHeroic toolkit through AI, terminal, SDK, and export; refuse a client-specific hero and a card-grid directory.
+      OWN-WORLD: Warm paper, near-black ink, one cobalt lane, graphite program rules, square controls, compressed grotesk display, and mono only for code.
+      STORY: Understand the shared toolkit, see one training-history task across four surfaces, then connect hosted MCP or choose a goal.
+      FIRST VIEWPORT: A thin custom nav above a five/seven desktop split; on mobile, the thesis leads directly into goal navigation before the technical proof.
+      FORM: The Shared Training Log, grounded direction 6; Parallel Lanes composition A; seed b0dc30a8.
+      FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+    -->`}
+        />
+      )
+    }
     <a class="skip-link" href="#main">Skip to main content</a>
     <slot />
   </body>

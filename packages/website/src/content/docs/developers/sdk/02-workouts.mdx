@@ -1,0 +1,52 @@
+---
+title: Build workouts
+description: Resolve exercises, build a draft session, read it back, and publish separately.
+---
+
+`buildSession()` creates one session inside a program, saves its blocks and exercises, and can
+optionally publish it. The safer workflow is draft first, inspect second, publish last.
+
+<Steps>
+  <Step title="Resolve every exercise">
+    Use the [exercise library](/developers/sdk/exercises) to turn names into TrainHeroic ids.
+  </Step>
+  <Step title="Build a draft">Set `publish: false` and keep the returned `pwId`.</Step>
+  <Step title="Read it back">Verify the encoded session before it becomes athlete-visible.</Step>
+  <Step title="Publish deliberately">
+    Call `publishSession()` only after the draft matches the intended programming.
+  </Step>
+</Steps>
+
+```ts
+import { buildSession } from "@trainheroic-unofficial/js";
+
+const { match } = await library.resolve("Back Squat");
+if (!match) throw new Error("Choose one exercise before building");
+
+const { pwId, workoutId } = await buildSession(client, {
+  programId: 12345,
+  date: [2026, 8, 17], // [year, month, day], with a 1-based month
+  instruction: "Warm up first.",
+  blocks: [
+    {
+      title: "Strength",
+      exercises: [{ id: match.id, sets: 5, reps: 5, weight: 225, rpe: 8 }],
+    },
+  ],
+  publish: false,
+});
+```
+
+`reps` and `weight` accept one scalar for every set or a per-set array such as
+`reps: [5, 5, 3]`. Loads use the unit configured on the exercise in TrainHeroic.
+
+## Session handles
+
+- `pwId` identifies the session's placement in the program. Read, publish, unpublish, copy,
+  and remove operations use it.
+- `workoutId` identifies the underlying workout record.
+
+:::warning
+Publishing makes the session visible to athletes. The MCP and CLI surfaces require explicit
+confirmation for that step; direct SDK callers own their own confirmation policy.
+:::

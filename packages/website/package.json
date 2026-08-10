@@ -8,17 +8,17 @@
     "gen:mcp-tools": "tsx scripts/gen-mcp-tools.mts",
     "gen:social-images": "tsx scripts/gen-social-images.mts",
     "predev": "pnpm gen:mcp-tools && pnpm gen:social-images",
-    "dev": "astro dev",
+    "dev": "blume dev",
     "prebuild": "pnpm gen:mcp-tools && pnpm gen:social-images",
-    "build": "astro build",
-    "preview": "astro preview",
-    "astro": "astro"
+    "build": "blume validate --strict && blume build --strict",
+    "preview": "blume preview",
+    "typecheck": "blume check --strict"
   },
   "dependencies": {
-    "@astrojs/sitemap": "^3.7.3",
-    "@astrojs/starlight": "^0.41.7",
+    "@fontsource-variable/archivo": "^5.3.0",
     "@trainheroic-unofficial/js": "workspace:*",
-    "astro": "^7.2.0"
+    "astro": "^7.2.0",
+    "blume": "^1.4.2"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",

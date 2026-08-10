@@ -24,9 +24,9 @@
 
 ## What you can do
 
-| Account | Capabilities |
-| --- | --- |
-| **Coach** | Build and publish workouts · manage athletes, teams, and programs · read analytics · send messages |
+| Account     | Capabilities                                                                                                    |
+| ----------- | --------------------------------------------------------------------------------------------------------------- |
+| **Coach**   | Build and publish workouts · manage athletes, teams, and programs · read analytics · send messages              |
 | **Athlete** | Review training history · track PRs and progress on a lift over time · see what's programmed · export your data |
 
 A coach account also carries athlete scope, so it can reach its own training data through the athlete tools.
@@ -120,10 +120,10 @@ Add this to your `.mcp.json` (or the client's MCP config):
       "args": ["-y", "@trainheroic-unofficial/coach-mcp"],
       "env": {
         "TRAINHEROIC_EMAIL": "coach@example.com",
-        "TRAINHEROIC_PASSWORD": "yourpassword"
-      }
-    }
-  }
+        "TRAINHEROIC_PASSWORD": "yourpassword",
+      },
+    },
+  },
 }
 ```
 
@@ -148,16 +148,16 @@ trainheroic help
 
 ## Packages
 
-| Package | Description |
-| --- | --- |
-| [`@trainheroic-unofficial/dto`](packages/dto) | zod schemas and types, the source of truth for API shapes |
-| [`@trainheroic-unofficial/js`](packages/js) | the runtime-agnostic SDK (client, auth, encoder, exercise library) |
-| [`@trainheroic-unofficial/core`](packages/core) | the shared MCP tool layer, reused by every server |
-| [`@trainheroic-unofficial/coach-mcp`](packages/coach-mcp) | local stdio MCP server for a coach |
-| [`@trainheroic-unofficial/athlete-mcp`](packages/athlete-mcp) | local stdio MCP server for an athlete |
-| [`@trainheroic-unofficial/cloudflare`](packages/cloudflare) | the hosted multi-tenant Worker (OAuth + D1) |
-| [`@trainheroic-unofficial/cli`](packages/cli) | the command-line tool |
-| [`@trainheroic-unofficial/website`](packages/website) | documentation site (Claude.ai setup, skill, SDK, MCP reference) |
+| Package                                                       | Description                                                        |
+| ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [`@trainheroic-unofficial/dto`](packages/dto)                 | zod schemas and types, the source of truth for API shapes          |
+| [`@trainheroic-unofficial/js`](packages/js)                   | the runtime-agnostic SDK (client, auth, encoder, exercise library) |
+| [`@trainheroic-unofficial/core`](packages/core)               | the shared MCP tool layer, reused by every server                  |
+| [`@trainheroic-unofficial/coach-mcp`](packages/coach-mcp)     | local stdio MCP server for a coach                                 |
+| [`@trainheroic-unofficial/athlete-mcp`](packages/athlete-mcp) | local stdio MCP server for an athlete                              |
+| [`@trainheroic-unofficial/cloudflare`](packages/cloudflare)   | the hosted multi-tenant Worker (OAuth + D1)                        |
+| [`@trainheroic-unofficial/cli`](packages/cli)                 | the command-line tool                                              |
+| [`@trainheroic-unofficial/website`](packages/website)         | documentation site (Claude.ai setup, skill, SDK, MCP reference)    |
 
 ## Documentation site
 
@@ -168,7 +168,8 @@ pnpm website:dev     # http://localhost:4321
 pnpm website:build
 ```
 
-The home page walks through the Claude.ai connector; `/developers` links to skill, SDK, and MCP reference pages.
+The home page walks through the Claude.ai connector. `/developers` branches into dedicated
+skill, CLI, SDK, and MCP guides, and Blume publishes the same corpus as AI-readable Markdown.
 
 ## Disclaimer
 

@@ -1,0 +1,59 @@
+---
+title: Claude Code skill
+description: Install the TrainHeroic skill and let Claude Code use the version-matched CLI workflow.
+---
+
+The skill teaches Claude Code the TrainHeroic workflows and command shapes. It invokes the CLI,
+so results stay structured and destructive commands retain their confirmation checks.
+
+## Install
+
+```bash
+npx skills add alandotcom/trainheroic-unofficial
+```
+
+Set your login in the shell that launches Claude Code:
+
+```bash
+export TRAINHEROIC_EMAIL=coach@example.com
+export TRAINHEROIC_PASSWORD=yourpassword
+```
+
+:::warning[Credentials are plaintext]
+Environment variables can appear in shell history and process configuration. Do not commit
+them to a repository.
+:::
+
+## Use the skill
+
+<Tabs>
+  <Tab title="Coach">
+    Type `/trainheroic-unofficial`, then ask for roster data, analytics, programming, or
+    messaging work.
+
+    <Prompt description="A programming task for the skill." actions={["copy"]}>
+      Build a five-by-five back squat session for Monday as a draft, then read it back to me.
+    </Prompt>
+
+  </Tab>
+  <Tab title="Athlete">
+    Type `/trainheroic-athlete`, then ask about your own history, PRs, working maxes, or
+    scheduled training.
+
+    <Prompt description="A training-history task for the skill." actions={["copy"]}>
+      Compare my last five back squat sessions and summarize the trend.
+    </Prompt>
+
+  </Tab>
+</Tabs>
+
+## Version-matched reference
+
+The CLI can print the exact workflow guide bundled with its installed version:
+
+```bash
+trainheroic skill
+trainheroic skill --full
+```
+
+Use `--full` when the task involves workout JSON or low-level API shapes.

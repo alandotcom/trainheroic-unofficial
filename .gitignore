@@ -1,6 +1,7 @@
 # Node / pnpm / build
 node_modules/
 dist/
+.blume/
 *.log
 # MCPB build output (the bundled server). The manifest and icon are committed.
 packages/coach-mcp/mcpb/server/

@@ -1,0 +1,56 @@
+---
+import { pageHref } from "../lib/paths.ts";
+
+interface Props {
+  variant: "desktop" | "mobile";
+}
+
+const { variant } = Astro.props;
+
+const goals = [
+  {
+    title: "Use with AI",
+    description: "Connect an AI client to live coach or athlete tools through the hosted MCP server.",
+    href: "/connect",
+    linkLabel: "Connect a client",
+  },
+  {
+    title: "Work in a terminal",
+    description: "Inspect, export, and automate TrainHeroic from Claude Code or the command line.",
+    href: "/developers/cli",
+    linkLabel: "Use the CLI",
+  },
+  {
+    title: "Build something",
+    description: "Use the typed SDK or an MCP server inside your own application and workflow.",
+    href: "/developers",
+    linkLabel: "Explore developer tools",
+  },
+  {
+    title: "Export your data",
+    description: "Preview your logged sessions and download a portable copy from the browser.",
+    href: "/export",
+    linkLabel: "Export training history",
+  },
+];
+---
+
+<nav
+  class:list={["goal-index", `goal-index--${variant}`]}
+  aria-label="Choose what you want to do"
+>
+  {
+    goals.map((goal) => (
+      <a class="goal-row" href={pageHref(goal.href, "/")}>
+        <h2>{goal.title}</h2>
+        <p>{goal.description}</p>
+        <span class="goal-row__action">
+          <span>{goal.linkLabel}</span>
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M5 12h13M13 6l6 6-6 6" />
+          </svg>
+        </span>
+      </a>
+    ))
+  }
+</nav>

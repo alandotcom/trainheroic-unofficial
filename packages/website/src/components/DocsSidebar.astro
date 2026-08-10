@@ -1,0 +1,148 @@
+---
+import type { NavNode } from "blume/core/types.ts";
+import { withBase } from "blume/components/islands/base-path.ts";
+import Self from "./DocsSidebar.astro";
+
+interface Props {
+  items: NavNode[];
+  currentRoute: string;
+  depth?: number;
+}
+
+const { items, currentRoute, depth = 0 } = Astro.props;
+const containsCurrent = (node: NavNode): boolean =>
+  node.kind === "page"
+    ? node.route === currentRoute
+    : node.route === currentRoute || node.children.some(containsCurrent);
+const groupRoute = (node: Extract<NavNode, { kind: "group" }>): string | undefined => {
+  if (node.route) return node.route;
+  const first = node.children[0];
+  return first?.kind === "page" ? first.route : undefined;
+};
+---
+
+{
+  depth === 0 && (
+    <nav class="goal-nav" aria-label="Website sections">
+      <a href={withBase("/connect")}>Connect</a>
+      <a href={withBase("/developers")}>Develop</a>
+      <a href={withBase("/export")}>Export</a>
+    </nav>
+  )
+}
+
+<ul class:list={["docs-nav", depth > 0 && "docs-nav--nested"]}>
+  {
+    items.map((item) =>
+      item.kind === "page" ? (
+        <li>
+          <a
+            aria-current={item.route === currentRoute ? "page" : undefined}
+            href={withBase(item.route)}
+          >
+            {item.label}
+          </a>
+        </li>
+      ) : (
+        <li class="docs-nav__group">
+          {groupRoute(item) ? (
+            <a
+              aria-current={groupRoute(item) === currentRoute ? "page" : undefined}
+              class="docs-nav__group-title"
+              href={withBase(groupRoute(item)!)}
+            >
+              {item.label}
+            </a>
+          ) : (
+            <span class="docs-nav__group-title">{item.label}</span>
+          )}
+          <div hidden={depth > 0 && !containsCurrent(item)}>
+            <Self currentRoute={currentRoute} depth={depth + 1} items={item.children} />
+          </div>
+        </li>
+      )
+    )
+  }
+</ul>
+
+<style>
+  .goal-nav {
+    display: none;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--blume-border);
+  }
+
+  .goal-nav a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    color: var(--blume-foreground);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .docs-nav {
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.125rem;
+    list-style: none;
+  }
+
+  .docs-nav a {
+    min-height: 2.25rem;
+    padding: 0.45rem 0.75rem;
+    display: flex;
+    align-items: center;
+    color: var(--blume-muted-foreground);
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    line-height: 1.35;
+    text-decoration: none;
+  }
+
+  .docs-nav a:hover {
+    color: var(--blume-foreground);
+    background: var(--blume-muted);
+  }
+
+  .docs-nav a[aria-current="page"] {
+    color: var(--blume-foreground);
+    background: var(--blume-muted);
+    font-weight: 600;
+  }
+
+  .docs-nav--nested {
+    margin-top: 0.25rem;
+    padding-left: 0.75rem;
+    border-left: 1px solid var(--blume-border);
+  }
+
+  .docs-nav__group {
+    margin-top: 1.25rem;
+  }
+
+  .docs-nav__group:first-child {
+    margin-top: 0;
+  }
+
+  .docs-nav__group-title,
+  span.docs-nav__group-title {
+    min-height: auto;
+    padding: 0 0.75rem 0.4rem;
+    display: block;
+    color: var(--blume-foreground);
+    background: transparent;
+    font-size: 0.8125rem;
+    font-weight: 650;
+    text-decoration: none;
+  }
+
+  @media (max-width: 63.99rem) {
+    .goal-nav {
+      display: grid;
+    }
+  }
+</style>

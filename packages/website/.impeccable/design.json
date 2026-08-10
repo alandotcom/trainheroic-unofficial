@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-10T00:00:00.000Z",
+  "title": "Design System: TrainHeroic Unofficial",
+  "extensions": {
+    "colorMeta": {
+      "cobalt": {
+        "role": "primary",
+        "displayName": "Lane Cobalt",
+        "canonical": "#2457d6",
+        "tonalRamp": ["#dce5ff", "#2457d6", "#1945b8"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "canonical": "#f3f1e9",
+        "tonalRamp": ["#faf9f4", "#f3f1e9", "#e9e6dc"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Training Ink",
+        "canonical": "#171714",
+        "tonalRamp": ["#6a6962", "#55554f", "#171714"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Compressed Thesis",
+        "purpose": "Oversized homepage thesis only."
+      },
+      "headline": {
+        "displayName": "Lane Headline",
+        "purpose": "Proof statements and goal destinations."
+      },
+      "body": {
+        "displayName": "Working Copy",
+        "purpose": "Product explanations and documentation."
+      },
+      "label": {
+        "displayName": "Program Label",
+        "purpose": "Uppercase fact labels and metadata."
+      },
+      "code": {
+        "displayName": "Literal Code",
+        "purpose": "Commands, endpoints, imports, and queries only."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Goal-row color and arrow transitions plus proof-panel entry."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Effectively removes animations and transitions when reduced motion is requested."
+      }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "44rem" },
+      { "name": "stacked", "value": "64rem" },
+      { "name": "compact-nav", "value": "35rem" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Square cobalt action for the single strongest next step.",
+      "html": "<a class=\"ds-primary-action\" href=\"#\">Connect hosted MCP</a>",
+      "css": ".ds-primary-action { min-height: 56px; padding: 0 24px; display: inline-flex; align-items: center; justify-content: center; color: #fff; background: var(--color-accent, #2457d6); border-radius: 0; font-family: 'Archivo Variable', 'Arial Narrow', sans-serif; font-weight: 650; text-decoration: none; transition: background-color 180ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-primary-action:hover { background: var(--color-accent-hover, #1945b8); } .ds-primary-action:focus-visible { outline: 3px solid var(--color-accent, #2457d6); outline-offset: 3px; }"
+    },
+    {
+      "name": "Selected Proof Tab",
+      "kind": "custom",
+      "refersTo": "tab-active",
+      "description": "Selected route within the shared training-history proof.",
+      "html": "<button class=\"ds-proof-tab\" aria-selected=\"true\">Hosted MCP</button>",
+      "css": ".ds-proof-tab { position: relative; min-height: 80px; padding: 16px; color: var(--color-accent, #2457d6); background: var(--color-surface, #faf9f4); border: 0; border-right: 1px solid var(--color-line-soft, #d3d0c6); border-radius: 0; font-family: 'Archivo Variable', 'Arial Narrow', sans-serif; font-weight: 700; } .ds-proof-tab::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 4px; content: ''; background: var(--color-accent, #2457d6); } .ds-proof-tab:focus-visible { outline: 3px solid var(--color-accent, #2457d6); outline-offset: 3px; }"
+    },
+    {
+      "name": "Goal Row",
+      "kind": "nav",
+      "refersTo": "goal-row",
+      "description": "Full-width goal destination with a cobalt inversion on hover and focus.",
+      "html": "<a class=\"ds-goal-row\" href=\"#\"><strong>Use with AI</strong><span>Connect a client</span><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M5 12h13M13 6l6 6-6 6\" /></svg></a>",
+      "css": ".ds-goal-row { min-height: 82px; padding: 14px 24px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 24px; color: var(--color-ink, #171714); background: var(--color-bg, #f3f1e9); border-bottom: 1px solid var(--color-line-soft, #d3d0c6); border-radius: 0; font-family: 'Archivo Variable', 'Arial Narrow', sans-serif; text-decoration: none; transition: color 180ms cubic-bezier(0.16, 1, 0.3, 1), background-color 180ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-goal-row strong { font-size: 28px; } .ds-goal-row svg { width: 24px; fill: none; stroke: currentColor; stroke-linecap: square; stroke-linejoin: miter; transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-goal-row:hover, .ds-goal-row:focus-visible { color: #fff; background: var(--color-accent, #2457d6); } .ds-goal-row:hover svg, .ds-goal-row:focus-visible svg { transform: translateX(0.35rem); } .ds-goal-row:focus-visible { outline: 3px solid var(--color-accent, #2457d6); outline-offset: 3px; }"
+    },
+    {
+      "name": "Program Fact",
+      "kind": "custom",
+      "description": "Label-value pair for prompts, commands, endpoints, and outcomes.",
+      "html": "<div class=\"ds-program-fact\"><span>Endpoint</span><code>https://mcp.trainheroic-unofficial.com/mcp</code></div>",
+      "css": ".ds-program-fact { padding: 20px 0; display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 20px; color: var(--color-ink, #171714); border-top: 1px solid var(--color-line, #aaa89f); border-bottom: 1px solid var(--color-line-soft, #d3d0c6); font-family: 'Archivo Variable', 'Arial Narrow', sans-serif; } .ds-program-fact > span { color: var(--color-faint, #6a6962); font-size: 12px; font-weight: 620; letter-spacing: 0.06em; text-transform: uppercase; } .ds-program-fact code { overflow-wrap: anywhere; font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace; font-size: 14px; }"
+    },
+    {
+      "name": "Site Navigation",
+      "kind": "nav",
+      "description": "Flat custom header shared by the homepage and Blume documentation shell.",
+      "html": "<nav class=\"ds-site-nav\"><a class=\"ds-brand\" href=\"#\">trainheroic <span>unofficial</span></a><a href=\"#\">Docs</a><a class=\"ds-nav-action\" href=\"#\">Connect MCP</a></nav>",
+      "css": ".ds-site-nav { min-height: 64px; padding: 0 24px; display: flex; align-items: center; gap: 16px; color: var(--color-ink, #171714); background: var(--color-bg, #f3f1e9); border-bottom: 1px solid var(--color-line, #aaa89f); font-family: 'Archivo Variable', 'Arial Narrow', sans-serif; } .ds-site-nav a { min-height: 44px; display: inline-flex; align-items: center; color: inherit; text-decoration: none; } .ds-brand { margin-right: auto; font-weight: 710; } .ds-brand span { margin-left: 6px; color: var(--color-muted, #55554f); font-weight: 450; } .ds-nav-action { padding: 0 13px; color: #fff !important; background: var(--color-accent, #2457d6); } .ds-site-nav a:hover:not(.ds-nav-action) { text-decoration: underline; text-underline-offset: 0.35em; } .ds-nav-action:hover { background: var(--color-accent-hover, #1945b8); } .ds-site-nav a:focus-visible { outline: 3px solid var(--color-accent, #2457d6); outline-offset: 3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Shared Training Log",
+    "overview": "A precise training record opened across AI, terminal, SDK, and export. Warm paper, program rules, compressed type, and one cobalt lane create a direct technical world without borrowing an AI client's identity.",
+    "keyCharacteristics": [
+      "Warm flat paper divided by graphite program rules",
+      "Compressed Archivo hierarchy",
+      "One cobalt accent",
+      "Square controls without shadows",
+      "Monospace only for literal code"
+    ],
+    "rules": [
+      {
+        "name": "The One Lane Rule",
+        "body": "Cobalt is the only expressive accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Literal Mono Rule",
+        "body": "Use monospace only when content is typed, pasted, run, or parsed.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Record Rule",
+        "body": "Use rules and tonal shifts instead of shadows or glass effects.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do lead with the user's goal and show a real TrainHeroic task as proof.",
+      "Do keep the hosted MCP route prominent without making one AI client the whole product.",
+      "Do use rules, alignment, and type scale to establish hierarchy."
+    ],
+    "donts": [
+      "Don't copy another product's navigation or client-specific identity.",
+      "Don't use generic card grids, icon bubbles, pills, gradients, or shadows.",
+      "Don't assign every audience or product surface a different accent color."
+    ]
+  }
+}

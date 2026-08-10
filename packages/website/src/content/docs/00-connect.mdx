@@ -1,0 +1,78 @@
+---
+title: Connect TrainHeroic to Claude
+description: Ask Claude about your roster, programming, progress, and training history.
+---
+
+Give Claude access to your existing TrainHeroic account. Coaches get roster and programming
+tools; athletes get their own workouts, history, PRs, and working maxes.
+
+## Set up in Claude.ai
+
+<Steps>
+  <Step title="Open the connector settings">
+    Go to [Settings → Connectors → Add custom connector](https://claude.ai/customize/connectors?modal=add-custom-connector).
+  </Step>
+
+  <Step title="Add TrainHeroic">
+    Name it **TrainHeroic** and paste this URL:
+
+    ```text
+    https://mcp.trainheroic-unofficial.com/mcp
+    ```
+
+  </Step>
+
+  <Step title="Sign in">
+    Use the same email and password you use in the TrainHeroic app. The connector detects
+    whether your account is a coach, an athlete, or both.
+  </Step>
+</Steps>
+
+:::note[You need an existing account]
+This connector does not create a TrainHeroic account or replace the TrainHeroic app.
+:::
+
+## Start with a question
+
+<Tabs>
+  <Tab title="Coach">
+    <Prompt description="See who has trained recently." actions={["copy"]}>
+      Which athletes on my roster have not trained in the last seven days?
+    </Prompt>
+
+    <Prompt description="Review a programmed day." actions={["copy"]}>
+      What is on the program for Tuesday?
+    </Prompt>
+
+  </Tab>
+  <Tab title="Athlete">
+    <Prompt description="Review your progress." actions={["copy"]}>
+      Show my back squat PRs from this year.
+    </Prompt>
+
+    <Prompt description="See what is next." actions={["copy"]}>
+      What is my next scheduled workout?
+    </Prompt>
+
+  </Tab>
+</Tabs>
+
+Claude asks for confirmation before publishing workouts, sending messages, deleting data,
+or logging athlete-facing results.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="See every capability" href="/capabilities" icon="list-checks">
+    What coaches and athletes can read, create, and change.
+  </Card>
+  <Card title="Understand privacy" href="/privacy" icon="shield-check">
+    Where credentials live for hosted, local, and browser-only tools.
+  </Card>
+  <Card title="Export your history" href="/export" icon="download">
+    Download logged sessions as CSV, JSON, or text.
+  </Card>
+  <Card title="Build with the API" href="/developers" icon="code-2">
+    Use the skill, CLI, TypeScript SDK, or MCP servers.
+  </Card>
+</CardGroup>

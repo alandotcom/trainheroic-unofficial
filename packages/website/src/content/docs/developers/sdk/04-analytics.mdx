@@ -1,0 +1,33 @@
+---
+title: Analytics
+description: Query coach readiness, compliance, training volume, and lift-progress reports.
+---
+
+Analytics helpers are read-only. TrainHeroic happens to use POST for these report queries, but
+the calls do not mutate account data.
+
+```ts
+import { analyticsMetricCatalog, queryAnalytics } from "@trainheroic-unofficial/js";
+
+const readiness = await queryAnalytics(client, {
+  metric: "readiness-team",
+  teamId: 42,
+  date: "2026-08-10",
+});
+
+console.log(readiness);
+console.log(analyticsMetricCatalog());
+```
+
+## Metric inputs
+
+| Scope   | Metrics                                                       | Required identifiers |
+| ------- | ------------------------------------------------------------- | -------------------- |
+| Team    | Readiness, compliance, lift progress                          | `teamId`             |
+| Athlete | Readiness, training summary, 1RM history, working-max history | `userIds`            |
+
+`readiness-team` takes one `date`. Range-based metrics take `dateStart` and `dateEnd`. Lift
+metrics also need `exerciseId`. Dates are `YYYY-MM-DD`.
+
+There is no raw team-volume metric. Pass every athlete id to `training-summary-athlete`, or
+use `teamVolume()` to group the per-athlete rows into one rollup.

@@ -1,0 +1,41 @@
+---
+title: Developer docs
+description: Choose the skill, CLI, TypeScript SDK, or MCP server for your integration.
+---
+
+The toolkit has four entry points over the same TrainHeroic client and typed data shapes.
+Choose based on who should drive the work.
+
+<CardGroup cols={2}>
+  <Card title="Claude Code skill" href="/developers/skill" icon="sparkles">
+    The fastest way to let a coding agent inspect or operate your TrainHeroic account.
+  </Card>
+  <Card title="Command-line interface" href="/developers/cli" icon="terminal">
+    JSON-in, JSON-out commands for scripts, terminals, and agent subprocesses.
+  </Card>
+  <Card title="TypeScript SDK" href="/developers/sdk" icon="braces">
+    Runtime-agnostic auth, exercises, workouts, athlete history, analytics, and messaging.
+  </Card>
+  <Card title="MCP servers" href="/developers/mcp" icon="plug">
+    Hosted OAuth or local stdio tools for Claude, Cursor, and other MCP clients.
+  </Card>
+</CardGroup>
+
+## Pick a surface
+
+| If you need to…                            | Start with…                            |
+| ------------------------------------------ | -------------------------------------- |
+| Ask Claude Code to work with your account  | [Claude Code skill](/developers/skill) |
+| Run repeatable shell commands or emit JSON | [CLI](/developers/cli)                 |
+| Build an application or automation         | [TypeScript SDK](/developers/sdk)      |
+| Connect an AI client to typed tools        | [MCP server](/developers/mcp)          |
+
+## Runtime requirements
+
+Published packages require Node 18 or a modern runtime with `fetch` and Web Crypto. Developing
+the monorepo itself requires Node 24 and pnpm 11.
+
+:::warning
+The TrainHeroic API is undocumented. Pin package versions in production and expect upstream
+responses to change occasionally.
+:::
