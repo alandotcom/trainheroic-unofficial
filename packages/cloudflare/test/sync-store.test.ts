@@ -293,4 +293,40 @@ describe("MessagingStore", () => {
       observed.queries.filter((query) => query.toLowerCase().includes('from "sync_state"')),
     ).toHaveLength(1);
   });
+
+  it("writes message comments in bounded multi-row statements", async () => {
+    const comments = Array.from({ length: 25 }, (_, index) => ({
+      id: index + 1,
+      timestamp: 1_000 + index,
+      content: `Comment ${index + 1}`,
+      authorName: "Coach",
+      isAuthor: true,
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+        if (url.includes("/v5/messaging/streams/700/comments")) return json(comments);
+        if (url.includes("/v5/messaging/streams")) {
+          return json({
+            teams: [{ id: 700, title: "Team", teamId: 10 }],
+            athletes: [],
+            programs: [],
+            coaches: [],
+          });
+        }
+        return json({});
+      }),
+    );
+
+    const observed = observeD1Queries(env.TH_DB);
+    const store = new MessagingStore(makeD1Warehouse(observed.database), client(), 7);
+    expect(await store.syncAll()).toMatchObject([{ stream: 700, new: 25 }]);
+    expect(await store.history(700)).toHaveLength(25);
+    expect(
+      observed.queries.filter((query) =>
+        query.toLowerCase().startsWith('insert into "message_comment"'),
+      ),
+    ).toHaveLength(4);
+  });
 });
