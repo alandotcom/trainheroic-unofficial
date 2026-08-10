@@ -218,4 +218,45 @@ describe("MessagingStore", () => {
     // full ignores the cursor (lastCommentId=""), so the top-level comment is read again.
     expect(again.new).toBe(1);
   });
+
+  it("loads incremental cursors with constant query count as streams grow", async () => {
+    const streams = Array.from({ length: 20 }, (_, index) => ({
+      id: 1_000 + index,
+      title: `Team ${index}`,
+      teamId: index,
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+        if (url.includes("/comments")) return json([]);
+        if (url.includes("/v5/messaging/streams")) {
+          return json({ teams: streams, athletes: [], programs: [], coaches: [] });
+        }
+        return json({});
+      }),
+    );
+
+    let cursorReads = 0;
+    const warehouse = makeD1Warehouse(env.TH_DB, {
+      instrument: (d1) =>
+        new Proxy(d1, {
+          get(target, property) {
+            if (property === "prepare") {
+              return (query: string) => {
+                if (query.toLowerCase().includes('from "sync_state"')) cursorReads += 1;
+                return target.prepare(query);
+              };
+            }
+            const value = Reflect.get(target, property, target) as unknown;
+            return typeof value === "function" ? value.bind(target) : value;
+          },
+        }),
+    });
+
+    const result = await new MessagingStore(warehouse, client(), 7).syncAll();
+
+    expect(result).toHaveLength(20);
+    expect(cursorReads).toBe(1);
+  });
 });
