@@ -1,5 +1,14 @@
 # @trainheroic-unofficial/cloudflare
 
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [5e3cf8e]
+  - @trainheroic-unofficial/js@3.0.0
+  - @trainheroic-unofficial/core@3.0.0
+  - @trainheroic-unofficial/db@3.0.0
+
 ## 2.1.2
 
 ### Patch Changes
