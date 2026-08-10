@@ -1,9 +1,17 @@
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
-import { coerceInt, fetchAthleteWorkouts, presentAthleteWorkout } from "@trainheroic-unofficial/js";
+import {
+  chunk,
+  coerceInt,
+  fetchAthleteWorkouts,
+  presentAthleteWorkout,
+} from "@trainheroic-unofficial/js";
 import type { ProgramWorkout } from "@trainheroic-unofficial/js";
 import { AthleteScopedStore } from "../base";
 import { type BatchStmt, athleteCursorUpsertStmt } from "../runner";
 import { athleteWorkout, athleteWorkoutExercise } from "../schema";
+
+// Keep the expanded table shape below D1's 100-parameter limit (matching exercise-library writes).
+const EXERCISE_WRITE_ROWS = 8;
 
 export type WorkoutSyncResult = {
   workouts: number;
@@ -65,26 +73,28 @@ export class AthleteWorkoutStore extends AthleteScopedStore {
             and(eq(athleteWorkoutExercise.userId, user), eq(athleteWorkoutExercise.workoutId, id)),
           ),
       ];
+      const exerciseRows = [];
       for (const block of view.blocks) {
         for (const ex of block.exercises) {
-          group.push(
-            this.db.insert(athleteWorkoutExercise).values({
-              userId: user,
-              workoutId: id,
-              blockOrder: block.order,
-              blockTitle: block.title,
-              isTest: block.isTest ? 1 : 0,
-              exerciseId: ex.exerciseId,
-              title: ex.title,
-              units: JSON.stringify(ex.units),
-              prescribed: JSON.stringify(ex.prescribed),
-              performed: JSON.stringify(ex.performed),
-              instruction: ex.instruction,
-            }),
-          );
-          exercises += 1;
+          exerciseRows.push({
+            userId: user,
+            workoutId: id,
+            blockOrder: block.order,
+            blockTitle: block.title,
+            isTest: block.isTest ? 1 : 0,
+            exerciseId: ex.exerciseId,
+            title: ex.title,
+            units: JSON.stringify(ex.units),
+            prescribed: JSON.stringify(ex.prescribed),
+            performed: JSON.stringify(ex.performed),
+            instruction: ex.instruction,
+          });
         }
       }
+      for (const values of chunk(exerciseRows, EXERCISE_WRITE_ROWS)) {
+        group.push(this.db.insert(athleteWorkoutExercise).values(values));
+      }
+      exercises += exerciseRows.length;
       groups.push(group);
     }
 

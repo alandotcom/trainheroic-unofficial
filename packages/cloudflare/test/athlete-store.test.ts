@@ -196,6 +196,37 @@ describe("AthleteWorkoutStore", () => {
     await store.sync("2026-06-01", "2026-06-07");
     expect((await store.workoutExercises(555)).length).toBe(1);
   });
+
+  it("writes workout exercises in bounded multi-row statements", async () => {
+    const workout = structuredClone(WORKOUT);
+    workout.summarizedSavedWorkout.workout.workoutSets[0]!.workoutSetExercises = Array.from(
+      { length: 25 },
+      (_, index) => ({
+        ...WORKOUT.summarizedSavedWorkout.workout.workoutSets[0]!.workoutSetExercises[0]!,
+        id: 100 + index,
+        exercise_id: index + 1,
+        title: `Exercise ${index + 1}`,
+      }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: USER, session_id: "sess" });
+        if (url.includes("/3.0/athlete/programworkout/range")) return json([workout]);
+        return json({});
+      }),
+    );
+
+    const observed = observeD1Queries(env.TH_DB);
+    const store = new AthleteWorkoutStore(makeD1Warehouse(observed.database), client(), USER);
+    expect(await store.sync("2026-06-01", "2026-06-07")).toMatchObject({ exercises: 25 });
+    expect(await store.workoutExercises(555)).toHaveLength(25);
+    expect(
+      observed.queries.filter((query) =>
+        query.toLowerCase().startsWith('insert into "athlete_workout_exercise"'),
+      ),
+    ).toHaveLength(4);
+  });
 });
 
 describe("AthleteTrainingStore", () => {
