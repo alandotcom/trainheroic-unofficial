@@ -1,0 +1,68 @@
+---
+title: MCP servers
+description: Connect an MCP client to TrainHeroic over HTTP with OAuth authentication.
+---
+
+The hosted server is the simplest MCP deployment: one URL, OAuth login, and a tool set selected
+from the role on your TrainHeroic account.
+
+```text
+https://mcp.trainheroic-unofficial.com/mcp
+```
+
+## Claude Code
+
+```bash
+claude mcp add trainheroic --transport http \
+  https://mcp.trainheroic-unofficial.com/mcp
+```
+
+Claude Code opens the OAuth flow the first time the server needs authorization.
+
+## Other MCP clients
+
+Use the main URL as an HTTP MCP server:
+
+```json
+{
+  "mcpServers": {
+    "trainheroic": {
+      "url": "https://mcp.trainheroic-unofficial.com/mcp"
+    }
+  }
+}
+```
+
+## Role-aware tools
+
+<Tabs>
+  <Tab title="Coach account">
+    Gets the coaching surface plus the account's own athlete-training tools.
+  </Tab>
+  <Tab title="Athlete account">
+    Gets profile, workouts, history, PR, working-max, leaderboard, and set-logging tools.
+  </Tab>
+</Tabs>
+
+Two optional endpoints narrow the connection to one role:
+
+| Endpoint                                             | Scope                       |
+| ---------------------------------------------------- | --------------------------- |
+| `https://mcp.trainheroic-unofficial.com/mcp/coach`   | Coaching tools only         |
+| `https://mcp.trainheroic-unofficial.com/mcp/athlete` | Athlete-training tools only |
+
+The coach-only endpoint exposes no tools when the signed-in account is athlete-only.
+
+## Hosted-only features
+
+The hosted server adds D1-backed history warehouses and a feedback tool. Ask the assistant to
+report a problem and it can attach recent tool context for the maintainers.
+
+<CardGroup cols={2}>
+  <Card title="Run a local server" href="/developers/mcp/local" icon="laptop">
+    Keep the MCP process and credentials on your own machine.
+  </Card>
+  <Card title="Browse every tool" href="/developers/mcp/tools" icon="list-tree">
+    Read the generated coach, athlete, and hosted-only catalog.
+  </Card>
+</CardGroup>

@@ -1,0 +1,64 @@
+---
+title: Local MCP servers
+description: Run the coach or athlete MCP server over stdio on your own machine.
+---
+
+Local servers run as child processes of the MCP client. They need no database or OAuth setup;
+the client passes TrainHeroic credentials through environment variables.
+
+<Tabs>
+  <Tab title="Coach">
+    The coach server includes the full coaching surface and the account's own athlete tools.
+
+    ```bash
+    claude mcp add trainheroic \
+      -e TRAINHEROIC_EMAIL=coach@example.com \
+      -e TRAINHEROIC_PASSWORD=yourpassword \
+      -- npx -y @trainheroic-unofficial/coach-mcp
+    ```
+
+  </Tab>
+  <Tab title="Athlete">
+    The athlete server exposes only the signed-in account's training tools.
+
+    ```bash
+    claude mcp add trainheroic-athlete \
+      -e TRAINHEROIC_EMAIL=athlete@example.com \
+      -e TRAINHEROIC_PASSWORD=yourpassword \
+      -- npx -y @trainheroic-unofficial/athlete-mcp
+    ```
+
+  </Tab>
+</Tabs>
+
+## JSON configuration
+
+For Claude Desktop, Cursor, or another stdio client, add a server entry to its MCP config:
+
+```json
+{
+  "mcpServers": {
+    "trainheroic": {
+      "command": "npx",
+      "args": ["-y", "@trainheroic-unofficial/coach-mcp"],
+      "env": {
+        "TRAINHEROIC_EMAIL": "coach@example.com",
+        "TRAINHEROIC_PASSWORD": "yourpassword"
+      }
+    }
+  }
+}
+```
+
+For an athlete-only account, change the package and server name to
+`@trainheroic-unofficial/athlete-mcp` and `trainheroic-athlete`.
+
+:::danger[Protect the config file]
+The example stores real credentials in plaintext. Keep the config out of source control and
+limit who can read it.
+:::
+
+## Confirm the connection
+
+Ask the client to list your athletes or show your recent workouts. The available tool names and
+input schemas should appear in the client's MCP inspector or tool picker.

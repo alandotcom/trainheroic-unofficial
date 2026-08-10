@@ -1,0 +1,48 @@
+---
+title: What you can do
+description: TrainHeroic tools for coaches and athletes, including the actions that require confirmation.
+---
+
+The connector changes its tool set to match the account you sign in with. A coach account also
+has athlete scope, so coaches can query their own training alongside their roster.
+
+<Tabs>
+  <Tab title="Coach">
+    ## Coach tools
+
+    - Browse athletes, teams, programs, notifications, and roster activity.
+    - Build workouts as drafts, read them back, publish them, copy them, or save templates.
+    - Resolve exercises by name against the TrainHeroic exercise library.
+    - Pull readiness, compliance, volume, lift history, and PR reports.
+    - Invite, archive, and restore athletes; manage teams and join codes.
+    - Read conversations, draft messages, and send them after confirmation.
+
+  </Tab>
+  <Tab title="Athlete">
+    ## Athlete tools
+
+    - Review scheduled and completed workouts across a date range.
+    - Search exercises you have logged and inspect the full history for one lift.
+    - Read personal records, working maxes, benchmark leaderboards, and lifetime totals.
+    - Export workout history as CSV, JSON, or plain text.
+    - Log a completed set after explicit confirmation.
+
+  </Tab>
+</Tabs>
+
+## Confirmation is part of the tool
+
+Publishing, sending, deleting, archiving, and logging athlete-facing results are gated inside
+the MCP server. A client that supports MCP elicitation shows a confirmation prompt. Other
+clients must pass an explicit confirmation value, and the operation fails closed without it.
+
+:::info
+The model can draft a workout or message without confirmation. Confirmation is required when
+the action becomes visible to an athlete or changes remote data.
+:::
+
+## Undocumented API
+
+This project drives the same private endpoints used by the TrainHeroic web app. Those endpoints
+can change without notice, so treat the integration as a practical toolkit rather than an
+official compatibility guarantee.

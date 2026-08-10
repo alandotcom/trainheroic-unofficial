@@ -1,0 +1,73 @@
+---
+title: TypeScript SDK
+description: Authenticate with TrainHeroic and call the runtime-agnostic TypeScript client.
+---
+
+`@trainheroic-unofficial/js` provides the client, auth renewal, exercise library, workout
+builder, athlete reads, analytics, and messaging helpers.
+
+## Install
+
+```package-install
+@trainheroic-unofficial/js
+```
+
+Requires global `fetch` and Web Crypto: Node 18+, Cloudflare workerd, or a modern browser.
+
+## Create a client
+
+```ts
+import { TrainHeroicClient } from "@trainheroic-unofficial/js";
+
+const client = new TrainHeroicClient(
+  process.env.TRAINHEROIC_EMAIL!,
+  process.env.TRAINHEROIC_PASSWORD!,
+);
+
+const response = await client.request<{ id: number }>("GET", "/user/simple");
+if (response.ok) {
+  console.log(response.data.id);
+}
+```
+
+The client signs in lazily on the first request. If a request returns 401 or 403, it signs in
+again once and retries. Concurrent requests on a cold client share one login.
+
+:::info
+`request()` returns `{ status, ok, data }` for HTTP responses. Check `ok`; an HTTP error status
+does not throw. A failed login throws `TrainHeroicAuthError`.
+:::
+
+## Two entry points
+
+<CodeGroup>
+
+```ts Runtime-agnostic
+import { TrainHeroicClient, ExerciseLibrary, buildSession } from "@trainheroic-unofficial/js";
+```
+
+```ts Node filesystem helpers
+import { JsonFileLibraryCache, defaultCachePath } from "@trainheroic-unofficial/js/node";
+```
+
+</CodeGroup>
+
+The main entry imports no `node:*` modules. Filesystem-backed caching stays behind `./node` so
+the same SDK can run inside Cloudflare Workers.
+
+## Guides
+
+<CardGroup cols={2}>
+  <Card title="Exercise library" href="/developers/sdk/exercises" icon="search">
+    Resolve names to ids and persist the library locally.
+  </Card>
+  <Card title="Build workouts" href="/developers/sdk/workouts" icon="dumbbell">
+    Create draft sessions, prescribe sets, and publish deliberately.
+  </Card>
+  <Card title="Read athlete training" href="/developers/sdk/athletes" icon="activity">
+    Query profiles, workouts, lift history, PRs, and working maxes.
+  </Card>
+  <Card title="Query analytics" href="/developers/sdk/analytics" icon="chart-no-axes-combined">
+    Pull readiness, compliance, volume, and lift-progress reports.
+  </Card>
+</CardGroup>

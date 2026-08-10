@@ -1,0 +1,36 @@
+---
+title: Credentials and privacy
+description: How the hosted connector, local tools, and browser export handle your TrainHeroic login.
+---
+
+Every surface signs in to TrainHeroic with an existing email and password. Where those
+credentials live depends on how you connect.
+
+| Surface          | Where it runs     | Credential handling                                                   |
+| ---------------- | ----------------- | --------------------------------------------------------------------- |
+| Hosted connector | Cloudflare Worker | Stored server-side behind the OAuth grant and encrypted props         |
+| Local MCP server | Your computer     | Read from the MCP client's environment or config file                 |
+| CLI and SDK      | Your process      | Read from environment variables or values supplied by your code       |
+| Browser export   | Your browser      | Sent directly to TrainHeroic, then discarded; never sent to this site |
+
+## Hosted connector
+
+Claude receives an OAuth access token for the connector. The Worker uses the encrypted grant
+properties to sign in upstream; it never forwards Claude's bearer token to TrainHeroic.
+
+## Local tools
+
+Environment variables and MCP config files are plaintext. Shell commands can also land in your
+history. Treat `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD` like any other secret, and do not
+commit an MCP config containing them.
+
+## Sessions and caches
+
+TrainHeroic does not issue refresh tokens. The client keeps a session token in memory and signs
+in again after a 401 or 403. The CLI and local coach server cache session and exercise-library
+data under `~/.trainheroic/` so repeated commands do less work.
+
+:::warning[Unofficial project]
+This project is not affiliated with or endorsed by TrainHeroic. Use it with accounts and data
+you are authorized to access.
+:::

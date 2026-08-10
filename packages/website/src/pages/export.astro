@@ -544,7 +544,7 @@ import Footer from "../components/Footer.astro";
     });
 
     rangeToggle.addEventListener("click", () => {
-      setRangeOpen(loadForm.hidden);
+      setRangeOpen(loadForm.hasAttribute("hidden"));
     });
 
     loadForm.addEventListener("submit", (event) => {

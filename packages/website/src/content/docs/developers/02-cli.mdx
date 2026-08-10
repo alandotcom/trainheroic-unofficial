@@ -1,0 +1,65 @@
+---
+title: Command-line interface
+description: Install the trainheroic CLI, authenticate, and run JSON-oriented coach and athlete commands.
+---
+
+The CLI is designed for terminals, scripts, and AI agents. Successful commands print JSON to
+stdout; failures write to stderr and exit nonzero.
+
+## Install
+
+<CodeGroup>
+
+```bash Global install
+npm install -g @trainheroic-unofficial/cli
+```
+
+```bash Run once
+npx @trainheroic-unofficial/cli whoami
+```
+
+</CodeGroup>
+
+## Authenticate
+
+```bash
+export TRAINHEROIC_EMAIL=coach@example.com
+export TRAINHEROIC_PASSWORD=yourpassword
+trainheroic whoami
+```
+
+## Common commands
+
+<Tabs>
+  <Tab title="Coach">
+    ```bash
+    trainheroic coach athletes
+    trainheroic coach teams
+    trainheroic coach programs
+    trainheroic coach exercise resolve "Back Squat"
+    trainheroic coach message list
+    ```
+  </Tab>
+  <Tab title="Athlete">
+    ```bash
+    trainheroic athlete profile
+    trainheroic athlete workouts --start 2026-08-01 --end 2026-08-31
+    trainheroic athlete export
+    ```
+  </Tab>
+</Tabs>
+
+Run `trainheroic` with no arguments for the full command tree.
+
+## Input and confirmation
+
+Workout specs and other JSON inputs can be passed inline, read from `--file`, or piped on stdin.
+Inputs are validated against the shared DTO schemas before the request is sent.
+
+Actions that publish, delete, send, archive, or write athlete results require `--yes`. Building
+a draft does not; building and publishing in one command does.
+
+:::info
+Sessions and the exercise library are cached under `~/.trainheroic/`. The CLI and local coach
+MCP server share the same exercise-library cache.
+:::

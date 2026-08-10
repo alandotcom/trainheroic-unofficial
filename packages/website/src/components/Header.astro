@@ -1,40 +1,345 @@
 ---
+import "@fontsource-variable/archivo";
+import data from "blume:data";
+import type { UIStrings } from "blume/core/i18n-ui.ts";
+import type { Navigation } from "blume/core/types.ts";
+import Search from "blume/components/layout/Search.astro";
 import { pageHref, sitePath } from "../lib/paths.ts";
 
-const path = sitePath(Astro.url.pathname);
+interface Props {
+  navigation?: Navigation;
+  route?: string;
+  searchEnabled?: boolean;
+  searchLocale?: string;
+  searchStrings?: UIStrings["search"];
+}
 
-const links = [
-  { href: pageHref("export", path), label: "Export", match: path === "/export" },
-  { href: pageHref("developers", path), label: "Developers", match: false },
-  {
-    href: "https://github.com/alandotcom/trainheroic-unofficial",
-    label: "GitHub",
-    external: true,
-  },
-];
+const { navigation, route, searchEnabled = false, searchLocale, searchStrings } = Astro.props;
+const path = route ?? sitePath(Astro.url.pathname);
+const docsCurrent = path === "/developers" || path.startsWith("/developers/");
 ---
 
-<header class="site-header shell">
-  <div class="site-header__inner">
-    <a class="brand" href={pageHref("/", path)}>trainheroic <span>unofficial</span></a>
-    <nav class="nav" aria-label="Main">
+<header class="site-nav" data-blume-header>
+  <div class="site-nav__inner">
+    <a class="site-nav__brand" href={pageHref("/", path)}>
+      <span>trainheroic</span>
+      <span class="site-nav__qualifier">unofficial</span>
+    </a>
+
+    <div class="site-nav__actions">
       {
-        links.map((link) => (
-          <a
-            class="nav__link"
-            href={link.href}
-            aria-current={
-              link.match || path === link.href ? "page" : undefined
-            }
-            target={link.external ? "_blank" : undefined}
-            rel={link.external ? "noopener noreferrer" : undefined}
-            aria-label={link.external ? `${link.label} (opens in new tab)` : undefined}
-          >
-            {link.label}
-            {link.external ? <span aria-hidden="true"> ↗</span> : null}
-          </a>
-        ))
+        searchEnabled && navigation && (
+          <div class="site-nav__search">
+            <Search
+              locale={searchLocale}
+              navigation={navigation}
+              popularPages={data.config.search.popular}
+              strings={searchStrings}
+            />
+          </div>
+        )
       }
-    </nav>
+
+      <nav class="site-nav__links" aria-label="Main navigation">
+        <a aria-current={docsCurrent ? "page" : undefined} href={pageHref("/developers", path)}>
+          Docs
+        </a>
+        <a
+          aria-label="GitHub (opens in a new tab)"
+          href="https://github.com/alandotcom/trainheroic-unofficial"
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          GitHub
+        </a>
+        <a
+          aria-current={path === "/connect" ? "page" : undefined}
+          class="site-nav__primary"
+          href={pageHref("/connect", path)}
+        >Connect MCP</a>
+      </nav>
+
+      {
+        navigation ? (
+          <div class="site-nav__doc-tools">
+            <button class="site-nav__theme" data-site-theme-toggle type="button">
+              <span class="dark:hidden">Dark</span>
+              <span class="hidden dark:inline">Light</span>
+              <span class="sr-only"> mode</span>
+            </button>
+            <button
+              aria-label="Open documentation navigation"
+              class="site-nav__menu"
+              data-blume-nav-toggle
+              type="button"
+            >
+              Menu
+            </button>
+          </div>
+        ) : (
+          <details class="site-nav__local-menu">
+            <summary>Menu</summary>
+            <nav aria-label="Mobile navigation">
+              <a href={pageHref("/developers", path)}>Docs</a>
+              <a
+                aria-label="GitHub (opens in a new tab)"
+                href="https://github.com/alandotcom/trainheroic-unofficial"
+                rel="noopener noreferrer"
+                target="_blank"
+              >GitHub</a>
+            </nav>
+          </details>
+        )
+      }
+    </div>
   </div>
 </header>
+
+<script>
+  const drawerTop = () => {
+    const header = document.querySelector<HTMLElement>("[data-blume-header]");
+    if (header) {
+      document.documentElement.style.setProperty(
+        "--blume-drawer-top",
+        `${header.getBoundingClientRect().bottom}px`,
+      );
+    }
+  };
+
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+
+    if (target.closest("[data-site-theme-toggle]")) {
+      const root = document.documentElement;
+      const next = root.dataset.theme === "dark" ? "light" : "dark";
+      root.dataset.theme = next;
+      localStorage.setItem("blume-theme", next);
+    }
+
+    if (target.closest("[data-blume-nav-toggle]")) {
+      const root = document.documentElement;
+      const open = root.toggleAttribute("data-blume-nav-open");
+      if (open) drawerTop();
+      root.style.overflow = open ? "hidden" : "";
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    const root = document.documentElement;
+    if (window.matchMedia("(min-width: 64rem)").matches) {
+      delete root.dataset.blumeNavOpen;
+      root.style.overflow = "";
+    } else if (Object.hasOwn(root.dataset, "blumeNavOpen")) {
+      drawerTop();
+    }
+  });
+</script>
+
+<style>
+  .site-nav {
+    --nav-paper: var(--blume-background, var(--color-bg));
+    --nav-ink: var(--blume-foreground, var(--color-ink));
+    --nav-muted: var(--blume-muted-foreground, var(--color-muted));
+    --nav-line: var(--blume-border, var(--color-line));
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    color: var(--nav-ink);
+    background: var(--nav-paper);
+    border-bottom: 1px solid var(--nav-line);
+    font-family: "Archivo Variable", "Arial Narrow", sans-serif;
+  }
+
+  .site-nav__inner {
+    width: 100%;
+    min-height: 4rem;
+    padding-inline: clamp(1rem, 2.2vw, 2rem);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+  }
+
+  .site-nav__brand {
+    min-width: 0;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: inherit;
+    font-size: 1rem;
+    font-variation-settings: "wdth" 86, "wght" 710;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  .site-nav__qualifier {
+    color: var(--nav-muted);
+    font-variation-settings: "wdth" 86, "wght" 450;
+  }
+
+  .site-nav__actions,
+  .site-nav__links,
+  .site-nav__doc-tools {
+    display: flex;
+    align-items: center;
+  }
+
+  .site-nav__actions {
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .site-nav__links {
+    gap: 0.25rem;
+  }
+
+  .site-nav__links a,
+  .site-nav__theme,
+  .site-nav__menu,
+  .site-nav__local-menu summary {
+    min-height: 44px;
+    padding-inline: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--nav-ink);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.875rem;
+    font-variation-settings: "wdth" 92, "wght" 540;
+    text-decoration: none;
+  }
+
+  .site-nav__links a:not(.site-nav__primary):hover,
+  .site-nav__links a[aria-current="page"] {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.35em;
+  }
+
+  .site-nav__links .site-nav__primary {
+    min-width: 7.75rem;
+    margin-left: 0.5rem;
+    color: var(--color-on-accent);
+    background: var(--color-accent);
+    font-variation-settings: "wdth" 92, "wght" 620;
+  }
+
+  .site-nav__links .site-nav__primary:hover {
+    background: var(--color-accent-hover);
+  }
+
+  .site-nav a:focus-visible,
+  .site-nav button:focus-visible,
+  .site-nav summary:focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 3px;
+  }
+
+  .site-nav__theme,
+  .site-nav__menu,
+  .site-nav__local-menu {
+    display: none;
+  }
+
+  .site-nav__local-menu {
+    position: relative;
+  }
+
+  .site-nav__local-menu summary {
+    list-style: none;
+  }
+
+  .site-nav__local-menu summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .site-nav__local-menu nav {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    width: 11rem;
+    display: grid;
+    background: var(--nav-paper);
+    border: 1px solid var(--nav-line);
+  }
+
+  .site-nav__local-menu nav a {
+    min-height: 44px;
+    padding-inline: 1rem;
+    display: flex;
+    align-items: center;
+    color: var(--nav-ink);
+    border-bottom: 1px solid var(--nav-line);
+    font-size: 0.875rem;
+    text-decoration: none;
+  }
+
+  .site-nav__local-menu nav a:last-child {
+    border-bottom: 0;
+  }
+
+  :global(.site-nav__search [data-blume-search-open]) {
+    min-width: auto !important;
+    min-height: 44px;
+    padding-inline: 0.75rem;
+    color: var(--nav-muted);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+  }
+
+  :global(.site-nav__search [data-blume-search-open] kbd) {
+    display: none;
+  }
+
+  @media (max-width: 63.99rem) {
+    .site-nav__links > a:not(.site-nav__primary) {
+      display: none;
+    }
+
+    .site-nav__menu,
+    .site-nav__local-menu {
+      display: block;
+    }
+
+    .site-nav__theme {
+      display: inline-flex;
+    }
+  }
+
+  @media (max-width: 35rem) {
+    .site-nav__inner {
+      padding-block: 0.5rem;
+      gap: 0.5rem;
+    }
+
+    .site-nav__actions {
+      gap: 0.125rem;
+    }
+
+    .site-nav__theme,
+    .site-nav__search {
+      display: none;
+    }
+
+    .site-nav__links .site-nav__primary {
+      min-width: auto;
+      margin-left: 0;
+      padding-inline: 0.7rem;
+    }
+
+    .site-nav__menu,
+    .site-nav__local-menu summary {
+      padding-inline: 0.5rem;
+    }
+  }
+</style>

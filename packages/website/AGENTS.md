@@ -18,31 +18,33 @@ pnpm preview
 
 Two kinds of pages:
 
-- **Docs** (`/`, `/developers`, `/skill`, `/sdk`, `/mcp`): [Starlight](https://starlight.astro.build)
-  content in `src/content/docs/` (`.md`/`.mdx`). Starlight owns the shell (sidebar, search);
-  the site is light-only and themed to DESIGN.md via `src/styles/starlight.css` plus the
-  component overrides in `src/components/starlight/` (pinned light theme, brand site title,
-  disclaimer footer). Multi-line code snippets live in `src/data/snippets.ts` (MDX strips the
-  JSX indentation from inline template literals) and shared names/URLs in `src/data/tools.ts`,
-  rendered with Starlight's `Code` component so they stay single-sourced.
+- **Docs** (`/`, `/capabilities`, `/privacy`, `/developers/**`): [Blume](https://useblume.dev)
+  content in `src/content/docs/` (`.mdx`). `blume.config.ts` owns the shell, navigation, search,
+  SEO, AI-readable output, and custom-page mount. Navigation follows the filesystem: root pages
+  serve connector users, while `developers/` contains the skill, CLI, SDK, and MCP sections.
+  Use Blume's built-in Markdown and MDX components directly; prefer plain content over local
+  component wrappers.
 - **Bespoke** (`/export`): an interactive `.astro` app in `src/pages/` using `Layout.astro`,
-  `Header`/`Footer`, and `src/styles/global.css`. It stays out of Starlight.
+  `Header`/`Footer`, and `src/styles/global.css`. Blume mounts it as a custom page.
 
-Internal links inside docs content are relative (`../sdk/`) so they work on both hosts (root
-domain and the GitHub Pages subpath).
+Blume rewrites internal links for both hosts (root domain and the GitHub Pages subpath).
 
 ## MCP tool catalog
 
-The tool list on `/mcp` is generated from `packages/eval/src/tools.ts` and
+The tool list on `/developers/mcp/tools` is generated from `packages/eval/src/tools.ts` and
 `src/data/mcp-tool-catalog.ts`. After adding a core tool, update eval and the catalog, then run:
 
 ```bash
 pnpm gen:mcp-tools
 ```
 
+This writes `src/content/docs/developers/mcp/02-tools.mdx`; do not edit that page by hand.
+
 ## Documentation
 
-Full documentation: https://docs.astro.build
+Blume documentation: https://useblume.dev/docs
+
+Astro documentation: https://docs.astro.build
 
 Consult these guides before working on related tasks:
 

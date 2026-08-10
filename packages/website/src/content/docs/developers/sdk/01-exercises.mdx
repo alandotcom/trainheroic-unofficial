@@ -1,0 +1,35 @@
+---
+title: Exercise library
+description: Resolve TrainHeroic exercise names, inspect candidates, and cache the library.
+---
+
+Workout writes need TrainHeroic exercise ids. `ExerciseLibrary` loads the library once, ranks
+fuzzy matches in memory, and can persist the result between processes.
+
+```ts
+import { ExerciseLibrary } from "@trainheroic-unofficial/js";
+import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
+
+const library = new ExerciseLibrary(client, new JsonFileLibraryCache());
+
+const matches = await library.search("back squat", 5);
+const { match, candidates } = await library.resolve("Barbell Back Squat");
+
+if (!match) {
+  console.log(candidates.map((candidate) => `${candidate.id}: ${candidate.title}`));
+}
+```
+
+`resolve()` returns a confident `match` only when the name identifies one exercise. Ambiguous
+queries return candidates instead; let the user choose before writing a workout.
+
+## Storage
+
+The default cache is in memory. `JsonFileLibraryCache` writes to
+`~/.trainheroic/library.json` unless you provide another path. Hosted MCP uses a D1-backed
+implementation of the same `ExerciseIndex` interface.
+
+:::tip
+Code against `ExerciseIndex`, not `ExerciseLibrary`, when you want the same workflow to run
+against local and hosted stores.
+:::
