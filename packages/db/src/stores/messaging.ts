@@ -6,6 +6,8 @@ import { messageComment, messageStream, syncState } from "../schema";
 
 // org_id and resource consume two of D1's 100 bound parameters.
 const CURSOR_QUERY_IDS = 98;
+// The expanded comment upsert shape requires a conservative seven-row D1 parameter bound.
+const COMMENT_WRITE_ROWS = 7;
 
 export type StreamSyncResult = {
   stream: number;
@@ -47,50 +49,32 @@ export class MessagingStore extends OrgScopedStore {
       });
   }
 
-  #commentStatements(
+  #commentRows(
     org: number,
     streamId: number,
     c: Record<string, unknown>,
     parentId: number | null,
-    stmts: BatchStmt[],
+    rows: Array<typeof messageComment.$inferInsert>,
   ): void {
     const cid = coerceInt(c.id);
     if (cid === null) return;
-    stmts.push(
-      this.db
-        .insert(messageComment)
-        .values({
-          orgId: org,
-          id: cid,
-          streamId,
-          ts: coerceInt(c.timestamp),
-          content: String(c.content ?? ""),
-          authorName: String(c.authorName ?? ""),
-          authorLogo: String(c.authorLogo ?? ""),
-          imageUrl: c.imageUrl === undefined ? null : String(c.imageUrl),
-          isAuthor: c.isAuthor ? 1 : 0,
-          parentId,
-          reactions: JSON.stringify(c.reactions ?? []),
-          raw: JSON.stringify(c),
-        })
-        .onConflictDoUpdate({
-          target: [messageComment.orgId, messageComment.id],
-          set: {
-            ts: sql`excluded.ts`,
-            content: sql`excluded.content`,
-            authorName: sql`excluded.author_name`,
-            authorLogo: sql`excluded.author_logo`,
-            imageUrl: sql`excluded.image_url`,
-            isAuthor: sql`excluded.is_author`,
-            parentId: sql`excluded.parent_id`,
-            reactions: sql`excluded.reactions`,
-            raw: sql`excluded.raw`,
-          },
-        }),
-    );
+    rows.push({
+      orgId: org,
+      id: cid,
+      streamId,
+      ts: coerceInt(c.timestamp),
+      content: String(c.content ?? ""),
+      authorName: String(c.authorName ?? ""),
+      authorLogo: String(c.authorLogo ?? ""),
+      imageUrl: c.imageUrl === undefined ? null : String(c.imageUrl),
+      isAuthor: c.isAuthor ? 1 : 0,
+      parentId,
+      reactions: JSON.stringify(c.reactions ?? []),
+      raw: JSON.stringify(c),
+    });
     const replies = Array.isArray(c.replies) ? c.replies.filter(isRecord) : [];
     for (const reply of replies) {
-      this.#commentStatements(org, streamId, reply, cid, stmts);
+      this.#commentRows(org, streamId, reply, cid, rows);
     }
   }
 
@@ -143,12 +127,34 @@ export class MessagingStore extends OrgScopedStore {
     // comment won't re-surface it, so refreshing reactions/replies needs full=true.
     let high = coerceInt(cursor) ?? 0;
     let count = 0;
+    const commentRows: Array<typeof messageComment.$inferInsert> = [];
     for (const c of res.data) {
       if (!isRecord(c)) continue;
       const cid = coerceInt(c.id);
       if (cid !== null) high = Math.max(high, cid);
-      this.#commentStatements(org, sid, c, null, stmts);
+      this.#commentRows(org, sid, c, null, commentRows);
       count += 1;
+    }
+    for (const values of chunk(commentRows, COMMENT_WRITE_ROWS)) {
+      stmts.push(
+        this.db
+          .insert(messageComment)
+          .values(values)
+          .onConflictDoUpdate({
+            target: [messageComment.orgId, messageComment.id],
+            set: {
+              ts: sql`excluded.ts`,
+              content: sql`excluded.content`,
+              authorName: sql`excluded.author_name`,
+              authorLogo: sql`excluded.author_logo`,
+              imageUrl: sql`excluded.image_url`,
+              isAuthor: sql`excluded.is_author`,
+              parentId: sql`excluded.parent_id`,
+              reactions: sql`excluded.reactions`,
+              raw: sql`excluded.raw`,
+            },
+          }),
+      );
     }
     if (high > 0) {
       stmts.push(cursorUpsertStmt(this.db, org, "messaging", sid, { cursor: String(high) }));
