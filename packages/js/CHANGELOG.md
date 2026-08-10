@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/js
 
+## 3.0.1
+
+### Patch Changes
+
+- 100bc29: Reduce repeated exercise, roster, workout, and messaging requests. Message reads now accept an
+  incremental comment cursor, and large workout builds bound their concurrent upstream writes.
+  - @trainheroic-unofficial/dto@3.0.1
+
 ## 3.0.0
 
 ### Major Changes
