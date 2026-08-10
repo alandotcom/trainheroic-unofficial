@@ -88,11 +88,14 @@ export function parseProps(value: unknown): Props | undefined {
   };
 }
 
-function registerAthleteSurface(server: McpServer, client: TrainHeroicClient): void {
+function registerAthleteSurface(
+  server: McpServer,
+  client: TrainHeroicClient,
+  thUserId: number,
+): void {
   const warehouse = makeD1Warehouse(env.TH_DB, { instrument: Sentry.instrumentD1WithSentry });
   registerAthleteTrainingTools(server, { client });
-  // Stores resolve userId lazily when null.
-  registerAthleteSyncTools(server, warehouse, client, null);
+  registerAthleteSyncTools(server, warehouse, client, thUserId);
 }
 
 function registerCoachSurface(server: McpServer, client: TrainHeroicClient): void {
@@ -150,7 +153,7 @@ export function buildServer(variant: McpVariant, props: Props): McpServer {
   const { athlete: wantAthlete, coach: wantCoach } = selectSurfaces(variant, props.role);
 
   if (wantAthlete) {
-    metrics.run("athlete", () => registerAthleteSurface(server, client));
+    metrics.run("athlete", () => registerAthleteSurface(server, client, props.thUserId));
   }
   if (wantCoach) {
     metrics.run("coach", () => registerCoachSurface(server, client));
