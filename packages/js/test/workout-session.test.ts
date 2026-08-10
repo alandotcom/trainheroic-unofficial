@@ -80,7 +80,9 @@ describe("buildSession", () => {
         if (url.includes("/saveWorkoutSetExercises")) {
           active += 1;
           peak = Math.max(peak, active);
-          await new Promise((resolve) => setTimeout(resolve, 5));
+          await new Promise((resolve) => {
+            setTimeout(resolve, 5);
+          });
           active -= 1;
           return json({ success: 1 });
         }
