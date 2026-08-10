@@ -164,6 +164,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -316,6 +317,67 @@ describe("AthleteTrainingStore", () => {
     expect(second).toMatchObject({ catalog: 0, workingMaxes: 0, exercisesSynced: 1, remaining: 0 });
     expect(requests.filter((url) => url.includes("/v5/users/exercises/history"))).toHaveLength(1);
     expect(requests.filter((url) => url.includes("/2.0/athlete/workingMax"))).toHaveLength(1);
+  });
+
+  it("continues a full history refresh across repeated bounded calls", async () => {
+    const historyIds: number[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: USER, session_id: "sess" });
+        if (url.includes("/v5/users/exercises/history")) {
+          return json(
+            Array.from({ length: 3 }, (_, index) => ({
+              id: index + 1,
+              title: `Exercise ${index + 1}`,
+              param1Type: 3,
+              param2Type: 1,
+              isCircuit: false,
+            })),
+          );
+        }
+        const match = /\/v5\/exercises\/(\d+)\/history/u.exec(url);
+        if (match) {
+          historyIds.push(Number(match[1]));
+          return json(DETAIL);
+        }
+        if (url.includes("/2.0/athlete/workingMax")) return json(WORKING_MAX);
+        return json({});
+      }),
+    );
+
+    const store = new AthleteTrainingStore(makeD1Warehouse(env.TH_DB), client(), USER);
+    const first = await store.syncBatch({ batchSize: 2, full: true });
+    const second = await store.syncBatch({ batchSize: 2, full: true });
+
+    expect(first).toMatchObject({ exercisesSynced: 2, remaining: 1 });
+    expect(second).toMatchObject({ exercisesSynced: 1, remaining: 0 });
+    expect(historyIds.sort((a, b) => a - b)).toEqual([1, 2, 3]);
+  });
+
+  it("refreshes stale references even while a history row keeps failing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-10T00:00:00Z"));
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        requests.push(url);
+        if (url.endsWith("/auth")) return json({ id: USER, session_id: "sess" });
+        if (url.includes("/v5/users/exercises/history")) return json(CATALOG);
+        if (url.includes("/v5/exercises/1/history")) return json({}, 500);
+        if (url.includes("/2.0/athlete/workingMax")) return json(WORKING_MAX);
+        return json({});
+      }),
+    );
+
+    const store = new AthleteTrainingStore(makeD1Warehouse(env.TH_DB), client(), USER);
+    expect(await store.syncBatch({ batchSize: 1 })).toMatchObject({ remaining: 1 });
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    expect(await store.syncBatch({ batchSize: 1 })).toMatchObject({ remaining: 1 });
+
+    expect(requests.filter((url) => url.includes("/v5/users/exercises/history"))).toHaveLength(2);
+    expect(requests.filter((url) => url.includes("/2.0/athlete/workingMax"))).toHaveLength(2);
   });
 
   it("writes bulk training rows in bounded multi-row statements", async () => {
