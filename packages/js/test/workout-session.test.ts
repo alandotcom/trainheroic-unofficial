@@ -65,6 +65,41 @@ describe("buildSession", () => {
     expect(second.key).toBe("k::10002");
   });
 
+  it("bounds concurrent exercise-save requests across many blocks", async () => {
+    let active = 0;
+    let peak = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+        if (url.includes("/createWorkoutForDay/")) return json({ workout_id: 10, id: 20 });
+        if (url.includes("/saveProgramWorkoutSets")) {
+          const blocks = JSON.parse(String(init?.body)) as Array<{ order: number }>;
+          return json(blocks.map(({ order }) => ({ order, id: 100 + order })));
+        }
+        if (url.includes("/saveWorkoutSetExercises")) {
+          active += 1;
+          peak = Math.max(peak, active);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          active -= 1;
+          return json({ success: 1 });
+        }
+        return json({});
+      }),
+    );
+
+    await buildSession(new TrainHeroicClient("a@b.com", "pw"), {
+      programId: 5,
+      date: [2026, 6, 22],
+      blocks: Array.from({ length: 10 }, (_, index) => ({
+        title: `Block ${index + 1}`,
+        exercises: [{ id: index + 1, reps: [5] }],
+      })),
+    });
+
+    expect(peak).toBeLessThanOrEqual(4);
+  });
+
   it("publishes when requested", async () => {
     let publishBody: unknown;
     vi.stubGlobal(

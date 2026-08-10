@@ -13,7 +13,7 @@ import {
 } from "@trainheroic-unofficial/dto";
 import { z } from "zod";
 import type { TrainHeroicClient } from "./client";
-import { coerceInt, unitLabel } from "./exercise-util";
+import { coerceInt, mapPool, unitLabel } from "./exercise-util";
 import { checkResponse } from "./response-check";
 import { buildBlockPayload, LEADERBOARD_LABEL, makeExercise } from "./workout-encode";
 
@@ -26,6 +26,8 @@ export type BuildOptions = {
   /** Optional session-level note ("Coach Instructions"), set after the blocks save. */
   instruction?: string;
 };
+
+const EXERCISE_SAVE_CONCURRENCY = 4;
 
 /**
  * Coach calendar writes (`createWorkoutForDay`, timeline create, `copyProgramWorkout`) 500/401
@@ -108,10 +110,10 @@ export async function buildSession(
       return makeExercise(ex, wsid, j + 1, `k::${workoutId}${String(counter).padStart(3, "0")}`);
     });
   });
-  await Promise.all(
-    payloads
-      .filter((p) => p.length > 0)
-      .map((p) => req(client, "POST", "/2.0/coach/calendar/saveWorkoutSetExercises", p)),
+  await mapPool(
+    payloads.filter((p) => p.length > 0),
+    EXERCISE_SAVE_CONCURRENCY,
+    (payload) => req(client, "POST", "/2.0/coach/calendar/saveWorkoutSetExercises", payload),
   );
 
   // Session note (Coach Instructions). Set before publish so it leaves the draft/published
