@@ -163,6 +163,9 @@ export async function copySession(
       toProgramId: args.toProgramId,
       pwId: args.pwId,
       toDate: { date: iso, day, month, year, dayOfWeek, isToday: false },
+      // The legacy endpoint requires both mutually exclusive destination fields. The coach UI
+      // sends an explicit null for date-based copies; omitting it makes TrainHeroic return 500.
+      toTimelineDate: null,
     },
   });
   if (!res.ok) {

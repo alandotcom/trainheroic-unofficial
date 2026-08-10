@@ -1301,9 +1301,13 @@ Copies or repeats a session to a target date. Used for both "Copy" and "Repeat" 
     "year": 2026,
     "dayOfWeek": 0,
     "isToday": false
-  }
+  },
+  "toTimelineDate": null
 }
 ```
+
+`toTimelineDate` must be present as an explicit `null` for a calendar-date copy. Omitting it
+causes this legacy endpoint to return HTTP 500.
 
 #### `POST /2.0/coach/calendar/programWorkout/saveWorkoutAsTemplate/{workoutId}`
 
