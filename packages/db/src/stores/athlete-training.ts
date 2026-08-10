@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, like, sql } from "drizzle-orm";
 import {
   buildSearchText,
+  chunk,
   coerceInt,
   coerceNum,
   fetchExerciseHistoryDetail,
@@ -15,6 +16,8 @@ import { athleteExercise, athleteExerciseSession, athletePr, athleteWorkingMax }
 // subrequest budget. History is drained in batches (sessions_synced_at watermark per exercise).
 const FETCH_CONCURRENCY = 5;
 const DEFAULT_BATCH = 25;
+// Every training row binds at most nine values, keeping a ten-row statement below D1's limit.
+const BULK_WRITE_ROWS = 10;
 
 export type ExerciseSyncResult = {
   exerciseId: number;
@@ -36,79 +39,81 @@ export class AthleteTrainingStore extends AthleteScopedStore {
   async syncCatalog(): Promise<number> {
     const user = await this.user();
     const list = await fetchExerciseHistoryList(this.client);
-    const stmts: BatchStmt[] = [];
+    const rows = [];
     for (const item of list) {
       const id = coerceInt(item.id);
       if (id === null) continue;
       const title = item.title;
-      stmts.push(
-        this.db
-          .insert(athleteExercise)
-          .values({
-            userId: user,
-            id,
-            title,
-            searchText: buildSearchText(title),
-            param1Type: coerceInt(item.param1Type),
-            param2Type: coerceInt(item.param2Type),
-            isCircuit: item.isCircuit ? 1 : 0,
-            raw: JSON.stringify(item),
-          })
-          // sessions_synced_at is intentionally NOT in the set clause: re-syncing the catalog
-          // must preserve each exercise's history watermark.
-          .onConflictDoUpdate({
-            target: [athleteExercise.userId, athleteExercise.id],
-            set: {
-              title: sql`excluded.title`,
-              searchText: sql`excluded.search_text`,
-              param1Type: sql`excluded.param_1_type`,
-              param2Type: sql`excluded.param_2_type`,
-              isCircuit: sql`excluded.is_circuit`,
-              raw: sql`excluded.raw`,
-            },
-          }),
-      );
+      rows.push({
+        userId: user,
+        id,
+        title,
+        searchText: buildSearchText(title),
+        param1Type: coerceInt(item.param1Type),
+        param2Type: coerceInt(item.param2Type),
+        isCircuit: item.isCircuit ? 1 : 0,
+        raw: JSON.stringify(item),
+      });
     }
+    const stmts = chunk(rows, BULK_WRITE_ROWS).map((values) =>
+      this.db
+        .insert(athleteExercise)
+        .values(values)
+        // sessions_synced_at is intentionally NOT in the set clause: re-syncing the catalog
+        // must preserve each exercise's history watermark.
+        .onConflictDoUpdate({
+          target: [athleteExercise.userId, athleteExercise.id],
+          set: {
+            title: sql`excluded.title`,
+            searchText: sql`excluded.search_text`,
+            param1Type: sql`excluded.param_1_type`,
+            param2Type: sql`excluded.param_2_type`,
+            isCircuit: sql`excluded.is_circuit`,
+            raw: sql`excluded.raw`,
+          },
+        }),
+    );
     await this.runBatches(stmts);
-    return stmts.length;
+    return rows.length;
   }
 
-  /** Replace the working-max rows (one upsert per exercise). */
+  /** Replace the working-max rows with bounded multi-row upserts. */
   async syncWorkingMaxes(): Promise<number> {
     const user = await this.user();
     const maxes = await fetchWorkingMaxes(this.client);
-    const stmts: BatchStmt[] = [];
+    const rows = [];
     for (const m of maxes) {
       const exId = coerceInt(m.exercise_id);
       if (exId === null) continue;
-      stmts.push(
-        this.db
-          .insert(athleteWorkingMax)
-          .values({
-            userId: user,
-            exerciseId: exId,
-            title: m.title ?? null,
-            paramType: coerceInt(m.param_type),
-            value: coerceNum(m.value),
-            typeSuffix: m.type_suffix ?? null,
-            workingMaxId: coerceInt(m.working_max_id),
-            raw: JSON.stringify(m),
-          })
-          .onConflictDoUpdate({
-            target: [athleteWorkingMax.userId, athleteWorkingMax.exerciseId],
-            set: {
-              title: sql`excluded.title`,
-              paramType: sql`excluded.param_type`,
-              value: sql`excluded.value`,
-              typeSuffix: sql`excluded.type_suffix`,
-              workingMaxId: sql`excluded.working_max_id`,
-              raw: sql`excluded.raw`,
-            },
-          }),
-      );
+      rows.push({
+        userId: user,
+        exerciseId: exId,
+        title: m.title ?? null,
+        paramType: coerceInt(m.param_type),
+        value: coerceNum(m.value),
+        typeSuffix: m.type_suffix ?? null,
+        workingMaxId: coerceInt(m.working_max_id),
+        raw: JSON.stringify(m),
+      });
     }
+    const stmts = chunk(rows, BULK_WRITE_ROWS).map((values) =>
+      this.db
+        .insert(athleteWorkingMax)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [athleteWorkingMax.userId, athleteWorkingMax.exerciseId],
+          set: {
+            title: sql`excluded.title`,
+            paramType: sql`excluded.param_type`,
+            value: sql`excluded.value`,
+            typeSuffix: sql`excluded.type_suffix`,
+            workingMaxId: sql`excluded.working_max_id`,
+            raw: sql`excluded.raw`,
+          },
+        }),
+    );
     await this.runBatches(stmts);
-    return stmts.length;
+    return rows.length;
   }
 
   /** Refresh reference data when starting a drain, then advance one history batch. */
@@ -141,41 +146,44 @@ export class AthleteTrainingStore extends AthleteScopedStore {
         .where(and(eq(athletePr.userId, user), eq(athletePr.exerciseId, exerciseId))),
     ];
 
-    let prs = 0;
+    const prRows = [];
     for (const pr of detail.liftPRs ?? []) {
-      group.push(
-        this.db.insert(athletePr).values({
-          userId: user,
-          exerciseId,
-          description: pr.description ?? null,
-          reps: coerceInt(pr.reps),
-          weight: coerceNum(pr.weight),
-          units: pr.units ?? null,
-          date: pr.dateCompleted ?? null,
-          savedWorkoutSetExerciseId: coerceInt(pr.savedWorkoutSetExerciseId),
-        }),
-      );
-      prs += 1;
+      prRows.push({
+        userId: user,
+        exerciseId,
+        description: pr.description ?? null,
+        reps: coerceInt(pr.reps),
+        weight: coerceNum(pr.weight),
+        units: pr.units ?? null,
+        date: pr.dateCompleted ?? null,
+        savedWorkoutSetExerciseId: coerceInt(pr.savedWorkoutSetExerciseId),
+      });
+    }
+    for (const values of chunk(prRows, BULK_WRITE_ROWS)) {
+      group.push(this.db.insert(athletePr).values(values));
     }
 
-    let sessions = 0;
+    const sessionRows = [];
     for (const h of detail.history ?? []) {
       const sid = coerceInt(h.savedWorkoutSetExerciseId);
       if (sid === null) continue;
+      sessionRows.push({
+        userId: user,
+        savedWorkoutSetExerciseId: sid,
+        exerciseId,
+        date: h.dateCompleted ?? null,
+        abr: h.abr ?? null,
+        bestEstimated1rm: coerceNum(h.bestEstimated1RM),
+        programWorkoutId: coerceInt(h.programWorkoutId),
+        teamId: coerceInt(h.teamId),
+        raw: JSON.stringify(h),
+      });
+    }
+    for (const values of chunk(sessionRows, BULK_WRITE_ROWS)) {
       group.push(
         this.db
           .insert(athleteExerciseSession)
-          .values({
-            userId: user,
-            savedWorkoutSetExerciseId: sid,
-            exerciseId,
-            date: h.dateCompleted ?? null,
-            abr: h.abr ?? null,
-            bestEstimated1rm: coerceNum(h.bestEstimated1RM),
-            programWorkoutId: coerceInt(h.programWorkoutId),
-            teamId: coerceInt(h.teamId),
-            raw: JSON.stringify(h),
-          })
+          .values(values)
           .onConflictDoUpdate({
             target: [
               athleteExerciseSession.userId,
@@ -191,7 +199,6 @@ export class AthleteTrainingStore extends AthleteScopedStore {
             },
           }),
       );
-      sessions += 1;
     }
 
     group.push(
@@ -201,7 +208,7 @@ export class AthleteTrainingStore extends AthleteScopedStore {
         .where(and(eq(athleteExercise.userId, user), eq(athleteExercise.id, exerciseId))),
     );
     await this.runGroups([group]);
-    return { exerciseId, sessions, prs };
+    return { exerciseId, sessions: sessionRows.length, prs: prRows.length };
   }
 
   /** Sync the next batch of exercises whose history has not been pulled yet. */

@@ -6,6 +6,7 @@ import schema4 from "../../db/migrations/0004_athlete_performed.sql?raw";
 import { AthleteTrainingStore, AthleteWorkoutStore } from "@trainheroic-unofficial/db";
 import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
+import { observeD1Queries } from "./d1-query-observer";
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -254,5 +255,61 @@ describe("AthleteTrainingStore", () => {
     expect(second).toMatchObject({ catalog: 0, workingMaxes: 0, exercisesSynced: 1, remaining: 0 });
     expect(requests.filter((url) => url.includes("/v5/users/exercises/history"))).toHaveLength(1);
     expect(requests.filter((url) => url.includes("/2.0/athlete/workingMax"))).toHaveLength(1);
+  });
+
+  it("writes bulk training rows in bounded multi-row statements", async () => {
+    const catalog = Array.from({ length: 25 }, (_, index) => ({
+      id: index + 1,
+      title: `Exercise ${index + 1}`,
+      param1Type: 3,
+      param2Type: 1,
+      isCircuit: false,
+    }));
+    const detail = {
+      liftPRs: Array.from({ length: 25 }, (_, index) => ({
+        ...DETAIL.liftPRs[0],
+        reps: index + 1,
+        savedWorkoutSetExerciseId: 1_000 + index,
+      })),
+      history: Array.from({ length: 25 }, (_, index) => ({
+        ...DETAIL.history[0],
+        dateCompleted: `2026-06-${String(index + 1).padStart(2, "0")}`,
+        savedWorkoutSetExerciseId: 1_000 + index,
+      })),
+    };
+    const maxes = catalog.map((exercise) => ({
+      ...WORKING_MAX[0],
+      exercise_id: exercise.id,
+      title: exercise.title,
+      working_max_id: exercise.id,
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: USER, session_id: "sess" });
+        if (url.includes("/v5/users/exercises/history")) return json(catalog);
+        if (url.includes("/v5/exercises/1/history")) return json(detail);
+        if (url.includes("/2.0/athlete/workingMax")) return json(maxes);
+        return json({});
+      }),
+    );
+
+    const observed = observeD1Queries(env.TH_DB);
+    const store = new AthleteTrainingStore(makeD1Warehouse(observed.database), client(), USER);
+
+    expect(await store.syncCatalog()).toBe(25);
+    expect(await store.syncWorkingMaxes()).toBe(25);
+    expect(await store.syncExercise(1)).toMatchObject({ sessions: 25, prs: 25 });
+    expect(await store.sessions(1, 100)).toHaveLength(25);
+    expect(await store.prs(1)).toHaveLength(25);
+    expect(await store.workingMaxes()).toHaveLength(25);
+
+    const insertCount = (table: string) =>
+      observed.queries.filter((query) => query.toLowerCase().startsWith(`insert into "${table}"`))
+        .length;
+    expect(insertCount("athlete_exercise")).toBe(3);
+    expect(insertCount("athlete_working_max")).toBe(3);
+    expect(insertCount("athlete_pr")).toBe(3);
+    expect(insertCount("athlete_exercise_session")).toBe(3);
   });
 });
