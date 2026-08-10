@@ -179,7 +179,7 @@ Coach — manage a roster (needs a coach account):
 
   messaging:
   coach message list
-  coach message read <streamId> [--limit N]
+  coach message read <streamId> [--limit N] [--after <commentId>]
   coach message draft <streamId> <text> [--reply-to <id>]
   coach message send <streamId> <text> [--reply-to <id>] --yes
   coach message delete <streamId> <commentId> --yes
@@ -489,13 +489,18 @@ async function cmdMessage(client: TrainHeroicClient, rest: string[]): Promise<vo
       );
     }
     case "read": {
-      const { values, positionals } = parse(a, { limit: { type: "string" } });
+      const { values, positionals } = parse(a, {
+        limit: { type: "string" },
+        after: { type: "string" },
+      });
       const streamId = toInt(
-        need(positionals[0], "coach message read <streamId> [--limit N]"),
+        need(positionals[0], "coach message read <streamId> [--limit N] [--after <commentId>]"),
         "streamId",
       );
       const limit = values.limit !== undefined ? toInt(values.limit as string, "--limit") : 20;
-      return out(await readLive(client, streamId, limit));
+      const after =
+        values.after !== undefined ? toInt(values.after as string, "--after") : undefined;
+      return out(await readLive(client, streamId, limit, after));
     }
     case "draft": {
       const { values, positionals } = parse(a, { "reply-to": { type: "string" } });

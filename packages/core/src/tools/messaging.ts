@@ -42,16 +42,30 @@ function registerReads(server: McpServer, ctx: ToolContext): void {
     {
       title: "Read messages (live)",
       description:
-        "Recent comments in a stream, live from the API (the stream is fetched whole, then " +
-        "trimmed to `limit`, default 20). Each comment's `isAuthor` is true when the logged-in " +
+        "Comments in a stream, live from the API. Pass `afterCommentId` to fetch only newer " +
+        "comments upstream. Without it, the stream is fetched whole, then trimmed to `limit` " +
+        "(default 20). Each comment's `isAuthor` is true when the logged-in " +
         "user sent it — to answer 'did an athlete message me', look for comments with " +
         "isAuthor:false. Timestamps are Unix seconds. An empty result means the thread has no " +
         "messages.",
-      inputSchema: { streamId: idParam, limit: z.number().int().positive().max(200).optional() },
+      inputSchema: {
+        streamId: idParam,
+        limit: z.number().int().positive().max(200).optional(),
+        afterCommentId: idParam.optional(),
+      },
       annotations: READ,
     },
-    ({ streamId, limit }) =>
-      attempt(async () => jsonResult(await readLive(ctx.client, toId(streamId), limit ?? 20))),
+    ({ streamId, limit, afterCommentId }) =>
+      attempt(async () =>
+        jsonResult(
+          await readLive(
+            ctx.client,
+            toId(streamId),
+            limit ?? 20,
+            afterCommentId === undefined ? undefined : toId(afterCommentId),
+          ),
+        ),
+      ),
   );
 
   server.registerTool(
