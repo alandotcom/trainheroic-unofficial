@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, like, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, like, sql } from "drizzle-orm";
 import {
   buildSearchText,
   chunk,
@@ -9,8 +9,14 @@ import {
   fetchWorkingMaxes,
 } from "@trainheroic-unofficial/js";
 import { AthleteScopedStore } from "../base";
-import { type BatchStmt, mapPool } from "../runner";
-import { athleteExercise, athleteExerciseSession, athletePr, athleteWorkingMax } from "../schema";
+import { athleteCursorUpsertStmt, type BatchStmt, mapPool } from "../runner";
+import {
+  athleteExercise,
+  athleteExerciseSession,
+  athletePr,
+  athleteSyncState,
+  athleteWorkingMax,
+} from "../schema";
 
 // Bound the per-exercise history fan-out so a sync doesn't burst the host or blow the Worker
 // subrequest budget. History is drained in batches (sessions_synced_at watermark per exercise).
@@ -18,6 +24,9 @@ const FETCH_CONCURRENCY = 5;
 const DEFAULT_BATCH = 25;
 // Every training row binds at most nine values, keeping a ten-row statement below D1's limit.
 const BULK_WRITE_ROWS = 10;
+const REFERENCE_TTL_MS = 6 * 60 * 60 * 1000;
+const FULL_SYNC_STATE = "training-full";
+const REFERENCE_STATE = "training-reference";
 
 export type ExerciseSyncResult = {
   exerciseId: number;
@@ -35,6 +44,39 @@ export type TrainingSyncResult = {
 
 /** Athlete training zone: exercise catalog, per-exercise session history, PRs, working maxes. */
 export class AthleteTrainingStore extends AthleteScopedStore {
+  async #syncStates(user: number): Promise<Map<string, number | null>> {
+    const rows = await this.db
+      .select({ resource: athleteSyncState.resource, syncedAt: athleteSyncState.syncedAt })
+      .from(athleteSyncState)
+      .where(
+        and(
+          eq(athleteSyncState.userId, user),
+          inArray(athleteSyncState.resource, [FULL_SYNC_STATE, REFERENCE_STATE]),
+        ),
+      );
+    return new Map(rows.map((row) => [row.resource, row.syncedAt]));
+  }
+
+  async #startFullSync(user: number): Promise<void> {
+    await this.runGroups([
+      [
+        this.db
+          .update(athleteExercise)
+          .set({ sessionsSyncedAt: null })
+          .where(eq(athleteExercise.userId, user)),
+        athleteCursorUpsertStmt(this.db, user, FULL_SYNC_STATE, 0, "active"),
+      ],
+    ]);
+  }
+
+  async #finishFullSync(user: number): Promise<void> {
+    await this.db
+      .delete(athleteSyncState)
+      .where(
+        and(eq(athleteSyncState.userId, user), eq(athleteSyncState.resource, FULL_SYNC_STATE)),
+      );
+  }
+
   /** Refresh the exercise catalog. Preserves each row's sessions_synced_at watermark. */
   async syncCatalog(): Promise<number> {
     const user = await this.user();
@@ -118,14 +160,31 @@ export class AthleteTrainingStore extends AthleteScopedStore {
 
   /** Refresh reference data when starting a drain, then advance one history batch. */
   async syncBatch(opts: { batchSize?: number; full?: boolean } = {}): Promise<TrainingSyncResult> {
-    if (opts.full === true) await this.resetSessionsWatermark();
+    const user = await this.user();
+    const states = await this.#syncStates(user);
+    const unsyncedBefore = await this.unsyncedCount();
+    let fullActive = states.has(FULL_SYNC_STATE);
+    let fullStarted = false;
+    if (opts.full === true && (!fullActive || unsyncedBefore === 0)) {
+      await this.#startFullSync(user);
+      fullActive = true;
+      fullStarted = true;
+    }
 
-    const shouldRefresh = opts.full === true || (await this.unsyncedCount()) === 0;
+    const referenceSyncedAt = states.get(REFERENCE_STATE) ?? 0;
+    const shouldRefresh =
+      fullStarted || referenceSyncedAt === 0 || Date.now() - referenceSyncedAt >= REFERENCE_TTL_MS;
     const [catalog, workingMaxes] = shouldRefresh
       ? await Promise.all([this.syncCatalog(), this.syncWorkingMaxes()])
       : [0, 0];
+    if (shouldRefresh) {
+      await this.runBatches([
+        athleteCursorUpsertStmt(this.db, user, REFERENCE_STATE, 0, String(Date.now())),
+      ]);
+    }
     const results = await this.syncNextBatch(opts.batchSize ?? DEFAULT_BATCH);
     const remaining = await this.unsyncedCount();
+    if (fullActive && remaining === 0) await this.#finishFullSync(user);
 
     return {
       catalog,
