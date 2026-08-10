@@ -56,17 +56,21 @@ export function registerSyncTools(
       description:
         "Query the prescribed-programming history warehouse (populate it with programming_sync first). " +
         "Give sessionId for one session's blocks and prescribed sets; give programId for that " +
-        "program's session list over time. For the current full structure of one program live from " +
-        "the API, use get_program.",
-      inputSchema: { programId: idParam.optional(), sessionId: idParam.optional() },
+        "program's newest-first session list (limited to 200 by default). For the current full " +
+        "structure of one program live from the API, use get_program.",
+      inputSchema: {
+        programId: idParam.optional(),
+        sessionId: idParam.optional(),
+        limit: z.number().int().positive().max(500).optional(),
+      },
       annotations: READ,
     },
-    ({ programId, sessionId }) =>
+    ({ programId, sessionId, limit }) =>
       attempt(async () => {
         if (sessionId !== undefined)
           return jsonResult(await programming.getSession(toId(sessionId)));
         if (programId !== undefined) {
-          return jsonResult(await programming.getProgramSessions(toId(programId)));
+          return jsonResult(await programming.getProgramSessions(toId(programId), limit ?? 200));
         }
         return errorResult("Provide programId (session list) or sessionId (session detail).");
       }),
@@ -99,8 +103,9 @@ export function registerSyncTools(
       title: "Query message history",
       description:
         "Query the conversation history warehouse (populate it with messaging_sync first). Give " +
-        "streamId for that stream's comments (newest first); omit it to list conversations. For " +
-        "current/live data from the API, use messaging_conversations and messaging_read.",
+        "streamId for that stream's comments (newest first); omit it to list conversations. Lists " +
+        "are limited to 50 by default. For current/live data from the API, use " +
+        "messaging_conversations and messaging_read.",
       inputSchema: {
         streamId: idParam.optional(),
         limit: z.number().int().positive().max(200).optional(),
@@ -109,7 +114,7 @@ export function registerSyncTools(
     },
     ({ streamId, limit }) =>
       attempt(async () => {
-        if (streamId === undefined) return jsonResult(await messaging.streams());
+        if (streamId === undefined) return jsonResult(await messaging.streams(limit ?? 50));
         return jsonResult(await messaging.history(toId(streamId), limit ?? 50));
       }),
   );

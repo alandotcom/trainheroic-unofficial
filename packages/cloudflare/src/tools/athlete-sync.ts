@@ -39,20 +39,22 @@ function registerWorkoutsZone(server: McpServer, workouts: AthleteWorkoutStore):
         "Query the workouts warehouse (populate it with athlete_workouts_sync first). Give " +
         "workoutId for one workout's flattened exercises (each with prescribed + performed sets); " +
         "omit it to list workouts (optionally bounded by startDate/endDate), each carrying a " +
-        "logged flag. For current data live from the API, use athlete_workouts.",
+        "logged flag. Lists are newest-first and limited to 100 by default. For current data live " +
+        "from the API, use athlete_workouts.",
       inputSchema: {
         workoutId: idParam.optional(),
         startDate: dateString.optional(),
         endDate: dateString.optional(),
+        limit: z.number().int().positive().max(500).optional(),
       },
       annotations: READ,
     },
-    ({ workoutId, startDate, endDate }) =>
+    ({ workoutId, startDate, endDate, limit }) =>
       attempt(async () => {
         if (workoutId !== undefined) {
           return jsonResult(await workouts.workoutExercises(toId(workoutId)));
         }
-        return jsonResult(await workouts.list(startDate, endDate), {
+        return jsonResult(await workouts.list(startDate, endDate, limit ?? 100), {
           hint: "Bound with startDate/endDate, or pass workoutId for one workout's exercises.",
         });
       }),

@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { OrgScopedStore } from "../base";
 import { type BatchStmt, cursorUpsertStmt, mapPool } from "../runner";
 import { block, prescribedSet, program, programSession } from "../schema";
@@ -326,7 +326,7 @@ export class ProgrammingStore extends OrgScopedStore {
     return out;
   }
 
-  async getProgramSessions(programId: number): Promise<ProgramSessionRow[]> {
+  async getProgramSessions(programId: number, limit = 200): Promise<ProgramSessionRow[]> {
     const org = await this.org();
     const rows = await this.db
       .select({
@@ -337,7 +337,8 @@ export class ProgrammingStore extends OrgScopedStore {
       })
       .from(programSession)
       .where(and(eq(programSession.orgId, org), eq(programSession.programId, programId)))
-      .orderBy(programSession.date);
+      .orderBy(desc(programSession.date))
+      .limit(limit);
     return rows;
   }
 

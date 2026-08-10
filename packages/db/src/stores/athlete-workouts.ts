@@ -106,7 +106,7 @@ export class AthleteWorkoutStore extends AthleteScopedStore {
   }
 
   /** Stored workouts, optionally bounded by an inclusive date window (newest first). */
-  async list(startDate?: string, endDate?: string): Promise<unknown[]> {
+  async list(startDate?: string, endDate?: string, limit = 100): Promise<unknown[]> {
     const user = await this.user();
     const conditions = [eq(athleteWorkout.userId, user)];
     if (startDate !== undefined) conditions.push(gte(athleteWorkout.date, startDate));
@@ -122,7 +122,8 @@ export class AthleteWorkoutStore extends AthleteScopedStore {
       })
       .from(athleteWorkout)
       .where(and(...conditions))
-      .orderBy(desc(athleteWorkout.date));
+      .orderBy(desc(athleteWorkout.date))
+      .limit(limit);
     return rows.map((row) => ({ ...row, logged: row.logged === 1 }));
   }
 
