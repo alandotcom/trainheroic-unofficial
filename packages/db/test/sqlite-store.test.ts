@@ -55,6 +55,41 @@ describe("applyMigrations", () => {
 
     expect(plan.map((row) => row.detail).join("\n")).toContain("idx_aexercise_unsynced");
   });
+
+  it("uses covering order indexes for newest-first warehouse pages", () => {
+    const sqlite = freshDb();
+    const queries = [
+      {
+        sql: "SELECT id, date FROM athlete_workout WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT ?",
+        args: [USER, 100],
+        index: "idx_aworkout_date",
+      },
+      {
+        sql: "SELECT id, date FROM program_session WHERE org_id = ? AND program_id = ? ORDER BY date DESC, id DESC LIMIT ?",
+        args: [7, 111, 200],
+        index: "idx_psession_program",
+      },
+      {
+        sql: "SELECT id, last_viewed FROM message_stream WHERE org_id = ? ORDER BY last_viewed DESC, id DESC LIMIT ?",
+        args: [7, 50],
+        index: "idx_mstream_viewed",
+      },
+      {
+        sql: "SELECT id, ts FROM message_comment WHERE org_id = ? AND stream_id = ? ORDER BY ts DESC, id DESC LIMIT ?",
+        args: [7, 700, 50],
+        index: "idx_mcomment_stream",
+      },
+    ];
+
+    for (const query of queries) {
+      const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.args) as Array<{
+        detail: string;
+      }>;
+      const detail = plan.map((row) => row.detail).join("\n");
+      expect(detail).toContain(query.index);
+      expect(detail).not.toContain("USE TEMP B-TREE");
+    }
+  });
 });
 
 describe("a store on the node:sqlite driver", () => {

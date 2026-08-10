@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { chunk, coerceInt, fetchStreams, isRecord } from "@trainheroic-unofficial/js";
 import { OrgScopedStore } from "../base";
 import { type BatchStmt, cursorUpsertStmt } from "../runner";
@@ -197,8 +197,17 @@ export class MessagingStore extends OrgScopedStore {
     return out;
   }
 
-  async streams(limit = 100): Promise<unknown[]> {
+  async streams(limit = 100, before?: { lastViewed: number; id: number }): Promise<unknown[]> {
     const org = await this.org();
+    const conditions = [eq(messageStream.orgId, org)];
+    if (before !== undefined) {
+      conditions.push(
+        or(
+          lt(messageStream.lastViewed, before.lastViewed),
+          and(eq(messageStream.lastViewed, before.lastViewed), lt(messageStream.id, before.id)),
+        )!,
+      );
+    }
     return this.db
       .select({
         id: messageStream.id,
@@ -209,13 +218,26 @@ export class MessagingStore extends OrgScopedStore {
         last_viewed: messageStream.lastViewed,
       })
       .from(messageStream)
-      .where(eq(messageStream.orgId, org))
-      .orderBy(desc(messageStream.lastViewed))
+      .where(and(...conditions))
+      .orderBy(desc(messageStream.lastViewed), desc(messageStream.id))
       .limit(limit);
   }
 
-  async history(streamId: number, limit = 50): Promise<unknown[]> {
+  async history(
+    streamId: number,
+    limit = 50,
+    before?: { ts: number; id: number },
+  ): Promise<unknown[]> {
     const org = await this.org();
+    const conditions = [eq(messageComment.orgId, org), eq(messageComment.streamId, streamId)];
+    if (before !== undefined) {
+      conditions.push(
+        or(
+          lt(messageComment.ts, before.ts),
+          and(eq(messageComment.ts, before.ts), lt(messageComment.id, before.id)),
+        )!,
+      );
+    }
     const rows = await this.db
       .select({
         id: messageComment.id,
@@ -227,7 +249,7 @@ export class MessagingStore extends OrgScopedStore {
         reactions: messageComment.reactions,
       })
       .from(messageComment)
-      .where(and(eq(messageComment.orgId, org), eq(messageComment.streamId, streamId)))
+      .where(and(...conditions))
       .orderBy(desc(messageComment.ts), desc(messageComment.id))
       .limit(limit);
     return rows.map((row) => ({ ...row, reactions: safeParse(row.reactions) }));

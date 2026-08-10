@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { OrgScopedStore } from "../base";
 import { type BatchStmt, cursorUpsertStmt, mapPool } from "../runner";
 import { block, prescribedSet, program, programSession } from "../schema";
@@ -326,8 +326,21 @@ export class ProgrammingStore extends OrgScopedStore {
     return out;
   }
 
-  async getProgramSessions(programId: number, limit = 200): Promise<ProgramSessionRow[]> {
+  async getProgramSessions(
+    programId: number,
+    limit = 200,
+    before?: { date: string; id: number },
+  ): Promise<ProgramSessionRow[]> {
     const org = await this.org();
+    const conditions = [eq(programSession.orgId, org), eq(programSession.programId, programId)];
+    if (before !== undefined) {
+      conditions.push(
+        or(
+          lt(programSession.date, before.date),
+          and(eq(programSession.date, before.date), lt(programSession.id, before.id)),
+        )!,
+      );
+    }
     const rows = await this.db
       .select({
         id: programSession.id,
@@ -336,8 +349,8 @@ export class ProgrammingStore extends OrgScopedStore {
         published: programSession.published,
       })
       .from(programSession)
-      .where(and(eq(programSession.orgId, org), eq(programSession.programId, programId)))
-      .orderBy(desc(programSession.date))
+      .where(and(...conditions))
+      .orderBy(desc(programSession.date), desc(programSession.id))
       .limit(limit);
     return rows;
   }

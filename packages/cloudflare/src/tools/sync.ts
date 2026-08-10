@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { coerceInt } from "@trainheroic-unofficial/js";
+import { coerceInt, dateString } from "@trainheroic-unofficial/js";
 import { MessagingStore, ProgrammingStore, type Warehouse } from "@trainheroic-unofficial/db";
 import type { TrainHeroicClient } from "@trainheroic-unofficial/js";
 import {
@@ -57,20 +57,32 @@ export function registerSyncTools(
         "Query the prescribed-programming history warehouse (populate it with programming_sync first). " +
         "Give sessionId for one session's blocks and prescribed sets; give programId for that " +
         "program's newest-first session list (limited to 200 by default). For the current full " +
-        "structure of one program live from the API, use get_program.",
+        "structure of one program live from the API, use get_program. To continue a stored list, " +
+        "pass the last row's date/id as beforeDate/beforeSessionId.",
       inputSchema: {
         programId: idParam.optional(),
         sessionId: idParam.optional(),
         limit: z.number().int().positive().max(500).optional(),
+        beforeDate: dateString.optional(),
+        beforeSessionId: idParam.optional(),
       },
       annotations: READ,
     },
-    ({ programId, sessionId, limit }) =>
+    ({ programId, sessionId, limit, beforeDate, beforeSessionId }) =>
       attempt(async () => {
         if (sessionId !== undefined)
           return jsonResult(await programming.getSession(toId(sessionId)));
         if (programId !== undefined) {
-          return jsonResult(await programming.getProgramSessions(toId(programId), limit ?? 200));
+          if ((beforeDate === undefined) !== (beforeSessionId === undefined)) {
+            return errorResult("Pass beforeDate and beforeSessionId together.");
+          }
+          const before =
+            beforeDate !== undefined && beforeSessionId !== undefined
+              ? { date: beforeDate, id: toId(beforeSessionId) }
+              : undefined;
+          return jsonResult(
+            await programming.getProgramSessions(toId(programId), limit ?? 200, before),
+          );
         }
         return errorResult("Provide programId (session list) or sessionId (session detail).");
       }),
@@ -104,18 +116,39 @@ export function registerSyncTools(
       description:
         "Query the conversation history warehouse (populate it with messaging_sync first). Give " +
         "streamId for that stream's comments (newest first); omit it to list conversations. Lists " +
-        "are limited to 50 by default. For current/live data from the API, use " +
-        "messaging_conversations and messaging_read.",
+        "are limited to 50 by default. Continue a comment page with beforeTs/beforeCommentId, or " +
+        "a conversation page with beforeLastViewed/beforeStreamId, using the last row's values. " +
+        "For current/live data from the API, use messaging_conversations and messaging_read.",
       inputSchema: {
         streamId: idParam.optional(),
         limit: z.number().int().positive().max(200).optional(),
+        beforeTs: z.number().int().nonnegative().optional(),
+        beforeCommentId: idParam.optional(),
+        beforeLastViewed: z.number().int().nonnegative().optional(),
+        beforeStreamId: idParam.optional(),
       },
       annotations: READ,
     },
-    ({ streamId, limit }) =>
+    ({ streamId, limit, beforeTs, beforeCommentId, beforeLastViewed, beforeStreamId }) =>
       attempt(async () => {
-        if (streamId === undefined) return jsonResult(await messaging.streams(limit ?? 50));
-        return jsonResult(await messaging.history(toId(streamId), limit ?? 50));
+        if (streamId === undefined) {
+          if ((beforeLastViewed === undefined) !== (beforeStreamId === undefined)) {
+            return errorResult("Pass beforeLastViewed and beforeStreamId together.");
+          }
+          const before =
+            beforeLastViewed !== undefined && beforeStreamId !== undefined
+              ? { lastViewed: beforeLastViewed, id: toId(beforeStreamId) }
+              : undefined;
+          return jsonResult(await messaging.streams(limit ?? 50, before));
+        }
+        if ((beforeTs === undefined) !== (beforeCommentId === undefined)) {
+          return errorResult("Pass beforeTs and beforeCommentId together.");
+        }
+        const before =
+          beforeTs !== undefined && beforeCommentId !== undefined
+            ? { ts: beforeTs, id: toId(beforeCommentId) }
+            : undefined;
+        return jsonResult(await messaging.history(toId(streamId), limit ?? 50, before));
       }),
   );
 }

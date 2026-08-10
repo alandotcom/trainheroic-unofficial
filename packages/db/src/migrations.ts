@@ -13,6 +13,7 @@ import m0003 from "../migrations/0003_athlete.sql?raw";
 import m0004 from "../migrations/0004_athlete_performed.sql?raw";
 import m0005 from "../migrations/0005_coach_athlete_pr.sql?raw";
 import m0006 from "../migrations/0006_athlete_unsynced_queue.sql?raw";
+import m0007 from "../migrations/0007_history_pagination.sql?raw";
 
 /** One migration: a stable name (the filename stem) and its SQL. Applied in array order. */
 export type Migration = { name: string; sql: string };
@@ -24,4 +25,5 @@ export const MIGRATIONS: readonly Migration[] = [
   { name: "0004_athlete_performed", sql: m0004 },
   { name: "0005_coach_athlete_pr", sql: m0005 },
   { name: "0006_athlete_unsynced_queue", sql: m0006 },
+  { name: "0007_history_pagination", sql: m0007 },
 ];

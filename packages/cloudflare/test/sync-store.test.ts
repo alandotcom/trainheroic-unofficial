@@ -217,7 +217,15 @@ describe("ProgrammingStore", () => {
 
     const store = new ProgrammingStore(makeD1Warehouse(env.TH_DB), client(), 7);
     await store.syncCalendar(111, "Prog A");
-    expect(await store.getProgramSessions(111, 2)).toHaveLength(2);
+    const first = await store.getProgramSessions(111, 2);
+    const cursor = first[1];
+    if (!cursor?.date) throw new Error("Expected a dated session cursor");
+    const next = await store.getProgramSessions(111, 2, {
+      date: cursor.date,
+      id: cursor.id,
+    });
+    expect(first.map((row) => row.id)).toEqual([9003, 9002]);
+    expect(next.map((row) => row.id)).toEqual([9001]);
   });
 });
 
@@ -345,6 +353,13 @@ describe("MessagingStore", () => {
     const store = new MessagingStore(makeD1Warehouse(observed.database), client(), 7);
     expect(await store.syncAll()).toMatchObject([{ stream: 700, new: 25 }]);
     expect(await store.history(700)).toHaveLength(25);
+    const first = (await store.history(700, 10)) as Array<{ id: number; ts: number }>;
+    const next = (await store.history(700, 10, {
+      ts: first[9]!.ts,
+      id: first[9]!.id,
+    })) as Array<{ id: number }>;
+    expect(first.map((row) => row.id)).toEqual([25, 24, 23, 22, 21, 20, 19, 18, 17, 16]);
+    expect(next.map((row) => row.id)).toEqual([15, 14, 13, 12, 11, 10, 9, 8, 7, 6]);
     expect(
       observed.queries.filter((query) =>
         query.toLowerCase().startsWith('insert into "message_comment"'),
