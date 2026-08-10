@@ -83,10 +83,12 @@ export async function readLive(
   client: TrainHeroicClient,
   streamId: number,
   limit?: number,
+  afterCommentId?: number,
 ): Promise<unknown[]> {
+  const cursor = afterCommentId === undefined ? "" : String(afterCommentId);
   const res = await client.request<unknown>(
     "GET",
-    `/v5/messaging/streams/${streamId}/comments?lastCommentId=`,
+    `/v5/messaging/streams/${streamId}/comments?lastCommentId=${cursor}`,
   );
   if (!res.ok || !Array.isArray(res.data))
     throw new Error(`Message read failed (HTTP ${res.status}).`);

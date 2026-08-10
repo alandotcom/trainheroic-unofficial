@@ -79,6 +79,23 @@ describe("readLive / deleteComment", () => {
     expect((tail[1] as { id: number }).id).toBe(3);
   });
 
+  it("passes a comment cursor upstream for incremental reads", async () => {
+    let requestedUrl = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+        requestedUrl = url;
+        return json([{ id: 100 }]);
+      }),
+    );
+
+    const comments = await readLive(new TrainHeroicClient("a@b.com", "pw"), 700, 20, 99);
+
+    expect(requestedUrl).toContain("lastCommentId=99");
+    expect(comments).toEqual([{ id: 100 }]);
+  });
+
   it("issues a DELETE to the comment path", async () => {
     let deletedUrl: string | undefined;
     vi.stubGlobal(
