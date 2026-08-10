@@ -1,4 +1,4 @@
-import { and, eq, like, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, like, lt, sql } from "drizzle-orm";
 import { OrgScopedStore } from "../base";
 import { type BatchStmt, cursorUpsertStmt } from "../runner";
 import { exercise, syncMeta, syncState } from "../schema";
@@ -9,6 +9,7 @@ import {
   chunk,
   coerceInt,
   type ExerciseIndex,
+  type ExerciseDefaults,
   exerciseLibraryResponseSchema,
   exerciseResponseSchema,
   type ExerciseView,
@@ -34,6 +35,8 @@ const UPSERT_CHUNK = 8;
 const WRITE_BATCH = 100;
 // How many LIKE matches to pull before app-side ranking decides the final order.
 const SEARCH_CANDIDATES = 200;
+// org_id consumes one of D1's 100 bound parameters.
+const DEFAULTS_QUERY_IDS = 99;
 
 // The reads that feed the SDK's ExerciseRow shape: snake_case keys, matching the legacy SQL
 // projection so rankSearch/withUnits keep their input contract.
@@ -200,16 +203,20 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
 
   // -- reads ---------------------------------------------------------------
 
-  /** Param-type defaults for an exercise id, or null if unknown. No refresh on miss. */
-  async defaults(id: number): Promise<{ param1: number | null; param2: number | null } | null> {
+  /** Param-type defaults for multiple ids, read in bounded IN-query chunks. */
+  async defaultsMany(ids: readonly number[]): Promise<Map<number, ExerciseDefaults>> {
     const org = await this.org();
-    const row = await this.db
-      .select({ param1: exercise.param1Type, param2: exercise.param2Type })
-      .from(exercise)
-      .where(and(eq(exercise.orgId, org), eq(exercise.id, id)))
-      .get();
-    if (!row) return null;
-    return { param1: row.param1, param2: row.param2 };
+    const result = new Map<number, ExerciseDefaults>();
+    for (const idsChunk of chunk([...new Set(ids)], DEFAULTS_QUERY_IDS)) {
+      const rows = await this.db
+        .select({ id: exercise.id, param1: exercise.param1Type, param2: exercise.param2Type })
+        .from(exercise)
+        .where(and(eq(exercise.orgId, org), inArray(exercise.id, idsChunk)));
+      for (const row of rows) {
+        result.set(row.id, { param1: row.param1, param2: row.param2 });
+      }
+    }
+    return result;
   }
 
   async get(id: number): Promise<Record<string, unknown> | null> {

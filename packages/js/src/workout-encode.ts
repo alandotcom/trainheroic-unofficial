@@ -14,6 +14,8 @@ import {
   unitLabel,
 } from "./exercise-util";
 
+type AdvisoryIndex = Pick<ExerciseIndex, "defaultsMany" | "ensureFresh">;
+
 // Red-Zone leaderboard unit -> redzone_type. Values from the coach app bundle.
 export const LEADERBOARD_TYPE: Readonly<Record<string, number>> = {
   completion: 0,
@@ -287,25 +289,21 @@ export function unitAdvisory(
 /**
  * Run unit advisories across a whole block list against an exercise index. Shared by the
  * MCP workout_build tool and the CLI so both surface the same notes/warnings. Ensures the
- * index is loaded first, otherwise `defaults` returns null on a cold index and every
+ * index is loaded first, otherwise the defaults map is empty on a cold index and every
  * advisory is silently dropped.
  */
 export async function collectAdvisories(
   blocks: readonly BlockSpec[],
-  index: ExerciseIndex,
+  index: AdvisoryIndex,
 ): Promise<Advisory> {
   await index.ensureFresh();
   const pairs = blocks.flatMap((b) => b.exercises.map((ex) => ({ block: b, ex })));
-  const defaults = await Promise.all(
-    pairs.map((p) => {
-      const id = Number(p.ex.id);
-      return Number.isFinite(id) ? index.defaults(id) : Promise.resolve(null);
-    }),
-  );
+  const ids = [...new Set(pairs.map((p) => Number(p.ex.id)).filter((id) => Number.isFinite(id)))];
+  const defaultsById = await index.defaultsMany(ids);
   const notes: string[] = [];
   const warnings: string[] = [];
-  pairs.forEach((p, i) => {
-    const def = defaults[i];
+  pairs.forEach((p) => {
+    const def = defaultsById.get(Number(p.ex.id));
     if (!def) return;
     const advisory = unitAdvisory(p.block.title, p.ex, def);
     notes.push(...advisory.notes);
