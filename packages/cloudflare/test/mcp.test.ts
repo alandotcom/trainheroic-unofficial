@@ -97,4 +97,11 @@ describe("parseProps", () => {
     expect(parseProps({ ...base, email: "" })).toBeUndefined();
     expect(parseProps({ ...base, password: "" })).toBeUndefined();
   });
+
+  it("rejects an invalid athlete tenant id", () => {
+    expect(parseProps({ ...base, thUserId: 0 })).toBeUndefined();
+    expect(parseProps({ ...base, thUserId: -1 })).toBeUndefined();
+    expect(parseProps({ ...base, thUserId: 1.5 })).toBeUndefined();
+    expect(parseProps({ ...base, thUserId: Number.MAX_SAFE_INTEGER + 1 })).toBeUndefined();
+  });
 });
