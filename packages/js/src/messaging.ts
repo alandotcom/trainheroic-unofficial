@@ -92,5 +92,8 @@ export async function readLive(
   );
   if (!res.ok || !Array.isArray(res.data))
     throw new Error(`Message read failed (HTTP ${res.status}).`);
+  // The upstream cursor already bounds this to unseen comments. Tail-slicing here would silently
+  // discard the oldest unseen rows and make them unrecoverable when the caller advances again.
+  if (afterCommentId !== undefined) return res.data;
   return limit !== undefined && limit > 0 ? res.data.slice(-limit) : res.data;
 }
