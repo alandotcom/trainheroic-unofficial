@@ -173,16 +173,10 @@ export class ExerciseLibrary implements ExerciseIndex {
 
   async resolve(name: string): Promise<ResolveResult> {
     await this.ensureFresh();
-    let hit = this.#exact(name);
+    const hit = this.#exact(name);
     if (hit) return { match: hit, candidates: [hit] };
 
-    let candidates = this.#searchOnly(name, 20);
-    if (candidates.length === 0) {
-      await this.refresh();
-      hit = this.#exact(name);
-      if (hit) return { match: hit, candidates: [hit] };
-      candidates = this.#searchOnly(name, 20);
-    }
+    const candidates = this.#searchOnly(name, 20);
     if (candidates.length === 1) return { match: candidates[0] ?? null, candidates };
     return { match: null, candidates };
   }
