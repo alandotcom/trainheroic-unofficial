@@ -226,4 +226,33 @@ describe("AthleteTrainingStore", () => {
     await store.syncNextBatch(10);
     expect((await store.prs(1)).length).toBe(1);
   });
+
+  it("refreshes reference data once while draining history across calls", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        requests.push(url);
+        if (url.endsWith("/auth")) return json({ id: USER, session_id: "sess" });
+        if (url.includes("/v5/users/exercises/history")) {
+          return json([
+            ...CATALOG,
+            { id: 2, title: "Bench Press", param1Type: 3, param2Type: 1, isCircuit: false },
+          ]);
+        }
+        if (url.includes("/v5/exercises/") && url.includes("/history")) return json(DETAIL);
+        if (url.includes("/2.0/athlete/workingMax")) return json(WORKING_MAX);
+        return json({});
+      }),
+    );
+
+    const store = new AthleteTrainingStore(makeD1Warehouse(env.TH_DB), client(), USER);
+    const first = await store.syncBatch({ batchSize: 1 });
+    const second = await store.syncBatch({ batchSize: 1 });
+
+    expect(first).toMatchObject({ catalog: 2, workingMaxes: 1, exercisesSynced: 1, remaining: 1 });
+    expect(second).toMatchObject({ catalog: 0, workingMaxes: 0, exercisesSynced: 1, remaining: 0 });
+    expect(requests.filter((url) => url.includes("/v5/users/exercises/history"))).toHaveLength(1);
+    expect(requests.filter((url) => url.includes("/2.0/athlete/workingMax"))).toHaveLength(1);
+  });
 });
