@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/js
 
+## 2.1.2
+
+### Patch Changes
+
+- c8914cf: Fix session copy requests by sending the explicit null timeline destination required by the
+  TrainHeroic API, and document the complete date-copy payload.
+  - @trainheroic-unofficial/dto@2.1.2
+
 ## 2.1.1
 
 ### Patch Changes
