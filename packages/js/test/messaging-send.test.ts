@@ -86,14 +86,14 @@ describe("readLive / deleteComment", () => {
       vi.fn(async (url: string) => {
         if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
         requestedUrl = url;
-        return json([{ id: 100 }]);
+        return json([{ id: 100 }, { id: 101 }, { id: 102 }]);
       }),
     );
 
-    const comments = await readLive(new TrainHeroicClient("a@b.com", "pw"), 700, 20, 99);
+    const comments = await readLive(new TrainHeroicClient("a@b.com", "pw"), 700, 2, 99);
 
     expect(requestedUrl).toContain("lastCommentId=99");
-    expect(comments).toEqual([{ id: 100 }]);
+    expect(comments).toEqual([{ id: 100 }, { id: 101 }, { id: 102 }]);
   });
 
   it("issues a DELETE to the comment path", async () => {
