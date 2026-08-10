@@ -290,16 +290,17 @@ describe("AthleteTrainingStore", () => {
     expect((await store.workingMaxes()).length).toBe(1);
   });
 
-  it("drains the batch queue incrementally and re-pulls on full reset", async () => {
+  it("drains the batch queue incrementally and re-pulls through the full-sync state machine", async () => {
     const store = new AthleteTrainingStore(makeD1Warehouse(env.TH_DB), client(), USER);
     await store.syncCatalog();
     await store.syncNextBatch(10);
     // Watermark set, so a second batch syncs nothing.
     expect(await store.syncNextBatch(10)).toHaveLength(0);
-    await store.resetSessionsWatermark();
-    expect(await store.unsyncedCount()).toBe(1);
-    // Re-sync rebuilds PRs (delete+reinsert), not duplicating them.
-    await store.syncNextBatch(10);
+    // A full sync owns the reset and rebuilds PRs (delete+reinsert) without duplicating them.
+    expect(await store.syncBatch({ batchSize: 10, full: true })).toMatchObject({
+      exercisesSynced: 1,
+      remaining: 0,
+    });
     expect((await store.prs(1)).length).toBe(1);
   });
 
@@ -322,7 +323,8 @@ describe("AthleteTrainingStore", () => {
       }),
     );
 
-    const store = new AthleteTrainingStore(makeD1Warehouse(env.TH_DB), client(), USER);
+    const observed = observeD1Queries(env.TH_DB);
+    const store = new AthleteTrainingStore(makeD1Warehouse(observed.database), client(), USER);
     const first = await store.syncBatch({ batchSize: 1 });
     const second = await store.syncBatch({ batchSize: 1 });
 
@@ -330,6 +332,9 @@ describe("AthleteTrainingStore", () => {
     expect(second).toMatchObject({ catalog: 0, workingMaxes: 0, exercisesSynced: 1, remaining: 0 });
     expect(requests.filter((url) => url.includes("/v5/users/exercises/history"))).toHaveLength(1);
     expect(requests.filter((url) => url.includes("/2.0/athlete/workingMax"))).toHaveLength(1);
+    expect(
+      observed.queries.filter((query) => query.toLowerCase().startsWith("select count(*)")),
+    ).toHaveLength(2);
   });
 
   it("continues a full history refresh across repeated bounded calls", async () => {
@@ -366,6 +371,24 @@ describe("AthleteTrainingStore", () => {
     expect(first).toMatchObject({ exercisesSynced: 2, remaining: 1 });
     expect(second).toMatchObject({ exercisesSynced: 1, remaining: 0 });
     expect(historyIds.sort((a, b) => a - b)).toEqual([1, 2, 3]);
+  });
+
+  it("keeps reserved sync markers isolated to scope zero", async () => {
+    await env.TH_DB.prepare(
+      "INSERT INTO athlete_sync_state (user_id, resource, scope_id, cursor, synced_at) VALUES (?, ?, ?, ?, ?)",
+    )
+      .bind(USER, "training-full", 99, "unrelated", Date.now())
+      .run();
+
+    const store = new AthleteTrainingStore(makeD1Warehouse(env.TH_DB), client(), USER);
+    await store.syncBatch({ batchSize: 10 });
+
+    const row = await env.TH_DB.prepare(
+      "SELECT cursor FROM athlete_sync_state WHERE user_id = ? AND resource = ? AND scope_id = ?",
+    )
+      .bind(USER, "training-full", 99)
+      .first<{ cursor: string }>();
+    expect(row?.cursor).toBe("unrelated");
   });
 
   it("refreshes stale references even while a history row keeps failing", async () => {

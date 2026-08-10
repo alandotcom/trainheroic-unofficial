@@ -51,6 +51,7 @@ export class AthleteTrainingStore extends AthleteScopedStore {
       .where(
         and(
           eq(athleteSyncState.userId, user),
+          eq(athleteSyncState.scopeId, 0),
           inArray(athleteSyncState.resource, [FULL_SYNC_STATE, REFERENCE_STATE]),
         ),
       );
@@ -73,7 +74,11 @@ export class AthleteTrainingStore extends AthleteScopedStore {
     await this.db
       .delete(athleteSyncState)
       .where(
-        and(eq(athleteSyncState.userId, user), eq(athleteSyncState.resource, FULL_SYNC_STATE)),
+        and(
+          eq(athleteSyncState.userId, user),
+          eq(athleteSyncState.resource, FULL_SYNC_STATE),
+          eq(athleteSyncState.scopeId, 0),
+        ),
       );
   }
 
@@ -162,13 +167,15 @@ export class AthleteTrainingStore extends AthleteScopedStore {
   async syncBatch(opts: { batchSize?: number; full?: boolean } = {}): Promise<TrainingSyncResult> {
     const user = await this.user();
     const states = await this.#syncStates(user);
-    const unsyncedBefore = await this.unsyncedCount();
     let fullActive = states.has(FULL_SYNC_STATE);
     let fullStarted = false;
-    if (opts.full === true && (!fullActive || unsyncedBefore === 0)) {
-      await this.#startFullSync(user);
-      fullActive = true;
-      fullStarted = true;
+    if (opts.full === true) {
+      const unsyncedBefore = await this.unsyncedCount();
+      if (!fullActive || unsyncedBefore === 0) {
+        await this.#startFullSync(user);
+        fullActive = true;
+        fullStarted = true;
+      }
     }
 
     const referenceSyncedAt = states.get(REFERENCE_STATE) ?? 0;
@@ -300,15 +307,6 @@ export class AthleteTrainingStore extends AthleteScopedStore {
       athleteExercise,
       and(eq(athleteExercise.userId, user), isNull(athleteExercise.sessionsSyncedAt)),
     );
-  }
-
-  /** Forget the per-exercise watermark so the next batch sync re-pulls every exercise. */
-  async resetSessionsWatermark(): Promise<void> {
-    const user = await this.user();
-    await this.db
-      .update(athleteExercise)
-      .set({ sessionsSyncedAt: null })
-      .where(eq(athleteExercise.userId, user));
   }
 
   // --- queries ---
