@@ -4,6 +4,7 @@ import { type BatchStmt, cursorUpsertStmt, mapPool } from "../runner";
 import { block, prescribedSet, program, programSession } from "../schema";
 import {
   checkResponse,
+  chunk,
   coerceInt,
   coerceNum,
   isRecord,
@@ -15,6 +16,8 @@ const MONTHS_FWD = 6;
 // Bound the upstream fan-out per calendar so a month window doesn't burst the host (or the
 // Worker subrequest budget) with ~25 simultaneous fetches.
 const FETCH_CONCURRENCY = 5;
+// Every programming row expands to at most ten bound values; eight stays below D1's limit.
+const BULK_WRITE_ROWS = 8;
 
 function monthWindow(back = MONTHS_BACK, fwd = MONTHS_FWD): Array<[number, number]> {
   const now = new Date();
@@ -223,8 +226,8 @@ export class ProgrammingStore extends OrgScopedStore {
       this.db.delete(block).where(and(eq(block.orgId, org), eq(block.programSessionId, sid))),
     ];
 
-    let blocks = 0;
-    let sets = 0;
+    const blockRows: Array<typeof block.$inferInsert> = [];
+    const setRows: Array<typeof prescribedSet.$inferInsert> = [];
     const setsObj = isRecord(pw.sets) ? pw.sets : {};
     const sortedBlocks = Object.values(setsObj)
       .filter(isRecord)
@@ -233,19 +236,24 @@ export class ProgrammingStore extends OrgScopedStore {
     for (const blk of sortedBlocks) {
       const bid = coerceInt(blk.id);
       if (bid === null) continue;
+      blockRows.push({
+        orgId: org,
+        id: bid,
+        programSessionId: sid,
+        ord: coerceInt(blk.order),
+        type: coerceInt(blk.type),
+        title: String(blk.title ?? ""),
+        instruction: String(blk.instruction ?? ""),
+        raw: JSON.stringify(blk),
+      });
+      const exercises = Array.isArray(blk.exercises) ? blk.exercises.filter(isRecord) : [];
+      for (const ex of exercises) setRows.push(...this.#setRows(org, bid, ex));
+    }
+    for (const values of chunk(blockRows, BULK_WRITE_ROWS)) {
       stmts.push(
         this.db
           .insert(block)
-          .values({
-            orgId: org,
-            id: bid,
-            programSessionId: sid,
-            ord: coerceInt(blk.order),
-            type: coerceInt(blk.type),
-            title: String(blk.title ?? ""),
-            instruction: String(blk.instruction ?? ""),
-            raw: JSON.stringify(blk),
-          })
+          .values(values)
           .onConflictDoUpdate({
             target: [block.orgId, block.id],
             set: {
@@ -258,44 +266,40 @@ export class ProgrammingStore extends OrgScopedStore {
             },
           }),
       );
-      blocks += 1;
-      const exercises = Array.isArray(blk.exercises) ? blk.exercises.filter(isRecord) : [];
-      for (const ex of exercises) sets += this.#setStatements(org, bid, ex, stmts);
     }
-    return { stmts, blocks, sets };
+    for (const values of chunk(setRows, BULK_WRITE_ROWS)) {
+      stmts.push(this.db.insert(prescribedSet).values(values));
+    }
+    return { stmts, blocks: blockRows.length, sets: setRows.length };
   }
 
-  #setStatements(
+  #setRows(
     org: number,
     bid: number,
     ex: Record<string, unknown>,
-    stmts: BatchStmt[],
-  ): number {
+  ): Array<typeof prescribedSet.$inferInsert> {
     const exId = coerceInt(ex.exercise_id);
     const p1t = coerceInt(ex.param_1_type);
     const p2t = coerceInt(ex.param_2_type);
-    let count = 0;
+    const rows: Array<typeof prescribedSet.$inferInsert> = [];
     for (let i = 1; i <= 10; i += 1) {
       const v1 = ex[`param_1_data_${i}`];
       const v2 = ex[`param_2_data_${i}`];
       const empty1 = v1 === undefined || v1 === null || v1 === "";
       const empty2 = v2 === undefined || v2 === null || v2 === "";
       if (empty1 && empty2) continue;
-      stmts.push(
-        this.db.insert(prescribedSet).values({
-          orgId: org,
-          blockId: bid,
-          exerciseId: exId,
-          setIndex: i,
-          param1Type: p1t,
-          param1Value: prescribedValue(v1),
-          param2Type: p2t,
-          param2Value: prescribedValue(v2),
-        }),
-      );
-      count += 1;
+      rows.push({
+        orgId: org,
+        blockId: bid,
+        exerciseId: exId,
+        setIndex: i,
+        param1Type: p1t,
+        param1Value: prescribedValue(v1),
+        param2Type: p2t,
+        param2Value: prescribedValue(v2),
+      });
     }
-    return count;
+    return rows;
   }
 
   async syncAll(): Promise<CalendarSyncResult[]> {
