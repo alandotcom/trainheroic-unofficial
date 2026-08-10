@@ -81,18 +81,9 @@ function registerTrainingZone(server: McpServer, training: AthleteTrainingStore)
         if (exerciseId !== undefined) {
           return jsonResult(await training.syncExercise(toId(exerciseId)));
         }
-        if (full === true) await training.resetSessionsWatermark();
-        const catalog = await training.syncCatalog();
-        const workingMaxes = await training.syncWorkingMaxes();
-        const results = await training.syncNextBatch(batchSize ?? 25);
-        const remaining = await training.unsyncedCount();
-        return jsonResult({
-          catalog,
-          workingMaxes,
-          exercisesSynced: results.length,
-          remaining,
-          results,
-        });
+        return jsonResult(
+          await training.syncBatch({ batchSize: batchSize ?? 25, full: full ?? false }),
+        );
       }),
   );
 

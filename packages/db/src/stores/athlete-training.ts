@@ -111,6 +111,26 @@ export class AthleteTrainingStore extends AthleteScopedStore {
     return stmts.length;
   }
 
+  /** Refresh reference data when starting a drain, then advance one history batch. */
+  async syncBatch(opts: { batchSize?: number; full?: boolean } = {}): Promise<TrainingSyncResult> {
+    if (opts.full === true) await this.resetSessionsWatermark();
+
+    const shouldRefresh = opts.full === true || (await this.unsyncedCount()) === 0;
+    const [catalog, workingMaxes] = shouldRefresh
+      ? await Promise.all([this.syncCatalog(), this.syncWorkingMaxes()])
+      : [0, 0];
+    const results = await this.syncNextBatch(opts.batchSize ?? DEFAULT_BATCH);
+    const remaining = await this.unsyncedCount();
+
+    return {
+      catalog,
+      workingMaxes,
+      exercisesSynced: results.length,
+      remaining,
+      results,
+    };
+  }
+
   /** Pull one exercise's session history + PRs, then mark it synced (atomic group). */
   async syncExercise(exerciseId: number): Promise<ExerciseSyncResult> {
     const user = await this.user();
