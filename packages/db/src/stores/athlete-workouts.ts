@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, lte, or, sql } from "drizzle-orm";
 import {
   chunk,
   coerceInt,
@@ -106,11 +106,24 @@ export class AthleteWorkoutStore extends AthleteScopedStore {
   }
 
   /** Stored workouts, optionally bounded by an inclusive date window (newest first). */
-  async list(startDate?: string, endDate?: string, limit = 100): Promise<unknown[]> {
+  async list(
+    startDate?: string,
+    endDate?: string,
+    limit = 100,
+    before?: { date: string; id: number },
+  ): Promise<unknown[]> {
     const user = await this.user();
     const conditions = [eq(athleteWorkout.userId, user)];
     if (startDate !== undefined) conditions.push(gte(athleteWorkout.date, startDate));
     if (endDate !== undefined) conditions.push(lte(athleteWorkout.date, endDate));
+    if (before !== undefined) {
+      conditions.push(
+        or(
+          lt(athleteWorkout.date, before.date),
+          and(eq(athleteWorkout.date, before.date), lt(athleteWorkout.id, before.id)),
+        )!,
+      );
+    }
     const rows = await this.db
       .select({
         id: athleteWorkout.id,
@@ -122,7 +135,7 @@ export class AthleteWorkoutStore extends AthleteScopedStore {
       })
       .from(athleteWorkout)
       .where(and(...conditions))
-      .orderBy(desc(athleteWorkout.date))
+      .orderBy(desc(athleteWorkout.date), desc(athleteWorkout.id))
       .limit(limit);
     return rows.map((row) => ({ ...row, logged: row.logged === 1 }));
   }

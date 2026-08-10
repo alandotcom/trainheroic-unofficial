@@ -2,7 +2,15 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { athleteWorkoutRangeArgsSchema, dateString } from "@trainheroic-unofficial/js";
 import type { TrainHeroicClient } from "@trainheroic-unofficial/js";
-import { attempt, idParam, jsonResult, READ, SYNC, toId } from "@trainheroic-unofficial/core";
+import {
+  attempt,
+  errorResult,
+  idParam,
+  jsonResult,
+  READ,
+  SYNC,
+  toId,
+} from "@trainheroic-unofficial/core";
 import {
   AthleteTrainingStore,
   AthleteWorkoutStore,
@@ -39,22 +47,32 @@ function registerWorkoutsZone(server: McpServer, workouts: AthleteWorkoutStore):
         "Query the workouts warehouse (populate it with athlete_workouts_sync first). Give " +
         "workoutId for one workout's flattened exercises (each with prescribed + performed sets); " +
         "omit it to list workouts (optionally bounded by startDate/endDate), each carrying a " +
-        "logged flag. Lists are newest-first and limited to 100 by default. For current data live " +
-        "from the API, use athlete_workouts.",
+        "logged flag. Lists are newest-first and limited to 100 by default. To continue, pass the " +
+        "last row's date/id as beforeDate/beforeWorkoutId. For current data live from the API, " +
+        "use athlete_workouts.",
       inputSchema: {
         workoutId: idParam.optional(),
         startDate: dateString.optional(),
         endDate: dateString.optional(),
         limit: z.number().int().positive().max(500).optional(),
+        beforeDate: dateString.optional(),
+        beforeWorkoutId: idParam.optional(),
       },
       annotations: READ,
     },
-    ({ workoutId, startDate, endDate, limit }) =>
+    ({ workoutId, startDate, endDate, limit, beforeDate, beforeWorkoutId }) =>
       attempt(async () => {
         if (workoutId !== undefined) {
           return jsonResult(await workouts.workoutExercises(toId(workoutId)));
         }
-        return jsonResult(await workouts.list(startDate, endDate, limit ?? 100), {
+        if ((beforeDate === undefined) !== (beforeWorkoutId === undefined)) {
+          return errorResult("Pass beforeDate and beforeWorkoutId together.");
+        }
+        const before =
+          beforeDate !== undefined && beforeWorkoutId !== undefined
+            ? { date: beforeDate, id: toId(beforeWorkoutId) }
+            : undefined;
+        return jsonResult(await workouts.list(startDate, endDate, limit ?? 100, before), {
           hint: "Bound with startDate/endDate, or pass workoutId for one workout's exercises.",
         });
       }),

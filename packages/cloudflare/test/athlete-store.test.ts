@@ -245,9 +245,17 @@ describe("AthleteWorkoutStore", () => {
 
     const store = new AthleteWorkoutStore(makeD1Warehouse(env.TH_DB), client(), USER);
     await store.sync("2026-06-01", "2026-06-03");
-    const rows = (await store.list(undefined, undefined, 2)) as Array<{ id: number }>;
+    const rows = (await store.list(undefined, undefined, 2)) as Array<{
+      id: number;
+      date: string;
+    }>;
+    const next = (await store.list(undefined, undefined, 2, {
+      date: rows[1]!.date,
+      id: rows[1]!.id,
+    })) as Array<{ id: number }>;
 
     expect(rows.map((row) => row.id)).toEqual([557, 556]);
+    expect(next.map((row) => row.id)).toEqual([555]);
   });
 });
 
