@@ -42,6 +42,19 @@ describe("applyMigrations", () => {
     expect(tables).toContain("athlete_pr");
     expect(tables).toContain("exercise");
   });
+
+  it("uses the unsynced queue index for ordered athlete history batches", () => {
+    const sqlite = freshDb();
+    const plan = sqlite
+      .prepare(
+        "EXPLAIN QUERY PLAN " +
+          "SELECT id FROM athlete_exercise " +
+          "WHERE user_id = ? AND sessions_synced_at IS NULL ORDER BY id LIMIT ?",
+      )
+      .all(USER, 25) as Array<{ detail: string }>;
+
+    expect(plan.map((row) => row.detail).join("\n")).toContain("idx_aexercise_unsynced");
+  });
 });
 
 describe("a store on the node:sqlite driver", () => {
