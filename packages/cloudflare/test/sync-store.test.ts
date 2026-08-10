@@ -152,6 +152,51 @@ describe("ProgrammingStore", () => {
     expect(result.sessions).toBe(2);
     expect((await store.getProgramSessions(111)).length).toBe(2);
   });
+
+  it("writes session blocks and prescribed sets in bounded multi-row statements", async () => {
+    const session = {
+      ...SESSION,
+      sets: Object.fromEntries(
+        Array.from({ length: 25 }, (_, index) => [
+          String(index + 1),
+          {
+            id: 6_000 + index,
+            order: index + 1,
+            type: 2,
+            title: `Block ${index + 1}`,
+            instruction: "",
+            exercises: [
+              { exercise_id: index + 1, param_1_type: 3, param_1_data_1: String(index + 1) },
+            ],
+          },
+        ]),
+      ),
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+        if (url.includes("/1.0/coach/programs/edit/")) {
+          return json({ programWorkouts: [session] });
+        }
+        return json({});
+      }),
+    );
+
+    const observed = observeD1Queries(env.TH_DB);
+    const store = new ProgrammingStore(makeD1Warehouse(observed.database), client(), 7);
+    expect(await store.syncCalendar(111, "Prog A")).toMatchObject({
+      blocks: 25,
+      prescribed_sets: 25,
+    });
+    expect((await store.getSession(SESSION.id)).blocks).toHaveLength(25);
+
+    const insertCount = (table: string) =>
+      observed.queries.filter((query) => query.toLowerCase().startsWith(`insert into "${table}"`))
+        .length;
+    expect(insertCount("block")).toBe(4);
+    expect(insertCount("prescribed_set")).toBe(4);
+  });
 });
 
 describe("MessagingStore", () => {
