@@ -48,31 +48,33 @@ function registerWorkoutsZone(server: McpServer, workouts: AthleteWorkoutStore):
         "workoutId for one workout's flattened exercises (each with prescribed + performed sets); " +
         "omit it to list workouts (optionally bounded by startDate/endDate), each carrying a " +
         "logged flag. Lists are newest-first and limited to 100 by default. To continue, pass the " +
-        "last row's date/id as beforeDate/beforeWorkoutId. For current data live from the API, " +
+        "last row's date/id in `before`. For current data live from the API, " +
         "use athlete_workouts.",
       inputSchema: {
         workoutId: idParam.optional(),
         startDate: dateString.optional(),
         endDate: dateString.optional(),
         limit: z.number().int().positive().max(500).optional(),
-        beforeDate: dateString.optional(),
-        beforeWorkoutId: idParam.optional(),
+        before: z.object({ date: dateString.nullable(), workoutId: idParam }).optional(),
       },
       annotations: READ,
     },
-    ({ workoutId, startDate, endDate, limit, beforeDate, beforeWorkoutId }) =>
+    ({ workoutId, startDate, endDate, limit, before }) =>
       attempt(async () => {
         if (workoutId !== undefined) {
+          if (
+            startDate !== undefined ||
+            endDate !== undefined ||
+            limit !== undefined ||
+            before !== undefined
+          ) {
+            return errorResult("workoutId detail mode cannot include list filters or a cursor.");
+          }
           return jsonResult(await workouts.workoutExercises(toId(workoutId)));
         }
-        if ((beforeDate === undefined) !== (beforeWorkoutId === undefined)) {
-          return errorResult("Pass beforeDate and beforeWorkoutId together.");
-        }
-        const before =
-          beforeDate !== undefined && beforeWorkoutId !== undefined
-            ? { date: beforeDate, id: toId(beforeWorkoutId) }
-            : undefined;
-        return jsonResult(await workouts.list(startDate, endDate, limit ?? 100, before), {
+        const cursor =
+          before === undefined ? undefined : { date: before.date, id: toId(before.workoutId) };
+        return jsonResult(await workouts.list(startDate, endDate, limit ?? 100, cursor), {
           hint: "Bound with startDate/endDate, or pass workoutId for one workout's exercises.",
         });
       }),
@@ -145,7 +147,7 @@ export function registerAthleteSyncTools(
   server: McpServer,
   warehouse: Warehouse,
   client: TrainHeroicClient,
-  userId: number | null = null,
+  userId: number,
 ): void {
   registerWorkoutsZone(server, new AthleteWorkoutStore(warehouse, client, userId));
   registerTrainingZone(server, new AthleteTrainingStore(warehouse, client, userId));

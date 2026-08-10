@@ -75,7 +75,8 @@ export function readProps(): Props {
 export function parseProps(value: unknown): Props | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const v = value as Record<string, unknown>;
-  if (typeof v.thUserId !== "number") return undefined;
+  if (typeof v.thUserId !== "number" || !Number.isSafeInteger(v.thUserId) || v.thUserId <= 0)
+    return undefined;
   if (typeof v.email !== "string" || v.email.length === 0) return undefined;
   if (typeof v.password !== "string" || v.password.length === 0) return undefined;
   if (typeof v.scope !== "string") return undefined;
