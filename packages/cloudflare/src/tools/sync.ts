@@ -13,23 +13,7 @@ import {
   toId,
 } from "@trainheroic-unofficial/core";
 
-/**
- * History warehouse tools for the programming and messaging zones. These accumulate a
- * time-series the live API cannot return in one call (18 months of prescribed sessions; full
- * conversation history), so they are a deliberately-populated store, not a cache: one sync
- * verb populates the zone, one query tool reads it. They persist to D1 (hosted only). For
- * current data, the live core tools `get_program` / `messaging_conversations` / `messaging_read`
- * are the default.
- */
-export function registerSyncTools(
-  server: McpServer,
-  warehouse: Warehouse,
-  client: TrainHeroicClient,
-  orgId: number | null = null,
-): void {
-  const programming = new ProgrammingStore(warehouse, client, orgId);
-  const messaging = new MessagingStore(warehouse, client, orgId);
-
+function registerProgrammingTools(server: McpServer, programming: ProgrammingStore): void {
   server.registerTool(
     "programming_sync",
     {
@@ -87,7 +71,9 @@ export function registerSyncTools(
         return errorResult("Provide programId (session list) or sessionId (session detail).");
       }),
   );
+}
 
+function registerMessagingTools(server: McpServer, messaging: MessagingStore): void {
   server.registerTool(
     "messaging_sync",
     {
@@ -151,4 +137,22 @@ export function registerSyncTools(
         return jsonResult(await messaging.history(toId(streamId), limit ?? 50, before));
       }),
   );
+}
+
+/**
+ * History warehouse tools for the programming and messaging zones. These accumulate a
+ * time-series the live API cannot return in one call (18 months of prescribed sessions; full
+ * conversation history), so they are a deliberately-populated store, not a cache: one sync
+ * verb populates the zone, one query tool reads it. They persist to D1 (hosted only). For
+ * current data, the live core tools `get_program` / `messaging_conversations` / `messaging_read`
+ * are the default.
+ */
+export function registerSyncTools(
+  server: McpServer,
+  warehouse: Warehouse,
+  client: TrainHeroicClient,
+  orgId: number | null = null,
+): void {
+  registerProgrammingTools(server, new ProgrammingStore(warehouse, client, orgId));
+  registerMessagingTools(server, new MessagingStore(warehouse, client, orgId));
 }
