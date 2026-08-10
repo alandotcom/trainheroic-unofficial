@@ -768,7 +768,7 @@ function prescribedExerciseLabels(workouts: readonly ProgramWorkout[]): string[]
 async function logResolvedExercises(
   client: TrainHeroicClient,
   target: LogTarget,
-  date: string,
+  workouts: readonly ProgramWorkout[],
   resolved: readonly ResolvedExercise[],
 ): Promise<Array<{ savedWorkoutSetId: number; exercisesLogged: number }>> {
   const bySet = new Map<number, SetResult[]>();
@@ -779,20 +779,19 @@ async function logResolvedExercises(
   }
   const out: Array<{ savedWorkoutSetId: number; exercisesLogged: number }> = [];
   for (const [savedWorkoutSetId, results] of bySet) {
-    const written =
-      target.role === "coach"
-        ? await logForAthlete(client, {
-            athleteId: target.athleteId,
-            date,
-            savedWorkoutSetId,
-            results,
-          })
-        : await logAthleteSet(client, { date, savedWorkoutSetId, results });
+    const written = await writeSetResults(
+      client,
+      target,
+      workouts,
+      savedWorkoutSetId,
+      results,
+      "log",
+    );
     // Keep the per-set shape to the two fields LogSessionResult documents; block completion is a
     // by-set concern that the by-exercise session log does not surface.
     out.push({
       savedWorkoutSetId: written.savedWorkoutSetId,
-      exercisesLogged: written.exercisesLogged,
+      exercisesLogged: written.exercisesWritten,
     });
   }
   return out;
@@ -843,7 +842,8 @@ export async function logAdHocSession(
     };
   });
 
-  const sets = await logResolvedExercises(client, { role: "athlete" }, args.date, resolved);
+  const updatedDay = await fetchAthleteWorkouts(client, args.date, args.date);
+  const sets = await logResolvedExercises(client, { role: "athlete" }, updatedDay, resolved);
   const result: LogSessionResult = { date: args.date, created, sets };
   // Warn (don't redirect) when a logged exercise was already on a coach-scheduled workout that day:
   // the ad-hoc log stands, but the caller can point at athlete_log_set to log into the schedule.
@@ -891,7 +891,7 @@ export async function logSessionForAthlete(
   const sets = await logResolvedExercises(
     client,
     { role: "coach", athleteId: args.athleteId },
-    args.date,
+    day,
     resolved,
   );
   return { date: args.date, created: false, sets };
