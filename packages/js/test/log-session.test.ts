@@ -18,8 +18,11 @@ afterEach(() => {
 });
 
 const SET_ID = 5000;
+const SET_ID_2 = 5001;
 const SWE_ID = 6000;
+const SWE_ID_2 = 6001;
 const WSE_ID = 7000;
+const WSE_ID_2 = 7001;
 const SAVED_ID = 8000;
 const WORKOUT_ID = 9000;
 const EXERCISE_ID = 1;
@@ -50,6 +53,20 @@ function dayWithSet(personal: boolean) {
                 },
               ],
             },
+            {
+              id: SET_ID_2,
+              workout_set_id: 4445,
+              saved_workout_id: SAVED_ID,
+              unit: "lb",
+              workoutSetExercises: [
+                {
+                  id: SWE_ID_2,
+                  workout_set_exercise_id: WSE_ID_2,
+                  exercise_id: 2,
+                  exercise_title: "Bench Press",
+                },
+              ],
+            },
           ],
         },
       },
@@ -59,6 +76,7 @@ function dayWithSet(personal: boolean) {
 
 const ADD_RESPONSE = [
   { id: SET_ID, savedWorkoutSetExercises: [{ id: SWE_ID, exerciseId: EXERCISE_ID }] },
+  { id: SET_ID_2, savedWorkoutSetExercises: [{ id: SWE_ID_2, exerciseId: 2 }] },
 ];
 
 describe("logAdHocSession (athlete)", () => {
@@ -93,12 +111,19 @@ describe("logAdHocSession (athlete)", () => {
 
     const result = await logAdHocSession(new TrainHeroicClient("a@b.com", "pw"), {
       date: "2026-06-21",
-      exercises: [{ exerciseId: EXERCISE_ID, sets: [{ param1: 5, param2: 185 }] }],
+      exercises: [
+        { exerciseId: EXERCISE_ID, sets: [{ param1: 5, param2: 185 }] },
+        { exerciseId: 2, sets: [{ param1: 5, param2: 135 }] },
+      ],
     });
 
     expect(created).toBe(true);
     expect(result.created).toBe(true);
-    expect(result.sets).toEqual([{ savedWorkoutSetId: SET_ID, exercisesLogged: 1 }]);
+    expect(rangeCalls).toBe(2);
+    expect(result.sets).toEqual([
+      { savedWorkoutSetId: SET_ID, exercisesLogged: 1 },
+      { savedWorkoutSetId: SET_ID_2, exercisesLogged: 1 },
+    ]);
     expect(puts.some((u) => u.includes(`/savedworkoutsetexercise/${SWE_ID}`))).toBe(true);
     expect(puts.some((u) => u.includes(`/savedworkoutset/${SET_ID}`))).toBe(true);
   });
@@ -252,11 +277,15 @@ describe("removePersonalWorkout", () => {
 describe("logSessionForAthlete (coach)", () => {
   it("logs against a prescribed set the athlete already has", async () => {
     const puts: string[] = [];
+    let rangeCalls = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
         if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
-        if (url.includes("/coach/athlete/programworkout/range")) return json(dayWithSet(false));
+        if (url.includes("/coach/athlete/programworkout/range")) {
+          rangeCalls += 1;
+          return json(dayWithSet(false));
+        }
         if (init?.method === "PUT") {
           puts.push(url);
           return json({ ok: 1 });
@@ -268,11 +297,18 @@ describe("logSessionForAthlete (coach)", () => {
     const result = await logSessionForAthlete(new TrainHeroicClient("a@b.com", "pw"), {
       athleteId: 333,
       date: "2026-06-21",
-      exercises: [{ exerciseId: EXERCISE_ID, sets: [{ param1: 5, param2: 185 }] }],
+      exercises: [
+        { exerciseId: EXERCISE_ID, sets: [{ param1: 5, param2: 185 }] },
+        { exerciseId: 2, sets: [{ param1: 5, param2: 135 }] },
+      ],
     });
 
     expect(result.created).toBe(false);
-    expect(result.sets).toEqual([{ savedWorkoutSetId: SET_ID, exercisesLogged: 1 }]);
+    expect(rangeCalls).toBe(1);
+    expect(result.sets).toEqual([
+      { savedWorkoutSetId: SET_ID, exercisesLogged: 1 },
+      { savedWorkoutSetId: SET_ID_2, exercisesLogged: 1 },
+    ]);
     // Coach surface stamps the athleteId into the path.
     expect(puts.some((u) => u.includes(`/coach/savedworkoutsetexercise/${SWE_ID}/333`))).toBe(true);
   });
