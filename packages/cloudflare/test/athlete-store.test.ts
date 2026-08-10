@@ -246,17 +246,30 @@ describe("AthleteWorkoutStore", () => {
 
     const store = new AthleteWorkoutStore(makeD1Warehouse(env.TH_DB), client(), USER);
     await store.sync("2026-06-01", "2026-06-03");
+    await env.TH_DB.batch([
+      env.TH_DB.prepare(
+        "INSERT INTO athlete_workout (user_id, id, date, logged) VALUES (?, ?, NULL, 0)",
+      ).bind(USER, 558),
+      env.TH_DB.prepare(
+        "INSERT INTO athlete_workout (user_id, id, date, logged) VALUES (?, ?, NULL, 0)",
+      ).bind(USER, 559),
+    ]);
     const rows = (await store.list(undefined, undefined, 2)) as Array<{
       id: number;
-      date: string;
+      date: string | null;
     }>;
     const next = (await store.list(undefined, undefined, 2, {
       date: rows[1]!.date,
       id: rows[1]!.id,
+    })) as Array<{ id: number; date: string | null }>;
+    const nullTail = (await store.list(undefined, undefined, 2, {
+      date: next[1]!.date,
+      id: next[1]!.id,
     })) as Array<{ id: number }>;
 
     expect(rows.map((row) => row.id)).toEqual([557, 556]);
-    expect(next.map((row) => row.id)).toEqual([555]);
+    expect(next.map((row) => row.id)).toEqual([555, 559]);
+    expect(nullTail.map((row) => row.id)).toEqual([558]);
   });
 });
 

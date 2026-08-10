@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, lt, sql, type SQL } from "drizzle-orm";
 import { chunk, coerceInt, fetchStreams, isRecord } from "@trainheroic-unofficial/js";
 import { OrgScopedStore } from "../base";
 import { type BatchStmt, cursorUpsertStmt } from "../runner";
@@ -16,6 +16,27 @@ export type StreamSyncResult = {
   new: number;
   error?: string;
 };
+
+export type StoredMessageStream = {
+  id: number;
+  kind: string | null;
+  title: string | null;
+  team_id: number | null;
+  user_id: number | null;
+  last_viewed: number | null;
+};
+export type MessageStreamCursor = { lastViewed: number | null; id: number };
+
+export type StoredMessage = {
+  id: number;
+  ts: number | null;
+  content: string | null;
+  author_name: string | null;
+  is_author: number;
+  parent_id: number | null;
+  reactions: unknown;
+};
+export type MessageCursor = { ts: number | null; id: number };
 
 /** Messaging zone: conversations (streams) + comments. Incremental, accumulate-only. */
 export class MessagingStore extends OrgScopedStore {
@@ -197,61 +218,79 @@ export class MessagingStore extends OrgScopedStore {
     return out;
   }
 
-  async streams(limit = 100, before?: { lastViewed: number; id: number }): Promise<unknown[]> {
+  async streams(limit = 100, before?: MessageStreamCursor): Promise<StoredMessageStream[]> {
     const org = await this.org();
     const conditions = [eq(messageStream.orgId, org)];
-    if (before !== undefined) {
-      conditions.push(
-        or(
-          lt(messageStream.lastViewed, before.lastViewed),
-          and(eq(messageStream.lastViewed, before.lastViewed), lt(messageStream.id, before.id)),
-        )!,
-      );
+    const columns = {
+      id: messageStream.id,
+      kind: messageStream.kind,
+      title: messageStream.title,
+      team_id: messageStream.teamId,
+      user_id: messageStream.userId,
+      last_viewed: messageStream.lastViewed,
+    };
+    const read = (extra: readonly SQL[], take: number) =>
+      this.db
+        .select(columns)
+        .from(messageStream)
+        .where(and(...conditions, ...extra))
+        .orderBy(desc(messageStream.lastViewed), desc(messageStream.id))
+        .limit(take);
+
+    if (before === undefined) return read([], limit);
+    if (before.lastViewed === null) {
+      return read([isNull(messageStream.lastViewed), lt(messageStream.id, before.id)], limit);
     }
-    return this.db
-      .select({
-        id: messageStream.id,
-        kind: messageStream.kind,
-        title: messageStream.title,
-        team_id: messageStream.teamId,
-        user_id: messageStream.userId,
-        last_viewed: messageStream.lastViewed,
-      })
-      .from(messageStream)
-      .where(and(...conditions))
-      .orderBy(desc(messageStream.lastViewed), desc(messageStream.id))
-      .limit(limit);
+    const rows = await read(
+      [
+        isNotNull(messageStream.lastViewed),
+        sql`(${messageStream.lastViewed}, ${messageStream.id}) < (${before.lastViewed}, ${before.id})`,
+      ],
+      limit,
+    );
+    if (rows.length < limit) {
+      rows.push(...(await read([isNull(messageStream.lastViewed)], limit - rows.length)));
+    }
+    return rows;
   }
 
-  async history(
-    streamId: number,
-    limit = 50,
-    before?: { ts: number; id: number },
-  ): Promise<unknown[]> {
+  async history(streamId: number, limit = 50, before?: MessageCursor): Promise<StoredMessage[]> {
     const org = await this.org();
     const conditions = [eq(messageComment.orgId, org), eq(messageComment.streamId, streamId)];
-    if (before !== undefined) {
-      conditions.push(
-        or(
-          lt(messageComment.ts, before.ts),
-          and(eq(messageComment.ts, before.ts), lt(messageComment.id, before.id)),
-        )!,
+    const columns = {
+      id: messageComment.id,
+      ts: messageComment.ts,
+      content: messageComment.content,
+      author_name: messageComment.authorName,
+      is_author: messageComment.isAuthor,
+      parent_id: messageComment.parentId,
+      reactions: messageComment.reactions,
+    };
+    const read = (extra: readonly SQL[], take: number) =>
+      this.db
+        .select(columns)
+        .from(messageComment)
+        .where(and(...conditions, ...extra))
+        .orderBy(desc(messageComment.ts), desc(messageComment.id))
+        .limit(take);
+
+    let rows;
+    if (before === undefined) {
+      rows = await read([], limit);
+    } else if (before.ts === null) {
+      rows = await read([isNull(messageComment.ts), lt(messageComment.id, before.id)], limit);
+    } else {
+      rows = await read(
+        [
+          isNotNull(messageComment.ts),
+          sql`(${messageComment.ts}, ${messageComment.id}) < (${before.ts}, ${before.id})`,
+        ],
+        limit,
       );
+      if (rows.length < limit) {
+        rows.push(...(await read([isNull(messageComment.ts)], limit - rows.length)));
+      }
     }
-    const rows = await this.db
-      .select({
-        id: messageComment.id,
-        ts: messageComment.ts,
-        content: messageComment.content,
-        author_name: messageComment.authorName,
-        is_author: messageComment.isAuthor,
-        parent_id: messageComment.parentId,
-        reactions: messageComment.reactions,
-      })
-      .from(messageComment)
-      .where(and(...conditions))
-      .orderBy(desc(messageComment.ts), desc(messageComment.id))
-      .limit(limit);
     return rows.map((row) => ({ ...row, reactions: safeParse(row.reactions) }));
   }
 }
