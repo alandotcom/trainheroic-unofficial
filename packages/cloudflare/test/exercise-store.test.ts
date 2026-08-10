@@ -175,6 +175,18 @@ describe("ExerciseStore safety + write-through", () => {
     expect(resolved.candidates.length).toBeGreaterThan(1);
   });
 
+  it("does not rewrite a fresh mirror for repeated unresolved names", async () => {
+    mockApi([{ id: 1, title: "Back Squat", param_1_type: 3 }]);
+    const store = newStore();
+    await store.refresh();
+
+    expect((await store.resolve("Definitely Missing")).match).toBeNull();
+    expect((await store.resolve("Definitely Missing")).match).toBeNull();
+
+    const requests = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(requests.filter((url) => url.includes("/v5/exerciseLibrary/all"))).toHaveLength(1);
+  });
+
   it("scopes rows by org", async () => {
     mockApi([{ id: 1, title: "Back Squat", param_1_type: 3 }]);
     await newStore(7).refresh();

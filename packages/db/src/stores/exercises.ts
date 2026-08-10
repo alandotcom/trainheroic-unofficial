@@ -272,16 +272,10 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
 
   async resolve(name: string): Promise<ResolveResult> {
     await this.ensureFresh();
-    let hit = await this.#exact(name);
+    const hit = await this.#exact(name);
     if (hit) return { match: hit, candidates: [hit] };
 
-    let candidates = await this.#searchOnly(name, 20);
-    if (candidates.length === 0) {
-      await this.refresh();
-      hit = await this.#exact(name);
-      if (hit) return { match: hit, candidates: [hit] };
-      candidates = await this.#searchOnly(name, 20);
-    }
+    const candidates = await this.#searchOnly(name, 20);
 
     if (candidates.length === 1) return { match: candidates[0] ?? null, candidates };
     return { match: null, candidates };
