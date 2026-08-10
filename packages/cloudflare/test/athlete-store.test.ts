@@ -227,6 +227,28 @@ describe("AthleteWorkoutStore", () => {
       ),
     ).toHaveLength(4);
   });
+
+  it("bounds stored workout lists to the newest requested rows", async () => {
+    const workouts = Array.from({ length: 3 }, (_, index) => ({
+      ...WORKOUT,
+      id: 555 + index,
+      date: `2026-06-0${index + 1}`,
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: USER, session_id: "sess" });
+        if (url.includes("/3.0/athlete/programworkout/range")) return json(workouts);
+        return json({});
+      }),
+    );
+
+    const store = new AthleteWorkoutStore(makeD1Warehouse(env.TH_DB), client(), USER);
+    await store.sync("2026-06-01", "2026-06-03");
+    const rows = (await store.list(undefined, undefined, 2)) as Array<{ id: number }>;
+
+    expect(rows.map((row) => row.id)).toEqual([557, 556]);
+  });
 });
 
 describe("AthleteTrainingStore", () => {

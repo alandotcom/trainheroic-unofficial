@@ -197,7 +197,7 @@ export class MessagingStore extends OrgScopedStore {
     return out;
   }
 
-  async streams(): Promise<unknown[]> {
+  async streams(limit = 100): Promise<unknown[]> {
     const org = await this.org();
     return this.db
       .select({
@@ -210,7 +210,8 @@ export class MessagingStore extends OrgScopedStore {
       })
       .from(messageStream)
       .where(eq(messageStream.orgId, org))
-      .orderBy(desc(messageStream.lastViewed));
+      .orderBy(desc(messageStream.lastViewed))
+      .limit(limit);
   }
 
   async history(streamId: number, limit = 50): Promise<unknown[]> {

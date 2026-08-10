@@ -197,6 +197,28 @@ describe("ProgrammingStore", () => {
     expect(insertCount("block")).toBe(4);
     expect(insertCount("prescribed_set")).toBe(4);
   });
+
+  it("bounds stored program sessions", async () => {
+    const sessions = Array.from({ length: 3 }, (_, index) => ({
+      ...SESSION,
+      id: SESSION.id + index,
+      day: 22 + index,
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+        if (url.includes("/1.0/coach/programs/edit/")) {
+          return json({ programWorkouts: sessions });
+        }
+        return json({});
+      }),
+    );
+
+    const store = new ProgrammingStore(makeD1Warehouse(env.TH_DB), client(), 7);
+    await store.syncCalendar(111, "Prog A");
+    expect(await store.getProgramSessions(111, 2)).toHaveLength(2);
+  });
 });
 
 describe("MessagingStore", () => {
@@ -328,5 +350,33 @@ describe("MessagingStore", () => {
         query.toLowerCase().startsWith('insert into "message_comment"'),
       ),
     ).toHaveLength(4);
+  });
+
+  it("bounds stored conversation lists", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+        if (url.includes("/comments")) return json([]);
+        if (url.includes("/v5/messaging/streams")) {
+          return json({
+            teams: Array.from({ length: 3 }, (_, index) => ({
+              id: 800 + index,
+              title: `Team ${index}`,
+              teamId: index,
+              lastViewed: index,
+            })),
+            athletes: [],
+            programs: [],
+            coaches: [],
+          });
+        }
+        return json({});
+      }),
+    );
+
+    const store = new MessagingStore(makeD1Warehouse(env.TH_DB), client(), 7);
+    await store.syncAll();
+    expect(await store.streams(2)).toHaveLength(2);
   });
 });
