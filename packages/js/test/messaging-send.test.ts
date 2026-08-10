@@ -80,20 +80,26 @@ describe("readLive / deleteComment", () => {
   });
 
   it("passes a comment cursor upstream for incremental reads", async () => {
-    let requestedUrl = "";
+    const requestedUrls: string[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
         if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
-        requestedUrl = url;
-        return json([{ id: 100 }, { id: 101 }, { id: 102 }]);
+        requestedUrls.push(url);
+        return url.includes("lastCommentId=99")
+          ? json([{ id: 100 }, { id: 101 }, { id: 102 }])
+          : json([{ id: 102 }]);
       }),
     );
 
-    const comments = await readLive(new TrainHeroicClient("a@b.com", "pw"), 700, 2, 99);
+    const client = new TrainHeroicClient("a@b.com", "pw");
+    const firstPage = await readLive(client, 700, 2, 99);
+    const secondPage = await readLive(client, 700, 2, 101);
 
-    expect(requestedUrl).toContain("lastCommentId=99");
-    expect(comments).toEqual([{ id: 100 }, { id: 101 }, { id: 102 }]);
+    expect(requestedUrls[0]).toContain("lastCommentId=99");
+    expect(requestedUrls[1]).toContain("lastCommentId=101");
+    expect(firstPage).toEqual([{ id: 100 }, { id: 101 }]);
+    expect(secondPage).toEqual([{ id: 102 }]);
   });
 
   it("issues a DELETE to the comment path", async () => {

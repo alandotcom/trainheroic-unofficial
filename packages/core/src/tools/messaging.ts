@@ -43,7 +43,8 @@ function registerReads(server: McpServer, ctx: ToolContext): void {
       title: "Read messages (live)",
       description:
         "Comments in a stream, live from the API. Pass `afterCommentId` to fetch only newer " +
-        "comments upstream; cursor reads return every unseen comment so none are skipped. " +
+        "comments upstream; cursor reads return the oldest unseen comments first, bounded by " +
+        "`limit`, so advance with the last returned comment ID to continue without gaps. " +
         "Without it, the stream is fetched whole, then trimmed to `limit` (default 20). Each " +
         "comment's `isAuthor` is true when the logged-in " +
         "user sent it — to answer 'did an athlete message me', look for comments with " +
