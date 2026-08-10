@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/eval
 
+## 2.1.2
+
+### Patch Changes
+
+- Updated dependencies [c8914cf]
+  - @trainheroic-unofficial/js@2.1.2
+  - @trainheroic-unofficial/dto@2.1.2
+
 ## 2.1.1
 
 ### Patch Changes
