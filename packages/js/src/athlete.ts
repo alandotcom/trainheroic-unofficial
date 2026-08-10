@@ -118,8 +118,9 @@ export async function fetchRosterActivity(
 ): Promise<RosterActivityRow[]> {
   const rows: RosterActivityRow[] = [];
   const concurrency = 6;
-  for (let i = 0; i < athleteIds.length; i += concurrency) {
-    const chunk = athleteIds.slice(i, i + concurrency);
+  const uniqueAthleteIds = [...new Set(athleteIds)];
+  for (let i = 0; i < uniqueAthleteIds.length; i += concurrency) {
+    const chunk = uniqueAthleteIds.slice(i, i + concurrency);
     const settled = await Promise.all(
       chunk.map(async (id) => {
         try {

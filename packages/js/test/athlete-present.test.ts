@@ -278,6 +278,22 @@ describe("fetchRosterActivity", () => {
     expect(out[2]?.lastLoggedDate).toBeNull();
     expect(out[2]?.sessionsCount).toBe(0);
   });
+
+  it("fetches a duplicate athlete id only once", async () => {
+    const requestedIds: number[] = [];
+    const countingClient = {
+      request: async (_method: string, path: string) => {
+        const id = Number(/user_id=(\d+)/.exec(path)?.[1]);
+        requestedIds.push(id);
+        return { status: 200, ok: true, data: fixtures[id] };
+      },
+    } as unknown as TrainHeroicClient;
+
+    const out = await fetchRosterActivity(countingClient, [11, 10, 11, 10]);
+
+    expect(requestedIds).toEqual([11, 10]);
+    expect(out.map((row) => row.athleteId)).toEqual([10, 11]);
+  });
 });
 
 describe("presentCoachAthleteTraining", () => {
