@@ -5,6 +5,7 @@ import schema2 from "../../db/migrations/0002_warehouse.sql?raw";
 import { MessagingStore, ProgrammingStore } from "@trainheroic-unofficial/db";
 import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
+import { observeD1Queries } from "./d1-query-observer";
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -237,26 +238,14 @@ describe("MessagingStore", () => {
       }),
     );
 
-    let cursorReads = 0;
-    const warehouse = makeD1Warehouse(env.TH_DB, {
-      instrument: (d1) =>
-        new Proxy(d1, {
-          get(target, property) {
-            if (property === "prepare") {
-              return (query: string) => {
-                if (query.toLowerCase().includes('from "sync_state"')) cursorReads += 1;
-                return target.prepare(query);
-              };
-            }
-            const value = Reflect.get(target, property, target) as unknown;
-            return typeof value === "function" ? value.bind(target) : value;
-          },
-        }),
-    });
+    const observed = observeD1Queries(env.TH_DB);
+    const warehouse = makeD1Warehouse(observed.database);
 
     const result = await new MessagingStore(warehouse, client(), 7).syncAll();
 
     expect(result).toHaveLength(20);
-    expect(cursorReads).toBe(1);
+    expect(
+      observed.queries.filter((query) => query.toLowerCase().includes('from "sync_state"')),
+    ).toHaveLength(1);
   });
 });
