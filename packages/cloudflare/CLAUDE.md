@@ -59,9 +59,12 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   tool layer stays Sentry-agnostic.
 - `src/sentry.ts`: the shared Sentry config (`sentryOptions(env)`) used by `withSentry` (the
   handler in `index.ts`). Sends the error + user email, aggregate metrics, and traces
-  (`SENTRY_TRACES_SAMPLE_RATE` var, default 1). Without MCP protocol sessions, traces and
-  errors correlate on `mcp.session` = `user:<thUserId>` (opaque numeric id, stamped in the MCP
-  factory and tool-metrics). D1 queries are traced separately via
+  (`SENTRY_TRACES_SAMPLE_RATE` var, default 1). `instrumentMcpServer` applies Sentry's official
+  MCP protocol instrumentation with tool inputs and outputs disabled; `tool-metrics.ts` adds the
+  app-specific tool span, aggregate metrics, and one privacy-safe structured log inside it. Logs
+  use explicit `Sentry.logger` calls rather than blanket console capture. Without MCP protocol
+  sessions, traces, logs, and errors correlate on `mcp.session` = `user:<thUserId>` (opaque numeric
+  id, stamped in the MCP factory and tool-metrics). D1 queries are traced separately via
   `Sentry.instrumentD1WithSentry`, applied once inside `makeDb` (`store/schema.ts`).
 - `migrations/`: the D1 schema, applied in order.
 

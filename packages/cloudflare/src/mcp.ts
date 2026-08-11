@@ -18,7 +18,12 @@ import { registerAthleteSyncTools } from "./tools/athlete-sync";
 import { registerFeedbackTool } from "./tools/feedback";
 import { registerSyncTools } from "./tools/sync";
 import { instrumentToolMetrics } from "./tool-metrics";
-import { mcpUserKey, tagMcpUser, trainHeroicHttpErrorReporter } from "./sentry";
+import {
+  instrumentMcpServer,
+  mcpUserKey,
+  tagMcpUser,
+  trainHeroicHttpErrorReporter,
+} from "./sentry";
 
 /** Path variants exposed by the Worker. `/mcp` is role-aware; the others scope to one surface. */
 export type McpVariant = "full" | "coach" | "athlete";
@@ -133,9 +138,11 @@ export function buildServer(variant: McpVariant, props: Props): McpServer {
   Sentry.setUser({ email: props.email });
   tagMcpUser(correlationId);
 
-  const server = new McpServer(
-    { name: "trainheroic", version: pkg.version },
-    { instructions: SERVER_INSTRUCTIONS },
+  const server = instrumentMcpServer(
+    new McpServer(
+      { name: "trainheroic", version: pkg.version },
+      { instructions: SERVER_INSTRUCTIONS },
+    ),
   );
 
   const metrics = instrumentToolMetrics(server, correlationId);

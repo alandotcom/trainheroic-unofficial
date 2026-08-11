@@ -4,6 +4,9 @@ import { TrainHeroicHttpError } from "@trainheroic-unofficial/js";
 const sentry = vi.hoisted(() => ({
   captureException: vi.fn(),
   setUser: vi.fn(),
+  wrapMcpServerWithSentry: vi.fn(
+    (server: object, _options?: { recordInputs?: boolean; recordOutputs?: boolean }) => server,
+  ),
 }));
 
 vi.mock("@sentry/cloudflare", () => ({
@@ -13,9 +16,14 @@ vi.mock("@sentry/cloudflare", () => ({
   setTag: vi.fn(),
   withScope: (fn: (scope: { setUser: (user: unknown) => void }) => unknown) =>
     fn({ setUser: sentry.setUser }),
+  wrapMcpServerWithSentry: (
+    server: object,
+    options?: { recordInputs?: boolean; recordOutputs?: boolean },
+  ) => sentry.wrapMcpServerWithSentry(server, options),
 }));
 
 import {
+  instrumentMcpServer,
   oauthProviderErrorReporter,
   reportOAuthInternalError,
   trainHeroicHttpErrorReporter,
@@ -25,6 +33,19 @@ import {
 afterEach(() => {
   sentry.captureException.mockReset();
   sentry.setUser.mockReset();
+  sentry.wrapMcpServerWithSentry.mockClear();
+});
+
+describe("MCP Sentry instrumentation", () => {
+  it("uses the official MCP wrapper without recording tool inputs or outputs", () => {
+    const server = {};
+
+    expect(instrumentMcpServer(server)).toBe(server);
+    expect(sentry.wrapMcpServerWithSentry).toHaveBeenCalledWith(server, {
+      recordInputs: false,
+      recordOutputs: false,
+    });
+  });
 });
 
 describe("TrainHeroic Sentry reporters", () => {

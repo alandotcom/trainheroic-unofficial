@@ -24,11 +24,15 @@ type OAuthInternalError = {
  *   - `httpServerIntegration({ maxRequestBodySize: "none" })` disables request-body capture, so
  *     the login POST (which carries the TrainHeroic password) can never reach Sentry. Listing the
  *     integration overrides the default one of the same name rather than adding a second, which
- *     is what makes this effective. This is the v10 lever; the newer `dataCollection.httpBodies`
- *     docs do not apply to this version.
- *   - Tracing is on (`tracesSampleRate`), so each request emits a span and every tool call runs
- *     inside its own `mcp.tool/<name>` span (tool-metrics.ts). Without MCP protocol sessions,
- *     traces correlate on `mcp.session` = `user:<thUserId>` (opaque numeric id, not email).
+ *     is what makes this effective.
+ *   - Tracing is on (`tracesSampleRate`). Sentry's MCP wrapper emits the standard protocol spans,
+ *     while every tool call also runs inside its aggregate-metrics `mcp.tool/<name>` span
+ *     (tool-metrics.ts). MCP inputs and outputs are explicitly disabled below. Without protocol
+ *     sessions, traces correlate on `mcp.session` = `user:<thUserId>` (opaque numeric id, not
+ *     email).
+ *   - Logs are enabled, but console capture is not. `tool-metrics.ts` emits one structured,
+ *     trace-linked log per tool invocation from an explicit allowlist of non-PII attributes;
+ *     arguments, results, raw errors, and console fallback content never enter Sentry Logs.
  *   - The email is attached explicitly via `Sentry.setUser` in the MCP factory, and `beforeSend`
  *     clamps `event.user` down to just the email so nothing else (id, username, geo) leaks. Note
  *     `beforeSend` does NOT run on `type: "feedback"` events, so the `report_feedback` path
@@ -48,6 +52,7 @@ export function sentryOptions(env: Env): CloudflareOptions {
     dsn: env.SENTRY_DSN,
     release: env.SENTRY_RELEASE,
     sendDefaultPii: false,
+    enableLogs: true,
     tracesSampleRate: tracesSampleRate(env),
     integrations: [Sentry.httpServerIntegration({ maxRequestBodySize: "none" })],
     beforeSend(event) {
@@ -58,6 +63,18 @@ export function sentryOptions(env: Env): CloudflareOptions {
       return event;
     },
   };
+}
+
+/**
+ * Add Sentry's protocol-level MCP spans while preserving this Worker's privacy boundary.
+ * Tool arguments can contain credentials or athlete data and tool results can contain the same,
+ * so neither belongs in Sentry even when SDK-wide data-collection defaults change later.
+ */
+export function instrumentMcpServer<Server extends object>(server: Server): Server {
+  return Sentry.wrapMcpServerWithSentry(server, {
+    recordInputs: false,
+    recordOutputs: false,
+  });
 }
 
 /** Opaque correlation key for a signed-in user (`user:<thUserId>`). */

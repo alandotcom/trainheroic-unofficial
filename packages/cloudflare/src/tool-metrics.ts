@@ -99,16 +99,30 @@ function wrapHandler(
     // Durations are approximate: Workers advances `Date.now()` only across I/O, which every
     // TrainHeroic-backed tool performs, so the wall-clock spent waiting on the API is captured.
     const start = Date.now();
-    const recordMetrics = (status: ToolOutcome): void => {
+    const recordMetrics = (status: ToolOutcome, ms: number): void => {
       // An elicitation round has not run the tool, so it belongs in neither the call count nor
       // the duration distribution. Its span still records the outcome (below).
       if (status === "input_required") return;
-      const ms = Date.now() - start;
       Sentry.metrics.count("mcp.tool.call", 1, { attributes: { tool: name, surface, status } });
       Sentry.metrics.distribution("mcp.tool.duration_ms", ms, {
         unit: "millisecond",
         attributes: { tool: name, surface },
       });
+    };
+
+    const recordLog = (status: ToolOutcome, ms: number): void => {
+      // One wide event per invocation: enough to filter and correlate without ever serializing
+      // the handler arguments or result, both of which can contain credentials or athlete data.
+      const attributes = {
+        event: "mcp_tool_completed",
+        mcp_tool_name: name,
+        mcp_surface: surface,
+        mcp_status: status,
+        mcp_session: correlationId,
+        duration_ms: ms,
+      };
+      if (status === "error") Sentry.logger.warn("MCP tool invocation completed", attributes);
+      else Sentry.logger.info("MCP tool invocation completed", attributes);
     };
 
     return Sentry.startSpan(
@@ -119,7 +133,9 @@ function wrapHandler(
       },
       (span): unknown => {
         const settle = (status: ToolOutcome): void => {
-          recordMetrics(status);
+          const ms = Date.now() - start;
+          recordMetrics(status, ms);
+          recordLog(status, ms);
           span.setAttribute("mcp.status", status);
           // A thrown/rejected handler already trips Sentry's error status; mark the in-band
           // `{ isError: true }` convention too so both failure modes show red in the waterfall.

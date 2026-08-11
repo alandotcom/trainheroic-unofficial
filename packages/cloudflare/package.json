@@ -18,7 +18,7 @@
     "@cfworker/json-schema": "^4.1.1",
     "@cloudflare/workers-oauth-provider": "0.10.2",
     "@modelcontextprotocol/server": "2.0.0",
-    "@sentry/cloudflare": "^10.69.0",
+    "@sentry/cloudflare": "^10.70.0",
     "@trainheroic-unofficial/core": "workspace:*",
     "@trainheroic-unofficial/db": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
