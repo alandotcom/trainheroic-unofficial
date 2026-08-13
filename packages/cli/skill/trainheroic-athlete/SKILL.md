@@ -65,6 +65,7 @@ on a 401/403. Start with `$TH athlete whoami` to confirm auth and get your `id`.
 | Download all historicals to JSON      | `$TH athlete export [--out dir] [--full]`                                        |
 | Log ids for a scheduled workout       | `$TH athlete log-targets --start Y-M-D --end Y-M-D [--program <title>]`          |
 | Log completed set results (gated)     | `$TH athlete log-set --date Y-M-D --set <id> ... --yes`                          |
+| Set planned reps/weight (gated)       | `$TH athlete prescribe-set --date Y-M-D --set <id> ... --yes`                    |
 | Log an off-plan session (gated)       | `$TH athlete log-session --date Y-M-D '[{"exerciseId":N,"sets":[...]}]' --yes`   |
 | Swap a prescribed exercise (gated)    | `$TH athlete swap-exercise --set-exercise <sweId> --exercise <exerciseId> --yes` |
 | Remove a stray personal session       | `$TH athlete session-remove --id <programWorkoutId> --date Y-M-D --yes`          |
@@ -130,6 +131,21 @@ $TH athlete log-set --date 2026-06-01 --set 1593305783 --yes \
 `--yes` is required. Confirm with the user before running it, and re-read the workout to
 check the result landed as intended. `param1`/`param2` are the entered values by entry slot
 (check the exercise's positional units first).
+
+### Setting planned weight without logging
+
+Use `$TH athlete prescribe-set` when you know the target reps or weight but have not performed the
+set. It writes the prescription with every completion flag clear, so the workout remains open and
+nothing is added to exercise history:
+
+```bash
+$TH athlete prescribe-set --date 2026-06-01 --set 1593305783 --yes \
+  '[{"savedWorkoutSetExerciseId": 2712369448, "sets": [{"param1": 5, "param2": 225}]}]'
+```
+
+The write replaces that exercise's whole prescription. Include every planned set and every value
+you want to keep; an omitted parameter is cleared. Get both ids from `athlete log-targets`, just as
+for `log-set`.
 
 ### Logging an off-plan session
 

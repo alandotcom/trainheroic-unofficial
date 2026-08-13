@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   athleteProfileSummarySchema,
   athletePrefsSchema,
+  athletePrescribeSetArgsSchema,
   athleteUserSchema,
   athleteWorkingMaxListSchema,
   athleteWorkoutRangeArgsSchema,
@@ -76,6 +77,7 @@ describe("athlete input schemas", () => {
     };
 
     expect(logSetArgsSchema.safeParse(input).success).toBe(false);
+    expect(athletePrescribeSetArgsSchema.safeParse(input).success).toBe(false);
     expect(coachPrescribeSetArgsSchema.safeParse({ ...input, athleteId: 1 }).success).toBe(false);
   });
 
@@ -95,13 +97,14 @@ describe("athlete input schemas", () => {
   });
 
   it("prescribe args drop the log-only slot field (full-replacement write has no slot)", () => {
-    const parsed = coachPrescribeSetArgsSchema.safeParse({
-      athleteId: 1,
+    const input = {
       date: "2026-06-01",
       savedWorkoutSetId: 123,
       results: [{ savedWorkoutSetExerciseId: 9, sets: [{ slot: 4, param1: 5, param2: 225 }] }],
-    });
+    };
+    const parsed = athletePrescribeSetArgsSchema.safeParse(input);
     expect(parsed.success).toBe(true);
     expect(parsed.data?.results[0]?.sets[0]).not.toHaveProperty("slot");
+    expect(coachPrescribeSetArgsSchema.safeParse({ ...input, athleteId: 1 }).success).toBe(true);
   });
 });

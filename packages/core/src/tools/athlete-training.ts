@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
+  athletePrescribeSetArgsSchema,
   athleteSessionRemoveArgsSchema,
   dateString,
   logSessionArgsSchema,
@@ -29,6 +30,7 @@ import {
   presentAthleteWorkouts,
   presentExerciseHistory,
   presentLogTargets,
+  prescribeAthleteSet,
   removePersonalWorkout,
   searchExerciseHistory,
   selectWorkouts,
@@ -595,6 +597,42 @@ function registerLogTool(server: McpServer, ctx: AthleteContext): void {
           await logAthleteSet(ctx.client, {
             date,
             savedWorkoutSetId: toId(savedWorkoutSetId),
+            results: toSetResults(results),
+          }),
+        );
+      }),
+  );
+
+  server.registerTool(
+    "athlete_prescribe_set",
+    {
+      title: "Set your prescribed reps/weight without logging",
+      description:
+        "Athlete-facing write: set the planned reps and/or weight for one of your scheduled " +
+        "workout sets WITHOUT recording it as performed. Use this when you know the target load " +
+        "before training but have not completed the set yet. The set stays open and nothing is " +
+        "added to exercise history. param1 is reps and param2 is weight; pass one sets[] entry per " +
+        "planned set. This write REPLACES the selected exercise's whole prescription, so include " +
+        "every planned set and every value you want to keep; an omitted param is cleared. Get " +
+        "savedWorkoutSetId + savedWorkoutSetExerciseId from athlete_log_targets. To record actual " +
+        "completed results, use athlete_log_set instead. Requires confirmation (elicitation or " +
+        "confirm:true).",
+      inputSchema: { ...athletePrescribeSetArgsSchema.shape, confirm: z.boolean().optional() },
+      annotations: DESTRUCTIVE,
+    },
+    ({ date, savedWorkoutSetId, results, confirm }, extra) =>
+      attempt(async () => {
+        const id = toId(savedWorkoutSetId);
+        const blocked = confirmGate(
+          extra,
+          `Set prescribed values on your saved workout set ${id} on ${date}? This changes your planned reps/weight but does not log the set as completed.`,
+          confirm,
+        );
+        if (blocked) return blocked;
+        return jsonResult(
+          await prescribeAthleteSet(ctx.client, {
+            date,
+            savedWorkoutSetId: id,
             results: toSetResults(results),
           }),
         );

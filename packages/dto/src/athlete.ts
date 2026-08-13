@@ -255,19 +255,21 @@ export const coachLogSetArgsSchema = logSetArgsSchema.extend({ athleteId: idArgS
 export type CoachLogSetArgs = z.infer<typeof coachLogSetArgsSchema>;
 
 /**
- * Args for the coach prescription-override write. Like {@link coachLogSetArgsSchema}
- * (athleteId + date + savedWorkoutSetId + per-exercise `sets`), but the values are prescribed
- * targets (param1 = reps, param2 = weight) written to the athlete's plan without marking the set
- * performed. The write replaces this athlete's whole prescription for the set, so its sets are
- * positional and sequential by definition: it deliberately omits the log path's `slot` field (a
- * sparse, slot-targeted prescription has no meaning here) by building its results off
- * {@link loggedSetSchema} rather than {@link loggedSetWithSlotSchema}.
+ * Args for changing the logged-in athlete's prescribed targets without marking the set performed.
+ * The write replaces the exercise's whole prescription, so its sets are positional and sequential
+ * by definition: it deliberately omits the log path's `slot` field because a sparse prescription
+ * has no meaning here.
  */
-export const coachPrescribeSetArgsSchema = z.object({
+export const athletePrescribeSetArgsSchema = z.object({
   date: dateString,
   savedWorkoutSetId: idArgSchema,
-  athleteId: idArgSchema,
   results: prescribedExerciseResultsSchema,
+});
+export type AthletePrescribeSetArgs = z.infer<typeof athletePrescribeSetArgsSchema>;
+
+/** Coach variant of {@link athletePrescribeSetArgsSchema}, with the roster athlete to update. */
+export const coachPrescribeSetArgsSchema = athletePrescribeSetArgsSchema.extend({
+  athleteId: idArgSchema,
 });
 export type CoachPrescribeSetArgs = z.infer<typeof coachPrescribeSetArgsSchema>;
 

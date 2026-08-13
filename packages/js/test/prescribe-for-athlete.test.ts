@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { prescribeForAthlete } from "../src/athlete-set-write";
+import { prescribeAthleteSet, prescribeForAthlete } from "../src/athlete-set-write";
 import { TrainHeroicClient } from "../src/client";
 
 function json(obj: unknown, status = 200): Response {
@@ -67,6 +67,48 @@ function stubFetch(): { puts: Array<{ url: string; body: unknown }> } {
   );
   return { puts };
 }
+
+/** Stub fetch for the logged-in athlete range read + capture every PUT. */
+function stubAthleteFetch(): { puts: Array<{ url: string; body: unknown }> } {
+  const puts: Array<{ url: string; body: unknown }> = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+      if (url.includes("/athlete/programworkout/range")) return json(dayWithSet());
+      if (init?.method === "PUT") {
+        puts.push({ url, body: init.body ? JSON.parse(String(init.body)) : undefined });
+        return json({ ok: 1 });
+      }
+      return json({});
+    }),
+  );
+  return { puts };
+}
+
+describe("prescribeAthleteSet", () => {
+  it("updates the logged-in athlete's prescribed weight without completing the set", async () => {
+    const { puts } = stubAthleteFetch();
+
+    const result = await prescribeAthleteSet(new TrainHeroicClient("a@b.com", "pw"), {
+      date: "2026-06-21",
+      savedWorkoutSetId: SET_ID,
+      results: [{ savedWorkoutSetExerciseId: SWE_ID, sets: [{ param2: 225 }] }],
+    });
+
+    expect(result).toEqual({ savedWorkoutSetId: SET_ID, exercisesPrescribed: 1 });
+    expect(puts).toHaveLength(1);
+    expect(puts[0]?.url).toContain(`/athlete/savedworkoutsetexercise/${SWE_ID}`);
+    expect(puts.some((p) => p.url.includes("/savedworkoutset/"))).toBe(false);
+
+    const body = puts[0]?.body as Record<string, unknown>;
+    expect(body.completed).toBe(0);
+    expect(body.param_1_made).toBe(0);
+    expect(body.param_1_data_1).toBe("");
+    expect(body.param_2_data_1).toBe("225");
+    expect(body).not.toHaveProperty("athleteId");
+  });
+});
 
 describe("prescribeForAthlete", () => {
   it("writes one exercise PUT and does NOT mark the set completed", async () => {

@@ -87,7 +87,8 @@ account) expose:
 - Live reads: `athlete_whoami`, `athlete_profile`, `athlete_prefs`, `athlete_workouts`,
   `athlete_exercises`, `athlete_exercise_history`, `athlete_personal_records`,
   `athlete_exercise_stats`, `athlete_working_maxes`, `athlete_leaderboard`.
-- Gated write: `athlete_log_set` (elicitation or `confirm:true`).
+- Gated writes include `athlete_log_set` for performed results and `athlete_prescribe_set` for
+  planned reps/weight that must not mark a set completed (elicitation or `confirm:true`).
 
 ## Warehouse tools (hosted worker only, D1-backed)
 

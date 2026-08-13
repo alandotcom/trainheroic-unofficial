@@ -4,7 +4,7 @@ Local single-user [MCP](https://modelcontextprotocol.io) server for a TrainHeroi
 
 It reads two required environment variables, `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD` (your existing TrainHeroic login). These are real credentials in plaintext; the config below puts them in a file or shell history, so treat them as secrets.
 
-It exposes the logged-in athlete's own training: scheduled and completed workouts, per-exercise history, PRs (personal records), working maxes, and lifetime totals, plus one confirmation-gated write that logs a completed set. Coaching capabilities (rosters, teams, programs, messaging) are available through [`@trainheroic-unofficial/coach-mcp`](../coach-mcp). A hosted version that holds credentials server-side behind OAuth and gives a coach login both the athlete and coaching tools is described in the [root README](../../README.md).
+It exposes the logged-in athlete's own training: scheduled and completed workouts, per-exercise history, PRs (personal records), working maxes, lifetime totals, and confirmation-gated training writes. Coaching capabilities (rosters, teams, programs, messaging) are available through [`@trainheroic-unofficial/coach-mcp`](../coach-mcp). A hosted version that holds credentials server-side behind OAuth and gives a coach login both the athlete and coaching tools is described in the [root README](../../README.md).
 
 ---
 
@@ -48,8 +48,8 @@ A coach account works here too: a TrainHeroic coach account also has its own ath
 
 ## Tools
 
-All read-only except `athlete_log_set`. The assistant fills in each tool's parameters (dates
-are `YYYY-MM-DD`); your MCP client shows the full schema for each.
+The assistant fills in each tool's parameters (dates are `YYYY-MM-DD`); your MCP client shows the
+full schema for each. Writes are confirmation-gated.
 
 - `athlete_whoami`: identity (id, name, roles)
 - `athlete_profile`: lifetime totals + profile
@@ -67,6 +67,9 @@ are `YYYY-MM-DD`); your MCP client shows the full schema for each.
 - `athlete_log_set`: logs completed set results to your training log. This is a real write
   that your coach can see. It confirms before running: the server asks the client to confirm,
   falling back to an explicit `confirm: true` argument when the client can't prompt.
+- `athlete_prescribe_set`: sets your planned reps and/or weight without recording the set as
+  completed. It replaces the selected exercise's whole prescription, so every planned set and
+  value to keep must be included.
 
 ---
 
