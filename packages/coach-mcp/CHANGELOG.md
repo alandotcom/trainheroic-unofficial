@@ -1,5 +1,22 @@
 # @trainheroic-unofficial/coach-mcp
 
+## 3.1.0
+
+### Minor Changes
+
+- 77fd0ec: feat(athlete): set planned reps or weight without logging the set
+
+  Adds `prescribeAthleteSet` to the SDK, `athlete_prescribe_set` to the MCP athlete surface, and
+  `athlete prescribe-set` to the CLI. The write updates the logged-in athlete's prescription while
+  leaving every performed/completion flag clear, so an assistant can record a target load before the
+  workout without falsely adding a completed set to exercise history.
+
+### Patch Changes
+
+- Updated dependencies [77fd0ec]
+  - @trainheroic-unofficial/js@3.1.0
+  - @trainheroic-unofficial/core@3.1.0
+
 ## 3.0.1
 
 ### Patch Changes
