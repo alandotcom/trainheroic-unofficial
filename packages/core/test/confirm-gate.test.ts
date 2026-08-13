@@ -96,6 +96,11 @@ const GATED: Array<{ reg: Register; name: string; args: Record<string, unknown> 
   },
   {
     reg: registerAthleteTrainingTools,
+    name: "athlete_prescribe_set",
+    args: { date: "2026-06-21", savedWorkoutSetId: 2, results: [] },
+  },
+  {
+    reg: registerAthleteTrainingTools,
     name: "athlete_swap_exercise",
     args: { savedWorkoutSetExerciseId: 1, exerciseId: 2 },
   },

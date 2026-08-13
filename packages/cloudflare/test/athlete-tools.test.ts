@@ -32,6 +32,7 @@ describe("athlete tool registration (role-aware surface)", () => {
         "athlete_exercise_history",
         "athlete_working_maxes",
         "athlete_log_set",
+        "athlete_prescribe_set",
       ]),
     );
     // No coaching tools leak into the athlete surface.

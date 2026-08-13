@@ -239,6 +239,30 @@ export async function logAthleteSet(
 }
 
 /**
+ * Set the logged-in athlete's prescribed reps/weight for one saved workout set WITHOUT marking it
+ * performed. This is the athlete-side equivalent of editing target values in the app: it writes
+ * `param_N_data_M` with every made/completed flag cleared and skips the set-completion PUT.
+ *
+ * The write replaces the selected exercise's whole prescription, so callers must pass every set
+ * they want to keep. An omitted param is cleared rather than preserved.
+ */
+export async function prescribeAthleteSet(
+  client: TrainHeroicClient,
+  args: { date: string; savedWorkoutSetId: number; results: readonly SetResult[] },
+): Promise<{ savedWorkoutSetId: number; exercisesPrescribed: number }> {
+  const workouts = await fetchAthleteWorkouts(client, args.date, args.date);
+  const r = await writeSetResults(
+    client,
+    { role: "athlete" },
+    workouts,
+    args.savedWorkoutSetId,
+    args.results,
+    "prescribe",
+  );
+  return { savedWorkoutSetId: r.savedWorkoutSetId, exercisesPrescribed: r.exercisesWritten };
+}
+
+/**
  * Coach "Log for Athlete": record set results for a roster athlete on their behalf, via the
  * coach surface — `PUT /1.0/coach/savedworkoutsetexercise/{id}/{athleteId}` (the data write)
  * then `PUT /1.0/coach/savedworkoutset/{id}/{athleteId}` (mark complete). Same two-step
@@ -376,9 +400,10 @@ export async function swapAthleteExercise(
 type LogTarget = { role: "athlete" } | { role: "coach"; athleteId: number };
 
 /**
- * Shared set-write behind {@link logAthleteSet}, {@link logForAthlete}, and
- * {@link prescribeForAthlete}. `target` selects the surface: `athlete` writes `/1.0/athlete/...`;
- * `coach` writes `/1.0/coach/...{athleteId}` and stamps `athleteId` into each body.
+ * Shared set-write behind {@link logAthleteSet}, {@link prescribeAthleteSet},
+ * {@link logForAthlete}, and {@link prescribeForAthlete}. `target` selects the surface: `athlete`
+ * writes `/1.0/athlete/...`; `coach` writes `/1.0/coach/...{athleteId}` and stamps `athleteId` into
+ * each body.
  *
  * Step 1 PUTs each exercise's per-set values to its own endpoint (the only path that actually
  * stores reps and weight). `mode` decides what those values mean: `"log"` records them as a

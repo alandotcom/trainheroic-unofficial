@@ -6,6 +6,7 @@ import process from "node:process";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import type { ZodType } from "zod";
 import {
+  athletePrescribeSetArgsSchema,
   coachLogSessionArgsSchema,
   athleteSessionRemoveArgsSchema,
   coachLogSetArgsSchema,
@@ -54,6 +55,7 @@ import {
   logAthleteSet,
   logForAthlete,
   logSessionForAthlete,
+  prescribeAthleteSet,
   prescribeForAthlete,
   toSetResults,
   type SessionExercise,
@@ -195,6 +197,7 @@ Athlete — the logged-in user's own training (a coach account works too):
   athlete leaderboard <workoutId> [--page N] [--page-size N] [--gender N]
   athlete export [--out dir] [--start Y-M-D] [--end Y-M-D] [--full]
   athlete log-set --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes   (logs to a PRESCRIBED workout on that date; ids from 'athlete log-targets'; each set fills the next position, add "slot":K to target the K-th; a partial log records only what you send)
+  athlete prescribe-set --date Y-M-D --set <savedWorkoutSetId> <resultsJson>|--file f --yes   (sets your PLANNED reps/weight without logging completion; replaces the selected exercise's whole prescription, so pass every set/value to keep)
   athlete log-session --date Y-M-D <exercisesJson>|--file f --yes   (log OFF-PLAN work with no prescription — creates/reuses a personal session for the date, then logs it; exerciseIds from 'athlete exercises')
   athlete session-remove --id <programWorkoutId> --date Y-M-D --yes   (delete a stray PERSONAL session; the id is the session 'id' from 'athlete workouts')
   athlete swap-exercise --set-exercise <savedWorkoutSetExerciseId> --exercise <exerciseId> --yes   (substitute one prescribed exercise in a COACH-SCHEDULED slot for a different one — your copy only; slot id from 'athlete log-targets', exerciseId from 'athlete exercises')
@@ -659,6 +662,41 @@ async function cmdAthleteLogSet(client: TrainHeroicClient, a: string[]): Promise
   );
 }
 
+const ATHLETE_PRESCRIBE_SET_USAGE =
+  "athlete prescribe-set --date Y-M-D --set <id> <resultsJson> --yes";
+
+async function cmdAthletePrescribeSet(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values, positionals } = parse(a, {
+    date: { type: "string" },
+    set: { type: "string" },
+    file: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const date = isoDate(
+    need(values.date as string | undefined, ATHLETE_PRESCRIBE_SET_USAGE),
+    "--date",
+  );
+  const savedWorkoutSetId = toInt(
+    need(values.set as string | undefined, ATHLETE_PRESCRIBE_SET_USAGE),
+    "--set",
+  );
+  const results = await jsonInput(positionals[0], values.file as string | undefined);
+  const args = validate(
+    athletePrescribeSetArgsSchema,
+    { date, savedWorkoutSetId, results },
+    "athlete prescribe-set args",
+  );
+  if (values.yes !== true)
+    fail(`changing the prescribed values for set ${savedWorkoutSetId} requires --yes.`);
+  return out(
+    await prescribeAthleteSet(client, {
+      date: args.date,
+      savedWorkoutSetId,
+      results: toSetResults(args.results),
+    }),
+  );
+}
+
 const LOG_SESSION_USAGE = "athlete log-session --date Y-M-D <exercisesJson>|--file f --yes";
 
 /** Map validated logSession exercises to the SDK's SessionExercise[] (ids coerced, slots trimmed). */
@@ -931,6 +969,8 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
       return cmdAthleteLogTargets(client, a);
     case "log-set":
       return cmdAthleteLogSet(client, a);
+    case "prescribe-set":
+      return cmdAthletePrescribeSet(client, a);
     case "log-session":
       return cmdAthleteLogSession(client, a);
     case "session-remove":
@@ -939,7 +979,7 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
       return cmdAthleteSwapExercise(client, a);
     default:
       return fail(
-        "usage: trainheroic athlete <whoami|profile|prefs|workouts|log-targets|exercises|history|prs|stats|working-maxes|leaderboard|export|log-set|log-session|session-remove|swap-exercise>",
+        "usage: trainheroic athlete <whoami|profile|prefs|workouts|log-targets|exercises|history|prs|stats|working-maxes|leaderboard|export|log-set|prescribe-set|log-session|session-remove|swap-exercise>",
       );
   }
 }

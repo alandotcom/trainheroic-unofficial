@@ -48,6 +48,7 @@ export const ATHLETE_COMMANDS: Record<string, string> = {
   "athlete leaderboard": "athlete_leaderboard",
   "athlete log-targets": "athlete_log_targets",
   "athlete log-set": "athlete_log_set",
+  "athlete prescribe-set": "athlete_prescribe_set",
   "athlete log-session": "athlete_log_session",
   "athlete session-remove": "athlete_session_remove",
   "athlete swap-exercise": "athlete_swap_exercise",

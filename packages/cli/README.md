@@ -84,7 +84,7 @@ trainheroic coach workout build --program 988 --date 2026-6-22 --file day.json -
   validation path on bad input.
 - Actions that touch an athlete or delete data require an explicit `--yes`:
   `coach workout publish`, `coach workout remove`, `coach exercise forget`,
-  `coach message send`, `coach message delete`, `athlete log-set`, and
+  `coach message send`, `coach message delete`, `athlete log-set`, `athlete prescribe-set`, and
   `coach workout build --publish`. (`coach workout build` alone creates a draft; `--publish`
   makes it visible to athletes, which is why that combination needs `--yes`.)
 - JSON input can be passed inline, with `--file <path>`, or piped on stdin. Inputs are
