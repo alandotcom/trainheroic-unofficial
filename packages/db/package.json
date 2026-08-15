@@ -35,7 +35,7 @@
   "dependencies": {
     "@trainheroic-unofficial/dto": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
-    "drizzle-orm": "1.0.0-rc.4"
+    "drizzle-orm": "1.0.0-rc.5-169397b"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
