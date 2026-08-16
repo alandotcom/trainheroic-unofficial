@@ -6,6 +6,7 @@ export * from "./tools/main-lifts";
 export * from "./tools/athlete-training";
 export * from "./tools/athletes";
 export * from "./tools/teams";
+export * from "./tools/programs";
 export * from "./tools/analytics";
 export * from "./tools/exercises";
 export * from "./tools/workout";

@@ -37,3 +37,18 @@ export const programWorkoutResponseSchema = z.looseObject({
 export const programsEditResponseSchema = z.looseObject({
   programWorkouts: z.array(programWorkoutResponseSchema).optional(),
 });
+
+/** A standalone program create response (container id + usable calendar/program id). */
+export const programCreateResponseSchema = z.looseObject({
+  id: intLike,
+  title: z.string(),
+  programId: intLike,
+  group_program: intLike,
+  type: intLike,
+  program: z
+    .looseObject({
+      id: intLike,
+      program_type: intLike,
+    })
+    .optional(),
+});

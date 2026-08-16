@@ -7,6 +7,7 @@ import { registerMainLiftTools } from "./main-lifts";
 import { registerMessagingTools } from "./messaging";
 import { registerReadTools } from "./reads";
 import { registerTeamTools } from "./teams";
+import { registerProgramTools } from "./programs";
 import { registerWorkoutTools } from "./workout";
 
 /** Register the full coach tool surface (roster, teams, programs, exercises, messaging). */
@@ -15,6 +16,7 @@ export function registerCoachTools(server: McpServer, ctx: ToolContext): void {
   registerMainLiftTools(server, ctx);
   registerAthleteTools(server, ctx);
   registerTeamTools(server, ctx);
+  registerProgramTools(server, ctx);
   registerAnalyticsTools(server, ctx);
   registerExerciseTools(server, ctx);
   registerWorkoutTools(server, ctx);

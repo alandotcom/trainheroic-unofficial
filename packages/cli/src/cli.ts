@@ -27,6 +27,7 @@ import {
   buildCommentPayload,
   collectAdvisories,
   copySession,
+  createProgram,
   definedProps,
   deleteComment,
   ExerciseLibrary,
@@ -69,6 +70,7 @@ import {
   presentCoachAthleteTraining,
   presentLogTargets,
   presentExerciseHistory,
+  PROGRAM_KINDS,
   publishSession,
   selectWorkouts,
   selectWorkoutsByProgram,
@@ -147,6 +149,7 @@ Coach — manage a roster (needs a coach account):
   coach athlete-restore --athletes <id,id,...>
 
   teams & join codes:
+  coach program-create --kind calendar|fixed --name "..."
   coach team-create --title "..."
   coach team-update --team <id> [--title "..."] [--group-program <id>]
   coach team-delete --team <id> --yes
@@ -1036,7 +1039,7 @@ async function cmdInstallSkill(): Promise<void> {
 }
 
 const COACH_USAGE =
-  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|team <id>|team-codes <id>|roster-activity|team-volume|athlete-training|athlete-lift-history|main-lift-prs|athlete-workouts|log-set|log-session|prescribe-set|swap-exercise|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|analytics-query|exercise|workout|message>";
+  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|program-create|team <id>|team-codes <id>|roster-activity|team-volume|athlete-training|athlete-lift-history|main-lift-prs|athlete-workouts|log-set|log-session|prescribe-set|swap-exercise|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|analytics-query|exercise|workout|message>";
 
 const COACH_LOG_SET_USAGE =
   "coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson> --yes";
@@ -1316,6 +1319,15 @@ async function cmdCoachTeamCreate(client: TrainHeroicClient, a: string[]): Promi
   return out(await mutate(client, "POST", "/1.0/coach/team/createWithTitleAndCode", { title }));
 }
 
+async function cmdCoachProgramCreate(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = 'coach program-create --kind calendar|fixed --name "..."';
+  const { values } = parse(a, { kind: { type: "string" }, name: { type: "string" } });
+  const kind = need(values.kind as string | undefined, usage);
+  const name = need(values.name as string | undefined, usage);
+  if (!(PROGRAM_KINDS as readonly string[]).includes(kind)) fail(usage);
+  return out(await createProgram(client, { kind: kind as (typeof PROGRAM_KINDS)[number], name }));
+}
+
 async function cmdCoachTeamUpdate(client: TrainHeroicClient, a: string[]): Promise<void> {
   const usage =
     'coach team-update --team <id> [--title "..."] [--group-program <id>]  (at least one of --title / --group-program)';
@@ -1588,6 +1600,8 @@ async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void
       return cmdCoachAthleteRestore(client, a);
     case "team-create":
       return cmdCoachTeamCreate(client, a);
+    case "program-create":
+      return cmdCoachProgramCreate(client, a);
     case "team-update":
       return cmdCoachTeamUpdate(client, a);
     case "team-delete":
