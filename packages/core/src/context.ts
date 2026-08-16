@@ -1,7 +1,7 @@
 import type { CallToolResult, InputRequiredResult } from "@modelcontextprotocol/server";
 import { idArgSchema } from "@trainheroic-unofficial/dto";
 import type { ExerciseIndex } from "@trainheroic-unofficial/js";
-import type { RequestOptions, TrainHeroicClient } from "@trainheroic-unofficial/js";
+import type { ClientResult, RequestOptions, TrainHeroicClient } from "@trainheroic-unofficial/js";
 
 /** What a tool handler may return: a finished result or an MRTR input round. */
 export type ToolHandlerResult = CallToolResult | InputRequiredResult;
@@ -208,6 +208,16 @@ export function errorResult(message: string): CallToolResult {
   return { isError: true, content: [{ type: "text", text: message }] };
 }
 
+/** Format an already-issued TrainHeroic response as a size-bounded tool result. */
+export function apiResponseResult(res: ClientResult, hint?: string): CallToolResult {
+  if (!res.ok) {
+    const raw = typeof res.data === "string" ? res.data : (JSON.stringify(res.data) ?? "");
+    const detail = hardCap(raw, resultBudget());
+    return errorResult(`TrainHeroic API error (HTTP ${res.status}): ${detail}`);
+  }
+  return jsonResult(res.data, { hint });
+}
+
 /** Issue a TrainHeroic request and format the outcome as a tool result. */
 export async function apiCall(
   ctx: ToolContext,
@@ -218,11 +228,6 @@ export async function apiCall(
 ): Promise<CallToolResult> {
   return attempt(async () => {
     const res = await ctx.client.request(method, path, options);
-    if (!res.ok) {
-      const raw = typeof res.data === "string" ? res.data : (JSON.stringify(res.data) ?? "");
-      const detail = hardCap(raw, resultBudget());
-      return errorResult(`TrainHeroic API error (HTTP ${res.status}): ${detail}`);
-    }
-    return jsonResult(res.data, { hint });
+    return apiResponseResult(res, hint);
   });
 }
