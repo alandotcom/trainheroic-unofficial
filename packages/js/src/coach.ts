@@ -3,8 +3,10 @@
 // single-request CRUD with no response-shaping logic (team create/delete, team-code,
 // archive/restore, session unpublish/save-as-template) is left to the callers' own
 // `request`/`apiCall`. Program creation lives here because its two returned ids have different
-// meanings. Team update lives here because re-pointing `group_program` requires a title (API 400
-// without one), so we may need a GET-then-PUT.
+// meanings. Program deletion lives here because `DELETE /v5/programs/{id}` 401s on a
+// list_programs container id and must use the underlying program id. Team update lives here
+// because re-pointing `group_program` requires a title (API 400 without one), so we may need a
+// GET-then-PUT.
 
 import { parseWorkoutDate, programCreateResponseSchema } from "@trainheroic-unofficial/dto";
 import type { TeamVolumeAthlete, TeamVolumeReport } from "@trainheroic-unofficial/dto";
@@ -80,6 +82,60 @@ export async function createProgram(
     requestedName,
     nameApplied: title === requestedName,
   };
+}
+
+export type DeletedProgram = {
+  /** Actual program id sent to `DELETE /v5/programs/{id}`. */
+  programId: number;
+  /** Container id when the caller passed a list_programs row id (otherwise null). */
+  containerId: number | null;
+};
+
+/**
+ * Delete a standalone program (`DELETE /v5/programs/{programId}`).
+ *
+ * The live API 401s when the path id is a list_programs container id. Pass either id: this
+ * resolves a container to its `group_program` first. Team calendars are not in that list; their
+ * program id is deleted as given. This is not idempotent against an unknown failure.
+ */
+export async function deleteProgram(
+  client: TrainHeroicClient,
+  programId: number,
+): Promise<DeletedProgram> {
+  if (!Number.isInteger(programId) || programId <= 0) {
+    throw new Error("Program id must be a positive integer.");
+  }
+
+  let targetId = programId;
+  let containerId: number | null = null;
+
+  const programs = await client.request<unknown>("GET", "/1.0/coach/programs");
+  if (programs.ok && Array.isArray(programs.data)) {
+    const asContainer = programs.data.find(
+      (item) => isRecord(item) && coerceInt(item.id) === programId,
+    );
+    if (isRecord(asContainer)) {
+      const resolved = coerceInt(asContainer.group_program);
+      if (resolved !== null) {
+        containerId = programId;
+        targetId = resolved;
+      }
+    } else {
+      const asProgram = programs.data.find(
+        (item) => isRecord(item) && coerceInt(item.group_program) === programId,
+      );
+      if (isRecord(asProgram)) containerId = coerceInt(asProgram.id);
+    }
+  }
+
+  const res = await client.request("DELETE", `/v5/programs/${targetId}`, {
+    expectedStatuses: [401, 403, 404],
+  });
+  if (!res.ok) {
+    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    throw new Error(`Program delete failed (HTTP ${res.status}): ${detail}`);
+  }
+  return { programId: targetId, containerId };
 }
 
 /** Normalize one-or-many emails into a deduped, trimmed list. */
@@ -210,6 +266,55 @@ export async function updateTeam(
   if (!res.ok) {
     const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
     throw new Error(`PUT /v5/teams/${args.teamId} failed (HTTP ${res.status}): ${detail}`);
+  }
+  return res.data;
+}
+
+/**
+ * Update a team's auto-publish settings (`POST /1.0/coach/team/updatePublishSettings`).
+ * The live API 500s on a partial body; it wants the full program object from
+ * `GET /3.0/coach/program/{programId}` with `pub_*` fields merged on top.
+ */
+export async function updateTeamPublishSettings(
+  client: TrainHeroicClient,
+  args: { programId?: number; teamId?: number; patch: Record<string, unknown> },
+): Promise<unknown> {
+  if (args.programId !== undefined && args.teamId !== undefined) {
+    throw new Error("Pass programId or teamId, not both.");
+  }
+  if (Object.keys(args.patch).length === 0) {
+    throw new Error("Provide at least one pub_* field to change.");
+  }
+  let programId = args.programId;
+  if (programId === undefined) {
+    if (args.teamId === undefined || args.teamId <= 0) {
+      throw new Error("Provide programId or teamId.");
+    }
+    const team = await client.request("GET", `/v5/teams/${args.teamId}`);
+    if (!team.ok || !isRecord(team.data)) {
+      const detail = typeof team.data === "string" ? team.data : JSON.stringify(team.data);
+      throw new Error(`GET /v5/teams/${args.teamId} failed (HTTP ${team.status}): ${detail}`);
+    }
+    const resolved = coerceInt(team.data.group_program) ?? coerceInt(team.data.programId);
+    if (resolved === null || resolved <= 0) {
+      throw new Error(`Team ${args.teamId} has no group_program.`);
+    }
+    programId = resolved;
+  }
+  if (programId <= 0) throw new Error("programId must be positive.");
+  const current = await client.request("GET", `/3.0/coach/program/${args.programId}`);
+  if (!current.ok || !isRecord(current.data)) {
+    const detail = typeof current.data === "string" ? current.data : JSON.stringify(current.data);
+    throw new Error(
+      `GET /3.0/coach/program/${args.programId} failed (HTTP ${current.status}): ${detail}`,
+    );
+  }
+  const res = await client.request("POST", "/1.0/coach/team/updatePublishSettings", {
+    body: { ...current.data, ...args.patch },
+  });
+  if (!res.ok) {
+    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    throw new Error(`updatePublishSettings failed (HTTP ${res.status}): ${detail}`);
   }
   return res.data;
 }
@@ -509,4 +614,40 @@ export async function teamVolume(
   );
 
   return { window: { start: args.dateStart, end: args.dateEnd }, athletes, totals };
+}
+
+/** Create a reusable session template in the coach library (`POST /v5/sessions/template`). */
+export async function createSessionTemplate(
+  client: TrainHeroicClient,
+  args: { title: string; instruction?: string },
+): Promise<Record<string, unknown>> {
+  const title = args.title.trim();
+  if (title === "") throw new Error("Session template title must not be blank.");
+  const body: Record<string, unknown> = { title };
+  if (args.instruction !== undefined) body.instruction = args.instruction;
+  const res = await client.request("POST", "/v5/sessions/template", { body });
+  if (!res.ok) {
+    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    throw new Error(`Session template create failed (HTTP ${res.status}): ${detail}`);
+  }
+  if (!isRecord(res.data) || coerceInt(res.data.id) === null) {
+    throw new Error("Session template create response is missing an id.");
+  }
+  return res.data;
+}
+
+/** Delete a library session template (`DELETE /v5/sessions/template/{id}`). */
+export async function deleteSessionTemplate(
+  client: TrainHeroicClient,
+  id: number,
+): Promise<{ deleted: number }> {
+  if (id <= 0) throw new Error("Session template id must be positive.");
+  const res = await client.request("DELETE", `/v5/sessions/template/${id}`, {
+    expectedStatuses: [401, 403, 404],
+  });
+  if (!res.ok) {
+    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    throw new Error(`Session template delete failed (HTTP ${res.status}): ${detail}`);
+  }
+  return { deleted: id };
 }

@@ -110,3 +110,28 @@ export type ReadResult = {
   instruction: string;
   blocks: ReadBlock[];
 };
+
+/** Body for `POST /v5/sessions/template` (library create, not save-from-session). */
+export const sessionTemplateCreateSchema = z.object({
+  title: z.string().min(1),
+  instruction: z.string().optional(),
+});
+export type SessionTemplateCreate = z.infer<typeof sessionTemplateCreateSchema>;
+
+/** Fields merged onto the program object for `POST /1.0/coach/team/updatePublishSettings`. */
+export const teamPublishPatchSchema = z
+  .object({
+    pub_enabled: z.union([z.number(), z.boolean()]).optional(),
+    pub_days: z.unknown().optional(),
+    pub_time: z.unknown().optional(),
+    pub_timezone: z.string().optional(),
+  })
+  .refine(
+    (v) =>
+      v.pub_enabled !== undefined ||
+      v.pub_days !== undefined ||
+      v.pub_time !== undefined ||
+      v.pub_timezone !== undefined,
+    { message: "Provide at least one pub_* field" },
+  );
+export type TeamPublishPatch = z.infer<typeof teamPublishPatchSchema>;

@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/server";
-import { updateTeam } from "@trainheroic-unofficial/js";
+import { updateTeam, updateTeamPublishSettings } from "@trainheroic-unofficial/js";
 import { z } from "zod";
 import { confirmGate } from "../confirm";
 import { apiCall, attempt, DESTRUCTIVE, idParam, jsonResult, toId } from "../context";
@@ -115,6 +115,50 @@ export function registerTeamTools(server: McpServer, ctx: ToolContext): void {
         );
         if (blocked) return blocked;
         return apiCall(ctx, "DELETE", `/v5/teamCodes/${id}`);
+      }),
+  );
+  registerTeamPublishSettings(server, ctx);
+}
+
+function registerTeamPublishSettings(server: McpServer, ctx: ToolContext): void {
+  server.registerTool(
+    "team_publish_settings",
+    {
+      title: "Update team auto-publish",
+      description:
+        "Update a team's auto-publish settings (POST /1.0/coach/team/updatePublishSettings). " +
+        "Pass teamId or programId (the team's group_program). At least one of pub_enabled, " +
+        "pub_days, pub_time, pub_timezone is required. Athlete-facing — requires confirmation.",
+      inputSchema: {
+        teamId: idParam.optional(),
+        programId: idParam.optional(),
+        pub_enabled: z.union([z.number(), z.boolean()]).optional(),
+        pub_days: z.unknown().optional(),
+        pub_time: z.unknown().optional(),
+        pub_timezone: z.string().optional(),
+        confirm: z.boolean().optional(),
+      },
+      annotations: DESTRUCTIVE,
+    },
+    ({ teamId, programId, pub_enabled, pub_days, pub_time, pub_timezone, confirm }, extra) =>
+      attempt(async () => {
+        const blocked = confirmGate(
+          extra,
+          "Change auto-publish settings? This controls when athletes see programmed sessions.",
+          confirm,
+        );
+        if (blocked) return blocked;
+        const patch: Record<string, unknown> = {};
+        if (pub_enabled !== undefined) patch.pub_enabled = pub_enabled;
+        if (pub_days !== undefined) patch.pub_days = pub_days;
+        if (pub_time !== undefined) patch.pub_time = pub_time;
+        if (pub_timezone !== undefined) patch.pub_timezone = pub_timezone;
+        const args: { patch: Record<string, unknown>; programId?: number; teamId?: number } = {
+          patch,
+        };
+        if (programId !== undefined) args.programId = toId(programId);
+        if (teamId !== undefined) args.teamId = toId(teamId);
+        return jsonResult(await updateTeamPublishSettings(ctx.client, args));
       }),
   );
 }

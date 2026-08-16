@@ -105,8 +105,8 @@ startDate?/endDate? }`.
 
 ## Still unexplored
 
-- `PUT /1.0/athlete/savedworkout/{id}` (whole-workout sync; not needed for per-set logging,
-  which uses the two-step path above).
-- `GET /v5/users/circuits/{recent,history}` (circuit history; shapes mirror the exercise
-  history list).
-- `GET /1.0/athlete/programming/programs` (subscribed programs; empty for the test account).
+Living status table: `.agents/skills/reverse-engineer-api/coverage.md`.
+
+In-scope athlete reads are wrapped (`athlete_circuits`, `athlete_programming_programs`,
+`athlete_recent_exercises`). Closed without a wrap: `PUT /1.0/athlete/savedworkout/{id}`
+(per-set logging is enough); working-max write (read exists; set/update never found).

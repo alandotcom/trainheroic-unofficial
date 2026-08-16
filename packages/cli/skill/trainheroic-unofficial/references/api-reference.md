@@ -294,6 +294,7 @@ Deletes an access code. No request body needed.
 | GET    | `/v5/programs/fixed`            | Fixed programs              |
 | GET    | `/1.0/coach/programs`           | Coach programs list         |
 | POST   | `/1.0/coach/programs/create`    | Create a standalone program |
+| DELETE | `/v5/programs/{programId}`      | Delete a standalone program |
 | GET    | `/1.0/coach/programs/edit/{id}` | Program edit data           |
 | GET    | `/3.0/coach/program/{id}`       | Program metadata/detail     |
 | GET    | `/1.0/coach/subscriptions`      | Program subscriptions       |
@@ -344,6 +345,14 @@ fixed-length program. The endpoint is not idempotent. Its response contains two 
 `id` is the container returned by `GET /1.0/coach/programs`, while `programId` (also
 `group_program`) is the actual program id used by `/3.0/coach/program/{id}` and workout writes.
 The live API may ignore `name` and assign a generated title; use the response's `title` as truth.
+
+#### `DELETE /v5/programs/{programId}`
+
+Deletes a standalone calendar or fixed program. The path id must be the underlying
+`programId` (`group_program`), not the `list_programs` container `id` — a container id
+returns 401. The SDK/`program_delete` tool resolves either id. Response body is the string
+`Successfully deleted program`. There is no update/rename endpoint; PUT on this path 405s
+(`Supported methods: DELETE`).
 
 ---
 
@@ -1369,15 +1378,8 @@ Updates the auto-publish settings for a team's program. Takes the full program o
 
 ## Still Unexplored
 
-- Program update (title, description, settings) — PUT/POST patterns return 405/404
-- Athlete remove from specific team (endpoint pattern not found via probing)
-- Working max set/update from coach side for specific athletes
-- Marketplace endpoints (publishing, pricing, purchases)
-- Notification management (mark read, dismiss — 401/404 on tested patterns)
-- `apis.trainheroic.com/user` endpoint (uses `api-token` header, returns full user profile with teams)
-- Circuit creation (vs superset — circuits may use different block type or field)
-- Prescription template CRUD
-- Coach preferences update (PATCH/PUT on `2.0/coach/prefs` returns 403/405)
-- Library settings
-- Session template update (edit existing template)
-- Workout set reorder / move exercises between blocks
+Living status table (remaining wrap gaps vs closed-without-a-wrap):
+`.agents/skills/reverse-engineer-api/coverage.md`.
+
+Still to wrap: none (in-scope). See coverage.md Closed without a wrap for out-of-scope
+and unreachable paths.

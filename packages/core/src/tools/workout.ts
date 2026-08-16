@@ -1,11 +1,18 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { type BlockSpec, blockSpecSchema, parseWorkoutDate } from "@trainheroic-unofficial/dto";
+import {
+  type BlockSpec,
+  blockSpecSchema,
+  parseWorkoutDate,
+  sessionTemplateCreateSchema,
+} from "@trainheroic-unofficial/dto";
 import {
   buildSession,
   type BuildOptions,
   collectAdvisories,
   copySession,
+  createSessionTemplate,
+  deleteSessionTemplate,
   publishSession,
   readSession,
   removeSession,
@@ -214,9 +221,53 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
   );
 }
 
+function registerTemplateLibrary(server: McpServer, ctx: ToolContext): void {
+  server.registerTool(
+    "session_template_create",
+    {
+      title: "Create a session template",
+      description:
+        "Create an empty reusable session template in the library (POST /v5/sessions/template). " +
+        "Distinct from session_save_as_template, which copies an existing session. Pass title " +
+        "and optional instruction.",
+      inputSchema: sessionTemplateCreateSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    ({ title, instruction }) =>
+      attempt(async () => {
+        const args: { title: string; instruction?: string } = { title };
+        if (instruction !== undefined) args.instruction = instruction;
+        return jsonResult(await createSessionTemplate(ctx.client, args));
+      }),
+  );
+
+  server.registerTool(
+    "session_template_delete",
+    {
+      title: "Delete a session template",
+      description:
+        "Delete a library session template (DELETE /v5/sessions/template/{id}). Requires " +
+        "confirmation (elicitation, or confirm:true).",
+      inputSchema: { id: z.number(), confirm: z.boolean().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+    },
+    ({ id, confirm }, extra) =>
+      attempt(async () => {
+        const blocked = confirmGate(
+          extra,
+          `Delete session template ${id} from the library?`,
+          confirm,
+        );
+        if (blocked) return blocked;
+        return jsonResult(await deleteSessionTemplate(ctx.client, id));
+      }),
+  );
+}
+
 /** Workout building, read-back, publishing, and the session calendar lifecycle. */
 export function registerWorkoutTools(server: McpServer, ctx: ToolContext): void {
   registerBuild(server, ctx);
   registerReadPublish(server, ctx);
   registerLifecycle(server, ctx);
+  registerTemplateLibrary(server, ctx);
 }

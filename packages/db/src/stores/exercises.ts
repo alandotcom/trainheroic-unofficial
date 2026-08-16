@@ -22,6 +22,8 @@ import {
 
 const LIBRARY_PATH = "/v5/exerciseLibrary/all";
 const CREATE_PATH = "/2.0/coach/exercise/create";
+const UPDATE_PATH = (id: number): string => `/2.0/coach/exercise/update/${id}`;
+const DELETE_PATH = (id: number): string => `/v5/exercises/${id}`;
 const TTL_MS = 7 * 24 * 3600 * 1000;
 // After confirming freshness, trust it for this long instead of re-querying on every
 // read (the DO instance is long-lived, so a workout build resolving many exercises would
@@ -288,6 +290,25 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
       await this.recordUpsert(ex as Record<string, unknown>);
     }
     return ex as Record<string, unknown>;
+  }
+
+  async update(id: number, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const res = await this.client.request("POST", UPDATE_PATH(id), { body });
+    if (!res.ok) throw new Error(`Exercise update failed (HTTP ${res.status}).`);
+    const ex = unwrapEnvelope(res.data);
+    if (ex && typeof ex === "object") {
+      checkResponse(exerciseResponseSchema, ex, "exercise update");
+      await this.recordUpsert(ex as Record<string, unknown>);
+    }
+    return ex as Record<string, unknown>;
+  }
+
+  async remove(id: number): Promise<void> {
+    const res = await this.client.request("DELETE", DELETE_PATH(id), {
+      expectedStatuses: [401, 403, 404],
+    });
+    if (!res.ok) throw new Error(`Exercise delete failed (HTTP ${res.status}).`);
+    await this.recordDelete(id);
   }
 
   async stats(): Promise<Record<string, unknown>> {
