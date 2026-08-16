@@ -45,6 +45,7 @@ export const COACH_WRITE_TOOLS: readonly string[] = [
   "athlete_archive",
   "athlete_restore",
   "team_create",
+  "program_create",
   "team_update",
   "team_delete",
   "team_code_create",

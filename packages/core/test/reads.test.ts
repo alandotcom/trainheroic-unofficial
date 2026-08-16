@@ -38,7 +38,7 @@ describe("get_program", () => {
     });
   });
 
-  it("returns a valid standalone calendar as an expected limited result", async () => {
+  it("follows a standalone container id to its real program id", async () => {
     const handler = getProgramHandler(async (_method, path) => {
       if (path === "/3.0/coach/program/4864050") {
         return { ok: false, status: 401, data: "Cannot access program" };
@@ -47,7 +47,35 @@ describe("get_program", () => {
         return {
           ok: true,
           status: 200,
-          data: [{ id: 4864050, title: "Coach Plan" }],
+          data: [{ id: 4864050, group_program: 4864999, title: "Coach Plan" }],
+        };
+      }
+      if (path === "/3.0/coach/program/4864999") {
+        return { ok: true, status: 200, data: { id: 4864999, group_id: 4864050, type: 1 } };
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    const result = await handler({ programId: 4864050 }, {} as ServerContext);
+
+    expect(result.isError).not.toBe(true);
+    expect(JSON.parse(result.content[0]?.text ?? "null")).toEqual({
+      id: 4864999,
+      group_id: 4864050,
+      type: 1,
+    });
+  });
+
+  it("returns limited metadata when the standalone program id also rejects detail", async () => {
+    const handler = getProgramHandler(async (_method, path) => {
+      if (path === "/3.0/coach/program/4864050" || path === "/3.0/coach/program/4864999") {
+        return { ok: false, status: 401, data: "Cannot access program" };
+      }
+      if (path === "/1.0/coach/programs") {
+        return {
+          ok: true,
+          status: 200,
+          data: [{ id: 4864050, group_program: 4864999, title: "Coach Plan" }],
         };
       }
       throw new Error(`Unexpected request: ${path}`);
@@ -58,10 +86,9 @@ describe("get_program", () => {
 
     expect(result.isError).not.toBe(true);
     expect(body).toMatchObject({
-      program: { id: 4864050, title: "Coach Plan" },
+      program: { id: 4864050, group_program: 4864999, title: "Coach Plan" },
       detailAvailable: false,
     });
-    expect(body.note).toMatch(/valid standalone calendar/iu);
   });
 
   it("keeps an inaccessible unrelated id as a tool error", async () => {

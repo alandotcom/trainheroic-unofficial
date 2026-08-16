@@ -161,6 +161,12 @@ The `.` entry imports no `node:*` modules. Anything that touches the filesystem 
 - **Messaging.** Tools for conversation streams: listing them, reading a stream, and
   building or sending or deleting a comment.
 
+`createProgram(client, { kind, name })` creates a standalone `calendar` or `fixed` program and
+returns both `containerId` (the id in `GET /1.0/coach/programs`) and `programId` (the id used by
+program detail and workout writes). TrainHeroic may replace the requested name; inspect the
+returned `title` and `nameApplied`. Creation is not idempotent, so do not blindly retry an
+uncertain result.
+
 ## Working with exercises
 
 `ExerciseLibrary` loads the full library once, caches it, and answers name lookups and fuzzy

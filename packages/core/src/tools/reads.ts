@@ -81,7 +81,9 @@ const SIMPLE_GETS: ReadonlyArray<{
     description:
       "Coach programs (standalone only). This is often empty even for an active coach, because " +
       "most programming lives as a team's group-program: if it returns [], call list_teams and " +
-      "read each team's group_program — do not conclude the coach has no programs.",
+      "read each team's group_program — do not conclude the coach has no programs. Each standalone " +
+      "row has two ids: id is its container/calendar id; group_program is the underlying program " +
+      "id used by workout writes. get_program accepts either one.",
     path: "/1.0/coach/programs",
   },
   {
@@ -301,10 +303,11 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
     {
       title: "Get program detail",
       description:
-        "Full nested program structure (blocks + sessions) live from the API, by program id. " +
-        "Works for team calendars and athlete coach calendars (type 5 from " +
-        "/v5/calendars/athletes/{id}). Some valid standalone calendars from list_programs do not " +
-        "expose nested detail; those return calendar metadata and next-step guidance instead.",
+        "Program detail live from the API, by program id. Works for team calendars and athlete " +
+        "coach calendars (type 5 from /v5/calendars/athletes/{id}). For standalone rows from " +
+        "list_programs, accepts either id (the container id) or group_program (the underlying " +
+        "program id); container ids are resolved automatically. If neither detail endpoint is " +
+        "available, returns calendar metadata and next-step guidance instead.",
       inputSchema: { programId: idParam },
       annotations: READ,
     },
@@ -329,6 +332,21 @@ async function getProgram(ctx: ToolContext, programId: number) {
       ? programs.data.find((item) => isRecord(item) && coerceInt(item.id) === programId)
       : undefined;
     if (!programs.ok || !program) return apiResponseResult(detail);
+
+    const actualProgramId = coerceInt(program.group_program);
+    if (actualProgramId !== null && actualProgramId !== programId) {
+      const actualDetail = await ctx.client.request(
+        "GET",
+        `/3.0/coach/program/${enc(actualProgramId)}`,
+        { expectedStatuses: [401, 403] },
+      );
+      if (actualDetail.ok || (actualDetail.status !== 401 && actualDetail.status !== 403)) {
+        return apiResponseResult(
+          actualDetail,
+          "This is a large, deep object. If it is truncated, fetch a narrower view (a specific session) instead.",
+        );
+      }
+    }
 
     return jsonResult({
       program,

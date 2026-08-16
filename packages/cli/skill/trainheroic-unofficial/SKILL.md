@@ -90,7 +90,7 @@ response shape, or an area not covered here.
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | Athletes               | `$TH coach athletes`; `coach athlete-invite\|athlete-archive\|athlete-restore`                                                                |
 | Teams / join codes     | `$TH coach teams\|team <id>\|team-codes <id>`; `coach team-create\|team-update\|team-delete\|team-code-create\|team-code-delete`              |
-| Programs               | `$TH coach programs`, `$TH coach program <id>`                                                                                                |
+| Programs               | `$TH coach programs`, `$TH coach program <id>`, `$TH coach program-create --kind calendar\|fixed --name "..."`                                |
 | Exercises              | `$TH coach exercise resolve\|search\|get\|sync\|create\|forget\|stats` (below)                                                                |
 | Sessions / workouts    | `$TH coach workout build\|read\|publish\|remove`; `coach session-copy\|session-unpublish\|session-save-template`                              |
 | Roster training        | `$TH coach roster-activity\|athlete-training\|athlete-lift-history\|athlete-workouts` (read another athlete's training)                       |

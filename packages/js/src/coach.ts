@@ -1,17 +1,86 @@
 // Coach write/query operations that carry real request-shaping logic, owned here so the MCP
 // tools (core) and the CLI share one implementation rather than duplicating it. Thin
-// single-request CRUD (team create/delete, team-code, archive/restore, session
-// unpublish/save-as-template) is left to the callers' own `request`/`apiCall` — there is no
-// behavior to centralize there. Team update lives here because re-pointing `group_program`
-// requires a title (API 400 without one), so we may need a GET-then-PUT.
+// single-request CRUD with no response-shaping logic (team create/delete, team-code,
+// archive/restore, session unpublish/save-as-template) is left to the callers' own
+// `request`/`apiCall`. Program creation lives here because its two returned ids have different
+// meanings. Team update lives here because re-pointing `group_program` requires a title (API 400
+// without one), so we may need a GET-then-PUT.
 
-import { parseWorkoutDate } from "@trainheroic-unofficial/dto";
+import { parseWorkoutDate, programCreateResponseSchema } from "@trainheroic-unofficial/dto";
 import type { TeamVolumeAthlete, TeamVolumeReport } from "@trainheroic-unofficial/dto";
 import type { TrainHeroicClient } from "./client";
-import { coerceInt } from "./exercise-util";
+import { coerceInt, isRecord } from "./exercise-util";
+import { checkResponse } from "./response-check";
 import { calendarWriteError } from "./workout-session";
 
 export const DEFAULT_INVITE_MESSAGE = "Follow these steps and you'll be set up and ready to go!";
+
+export const PROGRAM_KINDS = ["calendar", "fixed"] as const;
+export type ProgramKind = (typeof PROGRAM_KINDS)[number];
+
+export type CreatedProgram = {
+  /** Container/group id returned by list_programs and used by calendar edit/sync endpoints. */
+  containerId: number;
+  /** Actual program id used by get_program, workout creation, and other program-scoped writes. */
+  programId: number;
+  /** Title TrainHeroic actually assigned. The current API may ignore the requested name. */
+  title: string;
+  kind: ProgramKind;
+  requestedName: string;
+  nameApplied: boolean;
+};
+
+/**
+ * Create a standalone ongoing calendar or fixed-length program.
+ *
+ * TrainHeroic returns both a container id and the underlying program id. They are deliberately
+ * named separately here because `/3.0/coach/program/{containerId}` returns 401, while the
+ * `programId` works. This write is not idempotent: callers must not blindly retry an uncertain
+ * result. The live API currently accepts `name` but may generate its own title; `nameApplied`
+ * reports what happened.
+ */
+export async function createProgram(
+  client: TrainHeroicClient,
+  args: { kind: ProgramKind; name: string },
+): Promise<CreatedProgram> {
+  if (!(PROGRAM_KINDS as readonly string[]).includes(args.kind)) {
+    throw new Error(`Unknown program kind: ${String(args.kind)}.`);
+  }
+  if (typeof args.name !== "string" || args.name.trim() === "") {
+    throw new Error("Program name must not be blank.");
+  }
+  const requestedName = args.name.trim();
+
+  const res = await client.request<unknown>("POST", "/1.0/coach/programs/create", {
+    body: { finite: args.kind === "fixed", name: requestedName },
+  });
+  if (!res.ok) {
+    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    throw new Error(`Program create failed (HTTP ${res.status}): ${detail}`);
+  }
+
+  checkResponse(programCreateResponseSchema, res.data, "program create");
+  const rec = isRecord(res.data) ? res.data : {};
+  const nested = isRecord(rec.program) ? rec.program : {};
+  const containerId = coerceInt(rec.id);
+  const programId =
+    coerceInt(rec.programId) ?? coerceInt(rec.group_program) ?? coerceInt(nested.id);
+  if (containerId === null || programId === null) {
+    throw new Error("Program create response is missing the container id or program id.");
+  }
+  if (typeof rec.title !== "string" || rec.title.trim() === "") {
+    throw new Error("Program create response is missing the assigned title.");
+  }
+  const title = rec.title;
+  return {
+    containerId,
+    programId,
+    title,
+    kind: args.kind,
+    requestedName,
+    nameApplied: title === requestedName,
+  };
+}
 
 /** Normalize one-or-many emails into a deduped, trimmed list. */
 function emailList(emails: readonly string[]): string[] {

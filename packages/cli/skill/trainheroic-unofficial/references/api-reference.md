@@ -286,16 +286,17 @@ Deletes an access code. No request body needed.
 
 ### Programs
 
-| Method | Endpoint                        | Description                     |
-| ------ | ------------------------------- | ------------------------------- |
-| GET    | `/v5/programs`                  | List programs                   |
-| GET    | `/v5/programs/new`              | New programs                    |
-| GET    | `/v5/programs/free`             | Free programs                   |
-| GET    | `/v5/programs/fixed`            | Fixed programs                  |
-| GET    | `/1.0/coach/programs`           | Coach programs list             |
-| GET    | `/1.0/coach/programs/edit/{id}` | Program edit data               |
-| GET    | `/3.0/coach/program/{id}`       | Program detail (full structure) |
-| GET    | `/1.0/coach/subscriptions`      | Program subscriptions           |
+| Method | Endpoint                        | Description                 |
+| ------ | ------------------------------- | --------------------------- |
+| GET    | `/v5/programs`                  | List programs               |
+| GET    | `/v5/programs/new`              | New programs                |
+| GET    | `/v5/programs/free`             | Free programs               |
+| GET    | `/v5/programs/fixed`            | Fixed programs              |
+| GET    | `/1.0/coach/programs`           | Coach programs list         |
+| POST   | `/1.0/coach/programs/create`    | Create a standalone program |
+| GET    | `/1.0/coach/programs/edit/{id}` | Program edit data           |
+| GET    | `/3.0/coach/program/{id}`       | Program metadata/detail     |
+| GET    | `/1.0/coach/subscriptions`      | Program subscriptions       |
 
 #### `GET /3.0/coach/program/{id}` Response
 
@@ -335,6 +336,14 @@ Deletes an access code. No request body needed.
   }
 ]
 ```
+
+#### `POST /1.0/coach/programs/create`
+
+Send `{ "finite": false, "name": "..." }` for an ongoing calendar or `finite: true` for a
+fixed-length program. The endpoint is not idempotent. Its response contains two different ids:
+`id` is the container returned by `GET /1.0/coach/programs`, while `programId` (also
+`group_program`) is the actual program id used by `/3.0/coach/program/{id}` and workout writes.
+The live API may ignore `name` and assign a generated title; use the response's `title` as truth.
 
 ---
 

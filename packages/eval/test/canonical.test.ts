@@ -33,6 +33,18 @@ describe("canonical command maps stay in sync with the tool partition", () => {
     });
   });
 
+  it("normalizes standalone program creation with its kind and name", () => {
+    expect(
+      normalizeCliCommand(
+        "trainheroic coach program-create --kind fixed --name Offseason-Strength",
+        "coach",
+      ),
+    ).toEqual({
+      name: "program_create",
+      input: { kind: "fixed", name: "Offseason-Strength" },
+    });
+  });
+
   it("ignores a non-trainheroic command", () => {
     expect(normalizeCliCommand("ls -la", "coach")).toBeNull();
   });

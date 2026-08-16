@@ -13,6 +13,7 @@ export const COACH_COMMANDS: Record<string, string> = {
   "coach head-coach": "head_coach",
   "coach athletes": "list_athletes",
   "coach programs": "list_programs",
+  "coach program-create": "program_create",
   "coach teams": "list_teams",
   "coach program": "get_program",
   "coach team": "get_team",
@@ -68,6 +69,8 @@ const POSITIONAL_ID: Record<string, string> = {
 /** CLI flag → canonical arg name (only the ones graders inspect need mapping). */
 const FLAG_MAP: Record<string, string> = {
   program: "program",
+  kind: "kind",
+  name: "name",
   "program-id": "programId",
   team: "teamId",
   athlete: "athleteId",
