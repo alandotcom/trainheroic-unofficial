@@ -21,6 +21,8 @@ function mockApi(library: unknown): void {
       if (url.includes("/v5/exerciseLibrary/all")) return json(library);
       if (url.includes("/2.0/coach/exercise/create"))
         return json({ success: 1, data: { id: 555, title: "Made", param_1_type: 3 } });
+      if (url.includes("/2.0/coach/exercise/update/"))
+        return json({ success: 1, data: { id: 555, title: "Renamed", param_1_type: 3 } });
       if (url.includes("/v5/exercises/") && String(init?.method).toUpperCase() === "DELETE")
         return json("ok");
       return json({});
@@ -163,6 +165,23 @@ describe("ExerciseStore safety + write-through", () => {
 
     await store.recordDelete(999);
     expect(await store.get(999)).toBeNull();
+  });
+
+  it("update POSTs then write-throughs the renamed row", async () => {
+    mockApi([{ id: 555, title: "Made", param_1_type: 3, can_edit: 1 }]);
+    const store = newStore();
+    await store.refresh();
+    const updated = await store.update(555, { title: "Renamed", param_1_type: 3 });
+    expect(updated.title).toBe("Renamed");
+    expect((await store.get(555))?.title).toBe("Renamed");
+    const posted = vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([url, init]) =>
+          String(url).includes("/2.0/coach/exercise/update/555") &&
+          String((init as RequestInit | undefined)?.method).toUpperCase() === "POST",
+      );
+    expect(posted).toHaveLength(1);
   });
 
   it("remove DELETEs the live exercise then drops the D1 row", async () => {

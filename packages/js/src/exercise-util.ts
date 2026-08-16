@@ -228,6 +228,8 @@ export interface ExerciseIndex {
   get(id: number): Promise<Record<string, unknown> | null>;
   defaultsMany(ids: readonly number[]): Promise<Map<number, ExerciseDefaults>>;
   create(body: Record<string, unknown>): Promise<Record<string, unknown>>;
+  /** POST an update to a custom exercise on TrainHeroic, then refresh the mirror row. */
+  update(id: number, body: Record<string, unknown>): Promise<Record<string, unknown>>;
   /** DELETE the custom exercise on TrainHeroic, then drop it from the mirror. */
   remove(id: number): Promise<void>;
   recordDelete(id: number): Promise<void>;

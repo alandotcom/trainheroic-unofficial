@@ -65,6 +65,8 @@ const GATED: Array<{ reg: Register; name: string; args: Record<string, unknown> 
   },
   { reg: registerWorkoutTools, name: "session_remove", args: { programId: 1, pwId: 2 } },
   { reg: registerWorkoutTools, name: "session_unpublish", args: { pwId: 2 } },
+  { reg: registerWorkoutTools, name: "session_template_delete", args: { id: 1 } },
+  { reg: registerTeamTools, name: "team_publish_settings", args: { programId: 1, pub_enabled: 1 } },
   // Coach writes into an athlete's own log / prescription.
   {
     reg: registerAthleteTools,

@@ -14,6 +14,24 @@ import {
 } from "../context";
 import type { ToolContext } from "../context";
 
+function registerExerciseUpdate(server: McpServer, index: ToolContext["index"]): void {
+  server.registerTool(
+    "exercise_update",
+    {
+      title: "Update custom exercise",
+      description:
+        "Update a custom exercise (POST /2.0/coach/exercise/update/{id}) and write it through " +
+        "to the mirror. Same body as exercise_create. Only works for exercises with can_edit:1.",
+      inputSchema: { id: idParam, exercise: exerciseCreateSchema },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    ({ id, exercise }) =>
+      attempt(async () =>
+        jsonResult(await index.update(toId(id), exercise as Record<string, unknown>)),
+      ),
+  );
+}
+
 function registerExerciseDelete(server: McpServer, index: ToolContext["index"]): void {
   server.registerTool(
     "exercise_delete",
@@ -130,6 +148,7 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
       attempt(async () => jsonResult(await index.create(exercise as Record<string, unknown>))),
   );
 
+  registerExerciseUpdate(server, index);
   registerExerciseDelete(server, index);
 
   server.registerTool(

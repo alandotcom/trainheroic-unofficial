@@ -3,6 +3,7 @@ import { z } from "zod";
 import { dateString } from "@trainheroic-unofficial/dto";
 import {
   fetchCoachAthleteCalendarSummary,
+  fetchCoachAthleteTeamCalendar,
   fetchExerciseHistoryDetail,
   fetchRosterActivity,
   fetchTeamAthleteIds,
@@ -91,6 +92,30 @@ const SIMPLE_GETS: ReadonlyArray<{
     title: "Notification counts",
     description: "Unread counts including countMessagingNotViewed (cheap 'anything new?' poll).",
     path: "/v5/notifications/counts",
+  },
+  {
+    name: "list_notifications",
+    title: "Notification list",
+    description:
+      "Full notification list (GET /v5/notifications). Distinct from `notifications`, which " +
+      "returns unread counts only. Empty when there are no notifications.",
+    path: "/v5/notifications",
+  },
+  {
+    name: "list_subscriptions",
+    title: "Program subscriptions",
+    description:
+      "Program subscriptions and subscribed teams (GET /1.0/coach/subscriptions). " +
+      "Returns `{subscriptions, teams}`.",
+    path: "/1.0/coach/subscriptions",
+  },
+  {
+    name: "list_prescription_templates",
+    title: "Prescription templates",
+    description:
+      "Saved sets/reps schemes (GET /2.0/coach/workoutSetExercise/template). Use when picking " +
+      "a named prescription like '4 x 3' rather than typing set counts by hand.",
+    path: "/2.0/coach/workoutSetExercise/template",
   },
   {
     name: "analytics_categories",
@@ -414,6 +439,26 @@ function registerTeamVolume(server: McpServer, ctx: ToolContext): void {
 
 export function registerReadTools(server: McpServer, ctx: ToolContext): void {
   registerRosterReads(server, ctx);
+  registerCoachAthleteTeamCalendar(server, ctx);
   registerEntityReads(server, ctx);
   registerTeamVolume(server, ctx);
+}
+
+function registerCoachAthleteTeamCalendar(server: McpServer, ctx: ToolContext): void {
+  server.registerTool(
+    "coach_athlete_team_calendar",
+    {
+      title: "Coach-athlete team calendar",
+      description:
+        "Companion calendar for a roster athlete (GET /v5/calendars/athletes/{id}/coachAthleteTeam). " +
+        "Distinct from workout_build's type-5 individual calendar. Returns title, logo, id, " +
+        "athlete_id, owner_user_id.",
+      inputSchema: { athleteId: idParam },
+      annotations: READ,
+    },
+    ({ athleteId }) =>
+      attempt(async () =>
+        jsonResult(await fetchCoachAthleteTeamCalendar(ctx.client, toId(athleteId))),
+      ),
+  );
 }

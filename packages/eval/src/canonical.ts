@@ -16,6 +16,13 @@ export const COACH_COMMANDS: Record<string, string> = {
   "coach program-create": "program_create",
   "coach program-delete": "program_delete",
   "coach session-templates": "list_session_templates",
+  "coach session-template-create": "session_template_create",
+  "coach session-template-delete": "session_template_delete",
+  "coach notifications-list": "list_notifications",
+  "coach subscriptions": "list_subscriptions",
+  "coach prescription-templates": "list_prescription_templates",
+  "coach athlete-team-calendar": "coach_athlete_team_calendar",
+  "coach team-publish-settings": "team_publish_settings",
   "coach teams": "list_teams",
   "coach program": "get_program",
   "coach team": "get_team",
@@ -36,6 +43,7 @@ export const COACH_COMMANDS: Record<string, string> = {
   "coach exercise search": "exercise_search",
   "coach exercise get": "exercise_get",
   "coach exercise create": "exercise_create",
+  "coach exercise update": "exercise_update",
   "coach exercise delete": "exercise_delete",
 };
 
@@ -47,6 +55,9 @@ export const ATHLETE_COMMANDS: Record<string, string> = {
   "athlete working-maxes": "athlete_working_maxes",
   "athlete workouts": "athlete_workouts",
   "athlete exercises": "athlete_exercises",
+  "athlete recent-exercises": "athlete_recent_exercises",
+  "athlete circuits": "athlete_circuits",
+  "athlete programs": "athlete_programming_programs",
   "athlete history": "athlete_exercise_history",
   "athlete prs": "athlete_personal_records",
   "athlete stats": "athlete_exercise_stats",
@@ -69,6 +80,7 @@ const POSITIONAL_ID: Record<string, string> = {
   athlete_exercise_stats: "exerciseId",
   athlete_leaderboard: "workoutId",
   exercise_delete: "id",
+  session_template_delete: "id",
 };
 
 /** CLI flag → canonical arg name (only the ones graders inspect need mapping). */

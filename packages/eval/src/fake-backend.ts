@@ -86,7 +86,10 @@ function buildApp(
   app.get("/v5/headCoach", (c) => c.json(headCoach()));
   app.get("/1.0/coach/programs", (c) => c.json(dataset.programs));
   app.get("/1.0/coach/workouts", (c) => c.json([]));
+  app.get("/v5/notifications", (c) => c.json([]));
   app.get("/v5/notifications/counts", (c) => c.json(notificationCounts()));
+  app.get("/1.0/coach/subscriptions", (c) => c.json({ subscriptions: [], teams: [] }));
+  app.get("/2.0/coach/workoutSetExercise/template", (c) => c.json([]));
   app.get("/v5/analytics", (c) => c.json([]));
   app.get("/v5/exerciseLibrary/all", (c) => c.json(dataset.exerciseLibrary));
   app.get("/v5/athletes", (c) => c.json(dataset.athletes));
@@ -124,6 +127,15 @@ function buildApp(
     const month = Number(c.req.param("month"));
     return c.json(dataset.getCalendarSummary(athleteId, year, month));
   });
+  app.get("/v5/calendars/athletes/:id/coachAthleteTeam", (c) =>
+    c.json({
+      title: "Team calendar",
+      logo: null,
+      owner_user_id: 1,
+      id: Number(c.req.param("id")),
+      athlete_id: Number(c.req.param("id")),
+    }),
+  );
   app.get("/v5/athleteProfile/summary", (c) => {
     const userId = intParam(c.req.query("user_id"));
     if (userId === null) return c.json({ error: "missing user_id" }, 400);
@@ -198,6 +210,10 @@ function registerAthleteReads(
   personal: { current: PersonalSession | null },
 ): void {
   app.get("/v5/users/exercises/history", (c) => c.json(dataset.athlete.exercisesList));
+  app.get("/v5/users/exercises/recent", (c) => c.json([]));
+  app.get("/v5/users/circuits/recent", (c) => c.json([]));
+  app.get("/v5/users/circuits/history", (c) => c.json([]));
+  app.get("/1.0/athlete/programming/programs", (c) => c.json([]));
   app.get("/3.0/athlete/programworkout/range", (c) => {
     const start = c.req.query("startDate") ?? "";
     const end = c.req.query("endDate") ?? "";
@@ -229,6 +245,22 @@ function registerWrites(
   app.delete("/v5/exercises/:id", async (c) => {
     await record(c, writes);
     return c.json("ok");
+  });
+  app.post("/2.0/coach/exercise/update/:id", async (c) => {
+    await record(c, writes);
+    return c.json({ success: 1, data: { id: Number(c.req.param("id")), title: "Updated" } });
+  });
+  app.post("/v5/sessions/template", async (c) => {
+    await record(c, writes);
+    return c.json({ id: 1540001, title: "Template", instruction: "" });
+  });
+  app.delete("/v5/sessions/template/:id", async (c) => {
+    await record(c, writes);
+    return c.json("Session template deleted");
+  });
+  app.post("/1.0/coach/team/updatePublishSettings", async (c) => {
+    await record(c, writes);
+    return c.json({ ok: true });
   });
 
   // Set-write step 1 (the data write) + step 2 (mark complete), coach (…/{athleteId}) and athlete.

@@ -1381,11 +1381,5 @@ Updates the auto-publish settings for a team's program. Takes the full program o
 Living status table (remaining wrap gaps vs closed-without-a-wrap):
 `.agents/skills/reverse-engineer-api/coverage.md`.
 
-Still to wrap: custom-exercise update; session-template library create/delete (list is
-`list_session_templates`); circuit history; athlete subscribed programs; notifications
-list; coach subscriptions; recent exercises; prescription templates; team auto-publish;
-coach-athlete-team calendar; features / orgs / activity feed / reactions.
-
-Closed without a wrap (do not re-probe unless a new HAR appears): program update, per-team
-athlete remove, working-max write, notification mark-read/dismiss, `apis…/user`, workout
-reorder, prefs write, whole-workout `savedworkout` PUT, marketplace catalog.
+Still to wrap: none (in-scope). See coverage.md Closed without a wrap for out-of-scope
+and unreachable paths.

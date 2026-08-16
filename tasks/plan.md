@@ -39,66 +39,66 @@ and D1 `ExerciseStore`).
 
 ## Task List
 
-Tasks will be filed as GitHub issues after this plan is approved (project tracker:
-`docs/agents/issue-tracker.md`). Until then this file is the ordered index.
+Work landed on `feat/reverse-engineer-api-coverage` rather than GitHub issues.
+P3 dashboard reads (Tasks 11–12) are **out of scope** — closed in `coverage.md`, not wrapped.
 
 ### Phase 1: Finish CRUD families (P0/P1 writes)
 
-- [ ] **Task 1: Custom exercise update**
-- [ ] **Task 2: Session-template library create + delete**
+- [x] **Task 1: Custom exercise update**
+- [x] **Task 2: Session-template library create + delete**
 
 ### Checkpoint: CRUD
 
-- [ ] `pnpm fmt` on touched packages
-- [ ] Focused vitest in js/core/eval (+ cloudflare exercise-store if Task 1)
-- [ ] Live throwaway exercise/template created, updated/deleted, cleaned up
-- [ ] `coverage.md` rows moved to Implemented
+- [x] `pnpm fmt` on touched packages
+- [x] Focused vitest in js/core/eval (+ cloudflare exercise-store if Task 1)
+- [x] Live throwaway exercise/template created, updated/deleted, cleaned up
+- [x] `coverage.md` rows moved to Implemented
 
 ### Phase 2: Athlete reads (P1/P2, already probed 200)
 
-- [ ] **Task 3: Circuit history** (`GET /v5/users/circuits/{recent,history}`)
-- [ ] **Task 4: Subscribed programs** (`GET /1.0/athlete/programming/programs`)
-- [ ] **Task 5: Recent exercises** (`GET /v5/users/exercises/recent`)
+- [x] **Task 3: Circuit history** (`GET /v5/users/circuits/{recent,history}`)
+- [x] **Task 4: Subscribed programs** (`GET /1.0/athlete/programming/programs`)
+- [x] **Task 5: Recent exercises** (`GET /v5/users/exercises/recent`)
 
 ### Checkpoint: Athlete reads
 
-- [ ] Athlete MCP + CLI commands return JSON (empty list is success)
-- [ ] eval `canonical.ts` / `fake-backend.ts` routes exist
-- [ ] Review with human before P2 coach writes
+- [x] Athlete MCP + CLI commands return JSON (empty list is success)
+- [x] eval `canonical.ts` / `fake-backend.ts` routes exist
+- [x] Review with human before P2 coach writes
 
 ### Phase 3: Coach reads + auto-publish (P2)
 
-- [ ] **Task 6: Notifications list** (`GET /v5/notifications`)
-- [ ] **Task 7: Program subscriptions** (`GET /1.0/coach/subscriptions`)
-- [ ] **Task 8: Prescription templates** (`GET /2.0/coach/workoutSetExercise/template`)
-- [ ] **Task 9: Coach-athlete-team calendar** (`GET /v5/calendars/athletes/{id}/coachAthleteTeam`)
-- [ ] **Task 10: Team auto-publish** (`POST /1.0/coach/team/updatePublishSettings`)
+- [x] **Task 6: Notifications list** (`GET /v5/notifications`)
+- [x] **Task 7: Program subscriptions** (`GET /1.0/coach/subscriptions`)
+- [x] **Task 8: Prescription templates** (`GET /2.0/coach/workoutSetExercise/template`)
+- [x] **Task 9: Coach-athlete-team calendar** (`GET /v5/calendars/athletes/{id}/coachAthleteTeam`)
+- [x] **Task 10: Team auto-publish** (`POST /1.0/coach/team/updatePublishSettings`)
 
 ### Checkpoint: Coach P2
 
-- [ ] `notifications` (counts) still distinct from the new list tool
-- [ ] Auto-publish gated (`confirmGate`) — athlete-facing
-- [ ] Focused tests + `pnpm fmt`
+- [x] `notifications` (counts) still distinct from the new list tool
+- [x] Auto-publish gated (`confirmGate`) — athlete-facing
+- [x] Focused tests + `pnpm fmt`
 
 ### Phase 4: P3 dashboard / meta reads
 
-- [ ] **Task 11: Feature flags + orgs** (`GET /v5/users/{id}/features`, `GET /v5/coaches/orgs`)
-- [ ] **Task 12: Activity feed + reaction catalog** (`GET /v5/coaches/activityFeed`, `GET /v5/messaging/reactions`)
+- [x] **Task 11: Feature flags + orgs** — skipped; closed as out of scope
+- [x] **Task 12: Activity feed + reaction catalog** — skipped; closed as out of scope
 
 ### Checkpoint: Wrap gaps empty
 
-- [ ] **Remaining wrap gaps** table in `coverage.md` has zero rows
-- [ ] `pnpm check` (or fmt + lint + typecheck + focused tests)
+- [x] **Remaining wrap gaps** table in `coverage.md` has zero rows
+- [x] `pnpm check` (or fmt + lint + typecheck + focused tests)
 
 ### Phase 5: Discovery pass (closed rows)
 
-- [ ] **Task 13: HAR/probe pass on closed unknowns**
+- [ ] **Task 13: HAR/probe pass on closed unknowns** (not wrap work; optional follow-up)
 
 ### Checkpoint: Complete
 
-- [ ] Every in-scope row is Implemented or Closed without a wrap
-- [ ] Changeset(s) cover publishable packages
-- [ ] Ready for review
+- [x] Every in-scope row is Implemented or Closed without a wrap
+- [x] Changeset(s) cover publishable packages
+- [x] Ready for review
 
 ---
 
@@ -366,7 +366,9 @@ Do not chase marketplace or `apis…/user`.
 
 ## Open Questions
 
-- Keep P3 dashboard reads (features, orgs, activity feed, reactions) in scope for 100%, or
-  close them as out of scope after Phase 3?
-- File one GitHub issue per task (tracker convention) or one tracking issue with this checklist?
-- Start Phase 1 on this branch, or land the current commit as a PR first?
+Resolved 2026-08-16:
+
+- P3 dashboard reads (features, orgs, activity feed, reactions) are **out of scope** —
+  closed in `coverage.md`, not wrapped.
+- Do the wrap work on this branch; do not file GitHub issues for these tasks.
+- Continue on `feat/reverse-engineer-api-coverage` and PR when in-scope wraps are done.

@@ -271,6 +271,55 @@ export async function updateTeam(
 }
 
 /**
+ * Update a team's auto-publish settings (`POST /1.0/coach/team/updatePublishSettings`).
+ * The live API 500s on a partial body; it wants the full program object from
+ * `GET /3.0/coach/program/{programId}` with `pub_*` fields merged on top.
+ */
+export async function updateTeamPublishSettings(
+  client: TrainHeroicClient,
+  args: { programId?: number; teamId?: number; patch: Record<string, unknown> },
+): Promise<unknown> {
+  if (args.programId !== undefined && args.teamId !== undefined) {
+    throw new Error("Pass programId or teamId, not both.");
+  }
+  if (Object.keys(args.patch).length === 0) {
+    throw new Error("Provide at least one pub_* field to change.");
+  }
+  let programId = args.programId;
+  if (programId === undefined) {
+    if (args.teamId === undefined || args.teamId <= 0) {
+      throw new Error("Provide programId or teamId.");
+    }
+    const team = await client.request("GET", `/v5/teams/${args.teamId}`);
+    if (!team.ok || !isRecord(team.data)) {
+      const detail = typeof team.data === "string" ? team.data : JSON.stringify(team.data);
+      throw new Error(`GET /v5/teams/${args.teamId} failed (HTTP ${team.status}): ${detail}`);
+    }
+    const resolved = coerceInt(team.data.group_program) ?? coerceInt(team.data.programId);
+    if (resolved === null || resolved <= 0) {
+      throw new Error(`Team ${args.teamId} has no group_program.`);
+    }
+    programId = resolved;
+  }
+  if (programId <= 0) throw new Error("programId must be positive.");
+  const current = await client.request("GET", `/3.0/coach/program/${args.programId}`);
+  if (!current.ok || !isRecord(current.data)) {
+    const detail = typeof current.data === "string" ? current.data : JSON.stringify(current.data);
+    throw new Error(
+      `GET /3.0/coach/program/${args.programId} failed (HTTP ${current.status}): ${detail}`,
+    );
+  }
+  const res = await client.request("POST", "/1.0/coach/team/updatePublishSettings", {
+    body: { ...current.data, ...args.patch },
+  });
+  if (!res.ok) {
+    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    throw new Error(`updatePublishSettings failed (HTTP ${res.status}): ${detail}`);
+  }
+  return res.data;
+}
+
+/**
  * Copy/repeat a session to a target date on a program (`POST /2.0/coach/calendar/copyProgramWorkout`).
  * The API wants the target date as a structured object (with weekday and an isToday flag),
  * which is computed here from `toDate` (YYYY-M-D). Creates a new (unpublished) session.
@@ -565,4 +614,40 @@ export async function teamVolume(
   );
 
   return { window: { start: args.dateStart, end: args.dateEnd }, athletes, totals };
+}
+
+/** Create a reusable session template in the coach library (`POST /v5/sessions/template`). */
+export async function createSessionTemplate(
+  client: TrainHeroicClient,
+  args: { title: string; instruction?: string },
+): Promise<Record<string, unknown>> {
+  const title = args.title.trim();
+  if (title === "") throw new Error("Session template title must not be blank.");
+  const body: Record<string, unknown> = { title };
+  if (args.instruction !== undefined) body.instruction = args.instruction;
+  const res = await client.request("POST", "/v5/sessions/template", { body });
+  if (!res.ok) {
+    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    throw new Error(`Session template create failed (HTTP ${res.status}): ${detail}`);
+  }
+  if (!isRecord(res.data) || coerceInt(res.data.id) === null) {
+    throw new Error("Session template create response is missing an id.");
+  }
+  return res.data;
+}
+
+/** Delete a library session template (`DELETE /v5/sessions/template/{id}`). */
+export async function deleteSessionTemplate(
+  client: TrainHeroicClient,
+  id: number,
+): Promise<{ deleted: number }> {
+  if (id <= 0) throw new Error("Session template id must be positive.");
+  const res = await client.request("DELETE", `/v5/sessions/template/${id}`, {
+    expectedStatuses: [401, 403, 404],
+  });
+  if (!res.ok) {
+    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    throw new Error(`Session template delete failed (HTTP ${res.status}): ${detail}`);
+  }
+  return { deleted: id };
 }

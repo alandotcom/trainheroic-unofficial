@@ -16,13 +16,17 @@ import {
   exerciseUnits,
   fetchAthletePrefs,
   fetchAthleteProfileSummary,
+  fetchAthleteProgrammingPrograms,
   fetchAthleteUser,
   fetchAthleteWorkouts,
+  fetchCircuitHistory,
+  fetchCircuitRecent,
   fetchExerciseHistoryDetail,
   fetchExerciseHistoryList,
   fetchExerciseStats,
   fetchLeaderboard,
   fetchPersonalRecords,
+  fetchRecentExercises,
   fetchWorkingMaxes,
   isRecord,
   logAdHocSession,
@@ -684,6 +688,55 @@ function registerSwapTool(server: McpServer, ctx: AthleteContext): void {
   );
 }
 
+function registerCoverageReads(server: McpServer, ctx: AthleteContext): void {
+  server.registerTool(
+    "athlete_circuits",
+    {
+      title: "Circuit history",
+      description:
+        "Named circuit history for the logged-in athlete (GET /v5/users/circuits/{recent|history}). " +
+        "kind defaults to recent. Empty when the athlete has no saved circuits. Distinct from " +
+        "circuit *blocks* in workout_build (type 1).",
+      inputSchema: { kind: z.enum(["recent", "history"]).optional() },
+      annotations: READ,
+    },
+    ({ kind }) =>
+      attempt(async () =>
+        jsonResult(
+          kind === "history"
+            ? await fetchCircuitHistory(ctx.client)
+            : await fetchCircuitRecent(ctx.client),
+        ),
+      ),
+  );
+
+  server.registerTool(
+    "athlete_programming_programs",
+    {
+      title: "Subscribed programs",
+      description:
+        "Programs the athlete is subscribed to (GET /1.0/athlete/programming/programs). " +
+        "Not the coach list_programs surface. Empty when the athlete has no subscriptions.",
+      inputSchema: {},
+      annotations: READ,
+    },
+    () => attempt(async () => jsonResult(await fetchAthleteProgrammingPrograms(ctx.client))),
+  );
+
+  server.registerTool(
+    "athlete_recent_exercises",
+    {
+      title: "Recent exercises",
+      description:
+        "Recently used exercises (GET /v5/users/exercises/recent). Distinct from " +
+        "athlete_exercises (full logged catalog) and athlete_exercise_history (one lift).",
+      inputSchema: {},
+      annotations: READ,
+    },
+    () => attempt(async () => jsonResult(await fetchRecentExercises(ctx.client))),
+  );
+}
+
 /**
  * Live tools over the logged-in user's own training (history, scheduled/completed workouts,
  * PRs, working maxes), plus a gated set-logging write. The athlete user id is
@@ -710,6 +763,7 @@ export function registerAthleteTrainingTools(server: McpServer, ctx: AthleteCont
 
   registerProfileTools(server, ctx, whoami, userId);
   registerExerciseTools(server, ctx, userId);
+  registerCoverageReads(server, ctx);
   registerLogTargetsTool(server, ctx);
   registerSessionTools(server, ctx);
   registerLogTool(server, ctx);
