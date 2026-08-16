@@ -85,6 +85,7 @@ function buildApp(
   app.get("/user/simple", (c) => c.json(dataset.userSimple));
   app.get("/v5/headCoach", (c) => c.json(headCoach()));
   app.get("/1.0/coach/programs", (c) => c.json(dataset.programs));
+  app.get("/1.0/coach/workouts", (c) => c.json([]));
   app.get("/v5/notifications/counts", (c) => c.json(notificationCounts()));
   app.get("/v5/analytics", (c) => c.json([]));
   app.get("/v5/exerciseLibrary/all", (c) => c.json(dataset.exerciseLibrary));
@@ -221,6 +222,15 @@ function registerWrites(
   writes: WriteRecord[],
   personal: { current: PersonalSession | null },
 ): void {
+  app.delete("/v5/programs/:id", async (c) => {
+    await record(c, writes);
+    return c.json("Successfully deleted program");
+  });
+  app.delete("/v5/exercises/:id", async (c) => {
+    await record(c, writes);
+    return c.json("ok");
+  });
+
   // Set-write step 1 (the data write) + step 2 (mark complete), coach (…/{athleteId}) and athlete.
   app.put("/1.0/coach/savedworkoutsetexercise/:id/:athleteId", async (c) => {
     await record(c, writes);

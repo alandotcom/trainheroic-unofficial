@@ -1,8 +1,46 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { exerciseCreateSchema } from "@trainheroic-unofficial/dto";
-import { attempt, errorResult, idParam, jsonResult, READ, SYNC, toId } from "../context";
+import { confirmGate } from "../confirm";
+import {
+  attempt,
+  DESTRUCTIVE,
+  errorResult,
+  idParam,
+  jsonResult,
+  READ,
+  SYNC,
+  toId,
+} from "../context";
 import type { ToolContext } from "../context";
+
+function registerExerciseDelete(server: McpServer, index: ToolContext["index"]): void {
+  server.registerTool(
+    "exercise_delete",
+    {
+      title: "Delete custom exercise",
+      description:
+        "Delete a custom exercise on TrainHeroic (DELETE /v5/exercises/{id}) and drop it from " +
+        "the local mirror. Only works for exercises with can_edit:1. Built-in library exercises " +
+        "cannot be deleted. Requires confirmation (elicitation, or confirm:true). " +
+        "exercise_forget only clears the cache — use this to delete the live exercise.",
+      inputSchema: { id: idParam, confirm: z.boolean().optional() },
+      annotations: DESTRUCTIVE,
+    },
+    ({ id, confirm }, extra) =>
+      attempt(async () => {
+        const exerciseId = toId(id);
+        const blocked = confirmGate(
+          extra,
+          `Delete custom exercise ${exerciseId} from the live TrainHeroic library?`,
+          confirm,
+        );
+        if (blocked) return blocked;
+        await index.remove(exerciseId);
+        return jsonResult({ deleted: exerciseId });
+      }),
+  );
+}
 
 /**
  * Exercise library tools over the ExerciseIndex — a D1 mirror on the hosted server, an
@@ -92,12 +130,15 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
       attempt(async () => jsonResult(await index.create(exercise as Record<string, unknown>))),
   );
 
+  registerExerciseDelete(server, index);
+
   server.registerTool(
     "exercise_forget",
     {
       title: "Forget exercise (cache only)",
       description:
-        "Remove an exercise from the local mirror only. Run after deleting it via the API.",
+        "Remove an exercise from the local mirror only. Does not call TrainHeroic — use " +
+        "exercise_delete to delete the live custom exercise.",
       inputSchema: { id: idParam },
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
     },

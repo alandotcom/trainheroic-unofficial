@@ -28,6 +28,7 @@ import {
   collectAdvisories,
   copySession,
   createProgram,
+  deleteProgram,
   definedProps,
   deleteComment,
   ExerciseLibrary,
@@ -150,6 +151,7 @@ Coach — manage a roster (needs a coach account):
 
   teams & join codes:
   coach program-create --kind calendar|fixed --name "..."
+  coach program-delete --program <id> --yes
   coach team-create --title "..."
   coach team-update --team <id> [--title "..."] [--group-program <id>]
   coach team-delete --team <id> --yes
@@ -160,6 +162,7 @@ Coach — manage a roster (needs a coach account):
   coach session-copy --to-program <id> --pw <id> --to-date Y-M-D
   coach session-unpublish --pw <id> --yes
   coach session-save-template --workout <id>
+  coach session-templates
 
   analytics (curated metrics; for team training volume/recency use roster-activity --metric instead):
   coach analytics-query [--metric <key>] [--team <id>] [--users id,id] [--exercise <id>] [--date|--start|--end Y-M-D] [--use-metric]
@@ -172,6 +175,7 @@ Coach — manage a roster (needs a coach account):
   coach exercise get <id>
   coach exercise sync [--force]
   coach exercise create <json>|--file f
+  coach exercise delete <id> --yes
   coach exercise forget <id> --yes
   coach exercise stats
 
@@ -341,6 +345,13 @@ async function cmdExercise(client: TrainHeroicClient, rest: string[]): Promise<v
       const exercise = validate(exerciseCreateSchema, body, "exercise");
       return out(await lib.create(exercise as Record<string, unknown>));
     }
+    case "delete": {
+      const { values, positionals } = parse(a, { yes: { type: "boolean" } });
+      const id = toInt(need(positionals[0], "coach exercise delete <id> --yes"), "id");
+      if (values.yes !== true) fail(`add --yes to delete exercise ${id} from TrainHeroic.`);
+      await lib.remove(id);
+      return out({ deleted: id });
+    }
     case "forget": {
       const { values, positionals } = parse(a, { yes: { type: "boolean" } });
       const id = toInt(need(positionals[0], "coach exercise forget <id> --yes"), "id");
@@ -352,7 +363,7 @@ async function cmdExercise(client: TrainHeroicClient, rest: string[]): Promise<v
       return out(await lib.stats());
     default:
       return fail(
-        "usage: trainheroic coach exercise <resolve|search|get|sync|create|forget|stats>",
+        "usage: trainheroic coach exercise <resolve|search|get|sync|create|delete|forget|stats>",
       );
   }
 }
@@ -1039,7 +1050,7 @@ async function cmdInstallSkill(): Promise<void> {
 }
 
 const COACH_USAGE =
-  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|program-create|team <id>|team-codes <id>|roster-activity|team-volume|athlete-training|athlete-lift-history|main-lift-prs|athlete-workouts|log-set|log-session|prescribe-set|swap-exercise|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|analytics-query|exercise|workout|message>";
+  "usage: trainheroic coach <head-coach|athletes|programs|teams|notifications|analytics|program <id>|program-create|program-delete|team <id>|team-codes <id>|roster-activity|team-volume|athlete-training|athlete-lift-history|main-lift-prs|athlete-workouts|log-set|log-session|prescribe-set|swap-exercise|athlete-invite|athlete-archive|athlete-restore|team-create|team-update|team-delete|team-code-create|team-code-delete|session-copy|session-unpublish|session-save-template|session-templates|analytics-query|exercise|workout|message>";
 
 const COACH_LOG_SET_USAGE =
   "coach log-set --athlete <id> --date Y-M-D --set <savedWorkoutSetId> <resultsJson> --yes";
@@ -1328,6 +1339,15 @@ async function cmdCoachProgramCreate(client: TrainHeroicClient, a: string[]): Pr
   return out(await createProgram(client, { kind: kind as (typeof PROGRAM_KINDS)[number], name }));
 }
 
+async function cmdCoachProgramDelete(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const usage = "coach program-delete --program <id> --yes";
+  const { values } = parse(a, { program: { type: "string" }, yes: { type: "boolean" } });
+  const programId = toInt(need(values.program as string | undefined, usage), "--program");
+  if (values.yes !== true)
+    fail(`deleting program ${programId} removes the standalone calendar; add --yes.`);
+  return out(await deleteProgram(client, programId));
+}
+
 async function cmdCoachTeamUpdate(client: TrainHeroicClient, a: string[]): Promise<void> {
   const usage =
     'coach team-update --team <id> [--title "..."] [--group-program <id>]  (at least one of --title / --group-program)';
@@ -1602,6 +1622,8 @@ async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void
       return cmdCoachTeamCreate(client, a);
     case "program-create":
       return cmdCoachProgramCreate(client, a);
+    case "program-delete":
+      return cmdCoachProgramDelete(client, a);
     case "team-update":
       return cmdCoachTeamUpdate(client, a);
     case "team-delete":
@@ -1616,6 +1638,8 @@ async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void
       return cmdCoachSessionUnpublish(client, a);
     case "session-save-template":
       return cmdCoachSessionSaveTemplate(client, a);
+    case "session-templates":
+      return out(await get(client, "/1.0/coach/workouts?page=1&pageSize=50"));
     case "analytics-query":
       return cmdCoachAnalyticsQuery(client, a);
     case "exercise":

@@ -165,14 +165,17 @@ The `.` entry imports no `node:*` modules. Anything that touches the filesystem 
 returns both `containerId` (the id in `GET /1.0/coach/programs`) and `programId` (the id used by
 program detail and workout writes). TrainHeroic may replace the requested name; inspect the
 returned `title` and `nameApplied`. Creation is not idempotent, so do not blindly retry an
-uncertain result.
+uncertain result. `deleteProgram(client, programId)` removes it via `DELETE /v5/programs/{id}`
+and accepts either id (a container id is resolved to `group_program` first).
 
 ## Working with exercises
 
 `ExerciseLibrary` loads the full library once, caches it, and answers name lookups and fuzzy
 search against the in-memory copy. By default it caches in memory; pass a `JsonFileLibraryCache`
 from `./node` to persist between runs (it writes to `defaultCachePath()`,
-`~/.trainheroic/library.json`, unless you pass a path).
+`~/.trainheroic/library.json`, unless you pass a path). `create` / `remove` write through to
+TrainHeroic (`POST /2.0/coach/exercise/create`, `DELETE /v5/exercises/{id}`); `recordDelete`
+only drops the cached row.
 
 ```ts
 import { ExerciseLibrary } from "@trainheroic-unofficial/js";

@@ -3,8 +3,10 @@
 // single-request CRUD with no response-shaping logic (team create/delete, team-code,
 // archive/restore, session unpublish/save-as-template) is left to the callers' own
 // `request`/`apiCall`. Program creation lives here because its two returned ids have different
-// meanings. Team update lives here because re-pointing `group_program` requires a title (API 400
-// without one), so we may need a GET-then-PUT.
+// meanings. Program deletion lives here because `DELETE /v5/programs/{id}` 401s on a
+// list_programs container id and must use the underlying program id. Team update lives here
+// because re-pointing `group_program` requires a title (API 400 without one), so we may need a
+// GET-then-PUT.
 
 import { parseWorkoutDate, programCreateResponseSchema } from "@trainheroic-unofficial/dto";
 import type { TeamVolumeAthlete, TeamVolumeReport } from "@trainheroic-unofficial/dto";
@@ -80,6 +82,60 @@ export async function createProgram(
     requestedName,
     nameApplied: title === requestedName,
   };
+}
+
+export type DeletedProgram = {
+  /** Actual program id sent to `DELETE /v5/programs/{id}`. */
+  programId: number;
+  /** Container id when the caller passed a list_programs row id (otherwise null). */
+  containerId: number | null;
+};
+
+/**
+ * Delete a standalone program (`DELETE /v5/programs/{programId}`).
+ *
+ * The live API 401s when the path id is a list_programs container id. Pass either id: this
+ * resolves a container to its `group_program` first. Team calendars are not in that list; their
+ * program id is deleted as given. This is not idempotent against an unknown failure.
+ */
+export async function deleteProgram(
+  client: TrainHeroicClient,
+  programId: number,
+): Promise<DeletedProgram> {
+  if (!Number.isInteger(programId) || programId <= 0) {
+    throw new Error("Program id must be a positive integer.");
+  }
+
+  let targetId = programId;
+  let containerId: number | null = null;
+
+  const programs = await client.request<unknown>("GET", "/1.0/coach/programs");
+  if (programs.ok && Array.isArray(programs.data)) {
+    const asContainer = programs.data.find(
+      (item) => isRecord(item) && coerceInt(item.id) === programId,
+    );
+    if (isRecord(asContainer)) {
+      const resolved = coerceInt(asContainer.group_program);
+      if (resolved !== null) {
+        containerId = programId;
+        targetId = resolved;
+      }
+    } else {
+      const asProgram = programs.data.find(
+        (item) => isRecord(item) && coerceInt(item.group_program) === programId,
+      );
+      if (isRecord(asProgram)) containerId = coerceInt(asProgram.id);
+    }
+  }
+
+  const res = await client.request("DELETE", `/v5/programs/${targetId}`, {
+    expectedStatuses: [401, 403, 404],
+  });
+  if (!res.ok) {
+    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    throw new Error(`Program delete failed (HTTP ${res.status}): ${detail}`);
+  }
+  return { programId: targetId, containerId };
 }
 
 /** Normalize one-or-many emails into a deduped, trimmed list. */

@@ -22,6 +22,7 @@ import { checkResponse } from "./response-check";
 
 const LIBRARY_PATH = "/v5/exerciseLibrary/all";
 const CREATE_PATH = "/2.0/coach/exercise/create";
+const DELETE_PATH = (id: number): string => `/v5/exercises/${id}`;
 const TTL_MS = 7 * 24 * 3600 * 1000;
 
 type Stored = {
@@ -195,6 +196,14 @@ export class ExerciseLibrary implements ExerciseIndex {
       }
     }
     return ex as Record<string, unknown>;
+  }
+
+  async remove(id: number): Promise<void> {
+    const res = await this.#client.request("DELETE", DELETE_PATH(id), {
+      expectedStatuses: [401, 403, 404],
+    });
+    if (!res.ok) throw new Error(`Exercise delete failed (HTTP ${res.status}).`);
+    await this.recordDelete(id);
   }
 
   async recordDelete(id: number): Promise<void> {

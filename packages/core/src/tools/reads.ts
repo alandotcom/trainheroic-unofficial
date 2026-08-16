@@ -101,6 +101,16 @@ const SIMPLE_GETS: ReadonlyArray<{
       "(self-describing) enum instead; you rarely need this tool.",
     path: "/v5/analytics",
   },
+  {
+    name: "list_session_templates",
+    title: "List session templates",
+    description:
+      "Session templates in the coach library (GET /1.0/coach/workouts). Use a template id " +
+      "with session_save_as_template's inverse: this lists saved templates; " +
+      "session_save_as_template writes one from an existing session. Empty when the library " +
+      "has no templates yet.",
+    path: "/1.0/coach/workouts?page=1&pageSize=50",
+  },
 ];
 
 /** Roster-level reads: the fixed GETs plus the filterable athlete and team lists. */
