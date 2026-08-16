@@ -1,5 +1,11 @@
 # @trainheroic-unofficial/dto
 
+## 3.1.1
+
+### Patch Changes
+
+- 0d0a9e9: Resolve standalone container ids to their underlying TrainHeroic program ids instead of reporting an authentication error, and add typed SDK, MCP, and CLI support for creating standalone calendars and fixed programs.
+
 ## 3.1.0
 
 ### Minor Changes
