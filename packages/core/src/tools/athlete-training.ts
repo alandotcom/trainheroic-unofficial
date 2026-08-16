@@ -19,8 +19,7 @@ import {
   fetchAthleteProgrammingPrograms,
   fetchAthleteUser,
   fetchAthleteWorkouts,
-  fetchCircuitHistory,
-  fetchCircuitRecent,
+  fetchAthleteCircuits,
   fetchExerciseHistoryDetail,
   fetchExerciseHistoryList,
   fetchExerciseStats,
@@ -688,7 +687,7 @@ function registerSwapTool(server: McpServer, ctx: AthleteContext): void {
   );
 }
 
-function registerCoverageReads(server: McpServer, ctx: AthleteContext): void {
+function registerCatalogReads(server: McpServer, ctx: AthleteContext): void {
   server.registerTool(
     "athlete_circuits",
     {
@@ -701,13 +700,7 @@ function registerCoverageReads(server: McpServer, ctx: AthleteContext): void {
       annotations: READ,
     },
     ({ kind }) =>
-      attempt(async () =>
-        jsonResult(
-          kind === "history"
-            ? await fetchCircuitHistory(ctx.client)
-            : await fetchCircuitRecent(ctx.client),
-        ),
-      ),
+      attempt(async () => jsonResult(await fetchAthleteCircuits(ctx.client, kind ?? "recent"))),
   );
 
   server.registerTool(
@@ -763,7 +756,7 @@ export function registerAthleteTrainingTools(server: McpServer, ctx: AthleteCont
 
   registerProfileTools(server, ctx, whoami, userId);
   registerExerciseTools(server, ctx, userId);
-  registerCoverageReads(server, ctx);
+  registerCatalogReads(server, ctx);
   registerLogTargetsTool(server, ctx);
   registerSessionTools(server, ctx);
   registerLogTool(server, ctx);

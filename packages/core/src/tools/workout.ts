@@ -12,14 +12,14 @@ import {
   collectAdvisories,
   copySession,
   createSessionTemplate,
-  deleteSessionTemplate,
+  definedProps,
   publishSession,
   readSession,
   removeSession,
   resolveBuildProgramId,
 } from "@trainheroic-unofficial/js";
 import { confirmGate } from "../confirm";
-import { apiCall, attempt, errorResult, idParam, jsonResult, toId } from "../context";
+import { apiCall, attempt, DESTRUCTIVE, errorResult, idParam, jsonResult, toId } from "../context";
 import type { ToolContext } from "../context";
 
 /** Build a draft session (workout_build). */
@@ -234,11 +234,9 @@ function registerTemplateLibrary(server: McpServer, ctx: ToolContext): void {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     ({ title, instruction }) =>
-      attempt(async () => {
-        const args: { title: string; instruction?: string } = { title };
-        if (instruction !== undefined) args.instruction = instruction;
-        return jsonResult(await createSessionTemplate(ctx.client, args));
-      }),
+      attempt(async () =>
+        jsonResult(await createSessionTemplate(ctx.client, definedProps({ title, instruction }))),
+      ),
   );
 
   server.registerTool(
@@ -248,18 +246,19 @@ function registerTemplateLibrary(server: McpServer, ctx: ToolContext): void {
       description:
         "Delete a library session template (DELETE /v5/sessions/template/{id}). Requires " +
         "confirmation (elicitation, or confirm:true).",
-      inputSchema: { id: z.number(), confirm: z.boolean().optional() },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      inputSchema: { id: idParam, confirm: z.boolean().optional() },
+      annotations: DESTRUCTIVE,
     },
     ({ id, confirm }, extra) =>
       attempt(async () => {
+        const templateId = toId(id);
         const blocked = confirmGate(
           extra,
-          `Delete session template ${id} from the library?`,
+          `Delete session template ${templateId} from the library?`,
           confirm,
         );
         if (blocked) return blocked;
-        return jsonResult(await deleteSessionTemplate(ctx.client, id));
+        return apiCall(ctx, "DELETE", `/v5/sessions/template/${templateId}`);
       }),
   );
 }

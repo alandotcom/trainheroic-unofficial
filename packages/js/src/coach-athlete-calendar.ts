@@ -95,25 +95,6 @@ export async function fetchCoachAthleteCalendar(
 }
 
 /**
- * Companion calendar for a roster athlete (`GET /v5/calendars/athletes/{id}/coachAthleteTeam`).
- * Distinct from `fetchCoachAthleteCalendar` (type-5 individual calendar).
- */
-export async function fetchCoachAthleteTeamCalendar(
-  client: TrainHeroicClient,
-  athleteId: number,
-): Promise<Record<string, unknown>> {
-  if (athleteId <= 0) throw new Error("athleteId must be positive.");
-  const path = `/v5/calendars/athletes/${athleteId}/coachAthleteTeam`;
-  const res = await client.request("GET", path);
-  if (!res.ok) {
-    const detail = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
-    throw new Error(`GET ${path} failed (HTTP ${res.status}): ${detail}`);
-  }
-  if (!isRecord(res.data)) throw new Error("Unexpected coach-athlete-team calendar response.");
-  return res.data;
-}
-
-/**
  * Resolve the calendar program id for `workout_build` / `coach workout build`: either an
  * explicit team/group `programId`, or a roster `athleteId` (+ date) via
  * `fetchCoachAthleteCalendar`. Exactly one of programId / athleteId is required.
