@@ -6,11 +6,13 @@ import {
   fetchExerciseHistoryDetail,
   fetchRosterActivity,
   fetchTeamAthleteIds,
+  coerceInt,
+  isRecord,
   presentCoachAthleteTraining,
   presentExerciseHistory,
   teamVolume,
 } from "@trainheroic-unofficial/js";
-import { apiCall, attempt, idParam, jsonResult, READ, toId } from "../context";
+import { apiCall, apiResponseResult, attempt, idParam, jsonResult, READ, toId } from "../context";
 import type { ToolContext } from "../context";
 import { historyInRange } from "../history";
 
@@ -301,19 +303,42 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
       description:
         "Full nested program structure (blocks + sessions) live from the API, by program id. " +
         "Works for team calendars and athlete coach calendars (type 5 from " +
-        "/v5/calendars/athletes/{id}). Some unrelated ids return HTTP 401 Cannot access program.",
+        "/v5/calendars/athletes/{id}). Some valid standalone calendars from list_programs do not " +
+        "expose nested detail; those return calendar metadata and next-step guidance instead.",
       inputSchema: { programId: idParam },
       annotations: READ,
     },
-    ({ programId }) =>
-      apiCall(
-        ctx,
-        "GET",
-        `/3.0/coach/program/${enc(programId)}`,
-        undefined,
-        "This is a large, deep object. If it is truncated, fetch a narrower view (a specific session) instead.",
-      ),
+    ({ programId }) => getProgram(ctx, toId(programId)),
   );
+}
+
+async function getProgram(ctx: ToolContext, programId: number) {
+  return attempt(async () => {
+    const detail = await ctx.client.request("GET", `/3.0/coach/program/${enc(programId)}`, {
+      expectedStatuses: [401, 403],
+    });
+    if (detail.ok || (detail.status !== 401 && detail.status !== 403)) {
+      return apiResponseResult(
+        detail,
+        "This is a large, deep object. If it is truncated, fetch a narrower view (a specific session) instead.",
+      );
+    }
+
+    const programs = await ctx.client.request<unknown>("GET", "/1.0/coach/programs");
+    const program = Array.isArray(programs.data)
+      ? programs.data.find((item) => isRecord(item) && coerceInt(item.id) === programId)
+      : undefined;
+    if (!programs.ok || !program) return apiResponseResult(detail);
+
+    return jsonResult({
+      program,
+      detailAvailable: false,
+      note:
+        "TrainHeroic recognizes this as a valid standalone calendar, but its nested program-detail " +
+        "endpoint does not expose this calendar type. Use calendar/session reads instead; on the " +
+        "hosted server, programming_sync then programming_stored can read its dated sessions.",
+    });
+  });
 }
 
 /** Read-only coach/athlete queries. Exercise lookups live in the exercise store tools. */
