@@ -3,7 +3,6 @@ import { z } from "zod";
 import { dateString } from "@trainheroic-unofficial/dto";
 import {
   fetchCoachAthleteCalendarSummary,
-  fetchCoachAthleteTeamCalendar,
   fetchExerciseHistoryDetail,
   fetchRosterActivity,
   fetchTeamAthleteIds,
@@ -11,6 +10,7 @@ import {
   isRecord,
   presentCoachAthleteTraining,
   presentExerciseHistory,
+  SESSION_TEMPLATES_LIST_PATH,
   teamVolume,
 } from "@trainheroic-unofficial/js";
 import { apiCall, apiResponseResult, attempt, idParam, jsonResult, READ, toId } from "../context";
@@ -134,7 +134,7 @@ const SIMPLE_GETS: ReadonlyArray<{
       "with session_save_as_template's inverse: this lists saved templates; " +
       "session_save_as_template writes one from an existing session. Empty when the library " +
       "has no templates yet.",
-    path: "/1.0/coach/workouts?page=1&pageSize=50",
+    path: SESSION_TEMPLATES_LIST_PATH,
   },
 ];
 
@@ -457,8 +457,6 @@ function registerCoachAthleteTeamCalendar(server: McpServer, ctx: ToolContext): 
       annotations: READ,
     },
     ({ athleteId }) =>
-      attempt(async () =>
-        jsonResult(await fetchCoachAthleteTeamCalendar(ctx.client, toId(athleteId))),
-      ),
+      apiCall(ctx, "GET", `/v5/calendars/athletes/${toId(athleteId)}/coachAthleteTeam`),
   );
 }

@@ -1,5 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/server";
-import { updateTeam, updateTeamPublishSettings } from "@trainheroic-unofficial/js";
+import { teamPublishPatchObject, teamPublishPatchSchema } from "@trainheroic-unofficial/dto";
+import {
+  definedProps,
+  teamPublishTarget,
+  updateTeam,
+  updateTeamPublishSettings,
+} from "@trainheroic-unofficial/js";
 import { z } from "zod";
 import { confirmGate } from "../confirm";
 import { apiCall, attempt, DESTRUCTIVE, idParam, jsonResult, toId } from "../context";
@@ -132,10 +138,7 @@ function registerTeamPublishSettings(server: McpServer, ctx: ToolContext): void 
       inputSchema: {
         teamId: idParam.optional(),
         programId: idParam.optional(),
-        pub_enabled: z.union([z.number(), z.boolean()]).optional(),
-        pub_days: z.unknown().optional(),
-        pub_time: z.unknown().optional(),
-        pub_timezone: z.string().optional(),
+        ...teamPublishPatchObject.shape,
         confirm: z.boolean().optional(),
       },
       annotations: DESTRUCTIVE,
@@ -148,17 +151,16 @@ function registerTeamPublishSettings(server: McpServer, ctx: ToolContext): void 
           confirm,
         );
         if (blocked) return blocked;
-        const patch: Record<string, unknown> = {};
-        if (pub_enabled !== undefined) patch.pub_enabled = pub_enabled;
-        if (pub_days !== undefined) patch.pub_days = pub_days;
-        if (pub_time !== undefined) patch.pub_time = pub_time;
-        if (pub_timezone !== undefined) patch.pub_timezone = pub_timezone;
-        const args: { patch: Record<string, unknown>; programId?: number; teamId?: number } = {
-          patch,
-        };
-        if (programId !== undefined) args.programId = toId(programId);
-        if (teamId !== undefined) args.teamId = toId(teamId);
-        return jsonResult(await updateTeamPublishSettings(ctx.client, args));
+        const patch = teamPublishPatchSchema.parse(
+          definedProps({ pub_enabled, pub_days, pub_time, pub_timezone }),
+        );
+        const target = teamPublishTarget(
+          definedProps({
+            programId: programId !== undefined ? toId(programId) : undefined,
+            teamId: teamId !== undefined ? toId(teamId) : undefined,
+          }),
+        );
+        return jsonResult(await updateTeamPublishSettings(ctx.client, { ...target, patch }));
       }),
   );
 }

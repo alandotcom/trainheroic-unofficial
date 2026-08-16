@@ -184,28 +184,24 @@ export class ExerciseLibrary implements ExerciseIndex {
   }
 
   async create(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-    await this.ensureFresh();
-    const res = await this.#client.request("POST", CREATE_PATH, { body });
-    if (!res.ok) throw new Error(`Exercise create failed (HTTP ${res.status}).`);
-    const ex = unwrapEnvelope(res.data);
-    if (ex && typeof ex === "object") {
-      checkResponse(exerciseResponseSchema, ex, "exercise create");
-      const s = toStored(ex as Record<string, unknown>);
-      if (s) {
-        this.#byId.set(s.id, s);
-        await this.#persist();
-      }
-    }
-    return ex as Record<string, unknown>;
+    return this.#writeThrough(CREATE_PATH, body, "create");
   }
 
   async update(id: number, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.#writeThrough(UPDATE_PATH(id), body, "update");
+  }
+
+  async #writeThrough(
+    path: string,
+    body: Record<string, unknown>,
+    label: string,
+  ): Promise<Record<string, unknown>> {
     await this.ensureFresh();
-    const res = await this.#client.request("POST", UPDATE_PATH(id), { body });
-    if (!res.ok) throw new Error(`Exercise update failed (HTTP ${res.status}).`);
+    const res = await this.#client.request("POST", path, { body });
+    if (!res.ok) throw new Error(`Exercise ${label} failed (HTTP ${res.status}).`);
     const ex = unwrapEnvelope(res.data);
     if (ex && typeof ex === "object") {
-      checkResponse(exerciseResponseSchema, ex, "exercise update");
+      checkResponse(exerciseResponseSchema, ex, `exercise ${label}`);
       const s = toStored(ex as Record<string, unknown>);
       if (s) {
         this.#byId.set(s.id, s);

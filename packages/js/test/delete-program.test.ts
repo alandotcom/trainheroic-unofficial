@@ -30,7 +30,7 @@ describe("deleteProgram", () => {
 
     const result = await deleteProgram(new TrainHeroicClient("a@b.com", "pw"), 5074349);
 
-    expect(result).toEqual({ programId: 5074349, containerId: 5038722 });
+    expect(result).toEqual({ programId: 5074349, containerId: null });
     expect(paths.some((p) => p.endsWith("/v5/programs/5074349"))).toBe(true);
     expect(paths.some((p) => p.endsWith("/v5/programs/5038722"))).toBe(false);
   });
@@ -92,6 +92,21 @@ describe("deleteProgram", () => {
 
     await expect(deleteProgram(new TrainHeroicClient("a@b.com", "pw"), 99)).rejects.toThrow(
       /HTTP 401/u,
+    );
+  });
+
+  it("throws when listing programs fails before the delete", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+        if (url.endsWith("/1.0/coach/programs")) return json("nope", 500);
+        return json({}, 404);
+      }),
+    );
+
+    await expect(deleteProgram(new TrainHeroicClient("a@b.com", "pw"), 99)).rejects.toThrow(
+      /GET \/1\.0\/coach\/programs failed \(HTTP 500\)/u,
     );
   });
 });

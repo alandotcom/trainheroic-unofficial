@@ -32,7 +32,6 @@ import {
   createProgram,
   createSessionTemplate,
   deleteProgram,
-  deleteSessionTemplate,
   definedProps,
   deleteComment,
   ExerciseLibrary,
@@ -44,11 +43,9 @@ import {
   fetchAthleteUser,
   fetchAthleteWorkouts,
   fetchAthleteWorkoutsChunked,
+  fetchAthleteCircuits,
   fetchCoachAthleteCalendarSummary,
-  fetchCoachAthleteTeamCalendar,
   fetchCoachAthleteWorkouts,
-  fetchCircuitHistory,
-  fetchCircuitRecent,
   fetchExerciseHistoryDetail,
   fetchExerciseHistoryList,
   fetchExerciseStats,
@@ -63,6 +60,7 @@ import {
   inviteAthletes,
   updateTeam,
   updateTeamPublishSettings,
+  teamPublishTarget,
   logAdHocSession,
   logAthleteSet,
   logForAthlete,
@@ -78,6 +76,7 @@ import {
   presentAthleteWorkoutsExport,
   serializeWorkoutHistory,
   type WorkoutExportFormat,
+  SESSION_TEMPLATES_LIST_PATH,
   presentCoachAthleteTraining,
   presentLogTargets,
   presentExerciseHistory,
@@ -964,9 +963,7 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
       const { values } = parse(a, { kind: { type: "string" } });
       const kind = (values.kind as string | undefined) ?? "recent";
       if (kind !== "recent" && kind !== "history") fail("athlete circuits --kind recent|history");
-      return out(
-        kind === "history" ? await fetchCircuitHistory(client) : await fetchCircuitRecent(client),
-      );
+      return out(await fetchAthleteCircuits(client, kind));
     }
     case "programs":
       return out(await fetchAthleteProgrammingPrograms(client));
@@ -1473,10 +1470,12 @@ async function cmdCoachSessionTemplateCreate(
   const { values } = parse(a, { title: { type: "string" }, instruction: { type: "string" } });
   const title = need(values.title as string | undefined, usage);
   const instruction = values.instruction as string | undefined;
-  const args = validate(sessionTemplateCreateSchema, { title, instruction }, "session template");
-  const body: { title: string; instruction?: string } = { title: args.title };
-  if (args.instruction !== undefined) body.instruction = args.instruction;
-  return out(await createSessionTemplate(client, body));
+  const args = validate(
+    sessionTemplateCreateSchema,
+    definedProps({ title, instruction }),
+    "session template",
+  );
+  return out(await createSessionTemplate(client, args));
 }
 
 async function cmdCoachSessionTemplateDelete(
@@ -1487,12 +1486,12 @@ async function cmdCoachSessionTemplateDelete(
   const { values } = parse(a, { id: { type: "string" }, yes: { type: "boolean" } });
   const id = toInt(need(values.id as string | undefined, usage), "--id");
   if (values.yes !== true) fail(`add --yes to delete session template ${id}.`);
-  return out(await deleteSessionTemplate(client, id));
+  return out(await mutate(client, "DELETE", `/v5/sessions/template/${id}`));
 }
 
 async function cmdCoachTeamPublishSettings(client: TrainHeroicClient, a: string[]): Promise<void> {
   const usage =
-    "coach team-publish-settings (--team <id> | --program <id>) [--pub-enabled 0|1] --yes";
+    "coach team-publish-settings (--team <id> | --program <id>) [--pub-enabled 0|1] [--pub-days ...] [--pub-time ...] [--pub-timezone ...] --yes";
   const { values } = parse(a, {
     team: { type: "string" },
     program: { type: "string" },
@@ -1506,18 +1505,26 @@ async function cmdCoachTeamPublishSettings(client: TrainHeroicClient, a: string[
   const programRaw = values.program as string | undefined;
   if ((teamRaw === undefined) === (programRaw === undefined)) fail(usage);
   if (values.yes !== true) fail("changing auto-publish is athlete-facing; add --yes.");
-  const patch: Record<string, unknown> = {};
-  if (values["pub-enabled"] !== undefined) {
-    patch.pub_enabled = toInt(values["pub-enabled"] as string, "--pub-enabled");
-  }
-  if (values["pub-days"] !== undefined) patch.pub_days = values["pub-days"];
-  if (values["pub-time"] !== undefined) patch.pub_time = values["pub-time"];
-  if (values["pub-timezone"] !== undefined) patch.pub_timezone = values["pub-timezone"];
-  validate(teamPublishPatchSchema, patch, "publish settings");
-  const args: { patch: Record<string, unknown>; teamId?: number; programId?: number } = { patch };
-  if (teamRaw !== undefined) args.teamId = toInt(teamRaw, "--team");
-  if (programRaw !== undefined) args.programId = toInt(programRaw, "--program");
-  return out(await updateTeamPublishSettings(client, args));
+  const patch = validate(
+    teamPublishPatchSchema,
+    definedProps({
+      pub_enabled:
+        values["pub-enabled"] !== undefined
+          ? toInt(values["pub-enabled"] as string, "--pub-enabled")
+          : undefined,
+      pub_days: values["pub-days"],
+      pub_time: values["pub-time"],
+      pub_timezone: values["pub-timezone"],
+    }),
+    "publish settings",
+  );
+  const target = teamPublishTarget(
+    definedProps({
+      teamId: teamRaw !== undefined ? toInt(teamRaw, "--team") : undefined,
+      programId: programRaw !== undefined ? toInt(programRaw, "--program") : undefined,
+    }),
+  );
+  return out(await updateTeamPublishSettings(client, { ...target, patch }));
 }
 
 async function cmdCoachAnalyticsQuery(client: TrainHeroicClient, a: string[]): Promise<void> {
@@ -1650,27 +1657,26 @@ async function cmdCoachMainLiftPrs(client: TrainHeroicClient, a: string[]): Prom
   );
 }
 
+const COACH_SIMPLE_GETS: Record<string, string> = {
+  "head-coach": "/v5/headCoach",
+  athletes: "/v5/athletes",
+  programs: "/1.0/coach/programs",
+  teams: "/1.0/coach/teams",
+  notifications: "/v5/notifications/counts",
+  "notifications-list": "/v5/notifications",
+  subscriptions: "/1.0/coach/subscriptions",
+  "prescription-templates": "/2.0/coach/workoutSetExercise/template",
+  analytics: "/v5/analytics",
+  "session-templates": SESSION_TEMPLATES_LIST_PATH,
+};
+
 async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void> {
   const [sub, ...a] = rest;
+  if (sub !== undefined) {
+    const path = COACH_SIMPLE_GETS[sub];
+    if (path !== undefined) return out(await get(client, path));
+  }
   switch (sub) {
-    case "head-coach":
-      return out(await get(client, "/v5/headCoach"));
-    case "athletes":
-      return out(await get(client, "/v5/athletes"));
-    case "programs":
-      return out(await get(client, "/1.0/coach/programs"));
-    case "teams":
-      return out(await get(client, "/1.0/coach/teams"));
-    case "notifications":
-      return out(await get(client, "/v5/notifications/counts"));
-    case "notifications-list":
-      return out(await get(client, "/v5/notifications"));
-    case "subscriptions":
-      return out(await get(client, "/1.0/coach/subscriptions"));
-    case "prescription-templates":
-      return out(await get(client, "/2.0/coach/workoutSetExercise/template"));
-    case "analytics":
-      return out(await get(client, "/v5/analytics"));
     case "program":
       return out(
         await get(
@@ -1703,7 +1709,7 @@ async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void
         need(values.athlete as string | undefined, "coach athlete-team-calendar --athlete <id>"),
         "--athlete",
       );
-      return out(await fetchCoachAthleteTeamCalendar(client, athleteId));
+      return out(await get(client, `/v5/calendars/athletes/${athleteId}/coachAthleteTeam`));
     }
     case "main-lift-prs":
       return cmdCoachMainLiftPrs(client, a);
@@ -1745,8 +1751,6 @@ async function cmdCoach(client: TrainHeroicClient, rest: string[]): Promise<void
       return cmdCoachSessionUnpublish(client, a);
     case "session-save-template":
       return cmdCoachSessionSaveTemplate(client, a);
-    case "session-templates":
-      return out(await get(client, "/1.0/coach/workouts?page=1&pageSize=50"));
     case "session-template-create":
       return cmdCoachSessionTemplateCreate(client, a);
     case "session-template-delete":

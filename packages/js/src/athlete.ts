@@ -169,12 +169,11 @@ export function fetchRecentExercises(client: TrainHeroicClient): Promise<unknown
   return getArray(client, "/v5/users/exercises/recent", "athlete recent exercises");
 }
 
-export function fetchCircuitRecent(client: TrainHeroicClient): Promise<unknown[]> {
-  return getArray(client, "/v5/users/circuits/recent", "athlete recent circuits");
-}
-
-export function fetchCircuitHistory(client: TrainHeroicClient): Promise<unknown[]> {
-  return getArray(client, "/v5/users/circuits/history", "athlete circuit history");
+export function fetchAthleteCircuits(
+  client: TrainHeroicClient,
+  kind: "recent" | "history" = "recent",
+): Promise<unknown[]> {
+  return getArray(client, `/v5/users/circuits/${kind}`, `athlete ${kind} circuits`);
 }
 
 export function fetchAthleteProgrammingPrograms(client: TrainHeroicClient): Promise<unknown[]> {
