@@ -15,7 +15,7 @@ Recent discovery that drove this inventory: [PR #104](https://github.com/alandot
 
 **100% coverage** means every in-scope row is either **SDK + MCP + CLI + tests**, or moved
 to [Closed without a wrap](#closed-without-a-wrap) with probe evidence. Marketplace stays
-out of scope.
+out of scope. Ordered wrap slices: [`tasks/plan.md`](../../../tasks/plan.md).
 
 ## Remaining wrap gaps
 

@@ -9,3 +9,5 @@ skill:
 
 When you wrap a new endpoint, update `coverage.md` and the "Still Unexplored" sections in the
 CLI skill api-references. Do not fork a third inventory here.
+
+Remaining wrap work is sliced in [`tasks/plan.md`](../../tasks/plan.md).
