@@ -1,5 +1,21 @@
 # @trainheroic-unofficial/eval
 
+## 3.2.0
+
+### Minor Changes
+
+- c6b63fe: Add program/exercise delete, custom-exercise update, session-template library CRUD,
+  athlete circuit/program/recent-exercise reads, notifications list, subscriptions,
+  prescription templates, coach-athlete-team calendar, and team auto-publish after
+  live-probing the undocumented TrainHeroic paths.
+
+### Patch Changes
+
+- Updated dependencies [6c2400e]
+- Updated dependencies [c6b63fe]
+  - @trainheroic-unofficial/dto@3.2.0
+  - @trainheroic-unofficial/js@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes
