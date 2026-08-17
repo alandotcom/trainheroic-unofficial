@@ -23,7 +23,7 @@
     "@trainheroic-unofficial/db": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
     "agents": "^0.20.1",
-    "drizzle-orm": "1.0.0-rc.4",
+    "drizzle-orm": "1.0.0-rc.5-169397b",
     "hono": "^4.13.2",
     "zod": "^4.4.3"
   },
@@ -32,7 +32,7 @@
     "@cloudflare/vitest-pool-workers": "^0.21.3",
     "@cloudflare/workers-types": "^5.20260816.1",
     "@types/node": "^26.2.0",
-    "drizzle-kit": "1.0.0-rc.4",
+    "drizzle-kit": "1.0.0-rc.5-ab785fc",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10",
     "wrangler": "^4.123.0"
