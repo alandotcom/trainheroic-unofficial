@@ -31,11 +31,14 @@ describe("loginTrainHeroic", () => {
           name: "TrainHeroicHttpError",
           method: "POST",
           host: "apis.trainheroic.com",
+          requestBody: undefined,
+          responseBody: "upstream error",
           status,
         }),
       );
-      expect(String(onHttpError.mock.calls[0]?.[0])).not.toContain("private@example.com");
-      expect(String(onHttpError.mock.calls[0]?.[0])).not.toContain("very-secret");
+      const reported = JSON.stringify(onHttpError.mock.calls[0]?.[0]);
+      expect(reported).not.toContain("private@example.com");
+      expect(reported).not.toContain("very-secret");
     },
   );
 
@@ -62,6 +65,25 @@ describe("loginTrainHeroic", () => {
     );
     expect(await loginTrainHeroic("a@b.com", "bad", { onHttpError })).toBeNull();
     expect(onHttpError).toHaveBeenCalledWith(expect.objectContaining({ status: 401 }));
+  });
+
+  it("still returns null when an error response body cannot be read", async () => {
+    const onHttpError = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 500,
+        text: async () => {
+          throw new Error("body stream failed");
+        },
+      })),
+    );
+
+    expect(await loginTrainHeroic("a@b.com", "pw", { onHttpError })).toBeNull();
+    expect(onHttpError).toHaveBeenCalledWith(
+      expect.objectContaining({ responseBody: undefined, status: 500 }),
+    );
   });
 
   it("returns null when session_id is missing", async () => {

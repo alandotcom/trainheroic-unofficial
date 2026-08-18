@@ -125,7 +125,12 @@ export function tagMcpUser(key: string): void {
  * SDK surfaces them through its observability hook.
  */
 function captureTrainHeroicHttpError(error: TrainHeroicHttpError): void {
+  const extra: Record<string, unknown> = {};
+  if (error.requestBody !== undefined) extra["trainheroic.request_body"] = error.requestBody;
+  if (error.responseBody !== undefined) extra["trainheroic.response_body"] = error.responseBody;
+
   Sentry.captureException(error, {
+    ...(Object.keys(extra).length > 0 ? { extra } : {}),
     tags: {
       "upstream.service": "trainheroic",
       "http.request.method": error.method,
