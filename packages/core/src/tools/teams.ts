@@ -6,7 +6,7 @@ import { apiCall, attempt, DESTRUCTIVE, idParam, jsonResult, toId } from "../con
 import type { ToolContext } from "../context";
 
 // Additive writes (create, rename, add code) are not gated, matching exercise_create.
-// Deletes act on live data and gate through confirmGate.
+// Calendar reassignment and deletes act on live data and gate through confirmGate.
 const ADDITIVE = { readOnlyHint: false, destructiveHint: false, openWorldHint: true } as const;
 
 /**
@@ -39,21 +39,30 @@ export function registerTeamTools(server: McpServer, ctx: ToolContext): void {
         "Pass groupProgram (a program/calendar id — typically another team's group_program from " +
         "list_teams, or get_team) to point this team at an existing parent program. At least one " +
         "of title or groupProgram is required; when only groupProgram is set the current title " +
-        "is preserved.",
+        "is preserved. Calendar reassignment requires confirmation (elicitation, or confirm:true).",
       inputSchema: {
         teamId: idParam,
         title: z.string().min(1).optional(),
         groupProgram: idParam.optional(),
+        confirm: z.boolean().optional(),
       },
-      annotations: ADDITIVE,
+      annotations: DESTRUCTIVE,
     },
-    ({ teamId, title, groupProgram }) =>
+    ({ teamId, title, groupProgram, confirm }, extra) =>
       attempt(async () => {
         const args: { teamId: number; title?: string; groupProgram?: number } = {
           teamId: toId(teamId),
         };
         if (title !== undefined) args.title = title;
-        if (groupProgram !== undefined) args.groupProgram = toId(groupProgram);
+        if (groupProgram !== undefined) {
+          args.groupProgram = toId(groupProgram);
+          const blocked = confirmGate(
+            extra,
+            `Reassign team ${args.teamId} to calendar/program ${args.groupProgram}? This changes the live programming visible to its athletes.`,
+            confirm,
+          );
+          if (blocked) return blocked;
+        }
         return jsonResult(await updateTeam(ctx.client, args));
       }),
   );
