@@ -11,6 +11,16 @@ describe("notifyHttpError", () => {
     expect(error.responseBody).toEqual({ message: `${"x".repeat(2_000)}…[truncated]` });
   });
 
+  it("redacts whitespace-heavy provider text without polynomial backtracking", () => {
+    const startedAt = performance.now();
+    const error = new TrainHeroicHttpError("GET", "https://api.trainheroic.com/test", 500, {
+      responseBody: { message: `Authorization${" ".repeat(100_000)}!` },
+    });
+
+    expect(performance.now() - startedAt).toBeLessThan(250);
+    expect(JSON.stringify(error.responseBody).length).toBeLessThan(2_500);
+  });
+
   it("bounds the total response diagnostic tree", () => {
     const error = new TrainHeroicHttpError("GET", "https://api.trainheroic.com/test", 500, {
       responseBody: {

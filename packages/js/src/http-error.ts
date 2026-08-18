@@ -64,12 +64,12 @@ export type TrainHeroicHttpErrorDiagnostics = {
 function redactText(value: string): string {
   const redacted = value
     .replace(
-      /\bAuthorization(\s*["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\r\n,;&]+)/gi,
+      /\bAuthorization(["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\r\n,;&]+)/gi,
       (_match, separator: string) => `Authorization${separator}[Redacted]`,
     )
     .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [Redacted]")
     .replace(
-      /\b(password|passwd|secret|session[_-]?id|token|api[_-]?key)(\s*["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;&]+)/gi,
+      /\b(password|passwd|secret|session[_-]?id|token|api[_-]?key)(["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;&]+)/gi,
       (_match, key: string, separator: string) => `${key}${separator}[Redacted]`,
     )
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[Redacted email]")
