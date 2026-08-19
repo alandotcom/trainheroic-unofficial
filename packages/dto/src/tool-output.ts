@@ -30,9 +30,30 @@ export const truncatedOutputSchema = z.looseObject({
   __truncated: truncationMarkerSchema,
 });
 
-/** Add the shared size-budget fallback to a tool's natural result shape. */
+/** True when a value carries the budget-fallback marker (array wrap, in-place slice, or preview). */
+function hasTruncationMarker(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "__truncated")
+  );
+}
+
+/**
+ * Add the shared size-budget fallback to a tool's natural result shape.
+ *
+ * Truncation is first: Zod `z.object` strips unknown keys, so a sliced object with
+ * `__truncated` would otherwise validate as complete and drop the marker. The natural
+ * branch also rejects the marker so a future reorder cannot regress.
+ */
 export function toolOutputSchema<T extends z.ZodType>(schema: T) {
-  return z.union([schema, truncatedOutputSchema]);
+  return z.union([
+    truncatedOutputSchema,
+    schema.refine((value) => !hasTruncationMarker(value), {
+      message: "truncated output must match truncatedOutputSchema",
+    }),
+  ]);
 }
 
 export const opaqueJsonOutputSchema = z.json();

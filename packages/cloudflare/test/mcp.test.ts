@@ -272,10 +272,45 @@ describe("buildServer tool surfaces", () => {
           __truncated: { total: 100, omitted: 93, hint: "narrow the request" },
         },
       ],
+      [
+        "team_volume truncated",
+        toolOutputSchemaFor("team_volume"),
+        {
+          window: { start: "2026-01-01", end: "2026-01-31" },
+          athletes: [
+            {
+              athleteId: 1,
+              name: "A",
+              sessions: 1,
+              reps: 1,
+              volume: 1,
+              firstLoggedDate: null,
+              lastLoggedDate: null,
+            },
+          ],
+          totals: { athletes: 50, sessions: 200, reps: 1, volume: 1 },
+          __truncated: {
+            field: "athletes",
+            returned: 1,
+            total: 50,
+            omitted: 49,
+            hint: "narrow the request",
+          },
+        },
+      ],
     ];
 
     for (const [name, schema, output] of cases) {
-      expect(schema.safeParse(output).success, name).toBe(true);
+      const parsed = schema.safeParse(output);
+      expect(parsed.success, name).toBe(true);
+      if (
+        parsed.success &&
+        typeof output === "object" &&
+        output !== null &&
+        "__truncated" in output
+      ) {
+        expect(parsed.data, name).toEqual(output);
+      }
     }
   });
 
