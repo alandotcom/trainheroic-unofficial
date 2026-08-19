@@ -206,7 +206,15 @@ describe("buildServer tool surfaces", () => {
   });
 
   it("validates representative bounded results against their registered output schemas", () => {
-    const cases: Array<[string, { safeParse(value: unknown): { success: boolean } }, unknown]> = [
+    const cases: Array<
+      [
+        string,
+        {
+          safeParse(value: unknown): { success: true; data: unknown } | { success: false };
+        },
+        unknown,
+      ]
+    > = [
       ["whoami", toolOutputSchemaFor("whoami"), { id: 7, roles: ["coach"] }],
       ["athlete_profile", toolOutputSchemaFor("athlete_profile"), { summary: {}, user: { id: 7 } }],
       [
