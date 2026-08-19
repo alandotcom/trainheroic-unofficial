@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { dateString } from "@trainheroic-unofficial/dto";
+import { dateString, toolOutputSchemaFor } from "@trainheroic-unofficial/dto";
 import {
   fetchCoachAthleteCalendarSummary,
   fetchExerciseHistoryDetail,
@@ -143,7 +143,13 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
   for (const t of SIMPLE_GETS) {
     server.registerTool(
       t.name,
-      { title: t.title, description: t.description, inputSchema: {}, annotations: READ },
+      {
+        title: t.title,
+        description: t.description,
+        inputSchema: {},
+        outputSchema: toolOutputSchemaFor(t.name),
+        annotations: READ,
+      },
       () => apiCall(ctx, "GET", t.path),
     );
   }
@@ -168,6 +174,7 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
         q: z.string().optional(),
         limit: z.number().int().positive().max(500).optional(),
       },
+      outputSchema: toolOutputSchemaFor("list_athletes"),
       annotations: READ,
     },
     ({ q, limit }) =>
@@ -222,6 +229,7 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
         pageSize: z.number().int().positive().optional(),
         q: z.string().optional(),
       },
+      outputSchema: toolOutputSchemaFor("list_teams"),
       annotations: READ,
     },
     ({ page, pageSize, q }) => {
@@ -243,6 +251,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
       title: "Get team",
       description: "Full team object by team id.",
       inputSchema: { teamId: idParam },
+      outputSchema: toolOutputSchemaFor("get_team"),
       annotations: READ,
     },
     ({ teamId }) => apiCall(ctx, "GET", `/v5/teams/${enc(teamId)}`),
@@ -254,6 +263,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
       title: "List team access codes",
       description: "Join/access codes for a team.",
       inputSchema: { teamId: idParam },
+      outputSchema: toolOutputSchemaFor("list_team_codes"),
       annotations: READ,
     },
     ({ teamId }) => apiCall(ctx, "GET", `/v5/teams/${enc(teamId)}/teamCodes`),
@@ -271,6 +281,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         since: dateString.optional(),
         until: dateString.optional(),
       },
+      outputSchema: toolOutputSchemaFor("athlete_lift_history"),
       annotations: READ,
     },
     ({ athleteId, exerciseId, raw, since, until }) =>
@@ -294,6 +305,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         athleteIds: z.array(idParam).min(1),
         useMetric: z.boolean().optional(),
       },
+      outputSchema: toolOutputSchemaFor("roster_activity"),
       annotations: READ,
     },
     ({ athleteIds, useMetric }) =>
@@ -317,6 +329,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         year: z.number().int(),
         month: z.number().int().min(1).max(12),
       },
+      outputSchema: toolOutputSchemaFor("athlete_training"),
       annotations: READ,
     },
     ({ athleteId, year, month }) =>
@@ -344,6 +357,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         "program id); container ids are resolved automatically. If neither detail endpoint is " +
         "available, returns calendar metadata and next-step guidance instead.",
       inputSchema: { programId: idParam },
+      outputSchema: toolOutputSchemaFor("get_program"),
       annotations: READ,
     },
     ({ programId }) => getProgram(ctx, toId(programId)),
@@ -414,6 +428,7 @@ function registerTeamVolume(server: McpServer, ctx: ToolContext): void {
         dateStart: dateString,
         dateEnd: dateString,
       },
+      outputSchema: toolOutputSchemaFor("team_volume"),
       annotations: READ,
     },
     ({ teamId, athleteIds, dateStart, dateEnd }) =>
@@ -454,6 +469,7 @@ function registerCoachAthleteTeamCalendar(server: McpServer, ctx: ToolContext): 
         "Distinct from workout_build's type-5 individual calendar. Returns title, logo, id, " +
         "athlete_id, owner_user_id.",
       inputSchema: { athleteId: idParam },
+      outputSchema: toolOutputSchemaFor("coach_athlete_team_calendar"),
       annotations: READ,
     },
     ({ athleteId }) =>

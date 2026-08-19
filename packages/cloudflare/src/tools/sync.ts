@@ -12,6 +12,7 @@ import {
   SYNC,
   toId,
 } from "@trainheroic-unofficial/core";
+import { hostedWarehouseOutputSchemas } from "../tool-contracts";
 
 function registerProgrammingTools(server: McpServer, programming: ProgrammingStore): void {
   server.registerTool(
@@ -23,6 +24,7 @@ function registerProgrammingTools(server: McpServer, programming: ProgrammingSto
         "(sessions/blocks/sets) across an ~18-month window into D1. Omit programId to sync all " +
         "programs + team group-programs (heavy — many upstream calls). Then read with programming_stored.",
       inputSchema: { programId: idParam.optional() },
+      outputSchema: hostedWarehouseOutputSchemas.programming_sync,
       annotations: SYNC,
     },
     ({ programId }) =>
@@ -49,6 +51,7 @@ function registerProgrammingTools(server: McpServer, programming: ProgrammingSto
         limit: z.number().int().positive().max(500).optional(),
         before: z.object({ date: dateString.nullable(), sessionId: idParam }).optional(),
       },
+      outputSchema: hostedWarehouseOutputSchemas.programming_stored,
       annotations: READ,
     },
     ({ programId, sessionId, limit, before }) =>
@@ -84,6 +87,7 @@ function registerMessagingTools(server: McpServer, messaging: MessagingStore): v
         "incrementally per stream. Omit streamId to sync all. full=true re-pulls from the " +
         "beginning (refreshes reactions and replies on existing threads). Then read with messaging_stored.",
       inputSchema: { streamId: idParam.optional(), full: z.boolean().optional() },
+      outputSchema: hostedWarehouseOutputSchemas.messaging_sync,
       annotations: SYNC,
     },
     ({ streamId, full }) =>
@@ -113,6 +117,7 @@ function registerMessagingTools(server: McpServer, messaging: MessagingStore): v
           .object({ timestamp: z.number().int().nonnegative().nullable(), id: idParam })
           .optional(),
       },
+      outputSchema: hostedWarehouseOutputSchemas.messaging_stored,
       annotations: READ,
     },
     ({ streamId, limit, before }) =>

@@ -16,6 +16,7 @@ import {
   AthleteWorkoutStore,
   type Warehouse,
 } from "@trainheroic-unofficial/db";
+import { hostedWarehouseOutputSchemas } from "../tool-contracts";
 
 /**
  * Athlete training warehouse: download the athlete's historicals into D1 so they can be
@@ -33,6 +34,7 @@ function registerWorkoutsZone(server: McpServer, workouts: AthleteWorkoutStore):
         "workout flattened to exercise rows with both prescribed and logged/performed sets). " +
         "Then read with athlete_workouts_stored.",
       inputSchema: athleteWorkoutRangeArgsSchema.shape,
+      outputSchema: hostedWarehouseOutputSchemas.athlete_workouts_sync,
       annotations: SYNC,
     },
     ({ startDate, endDate }) =>
@@ -57,6 +59,7 @@ function registerWorkoutsZone(server: McpServer, workouts: AthleteWorkoutStore):
         limit: z.number().int().positive().max(500).optional(),
         before: z.object({ date: dateString.nullable(), workoutId: idParam }).optional(),
       },
+      outputSchema: hostedWarehouseOutputSchemas.athlete_workouts_stored,
       annotations: READ,
     },
     ({ workoutId, startDate, endDate, limit, before }) =>
@@ -96,6 +99,7 @@ function registerTrainingZone(server: McpServer, training: AthleteTrainingStore)
         batchSize: z.number().int().positive().max(100).optional(),
         full: z.boolean().optional(),
       },
+      outputSchema: hostedWarehouseOutputSchemas.athlete_training_sync,
       annotations: SYNC,
     },
     ({ exerciseId, batchSize, full }) =>
@@ -124,6 +128,7 @@ function registerTrainingZone(server: McpServer, training: AthleteTrainingStore)
         workingMaxes: z.boolean().optional(),
         limit: z.number().int().positive().max(500).optional(),
       },
+      outputSchema: hostedWarehouseOutputSchemas.athlete_training_stored,
       annotations: READ,
     },
     ({ q, exerciseId, prs, workingMaxes, limit }) =>

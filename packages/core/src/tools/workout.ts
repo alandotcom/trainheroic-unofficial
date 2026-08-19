@@ -5,6 +5,7 @@ import {
   blockSpecSchema,
   parseWorkoutDate,
   sessionTemplateCreateSchema,
+  toolOutputSchemaFor,
 } from "@trainheroic-unofficial/dto";
 import {
   buildSession,
@@ -19,7 +20,17 @@ import {
   resolveBuildProgramId,
 } from "@trainheroic-unofficial/js";
 import { confirmGate } from "../confirm";
-import { apiCall, attempt, DESTRUCTIVE, errorResult, idParam, jsonResult, toId } from "../context";
+import {
+  ADDITIVE,
+  apiCall,
+  attempt,
+  DESTRUCTIVE,
+  errorResult,
+  idParam,
+  jsonResult,
+  READ,
+  toId,
+} from "../context";
 import type { ToolContext } from "../context";
 
 /** Build a draft session (workout_build). */
@@ -46,7 +57,8 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         blocks: z.array(blockSpecSchema),
         instruction: z.string().optional(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      outputSchema: toolOutputSchemaFor("workout_build"),
+      annotations: ADDITIVE,
     },
     ({ programId, athleteId, date, timelineDay, blocks, instruction }) =>
       attempt(async () => {
@@ -94,7 +106,8 @@ function registerReadPublish(server: McpServer, ctx: ToolContext): void {
       title: "Read a built session",
       description: "Read-back a session by programId, date (YYYY-M-D), and programWorkout id.",
       inputSchema: { programId: z.number(), date: z.string(), pwId: z.number() },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      outputSchema: toolOutputSchemaFor("workout_read"),
+      annotations: READ,
     },
     ({ programId, date, pwId }) =>
       attempt(async () =>
@@ -115,7 +128,8 @@ function registerReadPublish(server: McpServer, ctx: ToolContext): void {
         pwId: z.number(),
         confirm: z.boolean().optional(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      outputSchema: toolOutputSchemaFor("workout_publish"),
+      annotations: DESTRUCTIVE,
     },
     ({ programId, date, pwId, confirm }, extra) =>
       attempt(async () => {
@@ -153,7 +167,8 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
         pwId: z.number(),
         confirm: z.boolean().optional(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      outputSchema: toolOutputSchemaFor("session_remove"),
+      annotations: DESTRUCTIVE,
     },
     ({ programId, pwId, confirm }, extra) =>
       attempt(async () => {
@@ -176,7 +191,8 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
         "Unpublish a previously published session (POST .../programWorkout/unPublish/{pwId}). It " +
         "is no longer athlete-facing. Requires confirmation (elicitation, or confirm:true).",
       inputSchema: { pwId: z.number(), confirm: z.boolean().optional() },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      outputSchema: toolOutputSchemaFor("session_unpublish"),
+      annotations: DESTRUCTIVE,
     },
     ({ pwId, confirm }, extra) =>
       attempt(async () => {
@@ -200,7 +216,8 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
         "toProgramId may be a team group_program or an athlete calendar program id " +
         "(from /v5/calendars/athletes/{athleteId}?year=&month= / workout_build athleteId).",
       inputSchema: { toProgramId: z.number(), pwId: z.number(), toDate: z.string() },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      outputSchema: toolOutputSchemaFor("session_copy"),
+      annotations: ADDITIVE,
     },
     ({ toProgramId, pwId, toDate }) =>
       attempt(async () => jsonResult(await copySession(ctx.client, { toProgramId, pwId, toDate }))),
@@ -214,7 +231,8 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
         "Save an existing session as a reusable template in the session library " +
         "(POST .../programWorkout/saveWorkoutAsTemplate/{workoutId}). Pass the workout_id.",
       inputSchema: { workoutId: z.number() },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      outputSchema: toolOutputSchemaFor("session_save_as_template"),
+      annotations: ADDITIVE,
     },
     ({ workoutId }) =>
       apiCall(ctx, "POST", `/2.0/coach/calendar/programWorkout/saveWorkoutAsTemplate/${workoutId}`),
@@ -230,8 +248,9 @@ function registerTemplateLibrary(server: McpServer, ctx: ToolContext): void {
         "Create an empty reusable session template in the library (POST /v5/sessions/template). " +
         "Distinct from session_save_as_template, which copies an existing session. Pass title " +
         "and optional instruction.",
-      inputSchema: sessionTemplateCreateSchema,
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      inputSchema: sessionTemplateCreateSchema.shape,
+      outputSchema: toolOutputSchemaFor("session_template_create"),
+      annotations: ADDITIVE,
     },
     ({ title, instruction }) =>
       attempt(async () =>
@@ -247,6 +266,7 @@ function registerTemplateLibrary(server: McpServer, ctx: ToolContext): void {
         "Delete a library session template (DELETE /v5/sessions/template/{id}). Requires " +
         "confirmation (elicitation, or confirm:true).",
       inputSchema: { id: idParam, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchemaFor("session_template_delete"),
       annotations: DESTRUCTIVE,
     },
     ({ id, confirm }, extra) =>
