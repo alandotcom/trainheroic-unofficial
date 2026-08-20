@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/core
 
+## 3.3.1
+
+### Patch Changes
+
+- 3317d39: Require confirmation for tool actions that overwrite existing records or submit feedback.
+- @trainheroic-unofficial/dto@3.3.1
+  - @trainheroic-unofficial/js@3.3.1
+
 ## 3.3.0
 
 ### Minor Changes

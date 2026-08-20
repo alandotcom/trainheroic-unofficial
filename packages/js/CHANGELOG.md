@@ -1,5 +1,11 @@
 # @trainheroic-unofficial/js
 
+## 3.3.1
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@3.3.1
+
 ## 3.3.0
 
 ### Patch Changes

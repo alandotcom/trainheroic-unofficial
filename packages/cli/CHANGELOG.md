@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/cli
 
+## 3.3.1
+
+### Patch Changes
+
+- d01e9cf: Require explicit CLI confirmation before reassigning a team's live calendar.
+- @trainheroic-unofficial/dto@3.3.1
+  - @trainheroic-unofficial/js@3.3.1
+
 ## 3.3.0
 
 ### Patch Changes
