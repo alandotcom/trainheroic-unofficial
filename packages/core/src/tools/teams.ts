@@ -54,7 +54,7 @@ export function registerTeamTools(server: McpServer, ctx: ToolContext): void {
         confirm: z.boolean().optional(),
       },
       outputSchema: opaqueOutputSchema,
-      annotations: DESTRUCTIVE,
+      annotations: ADDITIVE,
     },
     ({ teamId, title, groupProgram, confirm }, extra) =>
       attempt(async () => {
