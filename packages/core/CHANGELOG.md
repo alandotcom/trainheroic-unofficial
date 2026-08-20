@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/core
 
+## 3.3.3
+
+### Patch Changes
+
+- bcb590d: Correct MCP open-world annotations so private TrainHeroic operations remain closed-world while invitations and athlete-facing messages retain their external-action hints.
+- @trainheroic-unofficial/dto@3.3.3
+  - @trainheroic-unofficial/js@3.3.3
+
 ## 3.3.2
 
 ### Patch Changes
