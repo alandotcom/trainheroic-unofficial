@@ -7,9 +7,9 @@
 #      wrangler.jsonc it emits .js.map files (to --outdir) and uploads them to Cloudflare's
 #      own observability. SENTRY_RELEASE is injected as a Worker var so the Sentry SDK tags
 #      every event with this release id.
-#   2. If SENTRY_AUTH_TOKEN is set, sentry-cli uploads the same source maps to Sentry under
-#      that release, so Sentry stack traces resolve to original TypeScript. Without the token
-#      this step is skipped and the deploy still succeeds.
+#   2. If SENTRY_AUTH_TOKEN is set, the script rewrites Wrangler's source-map paths to stable
+#      repository-relative paths, associates the release with its Git commits, and uploads the
+#      maps to Sentry. Without the token this step is skipped and the deploy still succeeds.
 #
 # Env:
 #   SENTRY_AUTH_TOKEN  required only for the Sentry upload step. Use an organization auth
@@ -44,7 +44,13 @@ pnpm exec wrangler deploy --outdir "$OUTDIR" --var "SENTRY_RELEASE:${RELEASE}"
 
 if [ -n "${SENTRY_AUTH_TOKEN:-}" ]; then
   echo "▶ Uploading source maps to Sentry (${SENTRY_ORG}/${SENTRY_PROJECT} @ ${RELEASE})…"
+  node scripts/normalize-sourcemaps.mjs "$OUTDIR"
   pnpm dlx @sentry/cli@2 releases new "$RELEASE" --org "$SENTRY_ORG" --project "$SENTRY_PROJECT"
+  if ! pnpm dlx @sentry/cli@2 releases set-commits "$RELEASE" --auto --ignore-missing \
+    --org "$SENTRY_ORG" --project "$SENTRY_PROJECT"; then
+    echo "⚠ Could not associate Git commits with the Sentry release."
+    echo "  Source maps will still be uploaded, but repository source links may be unavailable."
+  fi
   pnpm dlx @sentry/cli@2 sourcemaps upload "$OUTDIR" \
     --release "$RELEASE" --org "$SENTRY_ORG" --project "$SENTRY_PROJECT"
   pnpm dlx @sentry/cli@2 releases finalize "$RELEASE" --org "$SENTRY_ORG" --project "$SENTRY_PROJECT"

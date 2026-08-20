@@ -54,6 +54,15 @@ describe("TrainHeroic Sentry reporters", () => {
       "post",
       "https://api.trainheroic.com/v5/workouts/private@example.com?token=secret",
       500,
+      {
+        requestBody: { param_1_type: 3, title: "Private title" },
+        responseBody: {
+          error: {
+            code: "INVALID_EXERCISE",
+            message: "token=private-token for coach@example.com",
+          },
+        },
+      },
     );
 
     trainHeroicHttpErrorReporter("user@example.com")(error);
@@ -61,6 +70,19 @@ describe("TrainHeroic Sentry reporters", () => {
     expect(sentry.setUser).toHaveBeenCalledWith({ email: "user@example.com" });
     expect(sentry.captureException).toHaveBeenCalledOnce();
     expect(sentry.captureException).toHaveBeenCalledWith(error, {
+      extra: {
+        "trainheroic.request_body": {
+          keys: ["param_1_type", "title"],
+          type: "object",
+          values: { param_1_type: 3 },
+        },
+        "trainheroic.response_body": {
+          error: {
+            code: "INVALID_EXERCISE",
+            message: "token=[Redacted] for [Redacted email]",
+          },
+        },
+      },
       tags: {
         "http.request.method": "POST",
         "http.response.status_code": "500",
@@ -70,6 +92,9 @@ describe("TrainHeroic Sentry reporters", () => {
     });
     expect(JSON.stringify(sentry.captureException.mock.calls[0])).not.toContain("private");
     expect(JSON.stringify(sentry.captureException.mock.calls[0])).not.toContain("secret");
+    expect(JSON.stringify(sentry.captureException.mock.calls[0])).not.toContain(
+      "coach@example.com",
+    );
   });
 
   it("suppresses expected interactive-login rejections at the hosted boundary", () => {

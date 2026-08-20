@@ -54,9 +54,11 @@ pnpm deploy            # from the repo root, or `pnpm deploy` in this package
 
 `deploy` runs `scripts/deploy.sh`: it builds and ships the Worker (`wrangler deploy`, which
 emits source maps because `upload_source_maps` is on) and tags the release with the short git
-sha. If `SENTRY_AUTH_TOKEN` is set, it then uploads the source maps to Sentry under that
-release so stack traces resolve to the original TypeScript; without the token it deploys and
-skips that step. `pnpm deploy:plain` is the bare `wrangler deploy` escape hatch.
+sha. If `SENTRY_AUTH_TOKEN` is set, it normalizes Wrangler's generated paths (for example,
+`dist/../../js/src/client.ts` becomes `packages/js/src/client.ts`), associates the release with
+its Git commits, and uploads the maps to Sentry. Stack traces then show stable repository paths
+and the original TypeScript; without the token it deploys and skips that step. `pnpm
+deploy:plain` is the bare `wrangler deploy` escape hatch.
 
 The token is read from `.env` at the repo root automatically (gitignored); set
 `SENTRY_AUTH_TOKEN` there, or pass it inline. Use an organization auth token (`org:ci` scope)
@@ -65,6 +67,11 @@ from <https://sentry.io/settings/auth-tokens/>.
 ```bash
 SENTRY_AUTH_TOKEN=sntrys_… pnpm deploy   # or just `pnpm deploy` once it is in .env
 ```
+
+For clickable source links, connect the GitHub repository to the Sentry organization and enable
+source-code integration for the project. The deploy script treats commit association as
+best-effort so an integration outage cannot prevent the already-built Worker from deploying;
+it prints a warning while still uploading the source maps.
 
 The daily KV-hygiene cron (`triggers.crons`) is deployed with the Worker and calls
 `purgeExpiredData`.
@@ -126,9 +133,14 @@ needs the `mcp-remote` bridge with `--transport http-only`:
 - **Error monitoring (Sentry).** Configured in `src/sentry.ts` and gated on the `SENTRY_DSN`
   secret. `withSentry` reports errors from the top-level fetch and cron handlers; the MCP
   factory (`src/mcp.ts`) attaches the signed-in user's email and correlates traces on
-  `mcp.session` = `user:<thUserId>`. By design the only data sent is the error and that email:
-  `sendDefaultPii` is off (no IPs/cookies/auth headers), request bodies are never captured
-  (so the login POST password cannot leak). Readable stack traces come from source map
-  upload, which `pnpm deploy` does automatically when `SENTRY_AUTH_TOKEN` is set (see step 4).
+  `mcp.session` = `user:<thUserId>`. `sendDefaultPii` is off (no IPs/cookies/auth headers), and
+  Sentry's HTTP integration never captures inbound request bodies (so the login POST password
+  cannot leak). Failed TrainHeroic calls attach a bounded request-field summary and sanitized
+  provider response diagnostics: request values are excluded except for a small allowlist of
+  non-sensitive enum fields, while response error codes/messages are token- and email-redacted.
+  Login failures include response diagnostics but never login request data. Readable stack traces
+  come from source map upload, which `pnpm deploy` does automatically when `SENTRY_AUTH_TOKEN` is
+  set; the upload normalizes generated paths to repository-relative source paths and attempts to
+  associate the release with its Git commits (see step 4).
   The Sentry org/project default to `alan-zy`/`trainheroic-mcp` and are overridable via
   `SENTRY_ORG`/`SENTRY_PROJECT`.

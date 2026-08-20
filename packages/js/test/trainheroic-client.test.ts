@@ -36,13 +36,107 @@ describe("TrainHeroicClient", () => {
           name: "TrainHeroicHttpError",
           method: "POST",
           host: "api.trainheroic.com",
+          requestBody: {
+            keys: ["private"],
+            type: "object",
+          },
+          responseBody: { error: "upstream rejected the request" },
           status,
         }),
       );
-      expect(String(onHttpError.mock.calls[0]?.[0])).not.toContain("private@example.com");
-      expect(String(onHttpError.mock.calls[0]?.[0])).not.toContain("preview");
+      const reported = JSON.stringify(onHttpError.mock.calls[0]?.[0]);
+      expect(reported).not.toContain("private@example.com");
+      expect(reported).not.toContain("preview");
+      expect(reported).not.toContain("payload");
     },
   );
+
+  it("reports allowlisted request values and redacted provider diagnostics", async () => {
+    const onHttpError = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json(
+          {
+            error: {
+              code: "INVALID_EXERCISE",
+              message: "token=provider-secret for coach@example.com",
+              received: {
+                param_1_type: 3,
+                session_id: "private-session",
+                title: "Private exercise title",
+              },
+            },
+            athlete: { name: "Private Athlete" },
+          },
+          500,
+        ),
+      ),
+    );
+    const client = new TrainHeroicClient("a@b.com", "pw", "live-session", { onHttpError });
+
+    await client.request("POST", "/2.0/coach/exercise/create", {
+      body: {
+        param_1_type: 3,
+        param_2_type: 1,
+        password: "private-password",
+        title: "Private exercise title",
+      },
+    });
+
+    const error = onHttpError.mock.calls[0]?.[0];
+    expect(error).toMatchObject({
+      requestBody: {
+        keys: ["param_1_type", "param_2_type", "password", "title"],
+        type: "object",
+        values: { param_1_type: 3, param_2_type: 1 },
+      },
+      responseBody: {
+        error: {
+          code: "INVALID_EXERCISE",
+          message: "token=[Redacted] for [Redacted email]",
+          received: {
+            param_1_type: 3,
+            session_id: "[Redacted]",
+            title: "[Redacted]",
+          },
+        },
+      },
+    });
+    const reported = JSON.stringify(error);
+    expect(reported).not.toContain("provider-secret");
+    expect(reported).not.toContain("coach@example.com");
+    expect(reported).not.toContain("private-password");
+    expect(reported).not.toContain("Private exercise title");
+    expect(reported).not.toContain("Private Athlete");
+  });
+
+  it("reports the HTTP failure before rethrowing an unreadable error body", async () => {
+    const onHttpError = vi.fn();
+    const bodyError = new Error("body stream failed");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 500,
+        text: async () => {
+          throw bodyError;
+        },
+      })),
+    );
+    const client = new TrainHeroicClient("a@b.com", "pw", "live-session", { onHttpError });
+
+    await expect(
+      client.request("POST", "/v5/workouts", { body: { title: "Private" } }),
+    ).rejects.toBe(bodyError);
+    expect(onHttpError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: { keys: ["title"], type: "object" },
+        responseBody: undefined,
+        status: 500,
+      }),
+    );
+  });
 
   it("logs in lazily then issues the request", async () => {
     const calls: string[] = [];

@@ -56,9 +56,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      # scripts/deploy.sh: wrangler deploy (+ Cloudflare source maps), then upload source maps
-      # to Sentry when SENTRY_AUTH_TOKEN is set. Without the token the Sentry step is skipped
-      # and the deploy still succeeds. SENTRY_RELEASE defaults to the short git sha.
+      # scripts/deploy.sh: wrangler deploy (+ Cloudflare source maps), normalize their repository
+      # paths, associate release commits, then upload to Sentry when SENTRY_AUTH_TOKEN is set.
+      # Without the token the Sentry step is skipped. SENTRY_RELEASE defaults to the short git sha.
       - name: Deploy worker
         run: pnpm run deploy
         env:

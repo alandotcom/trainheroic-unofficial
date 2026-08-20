@@ -81,18 +81,26 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   values; `ALLOWED_EMAILS` and `SENTRY_DSN` are optional secrets. Credentials are never a deploy
   secret here: each user enters them at login and they live in the OAuth grant's encrypted `props`.
 - Sentry is privacy-constrained on purpose: the data it sends is the error, the TrainHeroic
-  account email, sanitized TrainHeroic failure metadata (method, status, host), aggregate
+  account email, sanitized TrainHeroic failure metadata (method, status, host, a bounded
+  request-field summary, and redacted provider response diagnostics), aggregate
   metrics/traces (tool name, surface, ok/error, opaque `user:<thUserId>`), and — only when the
   user explicitly files one — a `report_feedback` report (the user's own message plus that same
   non-PII context, with their email as the contact). `src/sentry.ts` keeps
   `sendDefaultPii` off and forces `httpServerIntegration`'s `maxRequestBodySize: "none"` so
-  request bodies (the login POST password) are never captured; the email is attached via
+  inbound request bodies (the login POST password) are never captured; SDK error diagnostics
+  summarize request field names plus allowlisted enum values and redact/bound provider error
+  responses before they reach Sentry. The email is attached via
   `Sentry.setUser` in the MCP factory (`mcp.ts`) and explicitly scoped onto every reported
   TrainHeroic HTTP failure, including pre-grant login failures. With no `SENTRY_DSN` the SDK is
   disabled and every Sentry call is a no-op (the feedback tool then logs the report to `console`
-  instead). Keep paths, query strings, request/response bodies, credentials, and session tokens
-  out of upstream HTTP errors; keep new PII out of tool args/results sent to Sentry; and do not
-  set the user to anything but the email.
+  instead). Keep raw paths, query strings, request/response bodies, credentials, session tokens,
+  and arbitrary user-supplied values out of upstream HTTP errors; keep new PII out of tool
+  args/results sent to Sentry; and do not set the user to anything but the email.
+- `pnpm deploy` must run `scripts/normalize-sourcemaps.mjs` before its Sentry upload. Wrangler
+  emits `sourceRoot: "dist"` alongside map-relative `../../<package>/src/...` entries; uploading
+  that unchanged makes Sentry label frames `dist/../../...`. Keep the normalization and release
+  commit association so frames use stable `packages/<package>/src/...` repository paths and can
+  link to source through Sentry's GitHub integration.
 - Migrations are append-only. Add a new numbered file; do not edit a migration that has
   already been applied. After changing bindings, run `pnpm cf-typegen`. `migrations/` is the
   source of truth for the live DB — Drizzle does NOT generate it. When a migration changes a
@@ -113,7 +121,7 @@ These scripts are package-local (not at the workspace root).
 ```bash
 pnpm dev                 # wrangler dev (local workerd + Miniflare)
 pnpm inspect             # MCP Inspector UI; connect it to http://localhost:8787/mcp (needs pnpm dev)
-pnpm deploy              # wrangler deploy
+pnpm deploy              # deploy Worker + normalized Sentry source maps when configured
 pnpm cf-typegen          # wrangler types -> worker-configuration.d.ts
 pnpm db:migrate:local    # migrations against the local D1
 pnpm db:migrate          # migrations against the remote D1
