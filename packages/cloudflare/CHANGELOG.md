@@ -1,5 +1,15 @@
 # @trainheroic-unofficial/cloudflare
 
+## 3.3.2
+
+### Patch Changes
+
+- 4af48dc: Fix ChatGPT OAuth redirects and expose the OpenAI Apps domain-verification challenge.
+- @trainheroic-unofficial/core@3.3.2
+  - @trainheroic-unofficial/db@3.3.2
+  - @trainheroic-unofficial/dto@3.3.2
+  - @trainheroic-unofficial/js@3.3.2
+
 ## 3.3.1
 
 ### Patch Changes
