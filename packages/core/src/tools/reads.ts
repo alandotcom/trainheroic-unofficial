@@ -1,6 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { dateString } from "@trainheroic-unofficial/dto";
+import {
+  coachAthleteTrainingOutputSchema,
+  dateString,
+  exerciseHistoryOutputSchema,
+  opaqueOutputSchema,
+  rosterActivityOutputSchema,
+  teamVolumeOutputSchema,
+  toolOutputSchema,
+  userSimpleSchema,
+} from "@trainheroic-unofficial/dto";
 import {
   fetchCoachAthleteCalendarSummary,
   fetchExerciseHistoryDetail,
@@ -13,7 +22,16 @@ import {
   SESSION_TEMPLATES_LIST_PATH,
   teamVolume,
 } from "@trainheroic-unofficial/js";
-import { apiCall, apiResponseResult, attempt, idParam, jsonResult, READ, toId } from "../context";
+import {
+  apiCall,
+  apiResponseResult,
+  attempt,
+  clipArray,
+  idParam,
+  jsonResult,
+  READ,
+  toId,
+} from "../context";
 import type { ToolContext } from "../context";
 import { historyInRange } from "../history";
 
@@ -63,13 +81,6 @@ const SIMPLE_GETS: ReadonlyArray<{
   description: string;
   path: string;
 }> = [
-  {
-    name: "whoami",
-    title: "Who am I",
-    description:
-      "The authenticated TrainHeroic coach profile (id, org_id, name, roles, trial days).",
-    path: "/user/simple",
-  },
   {
     name: "head_coach",
     title: "Head coach / org",
@@ -140,10 +151,29 @@ const SIMPLE_GETS: ReadonlyArray<{
 
 /** Roster-level reads: the fixed GETs plus the filterable athlete and team lists. */
 function registerRosterReads(server: McpServer, ctx: ToolContext): void {
+  server.registerTool(
+    "whoami",
+    {
+      title: "Who am I",
+      description:
+        "The authenticated TrainHeroic coach profile (id, org_id, name, roles, trial days).",
+      inputSchema: {},
+      outputSchema: toolOutputSchema(userSimpleSchema),
+      annotations: READ,
+    },
+    () => apiCall(ctx, "GET", "/user/simple"),
+  );
+
   for (const t of SIMPLE_GETS) {
     server.registerTool(
       t.name,
-      { title: t.title, description: t.description, inputSchema: {}, annotations: READ },
+      {
+        title: t.title,
+        description: t.description,
+        inputSchema: {},
+        outputSchema: opaqueOutputSchema,
+        annotations: READ,
+      },
       () => apiCall(ctx, "GET", t.path),
     );
   }
@@ -168,6 +198,7 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
         q: z.string().optional(),
         limit: z.number().int().positive().max(500).optional(),
       },
+      outputSchema: toolOutputSchema(z.array(z.json())),
       annotations: READ,
     },
     ({ q, limit }) =>
@@ -192,14 +223,14 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
             return needles.every((n) => hay.includes(n));
           });
         }
-        const total = rows.length;
         if (limit !== undefined && rows.length > limit) {
-          return jsonResult({
-            items: rows.slice(0, limit),
-            returned: limit,
-            total,
-            note: "Limited client-side. Raise limit or narrow with q for the rest.",
-          });
+          return jsonResult(
+            clipArray(
+              rows,
+              limit,
+              "Limited client-side. Raise limit or narrow with q for the rest.",
+            ),
+          );
         }
         return jsonResult(rows, {
           hint: "Filter with q (name/email substring) or cap with limit to shrink this list.",
@@ -222,6 +253,7 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
         pageSize: z.number().int().positive().optional(),
         q: z.string().optional(),
       },
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     ({ page, pageSize, q }) => {
@@ -243,6 +275,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
       title: "Get team",
       description: "Full team object by team id.",
       inputSchema: { teamId: idParam },
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     ({ teamId }) => apiCall(ctx, "GET", `/v5/teams/${enc(teamId)}`),
@@ -254,6 +287,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
       title: "List team access codes",
       description: "Join/access codes for a team.",
       inputSchema: { teamId: idParam },
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     ({ teamId }) => apiCall(ctx, "GET", `/v5/teams/${enc(teamId)}/teamCodes`),
@@ -271,6 +305,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         since: dateString.optional(),
         until: dateString.optional(),
       },
+      outputSchema: toolOutputSchema(exerciseHistoryOutputSchema),
       annotations: READ,
     },
     ({ athleteId, exerciseId, raw, since, until }) =>
@@ -294,6 +329,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         athleteIds: z.array(idParam).min(1),
         useMetric: z.boolean().optional(),
       },
+      outputSchema: toolOutputSchema(rosterActivityOutputSchema),
       annotations: READ,
     },
     ({ athleteIds, useMetric }) =>
@@ -317,6 +353,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         year: z.number().int(),
         month: z.number().int().min(1).max(12),
       },
+      outputSchema: toolOutputSchema(coachAthleteTrainingOutputSchema),
       annotations: READ,
     },
     ({ athleteId, year, month }) =>
@@ -344,6 +381,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         "program id); container ids are resolved automatically. If neither detail endpoint is " +
         "available, returns calendar metadata and next-step guidance instead.",
       inputSchema: { programId: idParam },
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     ({ programId }) => getProgram(ctx, toId(programId)),
@@ -414,6 +452,7 @@ function registerTeamVolume(server: McpServer, ctx: ToolContext): void {
         dateStart: dateString,
         dateEnd: dateString,
       },
+      outputSchema: toolOutputSchema(teamVolumeOutputSchema),
       annotations: READ,
     },
     ({ teamId, athleteIds, dateStart, dateEnd }) =>
@@ -454,6 +493,7 @@ function registerCoachAthleteTeamCalendar(server: McpServer, ctx: ToolContext): 
         "Distinct from workout_build's type-5 individual calendar. Returns title, logo, id, " +
         "athlete_id, owner_user_id.",
       inputSchema: { athleteId: idParam },
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     ({ athleteId }) =>

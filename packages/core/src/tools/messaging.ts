@@ -1,6 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { commentDraftSchema } from "@trainheroic-unofficial/dto";
+import {
+  commentDraftSchema,
+  messageDeletedOutputSchema,
+  messageDraftOutputSchema,
+  messageSentOutputSchema,
+  opaqueOutputSchema,
+  toolOutputSchema,
+} from "@trainheroic-unofficial/dto";
 import {
   buildCommentPayload,
   deleteComment,
@@ -20,6 +27,7 @@ function registerReads(server: McpServer, ctx: ToolContext): void {
       description:
         "List chat streams (id, kind, title) live from the API; no setup needed. Use the id to read/draft/send.",
       inputSchema: {},
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     () =>
@@ -55,6 +63,7 @@ function registerReads(server: McpServer, ctx: ToolContext): void {
         limit: z.number().int().positive().max(200).optional(),
         afterCommentId: idParam.optional(),
       },
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     ({ streamId, limit, afterCommentId }) =>
@@ -76,6 +85,7 @@ function registerReads(server: McpServer, ctx: ToolContext): void {
       title: "Draft a message (preview only)",
       description: "Preview the exact payload and target WITHOUT sending. Always safe.",
       inputSchema: commentDraftSchema.shape,
+      outputSchema: toolOutputSchema(messageDraftOutputSchema),
       annotations: READ,
     },
     ({ streamId, text, replyTo }) =>
@@ -100,6 +110,7 @@ function registerWrites(server: McpServer, ctx: ToolContext): void {
         "Send a chat message — ATHLETE-FACING and immediate (no draft state on the server). " +
         "Requires confirmation (elicitation, or confirm:true). Prefer message_draft first.",
       inputSchema: { ...commentDraftSchema.shape, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(messageSentOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ streamId, text, replyTo, confirm }, extra) =>
@@ -127,6 +138,7 @@ function registerWrites(server: McpServer, ctx: ToolContext): void {
       title: "Delete a message",
       description: "Soft-delete a chat message on the live account. Requires confirmation.",
       inputSchema: { streamId: idParam, commentId: idParam, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(messageDeletedOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ streamId, commentId, confirm }, extra) =>

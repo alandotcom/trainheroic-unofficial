@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
+import { Client } from "@modelcontextprotocol/client";
+import { InMemoryTransport } from "@modelcontextprotocol/server";
+import {
+  athleteProfileOutputSchema,
+  athleteWorkoutsOutputSchema,
+  exerciseGetOutputSchema,
+  feedbackOutputSchema,
+  messageDeletedOutputSchema,
+  programCreatedOutputSchema,
+  teamVolumeOutputSchema,
+  toolOutputSchema,
+  userSimpleSchema,
+} from "@trainheroic-unofficial/dto";
 import { buildServer, parseProps, selectSurfaces } from "../src/mcp";
+import { hostedWarehouseOutputSchemas } from "../src/tool-contracts";
 import type { Props } from "../src/types";
 
 // The (variant, role) matrix is this package's authorization boundary: it is what keeps the
@@ -21,6 +35,19 @@ function registeredAmong(
 ): string[] {
   const server = buildServer(variant, props(role));
   return names.filter((name) => server.toolInputSchemaJson(name) !== undefined);
+}
+
+async function listTools(server: ReturnType<typeof buildServer>) {
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "metadata-test", version: "1.0.0" });
+  await server.connect(serverTransport);
+  try {
+    await client.connect(clientTransport);
+    return (await client.listTools()).tools;
+  } finally {
+    await client.close();
+    await server.close();
+  }
 }
 
 describe("selectSurfaces", () => {
@@ -72,6 +99,179 @@ describe("buildServer tool surfaces", () => {
   it("registers the feedback reporter on every variant", () => {
     for (const variant of ["full", "coach", "athlete"] as const) {
       expect(registeredAmong(variant, "coach", ["report_feedback"])).toEqual(["report_feedback"]);
+    }
+  });
+
+  it("registers complete output metadata for every hosted coach tool", async () => {
+    const server = buildServer("full", props("coach"));
+    const tools = await listTools(server);
+    const names = tools.map((tool) => tool.name);
+
+    // Do not snapshot the full roster. A new core or hosted tool should still pass as
+    // long as it registers outputSchema and annotation hints. Eval catalogs pin the
+    // core surface; hosted warehouse names come from hostedWarehouseOutputSchemas.
+    expect(new Set(names).size).toBe(names.length);
+    expect(names).toEqual(expect.arrayContaining(Object.keys(hostedWarehouseOutputSchemas)));
+    for (const tool of tools) {
+      const name = tool.name;
+      expect(tool.annotations, `${name} annotations`).toEqual(
+        expect.objectContaining({
+          readOnlyHint: expect.any(Boolean),
+          openWorldHint: expect.any(Boolean),
+          destructiveHint: expect.any(Boolean),
+        }),
+      );
+      expect(tool.outputSchema, `${name} outputSchema`).toBeDefined();
+    }
+  });
+
+  it("validates representative bounded results against their registered output schemas", () => {
+    const cases: Array<
+      [
+        string,
+        {
+          safeParse(value: unknown): { success: true; data: unknown } | { success: false };
+        },
+        unknown,
+      ]
+    > = [
+      ["whoami", toolOutputSchema(userSimpleSchema), { id: 7, roles: ["coach"] }],
+      [
+        "exercise_get",
+        toolOutputSchema(exerciseGetOutputSchema),
+        {
+          id: 1,
+          title: "Back Squat",
+          units: ["reps", "lb"],
+          can_edit: 0,
+          muscle_group: "legs",
+        },
+      ],
+      [
+        "athlete_profile",
+        toolOutputSchema(athleteProfileOutputSchema),
+        { summary: {}, user: { id: 7 } },
+      ],
+      [
+        "athlete_workouts",
+        toolOutputSchema(athleteWorkoutsOutputSchema),
+        [
+          {
+            id: 4,
+            date: "2026-08-18",
+            title: "Heavy day",
+            program: "Strength",
+            team: null,
+            logged: true,
+            personal: false,
+            exerciseCount: 3,
+            performedCount: 2,
+          },
+        ],
+      ],
+      [
+        "athlete_workouts_sync",
+        hostedWarehouseOutputSchemas.athlete_workouts_sync,
+        { workouts: 4, exercises: 12, from: "2026-08-01", to: "2026-08-18" },
+      ],
+      [
+        "messaging_stored",
+        hostedWarehouseOutputSchemas.messaging_stored,
+        [
+          {
+            id: 3,
+            ts: 10,
+            content: "hello",
+            author_name: "Coach",
+            is_author: 1,
+            parent_id: null,
+            reactions: [],
+          },
+        ],
+      ],
+      [
+        "program_create",
+        toolOutputSchema(programCreatedOutputSchema),
+        {
+          containerId: 1,
+          programId: 2,
+          title: "Base",
+          kind: "calendar",
+          requestedName: "Base",
+          nameApplied: true,
+        },
+      ],
+      [
+        "message_delete",
+        toolOutputSchema(messageDeletedOutputSchema),
+        { deleted: true, response: {} },
+      ],
+      [
+        "report_feedback",
+        toolOutputSchema(feedbackOutputSchema),
+        { status: "sent", reference: "abc", note: "Recorded." },
+      ],
+      [
+        "athlete_profile",
+        toolOutputSchema(athleteProfileOutputSchema),
+        {
+          preview: "partial",
+          __truncated: { total: 100, omitted: 93, hint: "narrow the request" },
+        },
+      ],
+      [
+        "team_volume truncated",
+        toolOutputSchema(teamVolumeOutputSchema),
+        {
+          items: [
+            {
+              athleteId: 1,
+              name: "A",
+              sessions: 1,
+              reps: 1,
+              volume: 1,
+              firstLoggedDate: null,
+              lastLoggedDate: null,
+            },
+          ],
+          __truncated: {
+            field: "athletes",
+            returned: 1,
+            total: 50,
+            omitted: 49,
+            hint: "narrow the request",
+          },
+        },
+      ],
+    ];
+
+    for (const [name, schema, output] of cases) {
+      const parsed = schema.safeParse(output);
+      expect(parsed.success, name).toBe(true);
+      if (parsed.success) expect(parsed.data, name).toEqual(output);
+    }
+    expect(toolOutputSchema(userSimpleSchema).safeParse({ foo: 1 }).success).toBe(false);
+  });
+
+  it("uses review-accurate hints for reads, private syncs, and overwrites", async () => {
+    const server = buildServer("full", props("coach"));
+    const tools = new Map((await listTools(server)).map((tool) => [tool.name, tool]));
+
+    expect(tools.get("athlete_workouts")?.annotations).toMatchObject({
+      readOnlyHint: true,
+      openWorldHint: true,
+      destructiveHint: false,
+    });
+    expect(tools.get("programming_sync")?.annotations).toMatchObject({
+      readOnlyHint: false,
+      openWorldHint: true,
+      destructiveHint: false,
+    });
+    for (const name of ["exercise_delete", "team_delete", "message_send"]) {
+      expect(tools.get(name)?.annotations?.destructiveHint, name).toBe(true);
+    }
+    for (const name of ["exercise_update", "team_update", "report_feedback"]) {
+      expect(tools.get(name)?.annotations?.destructiveHint, name).toBe(false);
     }
   });
 });

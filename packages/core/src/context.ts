@@ -13,9 +13,18 @@ export function toId(value: string | number): number {
   return typeof value === "number" ? value : Number(value);
 }
 
-// Shared MCP tool-annotation presets (honest hints; the destructive gate is enforced
-// in-handler via elicitation, not by these advisory flags).
-export const READ = { readOnlyHint: true, openWorldHint: true } as const;
+// Shared MCP tool-annotation presets. These flags are advisory; tools that require confirmation
+// enforce it separately in their handlers.
+export const READ = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  openWorldHint: true,
+} as const;
+export const ADDITIVE = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  openWorldHint: true,
+} as const;
 export const SYNC = {
   readOnlyHint: false,
   idempotentHint: true,
@@ -63,6 +72,9 @@ export async function attempt<T extends ToolHandlerResult>(
 /** Conservative per-result character cap, below the smallest host cap. */
 export const DEFAULT_RESULT_BUDGET = 60_000;
 
+/** Smallest cap that can still carry a useful structured truncation envelope. */
+const MIN_RESULT_BUDGET = 256;
+
 /** Reserve for the `__truncated` marker so wrapping cannot push back over budget. */
 const MARKER_RESERVE = 300;
 
@@ -73,24 +85,39 @@ const DEFAULT_OBJECT_HINT =
 
 /**
  * Clip an array to its first `keep` items and attach the `__truncated` marker describing what was
- * dropped. The marker is model-facing (tools instruct the model to key off `__truncated`), so its
- * shape has exactly one definition here: the size-budget path (`boundedSerialize`) and any tool
- * that deliberately caps a list (e.g. `athlete_exercises`) emit the same thing.
+ * dropped. Every budget fallback that trims a list uses this envelope (`{ items, __truncated }`),
+ * including in-place object-array truncation (the sliced array becomes `items` and `field` names
+ * the original key). `athlete_exercises` uses the same helper for a client-side catalog cap.
  */
 export function clipArray<T>(
   items: readonly T[],
   keep: number,
   hint?: string,
-): { items: T[]; __truncated: { returned: number; total: number; omitted: number; hint: string } } {
-  return {
-    items: items.slice(0, keep),
-    __truncated: {
-      returned: keep,
-      total: items.length,
-      omitted: items.length - keep,
-      hint: hint ?? DEFAULT_ARRAY_HINT,
-    },
+  field?: string,
+): {
+  items: T[];
+  __truncated: {
+    field?: string;
+    returned: number;
+    total: number;
+    omitted: number;
+    hint: string;
   };
+} {
+  const marker: {
+    field?: string;
+    returned: number;
+    total: number;
+    omitted: number;
+    hint: string;
+  } = {
+    returned: keep,
+    total: items.length,
+    omitted: items.length - keep,
+    hint: hint ?? DEFAULT_ARRAY_HINT,
+  };
+  if (field !== undefined) marker.field = field;
+  return { items: items.slice(0, keep), __truncated: marker };
 }
 
 /** Active budget. Overridable via TH_MCP_RESULT_BUDGET on Node; the default on workerd. */
@@ -99,10 +126,10 @@ export function resultBudget(): number {
     ?.env;
   const raw = env?.TH_MCP_RESULT_BUDGET;
   const n = raw ? Number(raw) : Number.NaN;
-  return Number.isFinite(n) && n > 0 ? n : DEFAULT_RESULT_BUDGET;
+  return Number.isFinite(n) && n >= MIN_RESULT_BUDGET ? n : DEFAULT_RESULT_BUDGET;
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
+function isPlainObject(value: unknown): value is Record<string, JsonValue> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -121,7 +148,7 @@ function largestPrefixCount(pieces: string[], charBudget: number): number {
   return k;
 }
 
-/** Last resort: cap a string at the budget and label it as truncated, non-JSON output. */
+/** Cap diagnostic text. Tool errors are text-only and are not output-schema validated. */
 function hardCap(text: string, budget: number, hint?: string): string {
   if (text.length <= budget) return text;
   const note = `\n\n[TRUNCATED: output exceeded ${budget} chars and is NOT valid JSON. ${
@@ -146,52 +173,80 @@ function largestArrayValuedKey(obj: Record<string, unknown>): string | null {
 }
 
 /**
- * Serialize `data` as JSON within `budget` characters. Small results are pretty-printed.
- * Oversized results degrade in order: trim a top-level array (wrapping it as
- * `{ items, __truncated }`), then a top-level object's largest array property (annotated
- * with `__truncated`), then a last-resort hard character cap. Pure and side-effect free.
+ * A JSON value that can be carried by MCP `structuredContent`.
  */
-export function boundedSerialize(data: unknown, budget: number, hint?: string): string {
-  // A string body (e.g. a non-JSON API response) still needs a hard cap.
-  if (typeof data === "string") return hardCap(data, budget, hint);
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
-  // JSON.stringify(undefined) returns undefined, so coerce to a "null" sentinel.
-  const compact = JSON.stringify(data) ?? "null";
-  if (compact.length <= budget) {
-    const pretty = JSON.stringify(data, null, 2) ?? "null";
-    return pretty.length <= budget ? pretty : compact;
+function jsonValue(data: unknown): JsonValue {
+  return JSON.parse(JSON.stringify(data) ?? "null") as JsonValue;
+}
+
+function previewEnvelope(source: string, budget: number, hint?: string): JsonValue {
+  const total = source.length;
+  const makeValue = (preview: string, markerHint: string) => ({
+    preview,
+    __truncated: { total, omitted: total - preview.length, hint: markerHint },
+  });
+
+  let markerHint = hint ?? "Narrow the query (filter, paginate, or fetch a specific id).";
+  while (JSON.stringify(makeValue("", markerHint)).length > budget && markerHint.length > 0) {
+    markerHint = markerHint.slice(0, -1);
+  }
+  if (JSON.stringify(makeValue("", markerHint)).length > budget) {
+    throw new RangeError("Result budget is too small for a structured truncation envelope.");
   }
 
-  if (Array.isArray(data)) {
-    const pieces = data.map((el) => JSON.stringify(el) ?? "null");
+  let keep = Math.max(0, budget - JSON.stringify(makeValue("", markerHint)).length);
+  let value = makeValue(source.slice(0, keep), markerHint);
+  while (JSON.stringify(value).length > budget && keep > 0) {
+    keep = Math.max(0, keep - (JSON.stringify(value).length - budget));
+    value = makeValue(source.slice(0, keep), markerHint);
+  }
+  return value;
+}
+
+function boundedResult(
+  data: unknown,
+  budget: number,
+  hint?: string,
+): { text: string; value: JsonValue } {
+  if (typeof data === "string" && data.length <= budget) return { text: data, value: data };
+
+  const value = jsonValue(data);
+  const compact = JSON.stringify(value);
+  if (compact.length <= budget) {
+    const pretty = JSON.stringify(value, null, 2);
+    return { text: pretty.length <= budget ? pretty : compact, value };
+  }
+
+  if (Array.isArray(value)) {
+    const pieces = value.map((element) => JSON.stringify(element));
     const k = largestPrefixCount(pieces, budget - MARKER_RESERVE);
-    const out = JSON.stringify(clipArray(data, k, hint));
-    if (out.length <= budget) return out;
-  } else if (isPlainObject(data)) {
-    const key = largestArrayValuedKey(data);
+    const truncated = clipArray(value, k, hint);
+    const text = JSON.stringify(truncated);
+    if (text.length <= budget) return { text, value: truncated };
+  } else if (isPlainObject(value)) {
+    const key = largestArrayValuedKey(value);
     if (key !== null) {
-      const arr = data[key] as unknown[];
-      const pieces = arr.map((el) => JSON.stringify(el) ?? "null");
-      // Leave room for the rest of the object and the marker before filling the array.
-      const restLen = (JSON.stringify({ ...data, [key]: [] }) ?? "{}").length;
-      const k = largestPrefixCount(pieces, Math.max(0, budget - MARKER_RESERVE - restLen));
-      const clone: Record<string, unknown> = {
-        ...data,
-        [key]: arr.slice(0, k),
-        __truncated: {
-          field: key,
-          returned: k,
-          total: arr.length,
-          omitted: arr.length - k,
-          hint: hint ?? DEFAULT_OBJECT_HINT,
-        },
-      };
-      const out = JSON.stringify(clone);
-      if (out.length <= budget) return out;
+      const array = value[key] as JsonValue[];
+      const pieces = array.map((element) => JSON.stringify(element));
+      const k = largestPrefixCount(pieces, budget - MARKER_RESERVE);
+      const truncated = clipArray(array, k, hint ?? DEFAULT_OBJECT_HINT, key);
+      const text = JSON.stringify(truncated);
+      if (text.length <= budget) return { text, value: truncated };
     }
   }
 
-  return hardCap(compact, budget, hint);
+  const truncated = previewEnvelope(typeof data === "string" ? data : compact, budget, hint);
+  return { text: JSON.stringify(truncated), value: truncated };
+}
+
+/**
+ * Serialize `data` within `budget` characters. Small JSON results are pretty-printed and small
+ * strings remain plain text. Oversized values become valid JSON truncation envelopes.
+ */
+export function boundedSerialize(data: unknown, budget: number, hint?: string): string {
+  return boundedResult(data, budget, hint).text;
 }
 
 /** Per-tool guidance threaded into the truncation marker when a result is too large. */
@@ -199,8 +254,8 @@ export type BudgetHint = { hint?: string | undefined };
 
 /** A successful tool result carrying JSON (or text) for the model, size-bounded. */
 export function jsonResult(data: unknown, opts?: BudgetHint): CallToolResult {
-  const text = boundedSerialize(data, resultBudget(), opts?.hint);
-  return { content: [{ type: "text", text }] };
+  const { text, value } = boundedResult(data, resultBudget(), opts?.hint);
+  return { content: [{ type: "text", text }], structuredContent: value };
 }
 
 /** A tool-level error: returned in-band (isError) so the model can self-correct. */

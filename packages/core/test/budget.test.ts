@@ -52,16 +52,18 @@ describe("boundedSerialize", () => {
     expect(out.length).toBeGreaterThan(budget * 0.85);
   });
 
-  it("truncates the largest array property of an object, preserving the rest", () => {
+  it("truncates the largest array property into { items, __truncated }", () => {
     const data = { meta: { kind: "roster", org: 7 }, athletes: rows(500) };
     const budget = 4000;
     const out = boundedSerialize(data, budget);
     expect(out.length).toBeLessThanOrEqual(budget);
     const parsed = JSON.parse(out);
     expect(parsed["__truncated"].field).toBe("athletes");
-    expect(parsed.meta).toEqual({ kind: "roster", org: 7 });
-    expect(parsed.athletes.length).toBe(parsed["__truncated"].returned);
+    expect(Array.isArray(parsed.items)).toBe(true);
+    expect(parsed.items.length).toBe(parsed["__truncated"].returned);
     expect(parsed["__truncated"].total).toBe(500);
+    expect(parsed.athletes).toBeUndefined();
+    expect(parsed.meta).toBeUndefined();
   });
 
   it("picks the largest array among several", () => {
@@ -70,19 +72,22 @@ describe("boundedSerialize", () => {
     expect(parsed["__truncated"].field).toBe("big");
   });
 
-  it("hard-caps a deep object with no trimmable array, labeled non-JSON", () => {
+  it("wraps a deep object with no trimmable array in valid structured JSON", () => {
     const data = { blob: "y".repeat(5000), kind: "deep" };
     const budget = 1000;
     const out = boundedSerialize(data, budget);
     expect(out.length).toBeLessThanOrEqual(budget);
-    expect(out).toContain("[TRUNCATED:");
-    expect(() => JSON.parse(out)).toThrow();
+    const parsed = JSON.parse(out);
+    expect(parsed.preview).toContain("y");
+    expect(parsed["__truncated"].omitted).toBeGreaterThan(0);
   });
 
-  it("hard-caps a huge string", () => {
+  it("wraps a huge string in valid structured JSON", () => {
     const out = boundedSerialize("z".repeat(2000), 500);
     expect(out.length).toBeLessThanOrEqual(500);
-    expect(out).toContain("[TRUNCATED:");
+    const parsed = JSON.parse(out);
+    expect(parsed.preview).toContain("z");
+    expect(parsed["__truncated"].total).toBe(2000);
   });
 
   it("returns a small string verbatim", () => {
@@ -115,9 +120,9 @@ describe("boundedSerialize", () => {
     expect(parsed["__truncated"].hint).toBe("use page/pageSize");
   });
 
-  it("propagates a custom hint into the hard-cap note", () => {
-    const out = boundedSerialize("z".repeat(2000), 500, "narrow me");
-    expect(out).toContain("narrow me");
+  it("propagates a custom hint into the hard-cap envelope", () => {
+    const parsed = JSON.parse(boundedSerialize("z".repeat(2000), 500, "narrow me"));
+    expect(parsed["__truncated"].hint).toBe("narrow me");
   });
 
   it("falls back to the default hint when none is given", () => {
@@ -142,20 +147,73 @@ describe("resultBudget", () => {
     expect(resultBudget()).toBe(12345);
   });
 
-  it("ignores a non-positive or non-numeric override", () => {
+  it("ignores a non-positive, too-small, or non-numeric override", () => {
     process.env.TH_MCP_RESULT_BUDGET = "nope";
     expect(resultBudget()).toBe(DEFAULT_RESULT_BUDGET);
     process.env.TH_MCP_RESULT_BUDGET = "-5";
+    expect(resultBudget()).toBe(DEFAULT_RESULT_BUDGET);
+    process.env.TH_MCP_RESULT_BUDGET = "100";
     expect(resultBudget()).toBe(DEFAULT_RESULT_BUDGET);
   });
 });
 
 describe("jsonResult wiring", () => {
+  it.each([
+    ["object", { a: 1, nested: ["two", true] }],
+    ["array", [1, "two", true]],
+    ["undefined", undefined],
+  ])("returns matching text and structured content for a small %s", (_label, data) => {
+    const out = jsonResult(data);
+    const part = out.content[0] as { text?: string } | undefined;
+    expect(JSON.parse(part?.text ?? "")).toEqual(out.structuredContent);
+  });
+
+  it("keeps a small string as compatible text and structured content", () => {
+    const out = jsonResult("hello");
+    const part = out.content[0] as { text?: string } | undefined;
+    expect(part?.text).toBe("hello");
+    expect(out.structuredContent).toBe("hello");
+  });
+
   it("bounds a large array result and stays within budget", () => {
     const out = jsonResult(rows(5000));
     const part = out.content[0] as { text?: string } | undefined;
     const text = part?.text ?? "";
     expect(text.length).toBeLessThanOrEqual(resultBudget());
     expect(JSON.parse(text)["__truncated"].total).toBe(5000);
+    expect(JSON.parse(text)).toEqual(out.structuredContent);
+  });
+
+  it("uses one bounded value for object-array truncation", () => {
+    const previous = process.env.TH_MCP_RESULT_BUDGET;
+    process.env.TH_MCP_RESULT_BUDGET = "4000";
+    try {
+      const out = jsonResult({ kind: "roster", athletes: rows(500) });
+      const part = out.content[0] as { text?: string } | undefined;
+      const parsed = JSON.parse(part?.text ?? "");
+      expect(parsed).toEqual(out.structuredContent);
+      expect(parsed["__truncated"].field).toBe("athletes");
+      expect(Array.isArray(parsed.items)).toBe(true);
+      expect(parsed.athletes).toBeUndefined();
+    } finally {
+      if (previous === undefined) delete process.env.TH_MCP_RESULT_BUDGET;
+      else process.env.TH_MCP_RESULT_BUDGET = previous;
+    }
+  });
+
+  it("keeps the hard-cap fallback structured and valid JSON", () => {
+    const previous = process.env.TH_MCP_RESULT_BUDGET;
+    process.env.TH_MCP_RESULT_BUDGET = "1000";
+    try {
+      const out = jsonResult({ blob: "y".repeat(5000), kind: "deep" });
+      const part = out.content[0] as { text?: string } | undefined;
+      const parsed = JSON.parse(part?.text ?? "");
+      expect(parsed).toEqual(out.structuredContent);
+      expect(parsed["__truncated"].omitted).toBeGreaterThan(0);
+      expect(parsed.preview).toContain("y");
+    } finally {
+      if (previous === undefined) delete process.env.TH_MCP_RESULT_BUDGET;
+      else process.env.TH_MCP_RESULT_BUDGET = previous;
+    }
   });
 });

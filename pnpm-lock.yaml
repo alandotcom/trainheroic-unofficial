@@ -103,6 +103,9 @@ importers:
       '@trainheroic-unofficial/db':
         specifier: workspace:*
         version: link:../db
+      '@trainheroic-unofficial/dto':
+        specifier: workspace:*
+        version: link:../dto
       '@trainheroic-unofficial/js':
         specifier: workspace:*
         version: link:../js
@@ -128,6 +131,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^5.20260816.1
         version: 5.20260816.1
+      '@modelcontextprotocol/client':
+        specifier: 2.0.0
+        version: 2.0.0
       '@types/node':
         specifier: ^26.2.0
         version: 26.2.0

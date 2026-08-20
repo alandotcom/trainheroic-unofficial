@@ -48,7 +48,7 @@ describe("ExerciseLibrary", () => {
 
   it("searches by token and gets full objects", async () => {
     mockApi([
-      { id: 1, title: "Back Squat", param_1_type: 3 },
+      { id: 1, title: "Back Squat", param_1_type: 3, muscle_group: "legs" },
       { id: 1162, title: "Bench Press", param_1_type: 3 },
     ]);
     const lib = new ExerciseLibrary(client());
@@ -56,6 +56,7 @@ describe("ExerciseLibrary", () => {
     const full = await lib.get(1);
     expect(full?.title).toBe("Back Squat");
     expect(full?.units).toEqual(["reps", null]);
+    expect(full?.muscle_group).toBe("legs");
     expect(full).not.toHaveProperty("param_1_type");
     expect(full).not.toHaveProperty("param_2_type");
   });

@@ -1,12 +1,30 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
+  athleteExerciseCatalogOutputSchema,
   athletePrescribeSetArgsSchema,
+  athletePrefsSchema,
+  athleteProfileOutputSchema,
   athleteSessionRemoveArgsSchema,
+  athleteSessionRemovedOutputSchema,
+  athleteWorkoutsOutputSchema,
+  athleteWorkingMaxListSchema,
   dateString,
+  exerciseHistoryOutputSchema,
+  exerciseStatsSchema,
+  exerciseSwapOutputSchema,
   logSessionArgsSchema,
   logSetArgsSchema,
+  logTargetsOutputSchema,
+  opaqueOutputSchema,
+  personalRecordListSchema,
+  personalWorkoutCreatedOutputSchema,
+  sessionLogOutputSchema,
+  setLogOutputSchema,
+  setPrescriptionOutputSchema,
   swapAthleteExerciseArgsSchema,
+  toolOutputSchema,
+  userSimpleSchema,
 } from "@trainheroic-unofficial/dto";
 import {
   addExercisesToWorkout,
@@ -44,7 +62,16 @@ import {
 } from "@trainheroic-unofficial/js";
 import type { SessionExercise, TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { confirmGate } from "../confirm";
-import { attempt, clipArray, DESTRUCTIVE, idParam, jsonResult, READ, toId } from "../context";
+import {
+  ADDITIVE,
+  attempt,
+  clipArray,
+  DESTRUCTIVE,
+  idParam,
+  jsonResult,
+  READ,
+  toId,
+} from "../context";
 import { historyInRange } from "../history";
 
 /**
@@ -72,6 +99,7 @@ function registerProfileTools(
       title: "Who am I (athlete)",
       description: "The logged-in account's identity (id, name, roles) from /user/simple.",
       inputSchema: {},
+      outputSchema: toolOutputSchema(userSimpleSchema),
       annotations: READ,
     },
     () => attempt(async () => jsonResult(await whoami())),
@@ -87,6 +115,7 @@ function registerProfileTools(
         "Use this for any 'how many sessions all-time / total volume ever' question rather than " +
         "summing athlete_workouts windows. Set useMetric for kg/metric totals.",
       inputSchema: { useMetric: z.boolean().optional() },
+      outputSchema: toolOutputSchema(athleteProfileOutputSchema),
       annotations: READ,
     },
     ({ useMetric }) =>
@@ -106,6 +135,7 @@ function registerProfileTools(
       title: "Athlete preferences",
       description: "Notification and display preference flags for the athlete account.",
       inputSchema: {},
+      outputSchema: toolOutputSchema(athletePrefsSchema),
       annotations: READ,
     },
     () => attempt(async () => jsonResult(await fetchAthletePrefs(ctx.client))),
@@ -120,6 +150,7 @@ function registerProfileTools(
         "null value: the exercise has a working-max slot but no number has been set yet, which " +
         "means there is effectively no working max for it.",
       inputSchema: {},
+      outputSchema: toolOutputSchema(athleteWorkingMaxListSchema),
       annotations: READ,
     },
     () => attempt(async () => jsonResult(await fetchWorkingMaxes(ctx.client))),
@@ -136,6 +167,7 @@ function registerProfileTools(
         pageSize: z.number().int().positive().max(200).optional(),
         gender: z.number().int().optional(),
       },
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     ({ workoutId, page, pageSize, gender }) =>
@@ -306,6 +338,7 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
         limit: z.number().int().positive().max(200).optional(),
         summary: z.boolean().optional(),
       },
+      outputSchema: toolOutputSchema(athleteWorkoutsOutputSchema),
       annotations: READ,
     },
     (args) => runAthleteWorkouts(ctx, args),
@@ -322,6 +355,7 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
         // be able to express it. jsonResult still budget-bounds an oversized payload.
         limit: z.number().int().positive().optional(),
       },
+      outputSchema: toolOutputSchema(athleteExerciseCatalogOutputSchema),
       annotations: READ,
     },
     (args) => runAthleteExercises(ctx, args),
@@ -338,6 +372,7 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
         since: dateString.optional(),
         until: dateString.optional(),
       },
+      outputSchema: toolOutputSchema(exerciseHistoryOutputSchema),
       annotations: READ,
     },
     ({ exerciseId, raw, since, until }) =>
@@ -363,6 +398,7 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
         "variants. For a point-in-time snapshot use athlete_exercise_stats; for the dated session " +
         "trend use athlete_exercise_history.",
       inputSchema: { exerciseId: idParam },
+      outputSchema: toolOutputSchema(personalRecordListSchema),
       annotations: READ,
     },
     ({ exerciseId }) =>
@@ -379,6 +415,7 @@ function registerExerciseTools(server: McpServer, ctx: AthleteContext, userId: U
         "athlete_personal_records, for progress over time use athlete_exercise_history. Get the " +
         "exercise id from athlete_exercises.",
       inputSchema: { exerciseId: idParam, date: dateString },
+      outputSchema: toolOutputSchema(exerciseStatsSchema),
       annotations: READ,
     },
     ({ exerciseId, date }) =>
@@ -403,6 +440,7 @@ function registerLogTargetsTool(server: McpServer, ctx: AthleteContext): void {
         teamId: idParam.optional(),
         raw: z.boolean().optional(),
       },
+      outputSchema: toolOutputSchema(logTargetsOutputSchema),
       annotations: READ,
     },
     ({ startDate, endDate, program, programId, teamId, raw }) =>
@@ -437,7 +475,8 @@ function registerSessionTools(server: McpServer, ctx: AthleteContext): void {
         "personal calendar. Returns programWorkoutId, workoutId (pass to " +
         "athlete_session_add_exercises), savedWorkoutId, groupId, and date.",
       inputSchema: { date: dateString },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      outputSchema: toolOutputSchema(personalWorkoutCreatedOutputSchema),
+      annotations: ADDITIVE,
     },
     ({ date }) => attempt(async () => jsonResult(await createPersonalWorkout(ctx.client, date))),
   );
@@ -458,7 +497,8 @@ function registerSessionTools(server: McpServer, ctx: AthleteContext): void {
           .array(z.object({ exerciseId: idParam, order: z.number().int().positive() }))
           .min(1),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      outputSchema: opaqueOutputSchema,
+      annotations: ADDITIVE,
     },
     ({ workoutId, exercises }) =>
       attempt(async () => {
@@ -481,6 +521,7 @@ function registerSessionTools(server: McpServer, ctx: AthleteContext): void {
         "sessions can be removed: the tool re-reads that day and refuses a coach-scheduled workout. " +
         "Requires confirmation (elicitation or confirm:true).",
       inputSchema: { ...athleteSessionRemoveArgsSchema.shape, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(athleteSessionRemovedOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ programWorkoutId, date, confirm }, extra) =>
@@ -539,6 +580,7 @@ function registerLogTool(server: McpServer, ctx: AthleteContext): void {
         "against a workout a coach already scheduled, use athlete_log_set instead. Requires " +
         "confirmation (elicitation or confirm:true).",
       inputSchema: { ...logSessionArgsSchema.shape, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(sessionLogOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ date, exercises, confirm }, extra) =>
@@ -586,6 +628,7 @@ function registerLogTool(server: McpServer, ctx: AthleteContext): void {
         "savedWorkoutSetExerciseId from athlete_log_targets (filter by program when several workouts " +
         "share a date). Requires confirmation (elicitation or confirm:true).",
       inputSchema: { ...logSetArgsSchema.shape, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(setLogOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ date, savedWorkoutSetId, results, confirm }, extra) =>
@@ -621,6 +664,7 @@ function registerLogTool(server: McpServer, ctx: AthleteContext): void {
         "completed results, use athlete_log_set instead. Requires confirmation (elicitation or " +
         "confirm:true).",
       inputSchema: { ...athletePrescribeSetArgsSchema.shape, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(setPrescriptionOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ date, savedWorkoutSetId, results, confirm }, extra) =>
@@ -665,6 +709,7 @@ function registerSwapTool(server: McpServer, ctx: AthleteContext): void {
         "from athlete_exercises). After swapping, log against the slot as usual with athlete_log_set. " +
         "Requires confirmation (elicitation or confirm:true).",
       inputSchema: { ...swapAthleteExerciseArgsSchema.shape, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(exerciseSwapOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ savedWorkoutSetExerciseId, exerciseId, confirm }, extra) =>
@@ -697,6 +742,7 @@ function registerCatalogReads(server: McpServer, ctx: AthleteContext): void {
         "kind defaults to recent. Empty when the athlete has no saved circuits. Distinct from " +
         "circuit *blocks* in workout_build (type 1).",
       inputSchema: { kind: z.enum(["recent", "history"]).optional() },
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     ({ kind }) =>
@@ -711,6 +757,7 @@ function registerCatalogReads(server: McpServer, ctx: AthleteContext): void {
         "Programs the athlete is subscribed to (GET /1.0/athlete/programming/programs). " +
         "Not the coach list_programs surface. Empty when the athlete has no subscriptions.",
       inputSchema: {},
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     () => attempt(async () => jsonResult(await fetchAthleteProgrammingPrograms(ctx.client))),
@@ -724,6 +771,7 @@ function registerCatalogReads(server: McpServer, ctx: AthleteContext): void {
         "Recently used exercises (GET /v5/users/exercises/recent). Distinct from " +
         "athlete_exercises (full logged catalog) and athlete_exercise_history (one lift).",
       inputSchema: {},
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     () => attempt(async () => jsonResult(await fetchRecentExercises(ctx.client))),
