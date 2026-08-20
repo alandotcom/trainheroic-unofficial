@@ -32,15 +32,23 @@ function registerExerciseUpdate(server: McpServer, index: ToolContext["index"]):
       title: "Update custom exercise",
       description:
         "Update a custom exercise (POST /2.0/coach/exercise/update/{id}) and write it through " +
-        "to the mirror. Same body as exercise_create. Only works for exercises with can_edit:1.",
-      inputSchema: { id: idParam, exercise: exerciseCreateSchema },
+        "to the mirror. Same body as exercise_create. Only works for exercises with can_edit:1. " +
+        "Requires confirmation (elicitation, or confirm:true).",
+      inputSchema: { id: idParam, exercise: exerciseCreateSchema, confirm: z.boolean().optional() },
       outputSchema: toolOutputSchema(exerciseCreatedOutputSchema),
-      annotations: ADDITIVE,
+      annotations: DESTRUCTIVE,
     },
-    ({ id, exercise }) =>
-      attempt(async () =>
-        jsonResult(await index.update(toId(id), exercise as Record<string, unknown>)),
-      ),
+    ({ id, exercise, confirm }, extra) =>
+      attempt(async () => {
+        const exerciseId = toId(id);
+        const blocked = confirmGate(
+          extra,
+          `Update custom exercise ${exerciseId}? This overwrites its live TrainHeroic definition.`,
+          confirm,
+        );
+        if (blocked) return blocked;
+        return jsonResult(await index.update(exerciseId, exercise as Record<string, unknown>));
+      }),
   );
 }
 

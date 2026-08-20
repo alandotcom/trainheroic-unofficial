@@ -46,19 +46,27 @@ export function registerTeamTools(server: McpServer, ctx: ToolContext): void {
         "Pass groupProgram (a program/calendar id — typically another team's group_program from " +
         "list_teams, or get_team) to point this team at an existing parent program. At least one " +
         "of title or groupProgram is required; when only groupProgram is set the current title " +
-        "is preserved.",
+        "is preserved. Requires confirmation (elicitation, or confirm:true).",
       inputSchema: {
         teamId: idParam,
         title: z.string().min(1).optional(),
         groupProgram: idParam.optional(),
+        confirm: z.boolean().optional(),
       },
       outputSchema: opaqueOutputSchema,
-      annotations: ADDITIVE,
+      annotations: DESTRUCTIVE,
     },
-    ({ teamId, title, groupProgram }) =>
+    ({ teamId, title, groupProgram, confirm }, extra) =>
       attempt(async () => {
+        const id = toId(teamId);
+        const blocked = confirmGate(
+          extra,
+          `Update team ${id}? This overwrites its live title and/or calendar assignment.`,
+          confirm,
+        );
+        if (blocked) return blocked;
         const args: { teamId: number; title?: string; groupProgram?: number } = {
-          teamId: toId(teamId),
+          teamId: id,
         };
         if (title !== undefined) args.title = title;
         if (groupProgram !== undefined) args.groupProgram = toId(groupProgram);

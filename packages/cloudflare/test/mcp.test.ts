@@ -267,11 +267,15 @@ describe("buildServer tool surfaces", () => {
       openWorldHint: true,
       destructiveHint: false,
     });
-    for (const name of ["exercise_delete", "team_delete", "message_send"]) {
+    for (const name of [
+      "exercise_delete",
+      "exercise_update",
+      "team_delete",
+      "team_update",
+      "message_send",
+      "report_feedback",
+    ]) {
       expect(tools.get(name)?.annotations?.destructiveHint, name).toBe(true);
-    }
-    for (const name of ["exercise_update", "team_update", "report_feedback"]) {
-      expect(tools.get(name)?.annotations?.destructiveHint, name).toBe(false);
     }
   });
 });
