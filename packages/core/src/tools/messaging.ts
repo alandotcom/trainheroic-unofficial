@@ -111,7 +111,7 @@ function registerWrites(server: McpServer, ctx: ToolContext): void {
         "Requires confirmation (elicitation, or confirm:true). Prefer message_draft first.",
       inputSchema: { ...commentDraftSchema.shape, confirm: z.boolean().optional() },
       outputSchema: toolOutputSchema(messageSentOutputSchema),
-      annotations: DESTRUCTIVE,
+      annotations: { ...DESTRUCTIVE, openWorldHint: true },
     },
     ({ streamId, text, replyTo, confirm }, extra) =>
       attempt(async () => {
