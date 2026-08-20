@@ -1,6 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { exerciseCreateSchema, toolOutputSchemaFor } from "@trainheroic-unofficial/dto";
+import {
+  exerciseCreateSchema,
+  exerciseCreatedOutputSchema,
+  exerciseDeletedOutputSchema,
+  exerciseForgottenOutputSchema,
+  exerciseResolveOutputSchema,
+  exerciseViewSchema,
+  opaqueOutputSchema,
+  toolOutputSchema,
+} from "@trainheroic-unofficial/dto";
 import { confirmGate } from "../confirm";
 import {
   ADDITIVE,
@@ -24,8 +33,8 @@ function registerExerciseUpdate(server: McpServer, index: ToolContext["index"]):
         "Update a custom exercise (POST /2.0/coach/exercise/update/{id}) and write it through " +
         "to the mirror. Same body as exercise_create. Only works for exercises with can_edit:1.",
       inputSchema: { id: idParam, exercise: exerciseCreateSchema },
-      outputSchema: toolOutputSchemaFor("exercise_update"),
-      annotations: DESTRUCTIVE,
+      outputSchema: toolOutputSchema(exerciseCreatedOutputSchema),
+      annotations: ADDITIVE,
     },
     ({ id, exercise }) =>
       attempt(async () =>
@@ -45,7 +54,7 @@ function registerExerciseDelete(server: McpServer, index: ToolContext["index"]):
         "cannot be deleted. Requires confirmation (elicitation, or confirm:true). " +
         "exercise_forget only clears the cache — use this to delete the live exercise.",
       inputSchema: { id: idParam, confirm: z.boolean().optional() },
-      outputSchema: toolOutputSchemaFor("exercise_delete"),
+      outputSchema: toolOutputSchema(exerciseDeletedOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ id, confirm }, extra) =>
@@ -76,7 +85,7 @@ function registerExerciseReads(server: McpServer, index: ToolContext["index"]): 
         "are fixed per exercise — check them before prescribing. `can_edit` is 1 only for the " +
         "coach's own custom exercises and 0 for built-in library exercises.",
       inputSchema: { name: z.string().min(1) },
-      outputSchema: toolOutputSchemaFor("exercise_resolve"),
+      outputSchema: toolOutputSchema(exerciseResolveOutputSchema),
       annotations: READ,
     },
     ({ name }) => attempt(async () => jsonResult(await index.resolve(name))),
@@ -95,7 +104,7 @@ function registerExerciseReads(server: McpServer, index: ToolContext["index"]): 
         query: z.string().min(1),
         limit: z.number().int().positive().max(100).optional(),
       },
-      outputSchema: toolOutputSchemaFor("exercise_search"),
+      outputSchema: toolOutputSchema(z.array(exerciseViewSchema)),
       annotations: READ,
     },
     ({ query, limit }) => attempt(async () => jsonResult(await index.search(query, limit ?? 20))),
@@ -107,7 +116,7 @@ function registerExerciseReads(server: McpServer, index: ToolContext["index"]): 
       title: "Get exercise",
       description: "Full exercise object (with units) by id.",
       inputSchema: { id: idParam },
-      outputSchema: toolOutputSchemaFor("exercise_get"),
+      outputSchema: toolOutputSchema(exerciseViewSchema),
       annotations: READ,
     },
     ({ id }) =>
@@ -123,7 +132,7 @@ function registerExerciseReads(server: McpServer, index: ToolContext["index"]): 
       title: "Sync exercise library",
       description: "Refresh the cached exercise index from TrainHeroic.",
       inputSchema: { force: z.boolean().optional() },
-      outputSchema: toolOutputSchemaFor("exercise_sync"),
+      outputSchema: opaqueOutputSchema,
       annotations: SYNC,
     },
     ({ force }) =>
@@ -152,7 +161,7 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
         "Create a custom exercise (POST /2.0/coach/exercise/create) and write it through to the " +
         'mirror. Body example: {"title":"Sandbag Clean","param_1_type":3,"param_2_type":1}.',
       inputSchema: { exercise: exerciseCreateSchema },
-      outputSchema: toolOutputSchemaFor("exercise_create"),
+      outputSchema: toolOutputSchema(exerciseCreatedOutputSchema),
       annotations: ADDITIVE,
     },
     ({ exercise }) =>
@@ -170,11 +179,11 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
         "Remove an exercise from the local mirror only. Does not call TrainHeroic — use " +
         "exercise_delete to delete the live custom exercise.",
       inputSchema: { id: idParam },
-      outputSchema: toolOutputSchemaFor("exercise_forget"),
+      outputSchema: toolOutputSchema(exerciseForgottenOutputSchema),
       annotations: {
         readOnlyHint: false,
         idempotentHint: true,
-        destructiveHint: true,
+        destructiveHint: false,
         openWorldHint: false,
       },
     },
@@ -191,7 +200,7 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
       title: "Exercise index stats",
       description: "Row counts and sync state for the cached exercise index.",
       inputSchema: {},
-      outputSchema: toolOutputSchemaFor("store_stats"),
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     () => attempt(async () => jsonResult(await index.stats())),

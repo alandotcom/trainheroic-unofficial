@@ -1,5 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/server";
-import { toolOutputSchemaFor } from "@trainheroic-unofficial/dto";
+import {
+  programCreatedOutputSchema,
+  programDeletedOutputSchema,
+  toolOutputSchema,
+} from "@trainheroic-unofficial/dto";
 import { createProgram, deleteProgram, PROGRAM_KINDS } from "@trainheroic-unofficial/js";
 import { z } from "zod";
 import { confirmGate } from "../confirm";
@@ -22,7 +26,7 @@ export function registerProgramTools(server: McpServer, ctx: ToolContext): void 
         kind: z.enum(PROGRAM_KINDS),
         name: z.string().trim().min(1),
       },
-      outputSchema: toolOutputSchemaFor("program_create"),
+      outputSchema: toolOutputSchema(programCreatedOutputSchema),
       annotations: ADDITIVE,
     },
     ({ kind, name }) =>
@@ -39,7 +43,7 @@ export function registerProgramTools(server: McpServer, ctx: ToolContext): void 
         "id); container ids 401 if sent raw and are resolved automatically. Removes the " +
         "calendar from the live account. Requires confirmation (elicitation, or confirm:true).",
       inputSchema: { programId: idParam, confirm: z.boolean().optional() },
-      outputSchema: toolOutputSchemaFor("program_delete"),
+      outputSchema: toolOutputSchema(programDeletedOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ programId, confirm }, extra) =>

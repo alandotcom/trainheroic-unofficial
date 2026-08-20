@@ -61,13 +61,13 @@ afterEach(() => {
 });
 
 describe("report_feedback tool", () => {
-  it("registers a single destructive external-submission tool", () => {
+  it("registers a single non-destructive tool", () => {
     const { server, registered } = captureServer();
     registerFeedbackTool(server, deps());
     expect(registered.name).toBe("report_feedback");
     expect(registered.config.annotations).toMatchObject({
       readOnlyHint: false,
-      destructiveHint: true,
+      destructiveHint: false,
       openWorldHint: true,
     });
   });

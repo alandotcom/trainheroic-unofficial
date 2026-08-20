@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { toolOutputSchemaFor } from "@trainheroic-unofficial/dto";
+import { opaqueOutputSchema } from "@trainheroic-unofficial/dto";
 import { ANALYTICS_METRIC_KEYS, definedProps, queryAnalytics } from "@trainheroic-unofficial/js";
 import { attempt, idParam, jsonResult, READ, toId } from "../context";
 import type { ToolContext } from "../context";
@@ -45,7 +45,7 @@ export function registerAnalyticsTools(server: McpServer, ctx: ToolContext): voi
         dateEnd: z.string().optional(),
         useMetric: z.boolean().optional(),
       },
-      outputSchema: toolOutputSchemaFor("analytics_query"),
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     ({ metric, teamId, userIds, exerciseId, date, dateStart, dateEnd, useMetric }) =>

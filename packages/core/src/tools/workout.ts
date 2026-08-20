@@ -3,9 +3,15 @@ import { z } from "zod";
 import {
   type BlockSpec,
   blockSpecSchema,
+  opaqueOutputSchema,
   parseWorkoutDate,
+  removedSessionOutputSchema,
   sessionTemplateCreateSchema,
-  toolOutputSchemaFor,
+  sessionTemplateCreatedOutputSchema,
+  toolOutputSchema,
+  workoutBuildOutputSchema,
+  workoutPublishOutputSchema,
+  workoutReadOutputSchema,
 } from "@trainheroic-unofficial/dto";
 import {
   buildSession,
@@ -57,7 +63,7 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         blocks: z.array(blockSpecSchema),
         instruction: z.string().optional(),
       },
-      outputSchema: toolOutputSchemaFor("workout_build"),
+      outputSchema: toolOutputSchema(workoutBuildOutputSchema),
       annotations: ADDITIVE,
     },
     ({ programId, athleteId, date, timelineDay, blocks, instruction }) =>
@@ -106,7 +112,7 @@ function registerReadPublish(server: McpServer, ctx: ToolContext): void {
       title: "Read a built session",
       description: "Read-back a session by programId, date (YYYY-M-D), and programWorkout id.",
       inputSchema: { programId: z.number(), date: z.string(), pwId: z.number() },
-      outputSchema: toolOutputSchemaFor("workout_read"),
+      outputSchema: toolOutputSchema(workoutReadOutputSchema),
       annotations: READ,
     },
     ({ programId, date, pwId }) =>
@@ -128,7 +134,7 @@ function registerReadPublish(server: McpServer, ctx: ToolContext): void {
         pwId: z.number(),
         confirm: z.boolean().optional(),
       },
-      outputSchema: toolOutputSchemaFor("workout_publish"),
+      outputSchema: toolOutputSchema(workoutPublishOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ programId, date, pwId, confirm }, extra) =>
@@ -167,7 +173,7 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
         pwId: z.number(),
         confirm: z.boolean().optional(),
       },
-      outputSchema: toolOutputSchemaFor("session_remove"),
+      outputSchema: toolOutputSchema(removedSessionOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ programId, pwId, confirm }, extra) =>
@@ -191,7 +197,7 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
         "Unpublish a previously published session (POST .../programWorkout/unPublish/{pwId}). It " +
         "is no longer athlete-facing. Requires confirmation (elicitation, or confirm:true).",
       inputSchema: { pwId: z.number(), confirm: z.boolean().optional() },
-      outputSchema: toolOutputSchemaFor("session_unpublish"),
+      outputSchema: opaqueOutputSchema,
       annotations: DESTRUCTIVE,
     },
     ({ pwId, confirm }, extra) =>
@@ -216,7 +222,7 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
         "toProgramId may be a team group_program or an athlete calendar program id " +
         "(from /v5/calendars/athletes/{athleteId}?year=&month= / workout_build athleteId).",
       inputSchema: { toProgramId: z.number(), pwId: z.number(), toDate: z.string() },
-      outputSchema: toolOutputSchemaFor("session_copy"),
+      outputSchema: opaqueOutputSchema,
       annotations: ADDITIVE,
     },
     ({ toProgramId, pwId, toDate }) =>
@@ -231,7 +237,7 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
         "Save an existing session as a reusable template in the session library " +
         "(POST .../programWorkout/saveWorkoutAsTemplate/{workoutId}). Pass the workout_id.",
       inputSchema: { workoutId: z.number() },
-      outputSchema: toolOutputSchemaFor("session_save_as_template"),
+      outputSchema: opaqueOutputSchema,
       annotations: ADDITIVE,
     },
     ({ workoutId }) =>
@@ -249,7 +255,7 @@ function registerTemplateLibrary(server: McpServer, ctx: ToolContext): void {
         "Distinct from session_save_as_template, which copies an existing session. Pass title " +
         "and optional instruction.",
       inputSchema: sessionTemplateCreateSchema.shape,
-      outputSchema: toolOutputSchemaFor("session_template_create"),
+      outputSchema: toolOutputSchema(sessionTemplateCreatedOutputSchema),
       annotations: ADDITIVE,
     },
     ({ title, instruction }) =>
@@ -266,7 +272,7 @@ function registerTemplateLibrary(server: McpServer, ctx: ToolContext): void {
         "Delete a library session template (DELETE /v5/sessions/template/{id}). Requires " +
         "confirmation (elicitation, or confirm:true).",
       inputSchema: { id: idParam, confirm: z.boolean().optional() },
-      outputSchema: toolOutputSchemaFor("session_template_delete"),
+      outputSchema: opaqueOutputSchema,
       annotations: DESTRUCTIVE,
     },
     ({ id, confirm }, extra) =>

@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { toolOutputSchemaFor } from "@trainheroic-unofficial/dto";
+import { athleteMainLiftPrsOutputSchema, toolOutputSchema } from "@trainheroic-unofficial/dto";
 import { fetchAthleteMainLiftPRs, fetchRosterMainLiftPRs } from "@trainheroic-unofficial/js";
 import { type ToolContext, READ, attempt, idParam, jsonResult, toId } from "../context";
 
@@ -30,7 +30,7 @@ export function registerMainLiftTools(server: McpServer, ctx: ToolContext): void
       title: "Athlete main-lift PRs (roster)",
       description: ATHLETE_DESC,
       inputSchema: { athleteId: idParam, months: monthsParam },
-      outputSchema: toolOutputSchemaFor("athlete_main_lift_prs"),
+      outputSchema: toolOutputSchema(athleteMainLiftPrsOutputSchema),
       annotations: READ,
     },
     ({ athleteId, months }) =>
@@ -51,7 +51,7 @@ export function registerMainLiftTools(server: McpServer, ctx: ToolContext): void
       title: "Roster main-lift PRs",
       description: ROSTER_DESC,
       inputSchema: { months: monthsParam, athleteIds: z.array(idParam).optional() },
-      outputSchema: toolOutputSchemaFor("roster_main_lift_prs"),
+      outputSchema: toolOutputSchema(z.array(athleteMainLiftPrsOutputSchema)),
       annotations: READ,
     },
     ({ months, athleteIds }) =>

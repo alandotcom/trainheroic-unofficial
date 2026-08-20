@@ -18,7 +18,7 @@ export function toId(value: string | number): number {
 export const READ = {
   readOnlyHint: true,
   destructiveHint: false,
-  openWorldHint: false,
+  openWorldHint: true,
 } as const;
 export const ADDITIVE = {
   readOnlyHint: false,
@@ -29,7 +29,7 @@ export const SYNC = {
   readOnlyHint: false,
   idempotentHint: true,
   destructiveHint: false,
-  openWorldHint: false,
+  openWorldHint: true,
 } as const;
 export const DESTRUCTIVE = {
   readOnlyHint: false,
@@ -85,24 +85,39 @@ const DEFAULT_OBJECT_HINT =
 
 /**
  * Clip an array to its first `keep` items and attach the `__truncated` marker describing what was
- * dropped. The marker is model-facing (tools instruct the model to key off `__truncated`), so its
- * shape has exactly one definition here: the size-budget path (`boundedSerialize`) and any tool
- * that deliberately caps a list (e.g. `athlete_exercises`) emit the same thing.
+ * dropped. Every budget fallback that trims a list uses this envelope (`{ items, __truncated }`),
+ * including in-place object-array truncation (the sliced array becomes `items` and `field` names
+ * the original key). `athlete_exercises` uses the same helper for a client-side catalog cap.
  */
 export function clipArray<T>(
   items: readonly T[],
   keep: number,
   hint?: string,
-): { items: T[]; __truncated: { returned: number; total: number; omitted: number; hint: string } } {
-  return {
-    items: items.slice(0, keep),
-    __truncated: {
-      returned: keep,
-      total: items.length,
-      omitted: items.length - keep,
-      hint: hint ?? DEFAULT_ARRAY_HINT,
-    },
+  field?: string,
+): {
+  items: T[];
+  __truncated: {
+    field?: string;
+    returned: number;
+    total: number;
+    omitted: number;
+    hint: string;
   };
+} {
+  const marker: {
+    field?: string;
+    returned: number;
+    total: number;
+    omitted: number;
+    hint: string;
+  } = {
+    returned: keep,
+    total: items.length,
+    omitted: items.length - keep,
+    hint: hint ?? DEFAULT_ARRAY_HINT,
+  };
+  if (field !== undefined) marker.field = field;
+  return { items: items.slice(0, keep), __truncated: marker };
 }
 
 /** Active budget. Overridable via TH_MCP_RESULT_BUDGET on Node; the default on workerd. */
@@ -215,20 +230,8 @@ function boundedResult(
     if (key !== null) {
       const array = value[key] as JsonValue[];
       const pieces = array.map((element) => JSON.stringify(element));
-      // Leave room for the rest of the object and the marker before filling the array.
-      const restLen = JSON.stringify({ ...value, [key]: [] }).length;
-      const k = largestPrefixCount(pieces, Math.max(0, budget - MARKER_RESERVE - restLen));
-      const truncated = {
-        ...value,
-        [key]: array.slice(0, k),
-        __truncated: {
-          field: key,
-          returned: k,
-          total: array.length,
-          omitted: array.length - k,
-          hint: hint ?? DEFAULT_OBJECT_HINT,
-        },
-      };
+      const k = largestPrefixCount(pieces, budget - MARKER_RESERVE);
+      const truncated = clipArray(array, k, hint ?? DEFAULT_OBJECT_HINT, key);
       const text = JSON.stringify(truncated);
       if (text.length <= budget) return { text, value: truncated };
     }

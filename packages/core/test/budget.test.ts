@@ -52,16 +52,18 @@ describe("boundedSerialize", () => {
     expect(out.length).toBeGreaterThan(budget * 0.85);
   });
 
-  it("truncates the largest array property of an object, preserving the rest", () => {
+  it("truncates the largest array property into { items, __truncated }", () => {
     const data = { meta: { kind: "roster", org: 7 }, athletes: rows(500) };
     const budget = 4000;
     const out = boundedSerialize(data, budget);
     expect(out.length).toBeLessThanOrEqual(budget);
     const parsed = JSON.parse(out);
     expect(parsed["__truncated"].field).toBe("athletes");
-    expect(parsed.meta).toEqual({ kind: "roster", org: 7 });
-    expect(parsed.athletes.length).toBe(parsed["__truncated"].returned);
+    expect(Array.isArray(parsed.items)).toBe(true);
+    expect(parsed.items.length).toBe(parsed["__truncated"].returned);
     expect(parsed["__truncated"].total).toBe(500);
+    expect(parsed.athletes).toBeUndefined();
+    expect(parsed.meta).toBeUndefined();
   });
 
   it("picks the largest array among several", () => {
@@ -191,6 +193,8 @@ describe("jsonResult wiring", () => {
       const parsed = JSON.parse(part?.text ?? "");
       expect(parsed).toEqual(out.structuredContent);
       expect(parsed["__truncated"].field).toBe("athletes");
+      expect(Array.isArray(parsed.items)).toBe(true);
+      expect(parsed.athletes).toBeUndefined();
     } finally {
       if (previous === undefined) delete process.env.TH_MCP_RESULT_BUDGET;
       else process.env.TH_MCP_RESULT_BUDGET = previous;

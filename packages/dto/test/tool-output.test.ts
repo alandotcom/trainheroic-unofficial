@@ -6,9 +6,9 @@ import {
   messageDraftOutputSchema,
   teamVolumeOutputSchema,
   toolOutputSchema,
-  toolOutputSchemaFor,
   truncatedOutputSchema,
-} from "../src/tool-output";
+  userSimpleSchema,
+} from "../src/index";
 
 const teamVolumeAthlete = {
   athleteId: 1,
@@ -26,10 +26,8 @@ const completeTeamVolume = {
   totals: { athletes: 2, sessions: 2, reps: 2, volume: 2 },
 };
 
-const truncatedTeamVolume = {
-  window: completeTeamVolume.window,
-  athletes: [teamVolumeAthlete],
-  totals: { athletes: 50, sessions: 200, reps: 1, volume: 1 },
+const truncatedEnvelope = {
+  items: [teamVolumeAthlete],
   __truncated: {
     field: "athletes",
     returned: 1,
@@ -85,14 +83,16 @@ describe("tool output schemas", () => {
     ).toBe(true);
   });
 
-  it("keeps __truncated when an object-array result is budget-sliced in place", () => {
-    const parsed = toolOutputSchemaFor("team_volume").parse(truncatedTeamVolume);
-    expect(parsed).toEqual(truncatedTeamVolume);
+  it("keeps __truncated on the dedicated envelope and rejects it as a complete team_volume", () => {
+    const wrapped = toolOutputSchema(teamVolumeOutputSchema);
+    expect(teamVolumeOutputSchema.safeParse(truncatedEnvelope).success).toBe(false);
+    expect(wrapped.parse(truncatedEnvelope)).toEqual(truncatedEnvelope);
   });
 
   it("accepts a complete unmarked object result", () => {
-    const parsed = toolOutputSchema(teamVolumeOutputSchema).parse(completeTeamVolume);
-    expect(parsed).toEqual(completeTeamVolume);
+    expect(toolOutputSchema(teamVolumeOutputSchema).parse(completeTeamVolume)).toEqual(
+      completeTeamVolume,
+    );
   });
 
   it("keeps __truncated for array and preview envelopes", () => {
@@ -110,5 +110,13 @@ describe("tool output schemas", () => {
     expect(toolOutputSchema(athleteProfileOutputSchema).parse(previewEnvelope)).toEqual(
       previewEnvelope,
     );
+  });
+
+  it("does not treat an arbitrary object as a contracted identity result", () => {
+    expect(toolOutputSchema(userSimpleSchema).safeParse({ foo: 1 }).success).toBe(false);
+    expect(toolOutputSchema(userSimpleSchema).parse({ id: 7, roles: ["coach"] })).toMatchObject({
+      id: 7,
+      roles: ["coach"],
+    });
   });
 });

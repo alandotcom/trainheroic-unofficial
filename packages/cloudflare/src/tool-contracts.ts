@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { toolOutputSchema } from "@trainheroic-unofficial/dto";
 import type {
+  ProgramSessionDetail,
   ProgramSessionRow,
   StoredMessage,
   StoredMessageStream,
@@ -112,9 +113,27 @@ const storedProgramSessionSchema: z.ZodType<ProgramSessionRow> = z.object({
   published: z.number(),
 });
 
-const storedSessionDetailSchema = z.object({
+const storedSessionBlockSchema = z.object({
+  id: z.number(),
+  ord: nullableNumber,
+  type: nullableNumber,
+  title: nullableString,
+  instruction: nullableString,
+  sets: z.array(
+    z.object({
+      exercise_id: nullableNumber,
+      set_index: nullableNumber,
+      param_1_type: nullableNumber,
+      param_1_value: z.union([z.number(), z.string()]).nullable(),
+      param_2_type: nullableNumber,
+      param_2_value: z.union([z.number(), z.string()]).nullable(),
+    }),
+  ),
+});
+
+const storedSessionDetailSchema: z.ZodType<ProgramSessionDetail> = z.object({
   sessionId: z.number(),
-  blocks: z.array(z.looseObject({ id: z.number(), sets: z.array(z.looseObject({})) })),
+  blocks: z.array(storedSessionBlockSchema),
 });
 
 const streamSyncSchema = z.object({

@@ -1,15 +1,5 @@
 import { z } from "zod";
-import {
-  athletePrefsSchema,
-  athleteProfileSummarySchema,
-  athleteUserSchema,
-  athleteWorkingMaxListSchema,
-  exerciseHistoryDetailSchema,
-  exerciseStatsSchema,
-  personalRecordListSchema,
-  programWorkoutListSchema,
-  userSimpleSchema,
-} from "./athlete";
+import { programWorkoutListSchema } from "./athlete";
 import { exerciseResponseSchema } from "./responses";
 
 const nullableNumber = z.number().nullable();
@@ -23,101 +13,25 @@ export const truncationMarkerSchema = z.looseObject({
   hint: z.string(),
 });
 
-/** Every budget fallback stays valid structured JSON and carries this marker. */
+/** Dedicated budget-fallback envelope. Never the natural tool shape. */
 export const truncatedOutputSchema = z.looseObject({
   preview: z.string().optional(),
   items: z.array(z.json()).optional(),
   __truncated: truncationMarkerSchema,
 });
 
-/** True when a value carries the budget-fallback marker (array wrap, in-place slice, or preview). */
-function hasTruncationMarker(value: unknown): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.hasOwn(value, "__truncated")
-  );
-}
-
 /**
  * Add the shared size-budget fallback to a tool's natural result shape.
- *
- * Truncation is first: Zod `z.object` strips unknown keys, so a sliced object with
- * `__truncated` would otherwise validate as complete and drop the marker. The natural
- * branch also rejects the marker so a future reorder cannot regress.
+ * Truncation is a dedicated `{ items|preview, __truncated }` envelope, so it cannot
+ * validate as the natural object and drop the marker.
  */
 export function toolOutputSchema<T extends z.ZodType>(schema: T) {
-  return z.union([
-    truncatedOutputSchema,
-    schema.refine((value) => !hasTruncationMarker(value), {
-      message: "truncated output must match truncatedOutputSchema",
-    }),
-  ]);
+  return z.union([truncatedOutputSchema, schema]);
 }
 
 export const opaqueJsonOutputSchema = z.json();
-
-export const athleteProfileOutputSchema = z.looseObject({
-  summary: athleteProfileSummarySchema,
-  user: athleteUserSchema,
-});
-
-const athleteWorkoutExerciseOutputSchema = z.object({
-  exerciseId: nullableNumber,
-  title: z.string(),
-  instruction: nullableString,
-  units: z.array(nullableString),
-  prescribed: z.array(z.string()),
-  performed: z.array(z.string()),
-});
-
-const athleteWorkoutBlockOutputSchema = z.object({
-  order: z.number(),
-  title: nullableString,
-  instruction: nullableString,
-  isTest: z.boolean(),
-  exercises: z.array(athleteWorkoutExerciseOutputSchema),
-});
-
-const athleteWorkoutOutputSchema = z.object({
-  id: nullableNumber,
-  date: z.string(),
-  title: z.string(),
-  program: nullableString,
-  team: nullableString,
-  instruction: nullableString,
-  logged: z.boolean(),
-  personal: z.boolean(),
-  blocks: z.array(athleteWorkoutBlockOutputSchema),
-});
-
-const athleteWorkoutSummaryOutputSchema = z.object({
-  id: nullableNumber,
-  date: z.string(),
-  title: z.string(),
-  program: nullableString,
-  team: nullableString,
-  logged: z.boolean(),
-  personal: z.boolean(),
-  exerciseCount: z.number().int().nonnegative(),
-  performedCount: z.number().int().nonnegative(),
-});
-
-export const athleteWorkoutsOutputSchema = z.union([
-  programWorkoutListSchema,
-  z.array(athleteWorkoutOutputSchema),
-  z.array(athleteWorkoutSummaryOutputSchema),
-]);
-
-export const athleteExerciseCatalogOutputSchema = z.array(
-  z.object({
-    id: z.union([z.number(), z.string()]),
-    title: z.string(),
-    isCircuit: z.boolean(),
-    units: z.array(nullableString),
-  }),
-);
+/** Explicit passthrough for tools whose live API payload is not yet contracted. */
+export const opaqueOutputSchema = toolOutputSchema(opaqueJsonOutputSchema);
 
 const logSetTargetOutputSchema = z.object({
   date: z.string(),
@@ -140,93 +54,9 @@ const logSetTargetOutputSchema = z.object({
 });
 
 export const logTargetsOutputSchema = z.union([
-  programWorkoutListSchema,
   z.array(logSetTargetOutputSchema),
+  programWorkoutListSchema,
 ]);
-
-export const presentedExerciseHistoryOutputSchema = z.object({
-  liftPRs: z.array(
-    z.object({
-      description: nullableString,
-      reps: nullableNumber,
-      weight: nullableNumber,
-      units: nullableString,
-      date: nullableString,
-    }),
-  ),
-  sessions: z.array(
-    z.object({
-      date: z.string(),
-      abr: nullableString,
-      estimated1RM: nullableNumber,
-      sets: z.array(z.object({ setNumber: z.number(), value: nullableString })),
-    }),
-  ),
-});
-
-export const exerciseHistoryOutputSchema = z.union([
-  exerciseHistoryDetailSchema,
-  presentedExerciseHistoryOutputSchema,
-]);
-
-export const coachAthleteTrainingOutputSchema = z.object({
-  athleteId: nullableNumber,
-  athleteName: nullableString,
-  year: z.number().int(),
-  month: z.number().int(),
-  sessions: z.array(
-    z.object({
-      workoutId: nullableNumber,
-      savedWorkoutId: nullableNumber,
-      title: z.string(),
-      logged: z.boolean(),
-      completed: z.boolean(),
-      rpe: nullableNumber,
-      durationMin: nullableNumber,
-      notes: nullableString,
-      exercises: z.array(
-        z.object({
-          exerciseId: nullableNumber,
-          title: z.string(),
-          summary: nullableString,
-          completed: z.boolean(),
-        }),
-      ),
-    }),
-  ),
-});
-
-export const rosterActivityOutputSchema = z.array(
-  z.object({
-    athleteId: z.number(),
-    sessionsCount: nullableNumber,
-    firstLoggedDate: nullableString,
-    lastLoggedDate: nullableString,
-    totalReps: nullableNumber,
-    totalVolume: nullableNumber,
-  }),
-);
-
-export const teamVolumeOutputSchema = z.object({
-  window: z.object({ start: z.string(), end: z.string() }),
-  athletes: z.array(
-    z.object({
-      athleteId: z.number(),
-      name: nullableString,
-      sessions: z.number(),
-      reps: z.number(),
-      volume: z.number(),
-      firstLoggedDate: nullableString,
-      lastLoggedDate: nullableString,
-    }),
-  ),
-  totals: z.object({
-    athletes: z.number(),
-    sessions: z.number(),
-    reps: z.number(),
-    volume: z.number(),
-  }),
-});
 
 export const messageDraftOutputSchema = z.object({
   draft: z.literal(true),
@@ -361,20 +191,7 @@ export const messageDeletedOutputSchema = z.object({
 
 export const exerciseDeletedOutputSchema = z.object({ deleted: z.number() });
 export const exerciseForgottenOutputSchema = z.object({ forgotten: z.number() });
-
-const exerciseViewOutputSchema = z.object({
-  id: z.number(),
-  title: z.string(),
-  can_edit: z.number(),
-  user_id: nullableNumber,
-  use_count: z.number(),
-  units: z.array(nullableString),
-});
-
-export const exerciseResolveOutputSchema = z.object({
-  match: exerciseViewOutputSchema.nullable(),
-  candidates: z.array(exerciseViewOutputSchema),
-});
+export const exerciseCreatedOutputSchema = exerciseResponseSchema;
 
 export const sessionTemplateCreatedOutputSchema = z.looseObject({
   id: z.union([z.number(), z.string()]),
@@ -391,7 +208,7 @@ const mainLiftPrOutputSchema = z.object({
   date: nullableString,
 });
 
-const athleteMainLiftPrsOutputSchema = z.object({
+export const athleteMainLiftPrsOutputSchema = z.object({
   athleteId: z.number(),
   athleteName: nullableString,
   prs: z.array(mainLiftPrOutputSchema),
@@ -410,62 +227,3 @@ export const programDeletedOutputSchema = z.object({
   programId: z.number(),
   containerId: nullableNumber,
 });
-
-export const knownToolOutputSchemas = {
-  athlete_whoami: userSimpleSchema,
-  athlete_profile: athleteProfileOutputSchema,
-  athlete_prefs: athletePrefsSchema,
-  athlete_working_maxes: athleteWorkingMaxListSchema,
-  athlete_workouts: athleteWorkoutsOutputSchema,
-  athlete_log_targets: logTargetsOutputSchema,
-  athlete_saved_workouts: logTargetsOutputSchema,
-  athlete_exercises: athleteExerciseCatalogOutputSchema,
-  athlete_exercise_history: exerciseHistoryOutputSchema,
-  athlete_personal_records: personalRecordListSchema,
-  athlete_exercise_stats: exerciseStatsSchema,
-  athlete_training: coachAthleteTrainingOutputSchema,
-  athlete_lift_history: exerciseHistoryOutputSchema,
-  roster_activity: rosterActivityOutputSchema,
-  team_volume: teamVolumeOutputSchema,
-  athlete_main_lift_prs: athleteMainLiftPrsOutputSchema,
-  roster_main_lift_prs: z.array(athleteMainLiftPrsOutputSchema),
-  message_draft: messageDraftOutputSchema,
-  message_send: messageSentOutputSchema,
-  message_delete: messageDeletedOutputSchema,
-  report_feedback: feedbackOutputSchema,
-  athlete_invite: athleteInviteOutputSchema,
-  athlete_session_create: personalWorkoutCreatedOutputSchema,
-  athlete_session_remove: athleteSessionRemovedOutputSchema,
-  athlete_log_session: sessionLogOutputSchema,
-  coach_log_session: sessionLogOutputSchema,
-  athlete_log_set: setLogOutputSchema,
-  log_athlete_set: setLogOutputSchema,
-  athlete_prescribe_set: setPrescriptionOutputSchema,
-  prescribe_athlete_set: setPrescriptionOutputSchema,
-  athlete_swap_exercise: exerciseSwapOutputSchema,
-  swap_athlete_exercise: exerciseSwapOutputSchema,
-  exercise_delete: exerciseDeletedOutputSchema,
-  exercise_forget: exerciseForgottenOutputSchema,
-  exercise_create: exerciseResponseSchema,
-  exercise_update: exerciseResponseSchema,
-  exercise_get: exerciseViewOutputSchema,
-  exercise_search: z.array(exerciseViewOutputSchema),
-  exercise_resolve: exerciseResolveOutputSchema,
-  program_create: programCreatedOutputSchema,
-  program_delete: programDeletedOutputSchema,
-  workout_build: workoutBuildOutputSchema,
-  workout_read: workoutReadOutputSchema,
-  workout_publish: workoutPublishOutputSchema,
-  session_remove: removedSessionOutputSchema,
-  session_template_create: sessionTemplateCreatedOutputSchema,
-} as const;
-
-const wrappedToolOutputSchemas: Readonly<Record<string, z.ZodType>> = Object.fromEntries(
-  Object.entries(knownToolOutputSchemas).map(([name, schema]) => [name, toolOutputSchema(schema)]),
-);
-const opaqueToolOutputSchema = toolOutputSchema(opaqueJsonOutputSchema);
-
-/** The declared result shape for a shared/core tool, including the budget fallback. */
-export function toolOutputSchemaFor(name: string): z.ZodType {
-  return wrappedToolOutputSchemas[name] ?? opaqueToolOutputSchema;
-}

@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
-import { toolOutputSchemaFor } from "@trainheroic-unofficial/dto";
+import {
+  athleteProfileOutputSchema,
+  athleteWorkoutsOutputSchema,
+  feedbackOutputSchema,
+  messageDeletedOutputSchema,
+  programCreatedOutputSchema,
+  teamVolumeOutputSchema,
+  toolOutputSchema,
+  userSimpleSchema,
+} from "@trainheroic-unofficial/dto";
 import { buildServer, parseProps, selectSurfaces } from "../src/mcp";
 import { hostedWarehouseOutputSchemas } from "../src/tool-contracts";
 import type { Props } from "../src/types";
@@ -215,11 +224,15 @@ describe("buildServer tool surfaces", () => {
         unknown,
       ]
     > = [
-      ["whoami", toolOutputSchemaFor("whoami"), { id: 7, roles: ["coach"] }],
-      ["athlete_profile", toolOutputSchemaFor("athlete_profile"), { summary: {}, user: { id: 7 } }],
+      ["whoami", toolOutputSchema(userSimpleSchema), { id: 7, roles: ["coach"] }],
+      [
+        "athlete_profile",
+        toolOutputSchema(athleteProfileOutputSchema),
+        { summary: {}, user: { id: 7 } },
+      ],
       [
         "athlete_workouts",
-        toolOutputSchemaFor("athlete_workouts"),
+        toolOutputSchema(athleteWorkoutsOutputSchema),
         [
           {
             id: 4,
@@ -256,7 +269,7 @@ describe("buildServer tool surfaces", () => {
       ],
       [
         "program_create",
-        toolOutputSchemaFor("program_create"),
+        toolOutputSchema(programCreatedOutputSchema),
         {
           containerId: 1,
           programId: 2,
@@ -266,15 +279,19 @@ describe("buildServer tool surfaces", () => {
           nameApplied: true,
         },
       ],
-      ["message_delete", toolOutputSchemaFor("message_delete"), { deleted: true, response: {} }],
+      [
+        "message_delete",
+        toolOutputSchema(messageDeletedOutputSchema),
+        { deleted: true, response: {} },
+      ],
       [
         "report_feedback",
-        toolOutputSchemaFor("report_feedback"),
+        toolOutputSchema(feedbackOutputSchema),
         { status: "sent", reference: "abc", note: "Recorded." },
       ],
       [
         "athlete_profile",
-        toolOutputSchemaFor("athlete_profile"),
+        toolOutputSchema(athleteProfileOutputSchema),
         {
           preview: "partial",
           __truncated: { total: 100, omitted: 93, hint: "narrow the request" },
@@ -282,10 +299,9 @@ describe("buildServer tool surfaces", () => {
       ],
       [
         "team_volume truncated",
-        toolOutputSchemaFor("team_volume"),
+        toolOutputSchema(teamVolumeOutputSchema),
         {
-          window: { start: "2026-01-01", end: "2026-01-31" },
-          athletes: [
+          items: [
             {
               athleteId: 1,
               name: "A",
@@ -296,7 +312,6 @@ describe("buildServer tool surfaces", () => {
               lastLoggedDate: null,
             },
           ],
-          totals: { athletes: 50, sessions: 200, reps: 1, volume: 1 },
           __truncated: {
             field: "athletes",
             returned: 1,
@@ -320,6 +335,7 @@ describe("buildServer tool surfaces", () => {
         expect(parsed.data, name).toEqual(output);
       }
     }
+    expect(toolOutputSchema(userSimpleSchema).safeParse({ foo: 1 }).success).toBe(false);
   });
 
   it("uses review-accurate hints for reads, private syncs, and overwrites", async () => {
@@ -328,16 +344,19 @@ describe("buildServer tool surfaces", () => {
 
     expect(tools.get("athlete_workouts")?.annotations).toMatchObject({
       readOnlyHint: true,
-      openWorldHint: false,
+      openWorldHint: true,
       destructiveHint: false,
     });
     expect(tools.get("programming_sync")?.annotations).toMatchObject({
       readOnlyHint: false,
-      openWorldHint: false,
+      openWorldHint: true,
       destructiveHint: false,
     });
-    for (const name of ["exercise_forget", "team_update", "exercise_update", "report_feedback"]) {
+    for (const name of ["exercise_delete", "team_delete", "message_send"]) {
       expect(tools.get(name)?.annotations?.destructiveHint, name).toBe(true);
+    }
+    for (const name of ["exercise_update", "team_update", "report_feedback"]) {
+      expect(tools.get(name)?.annotations?.destructiveHint, name).toBe(false);
     }
   });
 });

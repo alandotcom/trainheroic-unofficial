@@ -2,8 +2,8 @@ import * as Sentry from "@sentry/cloudflare";
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { DESTRUCTIVE, errorResult, jsonResult } from "@trainheroic-unofficial/core";
-import { toolOutputSchemaFor } from "@trainheroic-unofficial/dto";
+import { errorResult, jsonResult } from "@trainheroic-unofficial/core";
+import { feedbackOutputSchema, toolOutputSchema } from "@trainheroic-unofficial/dto";
 import type { AccountRole } from "../types";
 
 /**
@@ -120,10 +120,12 @@ export function registerFeedbackTool(server: McpServer, deps: FeedbackToolDeps):
             "For a bug: what actually happened instead. Leave empty for a test or non-bug feedback.",
           ),
       },
-      outputSchema: toolOutputSchemaFor(TOOL_NAME),
+      outputSchema: toolOutputSchema(feedbackOutputSchema),
       annotations: {
-        ...DESTRUCTIVE,
+        readOnlyHint: false,
+        destructiveHint: false,
         idempotentHint: false,
+        openWorldHint: true,
       },
     },
     (args): CallToolResult => {

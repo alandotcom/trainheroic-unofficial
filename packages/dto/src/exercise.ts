@@ -17,12 +17,22 @@ export type ExerciseRow = {
  * (param 1, then param 2). Positional, not semantic: param 2 is not always the load
  * — some exercises reverse the slots — so the units are not labelled by role.
  */
-export type ExerciseView = Omit<ExerciseRow, "param_1_type" | "param_2_type"> & {
-  units: Array<string | null>;
-};
+export const exerciseViewSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  can_edit: z.number(),
+  user_id: z.number().nullable(),
+  use_count: z.number(),
+  units: z.array(z.string().nullable()),
+});
+export type ExerciseView = z.infer<typeof exerciseViewSchema>;
 
 /** The outcome of resolving a name: a single match (or null) plus ranked candidates. */
-export type ResolveResult = { match: ExerciseView | null; candidates: ExerciseView[] };
+export const exerciseResolveOutputSchema = z.object({
+  match: exerciseViewSchema.nullable(),
+  candidates: z.array(exerciseViewSchema),
+});
+export type ResolveResult = z.infer<typeof exerciseResolveOutputSchema>;
 
 /** Body for creating a custom exercise; extra fields the API accepts are preserved. */
 export const exerciseCreateSchema = z.looseObject({
