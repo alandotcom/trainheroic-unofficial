@@ -86,18 +86,18 @@ response shape, or an area not covered here.
 
 ## What you can do
 
-| Area                   | How                                                                                                                                           |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Athletes               | `$TH coach athletes`; `coach athlete-invite\|athlete-archive\|athlete-restore`                                                                |
-| Teams / join codes     | `$TH coach teams\|team <id>\|team-codes <id>`; `coach team-create\|team-update\|team-delete\|team-code-create\|team-code-delete`              |
-| Programs               | `$TH coach programs`, `$TH coach program <id>`                                                                                                |
-| Exercises              | `$TH coach exercise resolve\|search\|get\|sync\|create\|forget\|stats` (below)                                                                |
-| Sessions / workouts    | `$TH coach workout build\|read\|publish\|remove`; `coach session-copy\|session-unpublish\|session-save-template`                              |
-| Roster training        | `$TH coach roster-activity\|athlete-training\|athlete-lift-history\|athlete-workouts` (read another athlete's training)                       |
-| Team volume (windowed) | `$TH coach team-volume --team <id>\|--athletes <ids> --start Y-M-D --end Y-M-D` — date-scoped team volume (roster-activity is all-time)       |
-| Log for an athlete     | `$TH coach log-set` (by set id) or `coach log-session` (by exercise) — record a roster athlete's reps/weights (real athletes only; see below) |
-| Messaging              | `$TH coach message list\|read\|draft\|send\|delete` (below)                                                                                   |
-| Analytics              | `$TH coach analytics` (category list); `$TH coach analytics-query --metric <key> ...` (the report)                                            |
+| Area                   | How                                                                                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Athletes               | `$TH coach athletes`; `coach athlete-invite\|athlete-archive\|athlete-restore`                                                                                  |
+| Teams / join codes     | `$TH coach teams\|team <id>\|team-codes <id>`; `coach team-create\|team-update\|team-delete\|team-code-create\|team-code-delete`                                |
+| Programs               | `$TH coach programs`, `$TH coach program <id>`, `$TH coach program-create --kind calendar\|fixed --name "..."`, `$TH coach program-delete --program <id> --yes` |
+| Exercises              | `$TH coach exercise resolve\|search\|get\|sync\|create\|delete\|forget\|stats` (below)                                                                          |
+| Sessions / workouts    | `$TH coach workout build\|read\|publish\|remove`; `coach session-copy\|session-unpublish\|session-save-template\|session-templates`                             |
+| Roster training        | `$TH coach roster-activity\|athlete-training\|athlete-lift-history\|athlete-workouts` (read another athlete's training)                                         |
+| Team volume (windowed) | `$TH coach team-volume --team <id>\|--athletes <ids> --start Y-M-D --end Y-M-D` — date-scoped team volume (roster-activity is all-time)                         |
+| Log for an athlete     | `$TH coach log-set` (by set id) or `coach log-session` (by exercise) — record a roster athlete's reps/weights (real athletes only; see below)                   |
+| Messaging              | `$TH coach message list\|read\|draft\|send\|delete` (below)                                                                                                     |
+| Analytics              | `$TH coach analytics` (category list); `$TH coach analytics-query --metric <key> ...` (the report)                                                              |
 
 ## Resolving exercises
 
@@ -119,7 +119,8 @@ deleting one via the API, drop it from the mirror:
 
 ```bash
 $TH coach exercise create '{"title":"Sandbag Clean","param_1_type":3,"param_2_type":1}'
-$TH coach exercise forget 7721170 --yes      # cache-only, run after an API delete
+$TH coach exercise delete 7721170 --yes      # live DELETE /v5/exercises/{id} + cache
+$TH coach exercise forget 7721170 --yes      # cache-only, if you already deleted via the API
 ```
 
 `$TH coach exercise stats` shows the cached row count.

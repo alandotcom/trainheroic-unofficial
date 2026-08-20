@@ -105,6 +105,30 @@ describe("TrainHeroicClient", () => {
     expect(onHttpError).not.toHaveBeenCalled();
   });
 
+  it("does not report an expected final status after re-login", async () => {
+    const onHttpError = vi.fn();
+    let dataCalls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "fresh-session" });
+        dataCalls += 1;
+        return json({ error: "Cannot access program" }, 401);
+      }),
+    );
+    const client = new TrainHeroicClient("a@b.com", "pw", "stale-session", {
+      onHttpError,
+    });
+
+    const result = await client.request("GET", "/3.0/coach/program/42", {
+      expectedStatuses: [401],
+    });
+
+    expect(result).toMatchObject({ ok: false, status: 401 });
+    expect(dataCalls).toBe(2);
+    expect(onHttpError).not.toHaveBeenCalled();
+  });
+
   it("shares one login across concurrent cold requests", async () => {
     let logins = 0;
     vi.stubGlobal(

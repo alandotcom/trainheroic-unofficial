@@ -28,6 +28,8 @@ export type ApiBase = "coach" | "apis";
 export type RequestOptions = {
   body?: unknown;
   base?: ApiBase;
+  /** Final non-2xx statuses the caller handles as part of normal control flow. */
+  expectedStatuses?: readonly number[];
 };
 
 export type ClientResult<T = unknown> = {
@@ -46,8 +48,9 @@ export type ClientOptions = {
   onSession?: (sessionId: string) => void;
   /**
    * Called once when a login or API request finishes with a non-2xx response. Transient 401/403
-   * API responses that succeed after the built-in re-login are not reported. The callback is
-   * best-effort: telemetry failures never change the API result returned to the caller.
+   * API responses that succeed after the built-in re-login and final statuses declared through
+   * `RequestOptions.expectedStatuses` are not reported. The callback is best-effort: telemetry
+   * failures never change the API result returned to the caller.
    */
   onHttpError?: TrainHeroicHttpErrorHandler;
 };
@@ -139,7 +142,7 @@ export class TrainHeroicClient {
       res = await this.#send(method, url, session, options.body);
     }
 
-    if (!res.ok) {
+    if (!res.ok && !options.expectedStatuses?.includes(res.status)) {
       notifyHttpError(this.#onHttpError, method, url, res.status);
     }
 

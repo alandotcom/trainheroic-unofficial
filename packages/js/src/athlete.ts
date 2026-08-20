@@ -165,6 +165,21 @@ export function fetchExerciseHistoryList(
   return getArray(client, "/v5/users/exercises/history", "athlete exercise history list");
 }
 
+export function fetchRecentExercises(client: TrainHeroicClient): Promise<unknown[]> {
+  return getArray(client, "/v5/users/exercises/recent", "athlete recent exercises");
+}
+
+export function fetchAthleteCircuits(
+  client: TrainHeroicClient,
+  kind: "recent" | "history" = "recent",
+): Promise<unknown[]> {
+  return getArray(client, `/v5/users/circuits/${kind}`, `athlete ${kind} circuits`);
+}
+
+export function fetchAthleteProgrammingPrograms(client: TrainHeroicClient): Promise<unknown[]> {
+  return getArray(client, "/1.0/athlete/programming/programs", "athlete programming programs");
+}
+
 /** Free-text search over the athlete's logged exercises (FTS replacement via rankSearch). */
 export async function searchExerciseHistory(
   client: TrainHeroicClient,

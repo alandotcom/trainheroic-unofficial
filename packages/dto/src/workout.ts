@@ -110,3 +110,10 @@ export type ReadResult = {
   instruction: string;
   blocks: ReadBlock[];
 };
+
+/** Body for `POST /v5/sessions/template` (library create, not save-from-session). */
+export const sessionTemplateCreateSchema = z.object({
+  title: z.string().min(1),
+  instruction: z.string().optional(),
+});
+export type SessionTemplateCreate = z.infer<typeof sessionTemplateCreateSchema>;

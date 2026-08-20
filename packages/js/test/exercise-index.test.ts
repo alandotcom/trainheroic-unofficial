@@ -13,11 +13,15 @@ function json(obj: unknown, status = 200): Response {
 function mockApi(library: unknown): void {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (url: string) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
       if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
       if (url.includes("/v5/exerciseLibrary/all")) return json(library);
       if (url.includes("/2.0/coach/exercise/create"))
         return json({ success: 1, data: { id: 555, title: "Made", param_1_type: 3 } });
+      if (url.includes("/2.0/coach/exercise/update/"))
+        return json({ success: 1, data: { id: 555, title: "Renamed", param_1_type: 3 } });
+      if (url.includes("/v5/exercises/") && String(init?.method).toUpperCase() === "DELETE")
+        return json("ok");
       return json({});
     }),
   );
@@ -44,7 +48,7 @@ describe("ExerciseLibrary", () => {
 
   it("searches by token and gets full objects", async () => {
     mockApi([
-      { id: 1, title: "Back Squat", param_1_type: 3 },
+      { id: 1, title: "Back Squat", param_1_type: 3, muscle_group: "legs" },
       { id: 1162, title: "Bench Press", param_1_type: 3 },
     ]);
     const lib = new ExerciseLibrary(client());
@@ -52,6 +56,7 @@ describe("ExerciseLibrary", () => {
     const full = await lib.get(1);
     expect(full?.title).toBe("Back Squat");
     expect(full?.units).toEqual(["reps", null]);
+    expect(full?.muscle_group).toBe("legs");
     expect(full).not.toHaveProperty("param_1_type");
     expect(full).not.toHaveProperty("param_2_type");
   });
@@ -69,6 +74,39 @@ describe("ExerciseLibrary", () => {
     expect((await lib.get(555))?.title).toBe("Made");
     await lib.recordDelete(555);
     expect(await lib.get(555)).toBeNull();
+  });
+
+  it("write-through update POSTs then refreshes the cached title", async () => {
+    mockApi([{ id: 555, title: "Made", param_1_type: 3, can_edit: 1 }]);
+    const lib = new ExerciseLibrary(client());
+    await lib.refresh();
+    const updated = await lib.update(555, { title: "Renamed", param_1_type: 3 });
+    expect(updated.title).toBe("Renamed");
+    expect((await lib.get(555))?.title).toBe("Renamed");
+    const posted = vi.mocked(fetch).mock.calls.filter(([url, init]) => {
+      return (
+        String(url).includes("/2.0/coach/exercise/update/555") &&
+        String((init as RequestInit | undefined)?.method).toUpperCase() === "POST"
+      );
+    });
+    expect(posted).toHaveLength(1);
+  });
+
+  it("write-through remove DELETEs the live exercise then drops the cache row", async () => {
+    mockApi([{ id: 555, title: "Made", param_1_type: 3, can_edit: 1 }]);
+    const lib = new ExerciseLibrary(client());
+    await lib.refresh();
+    expect((await lib.get(555))?.title).toBe("Made");
+    await lib.remove(555);
+    expect(await lib.get(555)).toBeNull();
+    const deleted = vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([url, init]) =>
+          String(url).includes("/v5/exercises/555") &&
+          String((init as RequestInit | undefined)?.method).toUpperCase() === "DELETE",
+      );
+    expect(deleted).toHaveLength(1);
   });
 
   it("returns no match when ambiguous", async () => {

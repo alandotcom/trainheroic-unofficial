@@ -68,6 +68,7 @@ describe("report_feedback tool", () => {
     expect(registered.config.annotations).toMatchObject({
       readOnlyHint: false,
       destructiveHint: false,
+      openWorldHint: true,
     });
   });
 

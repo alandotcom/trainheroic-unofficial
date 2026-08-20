@@ -1,5 +1,31 @@
 # @trainheroic-unofficial/cli
 
+## 3.2.0
+
+### Minor Changes
+
+- c6b63fe: Add program/exercise delete, custom-exercise update, session-template library CRUD,
+  athlete circuit/program/recent-exercise reads, notifications list, subscriptions,
+  prescription templates, coach-athlete-team calendar, and team auto-publish after
+  live-probing the undocumented TrainHeroic paths.
+
+### Patch Changes
+
+- 6c2400e: Fix team auto-publish when targeting a team id: resolve `group_program` first, then GET that program. The `--team` / `teamId` path previously requested `/3.0/coach/program/undefined`.
+- Updated dependencies [6c2400e]
+- Updated dependencies [c6b63fe]
+  - @trainheroic-unofficial/dto@3.2.0
+  - @trainheroic-unofficial/js@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- 0d0a9e9: Resolve standalone container ids to their underlying TrainHeroic program ids instead of reporting an authentication error, and add typed SDK, MCP, and CLI support for creating standalone calendars and fixed programs.
+- Updated dependencies [0d0a9e9]
+  - @trainheroic-unofficial/js@3.1.1
+  - @trainheroic-unofficial/dto@3.1.1
+
 ## 3.1.0
 
 ### Minor Changes

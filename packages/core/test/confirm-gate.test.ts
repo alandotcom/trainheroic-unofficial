@@ -3,7 +3,9 @@ import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { isInputRequiredResult } from "@modelcontextprotocol/server";
 import { registerAthleteTrainingTools } from "../src/tools/athlete-training";
 import { registerAthleteTools } from "../src/tools/athletes";
+import { registerExerciseTools } from "../src/tools/exercises";
 import { registerMessagingTools } from "../src/tools/messaging";
+import { registerProgramTools } from "../src/tools/programs";
 import { registerTeamTools } from "../src/tools/teams";
 import { registerWorkoutTools } from "../src/tools/workout";
 import type { ToolContext } from "../src/context";
@@ -35,7 +37,12 @@ function toolCtx(onRequest: () => void): ToolContext {
       return { ok: true, status: 200, data: { done: true } };
     },
   };
-  return { client, index: {} } as unknown as ToolContext;
+  const index = {
+    remove: async () => {
+      onRequest();
+    },
+  };
+  return { client, index } as unknown as ToolContext;
 }
 
 function mcpCtx(inputResponses?: Record<string, unknown>): ServerContext {
@@ -51,6 +58,8 @@ const GATED: Array<{ reg: Register; name: string; args: Record<string, unknown> 
     name: "team_update",
     args: { teamId: 1, title: "Team", groupProgram: 2 },
   },
+  { reg: registerProgramTools, name: "program_delete", args: { programId: 1 } },
+  { reg: registerExerciseTools, name: "exercise_delete", args: { id: 1 } },
   { reg: registerTeamTools, name: "team_code_delete", args: { codeId: 1 } },
   { reg: registerMessagingTools, name: "message_send", args: { streamId: 1, text: "hi" } },
   { reg: registerMessagingTools, name: "message_delete", args: { streamId: 1, commentId: 2 } },
@@ -61,6 +70,8 @@ const GATED: Array<{ reg: Register; name: string; args: Record<string, unknown> 
   },
   { reg: registerWorkoutTools, name: "session_remove", args: { programId: 1, pwId: 2 } },
   { reg: registerWorkoutTools, name: "session_unpublish", args: { pwId: 2 } },
+  { reg: registerWorkoutTools, name: "session_template_delete", args: { id: 1 } },
+  { reg: registerTeamTools, name: "team_publish_settings", args: { programId: 1, pub_enabled: 1 } },
   // Coach writes into an athlete's own log / prescription.
   {
     reg: registerAthleteTools,

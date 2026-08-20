@@ -1,6 +1,6 @@
 {
   "name": "@trainheroic-unofficial/athlete-mcp",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -34,7 +34,7 @@
   "devDependencies": {
     "@types/node": "^26.2.0",
     "tsdown": "^0.22.14",
-    "tsx": "^4.23.11",
+    "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }

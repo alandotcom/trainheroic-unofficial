@@ -1,16 +1,37 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { dateString } from "@trainheroic-unofficial/dto";
+import {
+  coachAthleteTrainingOutputSchema,
+  dateString,
+  exerciseHistoryOutputSchema,
+  opaqueOutputSchema,
+  rosterActivityOutputSchema,
+  teamVolumeOutputSchema,
+  toolOutputSchema,
+  userSimpleSchema,
+} from "@trainheroic-unofficial/dto";
 import {
   fetchCoachAthleteCalendarSummary,
   fetchExerciseHistoryDetail,
   fetchRosterActivity,
   fetchTeamAthleteIds,
+  coerceInt,
+  isRecord,
   presentCoachAthleteTraining,
   presentExerciseHistory,
+  SESSION_TEMPLATES_LIST_PATH,
   teamVolume,
 } from "@trainheroic-unofficial/js";
-import { apiCall, attempt, idParam, jsonResult, READ, toId } from "../context";
+import {
+  apiCall,
+  apiResponseResult,
+  attempt,
+  clipArray,
+  idParam,
+  jsonResult,
+  READ,
+  toId,
+} from "../context";
 import type { ToolContext } from "../context";
 import { historyInRange } from "../history";
 
@@ -61,13 +82,6 @@ const SIMPLE_GETS: ReadonlyArray<{
   path: string;
 }> = [
   {
-    name: "whoami",
-    title: "Who am I",
-    description:
-      "The authenticated TrainHeroic coach profile (id, org_id, name, roles, trial days).",
-    path: "/user/simple",
-  },
-  {
     name: "head_coach",
     title: "Head coach / org",
     description: "Org, license, and trial status for the head coach account.",
@@ -79,7 +93,9 @@ const SIMPLE_GETS: ReadonlyArray<{
     description:
       "Coach programs (standalone only). This is often empty even for an active coach, because " +
       "most programming lives as a team's group-program: if it returns [], call list_teams and " +
-      "read each team's group_program — do not conclude the coach has no programs.",
+      "read each team's group_program — do not conclude the coach has no programs. Each standalone " +
+      "row has two ids: id is its container/calendar id; group_program is the underlying program " +
+      "id used by workout writes. get_program accepts either one.",
     path: "/1.0/coach/programs",
   },
   {
@@ -87,6 +103,30 @@ const SIMPLE_GETS: ReadonlyArray<{
     title: "Notification counts",
     description: "Unread counts including countMessagingNotViewed (cheap 'anything new?' poll).",
     path: "/v5/notifications/counts",
+  },
+  {
+    name: "list_notifications",
+    title: "Notification list",
+    description:
+      "Full notification list (GET /v5/notifications). Distinct from `notifications`, which " +
+      "returns unread counts only. Empty when there are no notifications.",
+    path: "/v5/notifications",
+  },
+  {
+    name: "list_subscriptions",
+    title: "Program subscriptions",
+    description:
+      "Program subscriptions and subscribed teams (GET /1.0/coach/subscriptions). " +
+      "Returns `{subscriptions, teams}`.",
+    path: "/1.0/coach/subscriptions",
+  },
+  {
+    name: "list_prescription_templates",
+    title: "Prescription templates",
+    description:
+      "Saved sets/reps schemes (GET /2.0/coach/workoutSetExercise/template). Use when picking " +
+      "a named prescription like '4 x 3' rather than typing set counts by hand.",
+    path: "/2.0/coach/workoutSetExercise/template",
   },
   {
     name: "analytics_categories",
@@ -97,14 +137,43 @@ const SIMPLE_GETS: ReadonlyArray<{
       "(self-describing) enum instead; you rarely need this tool.",
     path: "/v5/analytics",
   },
+  {
+    name: "list_session_templates",
+    title: "List session templates",
+    description:
+      "Session templates in the coach library (GET /1.0/coach/workouts). Use a template id " +
+      "with session_save_as_template's inverse: this lists saved templates; " +
+      "session_save_as_template writes one from an existing session. Empty when the library " +
+      "has no templates yet.",
+    path: SESSION_TEMPLATES_LIST_PATH,
+  },
 ];
 
 /** Roster-level reads: the fixed GETs plus the filterable athlete and team lists. */
 function registerRosterReads(server: McpServer, ctx: ToolContext): void {
+  server.registerTool(
+    "whoami",
+    {
+      title: "Who am I",
+      description:
+        "The authenticated TrainHeroic coach profile (id, org_id, name, roles, trial days).",
+      inputSchema: {},
+      outputSchema: toolOutputSchema(userSimpleSchema),
+      annotations: READ,
+    },
+    () => apiCall(ctx, "GET", "/user/simple"),
+  );
+
   for (const t of SIMPLE_GETS) {
     server.registerTool(
       t.name,
-      { title: t.title, description: t.description, inputSchema: {}, annotations: READ },
+      {
+        title: t.title,
+        description: t.description,
+        inputSchema: {},
+        outputSchema: opaqueOutputSchema,
+        annotations: READ,
+      },
       () => apiCall(ctx, "GET", t.path),
     );
   }
@@ -129,6 +198,7 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
         q: z.string().optional(),
         limit: z.number().int().positive().max(500).optional(),
       },
+      outputSchema: toolOutputSchema(z.array(z.json())),
       annotations: READ,
     },
     ({ q, limit }) =>
@@ -153,14 +223,14 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
             return needles.every((n) => hay.includes(n));
           });
         }
-        const total = rows.length;
         if (limit !== undefined && rows.length > limit) {
-          return jsonResult({
-            items: rows.slice(0, limit),
-            returned: limit,
-            total,
-            note: "Limited client-side. Raise limit or narrow with q for the rest.",
-          });
+          return jsonResult(
+            clipArray(
+              rows,
+              limit,
+              "Limited client-side. Raise limit or narrow with q for the rest.",
+            ),
+          );
         }
         return jsonResult(rows, {
           hint: "Filter with q (name/email substring) or cap with limit to shrink this list.",
@@ -183,6 +253,7 @@ function registerRosterReads(server: McpServer, ctx: ToolContext): void {
         pageSize: z.number().int().positive().optional(),
         q: z.string().optional(),
       },
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     ({ page, pageSize, q }) => {
@@ -204,6 +275,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
       title: "Get team",
       description: "Full team object by team id.",
       inputSchema: { teamId: idParam },
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     ({ teamId }) => apiCall(ctx, "GET", `/v5/teams/${enc(teamId)}`),
@@ -215,6 +287,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
       title: "List team access codes",
       description: "Join/access codes for a team.",
       inputSchema: { teamId: idParam },
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
     ({ teamId }) => apiCall(ctx, "GET", `/v5/teams/${enc(teamId)}/teamCodes`),
@@ -232,6 +305,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         since: dateString.optional(),
         until: dateString.optional(),
       },
+      outputSchema: toolOutputSchema(exerciseHistoryOutputSchema),
       annotations: READ,
     },
     ({ athleteId, exerciseId, raw, since, until }) =>
@@ -255,6 +329,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         athleteIds: z.array(idParam).min(1),
         useMetric: z.boolean().optional(),
       },
+      outputSchema: toolOutputSchema(rosterActivityOutputSchema),
       annotations: READ,
     },
     ({ athleteIds, useMetric }) =>
@@ -278,6 +353,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
         year: z.number().int(),
         month: z.number().int().min(1).max(12),
       },
+      outputSchema: toolOutputSchema(coachAthleteTrainingOutputSchema),
       annotations: READ,
     },
     ({ athleteId, year, month }) =>
@@ -299,21 +375,61 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
     {
       title: "Get program detail",
       description:
-        "Full nested program structure (blocks + sessions) live from the API, by program id. " +
-        "Works for team calendars and athlete coach calendars (type 5 from " +
-        "/v5/calendars/athletes/{id}). Some unrelated ids return HTTP 401 Cannot access program.",
+        "Program detail live from the API, by program id. Works for team calendars and athlete " +
+        "coach calendars (type 5 from /v5/calendars/athletes/{id}). For standalone rows from " +
+        "list_programs, accepts either id (the container id) or group_program (the underlying " +
+        "program id); container ids are resolved automatically. If neither detail endpoint is " +
+        "available, returns calendar metadata and next-step guidance instead.",
       inputSchema: { programId: idParam },
+      outputSchema: opaqueOutputSchema,
       annotations: READ,
     },
-    ({ programId }) =>
-      apiCall(
-        ctx,
-        "GET",
-        `/3.0/coach/program/${enc(programId)}`,
-        undefined,
-        "This is a large, deep object. If it is truncated, fetch a narrower view (a specific session) instead.",
-      ),
+    ({ programId }) => getProgram(ctx, toId(programId)),
   );
+}
+
+async function getProgram(ctx: ToolContext, programId: number) {
+  return attempt(async () => {
+    const detail = await ctx.client.request("GET", `/3.0/coach/program/${enc(programId)}`, {
+      expectedStatuses: [401, 403],
+    });
+    if (detail.ok || (detail.status !== 401 && detail.status !== 403)) {
+      return apiResponseResult(
+        detail,
+        "This is a large, deep object. If it is truncated, fetch a narrower view (a specific session) instead.",
+      );
+    }
+
+    const programs = await ctx.client.request<unknown>("GET", "/1.0/coach/programs");
+    const program = Array.isArray(programs.data)
+      ? programs.data.find((item) => isRecord(item) && coerceInt(item.id) === programId)
+      : undefined;
+    if (!programs.ok || !program) return apiResponseResult(detail);
+
+    const actualProgramId = coerceInt(program.group_program);
+    if (actualProgramId !== null && actualProgramId !== programId) {
+      const actualDetail = await ctx.client.request(
+        "GET",
+        `/3.0/coach/program/${enc(actualProgramId)}`,
+        { expectedStatuses: [401, 403] },
+      );
+      if (actualDetail.ok || (actualDetail.status !== 401 && actualDetail.status !== 403)) {
+        return apiResponseResult(
+          actualDetail,
+          "This is a large, deep object. If it is truncated, fetch a narrower view (a specific session) instead.",
+        );
+      }
+    }
+
+    return jsonResult({
+      program,
+      detailAvailable: false,
+      note:
+        "TrainHeroic recognizes this as a valid standalone calendar, but its nested program-detail " +
+        "endpoint does not expose this calendar type. Use calendar/session reads instead; on the " +
+        "hosted server, programming_sync then programming_stored can read its dated sessions.",
+    });
+  });
 }
 
 /** Read-only coach/athlete queries. Exercise lookups live in the exercise store tools. */
@@ -336,6 +452,7 @@ function registerTeamVolume(server: McpServer, ctx: ToolContext): void {
         dateStart: dateString,
         dateEnd: dateString,
       },
+      outputSchema: toolOutputSchema(teamVolumeOutputSchema),
       annotations: READ,
     },
     ({ teamId, athleteIds, dateStart, dateEnd }) =>
@@ -361,6 +478,25 @@ function registerTeamVolume(server: McpServer, ctx: ToolContext): void {
 
 export function registerReadTools(server: McpServer, ctx: ToolContext): void {
   registerRosterReads(server, ctx);
+  registerCoachAthleteTeamCalendar(server, ctx);
   registerEntityReads(server, ctx);
   registerTeamVolume(server, ctx);
+}
+
+function registerCoachAthleteTeamCalendar(server: McpServer, ctx: ToolContext): void {
+  server.registerTool(
+    "coach_athlete_team_calendar",
+    {
+      title: "Coach-athlete team calendar",
+      description:
+        "Companion calendar for a roster athlete (GET /v5/calendars/athletes/{id}/coachAthleteTeam). " +
+        "Distinct from workout_build's type-5 individual calendar. Returns title, logo, id, " +
+        "athlete_id, owner_user_id.",
+      inputSchema: { athleteId: idParam },
+      outputSchema: opaqueOutputSchema,
+      annotations: READ,
+    },
+    ({ athleteId }) =>
+      apiCall(ctx, "GET", `/v5/calendars/athletes/${toId(athleteId)}/coachAthleteTeam`),
+  );
 }

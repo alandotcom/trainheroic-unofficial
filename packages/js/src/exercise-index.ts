@@ -22,6 +22,8 @@ import { checkResponse } from "./response-check";
 
 const LIBRARY_PATH = "/v5/exerciseLibrary/all";
 const CREATE_PATH = "/2.0/coach/exercise/create";
+const UPDATE_PATH = (id: number): string => `/2.0/coach/exercise/update/${id}`;
+const DELETE_PATH = (id: number): string => `/v5/exercises/${id}`;
 const TTL_MS = 7 * 24 * 3600 * 1000;
 
 type Stored = {
@@ -182,12 +184,24 @@ export class ExerciseLibrary implements ExerciseIndex {
   }
 
   async create(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.#writeThrough(CREATE_PATH, body, "create");
+  }
+
+  async update(id: number, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.#writeThrough(UPDATE_PATH(id), body, "update");
+  }
+
+  async #writeThrough(
+    path: string,
+    body: Record<string, unknown>,
+    label: string,
+  ): Promise<Record<string, unknown>> {
     await this.ensureFresh();
-    const res = await this.#client.request("POST", CREATE_PATH, { body });
-    if (!res.ok) throw new Error(`Exercise create failed (HTTP ${res.status}).`);
+    const res = await this.#client.request("POST", path, { body });
+    if (!res.ok) throw new Error(`Exercise ${label} failed (HTTP ${res.status}).`);
     const ex = unwrapEnvelope(res.data);
     if (ex && typeof ex === "object") {
-      checkResponse(exerciseResponseSchema, ex, "exercise create");
+      checkResponse(exerciseResponseSchema, ex, `exercise ${label}`);
       const s = toStored(ex as Record<string, unknown>);
       if (s) {
         this.#byId.set(s.id, s);
@@ -195,6 +209,14 @@ export class ExerciseLibrary implements ExerciseIndex {
       }
     }
     return ex as Record<string, unknown>;
+  }
+
+  async remove(id: number): Promise<void> {
+    const res = await this.#client.request("DELETE", DELETE_PATH(id), {
+      expectedStatuses: [401, 403, 404],
+    });
+    if (!res.ok) throw new Error(`Exercise delete failed (HTTP ${res.status}).`);
+    await this.recordDelete(id);
   }
 
   async recordDelete(id: number): Promise<void> {

@@ -24,12 +24,17 @@ Available to coach accounts on the main hosted endpoint and from the local coach
 | `list_teams` | Teams you coach |
 | `get_team` | One team with athletes and program |
 | `list_programs` | Standalone coach programs |
-| `get_program` | Program detail by id |
-| `notifications` | Unread notifications |
+| `get_program` | Program detail by container or program id |
+| `program_create` | Create a standalone calendar or fixed program |
+| `program_delete` | Delete a standalone calendar or fixed program |
+| `notifications` | Unread notification counts |
+| `list_notifications` | Full notification list |
+| `list_subscriptions` | Program subscriptions and teams |
 | `analytics_categories` | Analytics metric categories |
 | `roster_activity` | Recent training activity across the roster |
 | `athlete_training` | Filterable athlete training history |
 | `athlete_lift_history` | Lift history for one athlete |
+| `coach_athlete_team_calendar` | Team calendar companion for a roster athlete |
 | `team_volume` | Volume totals for a team |
 
 ### Workouts & sessions
@@ -43,6 +48,10 @@ Available to coach accounts on the main hosted endpoint and from the local coach
 | `session_unpublish` | Unpublish a live session |
 | `session_copy` | Copy a session to another date |
 | `session_save_as_template` | Save a session as a template |
+| `session_template_create` | Create an empty session template |
+| `session_template_delete` | Delete a library session template |
+| `list_session_templates` | List saved session templates |
+| `list_prescription_templates` | Saved sets/reps prescription templates |
 
 ### Exercise library
 
@@ -53,6 +62,8 @@ Available to coach accounts on the main hosted endpoint and from the local coach
 | `exercise_get` | Full exercise by id |
 | `exercise_sync` | Refresh the cached library |
 | `exercise_create` | Create a custom exercise |
+| `exercise_update` | Update a custom exercise |
+| `exercise_delete` | Delete a custom exercise |
 | `exercise_forget` | Remove a custom exercise from the cache |
 | `store_stats` | Library cache stats |
 
@@ -75,6 +86,7 @@ Available to coach accounts on the main hosted endpoint and from the local coach
 | --- | --- |
 | `team_create` | Create a team |
 | `team_update` | Rename a team or reassign its calendar |
+| `team_publish_settings` | Update team auto-publish settings |
 | `team_delete` | Delete a team |
 | `team_code_create` | Create a join code |
 | `team_code_delete` | Delete a join code |
@@ -111,6 +123,9 @@ Available to every account on the main hosted endpoint and from both local serve
 | `athlete_exercise_history` | History for one exercise |
 | `athlete_personal_records` | PRs for one exercise |
 | `athlete_exercise_stats` | Stats for one exercise |
+| `athlete_circuits` | Recent or historical circuits |
+| `athlete_programming_programs` | Programs the athlete is subscribed to |
+| `athlete_recent_exercises` | Recently used exercises |
 | `athlete_log_targets` | What to log today |
 
 ### Logging
