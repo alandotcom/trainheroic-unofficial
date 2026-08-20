@@ -22,100 +22,6 @@ import type { Props } from "../src/types";
 const props = (role: string, thUserId = 1): Props =>
   ({ thUserId, email: "a@b.com", password: "pw", role, scope: "athlete" }) as Props;
 
-const EXPECTED_HOSTED_COACH_TOOLS = [
-  "analytics_categories",
-  "analytics_query",
-  "athlete_archive",
-  "athlete_circuits",
-  "athlete_exercise_history",
-  "athlete_exercise_stats",
-  "athlete_exercises",
-  "athlete_invite",
-  "athlete_leaderboard",
-  "athlete_lift_history",
-  "athlete_log_session",
-  "athlete_log_set",
-  "athlete_log_targets",
-  "athlete_main_lift_prs",
-  "athlete_personal_records",
-  "athlete_prefs",
-  "athlete_prescribe_set",
-  "athlete_profile",
-  "athlete_programming_programs",
-  "athlete_recent_exercises",
-  "athlete_restore",
-  "athlete_saved_workouts",
-  "athlete_session_add_exercises",
-  "athlete_session_create",
-  "athlete_session_remove",
-  "athlete_swap_exercise",
-  "athlete_training",
-  "athlete_training_stored",
-  "athlete_training_sync",
-  "athlete_whoami",
-  "athlete_working_maxes",
-  "athlete_workouts",
-  "athlete_workouts_stored",
-  "athlete_workouts_sync",
-  "coach_athlete_team_calendar",
-  "coach_log_session",
-  "exercise_create",
-  "exercise_delete",
-  "exercise_forget",
-  "exercise_get",
-  "exercise_resolve",
-  "exercise_search",
-  "exercise_sync",
-  "exercise_update",
-  "get_program",
-  "get_team",
-  "head_coach",
-  "list_athletes",
-  "list_notifications",
-  "list_prescription_templates",
-  "list_programs",
-  "list_session_templates",
-  "list_subscriptions",
-  "list_team_codes",
-  "list_teams",
-  "log_athlete_set",
-  "message_delete",
-  "message_draft",
-  "message_send",
-  "messaging_conversations",
-  "messaging_read",
-  "messaging_stored",
-  "messaging_sync",
-  "notifications",
-  "prescribe_athlete_set",
-  "program_create",
-  "program_delete",
-  "programming_stored",
-  "programming_sync",
-  "report_feedback",
-  "roster_activity",
-  "roster_main_lift_prs",
-  "session_copy",
-  "session_remove",
-  "session_save_as_template",
-  "session_template_create",
-  "session_template_delete",
-  "session_unpublish",
-  "store_stats",
-  "swap_athlete_exercise",
-  "team_code_create",
-  "team_code_delete",
-  "team_create",
-  "team_delete",
-  "team_publish_settings",
-  "team_update",
-  "team_volume",
-  "whoami",
-  "workout_build",
-  "workout_publish",
-  "workout_read",
-] as const;
-
 /**
  * Which of `names` a variant registers for a role, probed through McpServer's public
  * `toolInputSchemaJson` (it returns `undefined` for a tool that was never registered). No
@@ -198,9 +104,13 @@ describe("buildServer tool surfaces", () => {
   it("registers complete output metadata for every hosted coach tool", async () => {
     const server = buildServer("full", props("coach"));
     const tools = await listTools(server);
+    const names = tools.map((tool) => tool.name);
 
-    expect(tools).toHaveLength(91);
-    expect(tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_HOSTED_COACH_TOOLS);
+    // Do not snapshot the full roster. A new core or hosted tool should still pass as
+    // long as it registers outputSchema and annotation hints. Eval catalogs pin the
+    // core surface; hosted warehouse names come from hostedWarehouseOutputSchemas.
+    expect(new Set(names).size).toBe(names.length);
+    expect(names).toEqual(expect.arrayContaining(Object.keys(hostedWarehouseOutputSchemas)));
     for (const tool of tools) {
       const name = tool.name;
       expect(tool.annotations, `${name} annotations`).toEqual(
