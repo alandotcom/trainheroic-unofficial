@@ -96,7 +96,7 @@ import {
   TrainHeroicClient,
 } from "@trainheroic-unofficial/js";
 import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
-import { looksLikeJson, parseDate } from "./parse";
+import { looksLikeJson, parseDate, requireTeamCalendarReassignmentConfirmation } from "./parse";
 import { loadSession, saveSession } from "./session-cache";
 
 const HELP = `trainheroic — command-line tool for the TrainHeroic API
@@ -162,7 +162,7 @@ Coach — manage a roster (needs a coach account):
   coach program-create --kind calendar|fixed --name "..."
   coach program-delete --program <id> --yes
   coach team-create --title "..."
-  coach team-update --team <id> [--title "..."] [--group-program <id>]
+  coach team-update --team <id> [--title "..."] [--group-program <id> --yes]
   coach team-publish-settings (--team <id> | --program <id>) [--pub-enabled 0|1] --yes
   coach team-delete --team <id> --yes
   coach team-code-create --team <id> [--type N]
@@ -1383,16 +1383,18 @@ async function cmdCoachProgramDelete(client: TrainHeroicClient, a: string[]): Pr
 
 async function cmdCoachTeamUpdate(client: TrainHeroicClient, a: string[]): Promise<void> {
   const usage =
-    'coach team-update --team <id> [--title "..."] [--group-program <id>]  (at least one of --title / --group-program)';
+    'coach team-update --team <id> [--title "..."] [--group-program <id> --yes]  (at least one of --title / --group-program)';
   const { values } = parse(a, {
     team: { type: "string" },
     title: { type: "string" },
     "group-program": { type: "string" },
+    yes: { type: "boolean" },
   });
   const teamId = toInt(need(values.team as string | undefined, usage), "--team");
   const title = values.title as string | undefined;
   const groupProgramRaw = values["group-program"] as string | undefined;
   if (title === undefined && groupProgramRaw === undefined) fail(usage);
+  requireTeamCalendarReassignmentConfirmation(teamId, groupProgramRaw, values.yes === true);
   const args: { teamId: number; title?: string; groupProgram?: number } = { teamId };
   if (title !== undefined) args.title = title;
   if (groupProgramRaw !== undefined) args.groupProgram = toInt(groupProgramRaw, "--group-program");

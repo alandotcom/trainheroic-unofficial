@@ -6,3 +6,16 @@ export { parseWorkoutDate as parseDate } from "@trainheroic-unofficial/js";
 export function looksLikeJson(s: string): boolean {
   return /^\s*[[{]/u.test(s);
 }
+
+/** Fail closed before changing the live calendar assigned to a team. */
+export function requireTeamCalendarReassignmentConfirmation(
+  teamId: number,
+  groupProgram: string | undefined,
+  confirmed: boolean,
+): void {
+  if (groupProgram !== undefined && !confirmed) {
+    throw new Error(
+      `reassigning team ${teamId}'s calendar changes live athlete programming; add --yes.`,
+    );
+  }
+}
