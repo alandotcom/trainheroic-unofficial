@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/athlete-mcp
 
+## 3.3.1
+
+### Patch Changes
+
+- Updated dependencies [3317d39]
+  - @trainheroic-unofficial/core@3.3.1
+  - @trainheroic-unofficial/js@3.3.1
+
 ## 3.3.0
 
 ### Patch Changes
