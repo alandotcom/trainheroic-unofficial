@@ -1,5 +1,11 @@
 # @trainheroic-unofficial/dto
 
+## 3.3.0
+
+### Minor Changes
+
+- 48fe6bc: Add structured MCP tool results and reusable output schemas for hosted tool validation.
+
 ## 3.2.0
 
 ### Minor Changes
