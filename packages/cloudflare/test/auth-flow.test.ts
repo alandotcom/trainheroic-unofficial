@@ -123,6 +123,14 @@ async function exchangeCode(
 }
 
 describe("OAuth authorize flow (end to end in workerd)", () => {
+  it("serves the OpenAI app domain-verification challenge", async () => {
+    const response = await SELF.fetch("http://localhost/.well-known/openai-apps-challenge");
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/plain");
+    expect(await response.text()).toBe("_R2qM_yjG8vDiKkhaiGhq6HFwQoKz2xiqXsVHaBJ128");
+  });
+
   it("registers a client, renders login, validates creds, and issues a code", async () => {
     stubTrainHeroicAuth();
 
@@ -147,6 +155,9 @@ describe("OAuth authorize flow (end to end in workerd)", () => {
       `&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256&state=xyz`;
     const page = await SELF.fetch(authUrl);
     expect(page.status).toBe(200);
+    const contentSecurityPolicy = page.headers.get("content-security-policy") ?? "";
+    expect(contentSecurityPolicy).not.toContain("form-action");
+    expect(contentSecurityPolicy).toContain("frame-ancestors 'none'");
     const html = await page.text();
     const csrf = field(html, "csrf");
     const oauthReq = field(html, "oauth_req");
