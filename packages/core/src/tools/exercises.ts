@@ -5,6 +5,7 @@ import {
   exerciseCreatedOutputSchema,
   exerciseDeletedOutputSchema,
   exerciseForgottenOutputSchema,
+  exerciseGetOutputSchema,
   exerciseResolveOutputSchema,
   exerciseViewSchema,
   opaqueOutputSchema,
@@ -116,7 +117,7 @@ function registerExerciseReads(server: McpServer, index: ToolContext["index"]): 
       title: "Get exercise",
       description: "Full exercise object (with units) by id.",
       inputSchema: { id: idParam },
-      outputSchema: toolOutputSchema(exerciseViewSchema),
+      outputSchema: toolOutputSchema(exerciseGetOutputSchema),
       annotations: READ,
     },
     ({ id }) =>

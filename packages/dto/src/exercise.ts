@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { idSchema } from "./common";
 
 /** A library exercise row as the index stores it. */
 export type ExerciseRow = {
@@ -26,6 +27,18 @@ export const exerciseViewSchema = z.object({
   units: z.array(z.string().nullable()),
 });
 export type ExerciseView = z.infer<typeof exerciseViewSchema>;
+
+/**
+ * Full library object from `exercise_get`: the stored row with param-type codes
+ * replaced by positional `units`. Extra API fields are preserved. Search/resolve
+ * use the strict `exerciseViewSchema` projection instead.
+ */
+export const exerciseGetOutputSchema = z.looseObject({
+  id: idSchema,
+  title: z.string(),
+  units: z.array(z.string().nullable()),
+});
+export type ExerciseGetOutput = z.infer<typeof exerciseGetOutputSchema>;
 
 /** The outcome of resolving a name: a single match (or null) plus ranked candidates. */
 export const exerciseResolveOutputSchema = z.object({

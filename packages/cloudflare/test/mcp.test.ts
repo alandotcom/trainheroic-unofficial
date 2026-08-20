@@ -4,6 +4,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/server";
 import {
   athleteProfileOutputSchema,
   athleteWorkoutsOutputSchema,
+  exerciseGetOutputSchema,
   feedbackOutputSchema,
   messageDeletedOutputSchema,
   programCreatedOutputSchema,
@@ -136,6 +137,17 @@ describe("buildServer tool surfaces", () => {
     > = [
       ["whoami", toolOutputSchema(userSimpleSchema), { id: 7, roles: ["coach"] }],
       [
+        "exercise_get",
+        toolOutputSchema(exerciseGetOutputSchema),
+        {
+          id: 1,
+          title: "Back Squat",
+          units: ["reps", "lb"],
+          can_edit: 0,
+          muscle_group: "legs",
+        },
+      ],
+      [
         "athlete_profile",
         toolOutputSchema(athleteProfileOutputSchema),
         { summary: {}, user: { id: 7 } },
@@ -236,14 +248,7 @@ describe("buildServer tool surfaces", () => {
     for (const [name, schema, output] of cases) {
       const parsed = schema.safeParse(output);
       expect(parsed.success, name).toBe(true);
-      if (
-        parsed.success &&
-        typeof output === "object" &&
-        output !== null &&
-        "__truncated" in output
-      ) {
-        expect(parsed.data, name).toEqual(output);
-      }
+      if (parsed.success) expect(parsed.data, name).toEqual(output);
     }
     expect(toolOutputSchema(userSimpleSchema).safeParse({ foo: 1 }).success).toBe(false);
   });
