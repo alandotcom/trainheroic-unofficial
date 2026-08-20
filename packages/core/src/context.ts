@@ -13,28 +13,29 @@ export function toId(value: string | number): number {
   return typeof value === "number" ? value : Number(value);
 }
 
-// Shared MCP tool-annotation presets. These flags are advisory; tools that require confirmation
-// enforce it separately in their handlers.
+// Shared MCP tool-annotation presets. TrainHeroic account data and private mirrors are closed-world;
+// tools that communicate with another person override openWorldHint at registration. These flags are
+// advisory; tools that require confirmation enforce it separately in their handlers.
 export const READ = {
   readOnlyHint: true,
   destructiveHint: false,
-  openWorldHint: true,
+  openWorldHint: false,
 } as const;
 export const ADDITIVE = {
   readOnlyHint: false,
   destructiveHint: false,
-  openWorldHint: true,
+  openWorldHint: false,
 } as const;
 export const SYNC = {
   readOnlyHint: false,
   idempotentHint: true,
   destructiveHint: false,
-  openWorldHint: true,
+  openWorldHint: false,
 } as const;
 export const DESTRUCTIVE = {
   readOnlyHint: false,
   destructiveHint: true,
-  openWorldHint: true,
+  openWorldHint: false,
 } as const;
 
 /** Everything a tool handler needs: the authenticated client and the exercise index. */

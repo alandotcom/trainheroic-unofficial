@@ -253,20 +253,27 @@ describe("buildServer tool surfaces", () => {
     expect(toolOutputSchema(userSimpleSchema).safeParse({ foo: 1 }).success).toBe(false);
   });
 
-  it("uses review-accurate hints for reads, private syncs, and overwrites", async () => {
+  it("uses review-accurate open-world hints", async () => {
     const server = buildServer("full", props("coach"));
     const tools = new Map((await listTools(server)).map((tool) => [tool.name, tool]));
 
     expect(tools.get("athlete_workouts")?.annotations).toMatchObject({
       readOnlyHint: true,
-      openWorldHint: true,
+      openWorldHint: false,
       destructiveHint: false,
     });
     expect(tools.get("programming_sync")?.annotations).toMatchObject({
       readOnlyHint: false,
-      openWorldHint: true,
+      openWorldHint: false,
       destructiveHint: false,
     });
+
+    const openWorldTools = [...tools.values()]
+      .filter((tool) => tool.annotations?.openWorldHint)
+      .map((tool) => tool.name)
+      .sort();
+    expect(openWorldTools).toEqual(["athlete_invite", "message_send", "report_feedback"]);
+
     for (const name of [
       "exercise_delete",
       "exercise_update",

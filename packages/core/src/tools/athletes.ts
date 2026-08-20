@@ -72,7 +72,7 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
         confirm: z.boolean().optional(),
       },
       outputSchema: toolOutputSchema(athleteInviteOutputSchema),
-      annotations: DESTRUCTIVE,
+      annotations: { ...DESTRUCTIVE, openWorldHint: true },
     },
     ({ teamId, emails, message, confirm }, extra) =>
       attempt(async () => {
@@ -132,7 +132,7 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
         readOnlyHint: false,
         idempotentHint: true,
         destructiveHint: false,
-        openWorldHint: true,
+        openWorldHint: false,
       },
     },
     ({ athleteIds }) =>
