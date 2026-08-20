@@ -1,36 +1,137 @@
 ---
-title: Credentials and privacy
-description: How the hosted connector, local tools, and browser export handle your TrainHeroic login.
+title: Privacy policy
+description: How TrainHeroic Unofficial collects, uses, stores, and shares information.
 ---
 
-Every surface signs in to TrainHeroic with an existing email and password. Where those
-credentials live depends on how you connect.
+**Effective August 20, 2026**
 
-| Surface          | Where it runs     | Credential handling                                                   |
-| ---------------- | ----------------- | --------------------------------------------------------------------- |
-| Hosted connector | Cloudflare Worker | Stored server-side behind the OAuth grant and encrypted props         |
-| Local MCP server | Your computer     | Read from the MCP client's environment or config file                 |
-| CLI and SDK      | Your process      | Read from environment variables or values supplied by your code       |
-| Browser export   | Your browser      | Sent directly to TrainHeroic, then discarded; never sent to this site |
+TrainHeroic Unofficial (the “Service”) is an independent, unofficial project. This policy
+explains how the Service handles information when you use the hosted connector, website,
+browser export, local MCP servers, CLI, or SDK.
 
-## Hosted connector
+## Information we handle
 
-Claude receives an OAuth access token for the connector. The Worker uses the encrypted grant
-properties to sign in upstream; it never forwards Claude's bearer token to TrainHeroic.
+Depending on how you use the Service, we may handle:
 
-## Local tools
+- **Account information:** your TrainHeroic email address, password, account role, and account
+  identifiers. The hosted connector needs these details to sign in to TrainHeroic for you.
+- **Training and coaching data:** information returned by or sent to TrainHeroic, such as
+  profiles, rosters, teams, programs, workouts, exercises, performance history, analytics,
+  messages, and records you ask the Service to create or change.
+- **Support and feedback:** your email address and anything you include in a support request or
+  feedback report.
+- **Technical information:** IP address used for rate limiting, OAuth grants and tokens, MCP
+  client registration data, tool name and success or failure status, timestamps, and error
+  diagnostics.
 
-Environment variables and MCP config files are plaintext. Shell commands can also land in your
-history. Treat `TRAINHEROIC_EMAIL` and `TRAINHEROIC_PASSWORD` like any other secret, and do not
-commit an MCP config containing them.
+Do not put passwords, session tokens, or unnecessary sensitive information in support messages
+or feedback reports.
 
-## Sessions and caches
+## How we use information
 
-TrainHeroic does not issue refresh tokens. The client keeps a session token in memory and signs
-in again after a 401 or 403. The CLI and local coach server cache session and exercise-library
-data under `~/.trainheroic/` so repeated commands do less work.
+We use information only as needed to:
 
-:::warning[Unofficial project]
-This project is not affiliated with or endorsed by TrainHeroic. Use it with accounts and data
-you are authorized to access.
-:::
+- authenticate you and operate the features you request;
+- retrieve, sync, search, or update your TrainHeroic data;
+- maintain security, prevent abuse, and enforce rate limits;
+- diagnose failures and improve reliability; and
+- respond to support requests or feedback.
+
+We do not sell personal information or use it for targeted advertising.
+
+## Where information goes
+
+### Hosted connector
+
+The hosted connector runs on Cloudflare. Your TrainHeroic credentials are kept in the encrypted
+properties of your OAuth grant. They are used to obtain a TrainHeroic session and are not placed
+in the Service's training-data database or diagnostic logs.
+
+If you use a hosted sync tool, the requested TrainHeroic data is copied into a Cloudflare D1
+database so you can search it later. Stored records are separated by TrainHeroic account or
+organization identifier.
+
+The Service may use Sentry for error monitoring. Sentry may receive your TrainHeroic account
+email, an error, sanitized upstream failure details, tool names and outcomes, and an opaque
+account identifier. The Service is configured not to send passwords, session tokens, request
+bodies, tool arguments, tool results, or raw TrainHeroic response bodies to Sentry. If you
+explicitly submit feedback, Sentry may also receive the report and your email address.
+
+Your MCP client, such as ChatGPT, sends tool requests to the Service and receives tool results.
+That client handles your conversations and its copy of tool data under its own privacy policy.
+
+### Local tools and browser export
+
+Local MCP servers, the CLI, and the SDK run on your computer or in your own process. Their local
+files and environment variables are controlled by you. The CLI and local coach server may cache
+sessions or exercise-library data under `~/.trainheroic/`.
+
+The browser export sends credentials and requests directly from your browser to TrainHeroic. It
+does not send your credentials or exported training data to this website.
+
+## Service providers and disclosures
+
+We disclose information only when needed to operate the Service, including to:
+
+- **TrainHeroic**, to authenticate your account and perform the requests you make;
+- **Cloudflare**, for website and connector hosting, storage, security, and networking;
+- **Sentry**, when enabled, for the limited diagnostics and feedback described above; and
+- **your MCP client or other software**, to return the results you requested.
+
+We may also disclose information if required by law or when reasonably necessary to protect the
+Service, its users, or others. TrainHeroic, Cloudflare, Sentry, and your MCP client have their own
+terms and privacy practices.
+
+## Cookies and tracking
+
+The public website does not use advertising cookies or third-party marketing trackers. The
+hosted connector may use cookies or similar browser storage that are strictly necessary to
+complete sign-in, protect the OAuth flow, and maintain security.
+
+## Retention
+
+Expired OAuth grants, tokens, and client registrations are periodically purged. Hosted data that
+you choose to sync may otherwise remain until it is replaced, the Service is discontinued, or
+you ask for deletion. Support messages, feedback, security records, and error diagnostics are
+kept only as long as reasonably needed for those purposes or as required by law. Copies may
+remain temporarily in backups or provider systems.
+
+## Your choices
+
+You can avoid hosted storage by using the local tools or browser export. You can also disconnect
+the connector in your MCP client to stop future access.
+
+To ask what personal information the Service holds about you, or to request correction or
+deletion, email [support@trainheroic-unofficial.com](mailto:support@trainheroic-unofficial.com).
+We may need to verify that you control the relevant account. Your local files and data held by
+TrainHeroic or your MCP client must be managed with those products directly.
+
+Depending on where you live, privacy law may give you additional rights to access, correct,
+delete, restrict, object to, or receive a copy of your personal information.
+
+## Security
+
+We use reasonable technical measures intended to protect information, including encrypted OAuth
+grant properties, per-account database scoping, restricted diagnostic collection, and rate
+limiting. No online service can promise complete security.
+
+## Children
+
+The Service is not directed to children under 13. Do not connect or manage another person's
+account unless you have authority to do so. Coaches and organizations are responsible for having
+the permissions required to access athlete information, including information about minors.
+
+## Changes to this policy
+
+We may update this policy when the Service or its data practices change. The effective date at
+the top will show the latest revision.
+
+## Contact
+
+Questions or requests can be sent to
+[support@trainheroic-unofficial.com](mailto:support@trainheroic-unofficial.com).
+
+This policy was adapted from Automattic's
+[Privacy Policy](https://github.com/Automattic/legalmattic/blob/master/Privacy-Policy.md), used
+under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). This adapted policy is
+also available under CC BY-SA 4.0.
