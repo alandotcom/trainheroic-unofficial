@@ -96,7 +96,7 @@ import {
   TrainHeroicClient,
 } from "@trainheroic-unofficial/js";
 import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
-import { looksLikeJson, parseDate } from "./parse";
+import { looksLikeJson, parseDate, requireTeamCalendarReassignmentConfirmation } from "./parse";
 import { loadSession, saveSession } from "./session-cache";
 
 const HELP = `trainheroic — command-line tool for the TrainHeroic API
@@ -1394,8 +1394,7 @@ async function cmdCoachTeamUpdate(client: TrainHeroicClient, a: string[]): Promi
   const title = values.title as string | undefined;
   const groupProgramRaw = values["group-program"] as string | undefined;
   if (title === undefined && groupProgramRaw === undefined) fail(usage);
-  if (groupProgramRaw !== undefined && values.yes !== true)
-    fail(`reassigning team ${teamId}'s calendar changes live athlete programming; add --yes.`);
+  requireTeamCalendarReassignmentConfirmation(teamId, groupProgramRaw, values.yes === true);
   const args: { teamId: number; title?: string; groupProgram?: number } = { teamId };
   if (title !== undefined) args.title = title;
   if (groupProgramRaw !== undefined) args.groupProgram = toInt(groupProgramRaw, "--group-program");

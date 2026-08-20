@@ -1,8 +1,7 @@
 import * as Sentry from "@sentry/cloudflare";
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
-import type { CallToolResult } from "@modelcontextprotocol/server";
-import { errorResult, jsonResult } from "@trainheroic-unofficial/core";
+import { confirmGate, errorResult, jsonResult } from "@trainheroic-unofficial/core";
 import { feedbackOutputSchema, toolOutputSchema } from "@trainheroic-unofficial/dto";
 import type { AccountRole } from "../types";
 
@@ -35,7 +34,8 @@ const DESCRIPTION =
   "details or pad the report with filler or commentary about this reporting tool. If the user is only " +
   "checking that reporting works, say that plainly in `message` and leave `expected` and `actual` empty " +
   "rather than making up a bug. Role, app version, and a correlation id are attached automatically — " +
-  "do not gather or restate those. The reply carries a reference id to share with the user.";
+  "do not gather or restate those. Requires confirmation (elicitation, or confirm:true). The reply " +
+  "carries a reference id to share with the user.";
 
 interface FeedbackInput {
   message: string;
@@ -119,16 +119,23 @@ export function registerFeedbackTool(server: McpServer, deps: FeedbackToolDeps):
           .describe(
             "For a bug: what actually happened instead. Leave empty for a test or non-bug feedback.",
           ),
+        confirm: z.boolean().optional().describe("Confirm sending this report to the maintainer."),
       },
       outputSchema: toolOutputSchema(feedbackOutputSchema),
       annotations: {
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: true,
         idempotentHint: false,
         openWorldHint: true,
       },
     },
-    (args): CallToolResult => {
+    (args, extra) => {
+      const blocked = confirmGate(
+        extra,
+        "Send this feedback report to the TrainHeroic Unofficial maintainer?",
+        args.confirm,
+      );
+      if (blocked) return blocked;
       try {
         const report = buildReport(args, deps);
         const message = composeMessage(report);

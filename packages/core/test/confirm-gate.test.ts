@@ -38,6 +38,10 @@ function toolCtx(onRequest: () => void): ToolContext {
     },
   };
   const index = {
+    update: async () => {
+      onRequest();
+      return { id: 1 };
+    },
     remove: async () => {
       onRequest();
     },
@@ -53,13 +57,14 @@ const GATED: Array<{ reg: Register; name: string; args: Record<string, unknown> 
   { reg: registerAthleteTools, name: "athlete_invite", args: { teamId: 1, emails: ["a@b.com"] } },
   { reg: registerAthleteTools, name: "athlete_archive", args: { athleteIds: [1] } },
   { reg: registerTeamTools, name: "team_delete", args: { teamId: 1 } },
-  {
-    reg: registerTeamTools,
-    name: "team_update",
-    args: { teamId: 1, title: "Team", groupProgram: 2 },
-  },
+  { reg: registerTeamTools, name: "team_update", args: { teamId: 1, title: "Renamed" } },
   { reg: registerProgramTools, name: "program_delete", args: { programId: 1 } },
   { reg: registerExerciseTools, name: "exercise_delete", args: { id: 1 } },
+  {
+    reg: registerExerciseTools,
+    name: "exercise_update",
+    args: { id: 1, exercise: { title: "Renamed exercise" } },
+  },
   { reg: registerTeamTools, name: "team_code_delete", args: { codeId: 1 } },
   { reg: registerMessagingTools, name: "message_send", args: { streamId: 1, text: "hi" } },
   { reg: registerMessagingTools, name: "message_delete", args: { streamId: 1, commentId: 2 } },
@@ -171,13 +176,5 @@ describe("accepted elicitation opens the gate", () => {
     );
     expect(probe.called()).toBe(true);
     expect((res as { isError?: boolean }).isError).toBeUndefined();
-  });
-});
-
-describe("team_update conditional confirmation", () => {
-  it("keeps title-only renames ungated", async () => {
-    const probe = run(registerTeamTools, "team_update", { teamId: 1, title: "Renamed" });
-    await probe.run(mcpCtx());
-    expect(probe.called()).toBe(true);
   });
 });

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { looksLikeJson, parseDate } from "../src/parse";
+import {
+  looksLikeJson,
+  parseDate,
+  requireTeamCalendarReassignmentConfirmation,
+} from "../src/parse";
 
 describe("parseDate", () => {
   it("parses YYYY-M-D into a tuple", () => {
@@ -20,5 +24,21 @@ describe("looksLikeJson", () => {
     expect(looksLikeJson('  {"a":1}')).toBe(true);
     expect(looksLikeJson("./spec.json")).toBe(false);
     expect(looksLikeJson("spec.json")).toBe(false);
+  });
+});
+
+describe("requireTeamCalendarReassignmentConfirmation", () => {
+  it("rejects calendar reassignment without explicit confirmation", () => {
+    expect(() => requireTeamCalendarReassignmentConfirmation(42, "99", false)).toThrow(
+      "reassigning team 42's calendar changes live athlete programming; add --yes.",
+    );
+  });
+
+  it("allows calendar reassignment with confirmation", () => {
+    expect(() => requireTeamCalendarReassignmentConfirmation(42, "99", true)).not.toThrow();
+  });
+
+  it("does not require confirmation when no calendar reassignment was requested", () => {
+    expect(() => requireTeamCalendarReassignmentConfirmation(42, undefined, false)).not.toThrow();
   });
 });
