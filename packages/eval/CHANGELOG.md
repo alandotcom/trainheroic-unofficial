@@ -1,5 +1,12 @@
 # @trainheroic-unofficial/eval
 
+## 3.3.3
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@3.3.3
+  - @trainheroic-unofficial/js@3.3.3
+
 ## 3.3.2
 
 ### Patch Changes
