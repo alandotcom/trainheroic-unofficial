@@ -137,6 +137,15 @@ export const personalWorkoutCreatedOutputSchema = z.object({
   date: z.string(),
 });
 
+export const athleteWorkoutNoteOutputSchema = z.object({
+  programWorkoutId: z.number(),
+  savedWorkoutId: z.number(),
+  date: z.string(),
+  notes: z.string(),
+  rpe: nullableNumber,
+});
+export type AthleteWorkoutNoteOutput = z.infer<typeof athleteWorkoutNoteOutputSchema>;
+
 const workoutReadExerciseOutputSchema = z.object({
   order: z.number(),
   title: z.string(),

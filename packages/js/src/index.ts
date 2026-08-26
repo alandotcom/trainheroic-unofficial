@@ -8,6 +8,7 @@ export * from "./exercise-util";
 export * from "./athlete";
 export * from "./coach-athlete-calendar";
 export * from "./athlete-set-write";
+export * from "./athlete-workout-note";
 export * from "./workout-export";
 export * from "./main-lifts";
 export * from "./coach";

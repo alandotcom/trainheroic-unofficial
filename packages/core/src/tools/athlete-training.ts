@@ -7,6 +7,9 @@ import {
   athleteProfileOutputSchema,
   athleteSessionRemoveArgsSchema,
   athleteSessionRemovedOutputSchema,
+  athleteWorkoutNoteArgsSchema,
+  athleteWorkoutNoteObject,
+  athleteWorkoutNoteOutputSchema,
   athleteWorkoutsOutputSchema,
   athleteWorkingMaxListSchema,
   dateString,
@@ -56,6 +59,7 @@ import {
   searchExerciseHistory,
   selectWorkouts,
   selectWorkoutsByProgram,
+  setAthleteWorkoutNote,
   summarizeAthleteWorkouts,
   swapAthleteExercise,
   toSetResults,
@@ -192,7 +196,8 @@ const ATHLETE_WORKOUTS_DESC =
   "published team session from the calendar side use workout_read. " +
   "Each exercise carries both its `prescribed` sets (what the program called for) and " +
   "`performed` sets (what the athlete actually logged); each workout has a top-level `logged` " +
-  "flag. Use `performed`/`logged` to tell what was recorded or done. That is the reliable " +
+  "flag. Session `notes` and `rpe` are the athlete's own note/RPE on that workout (null when " +
+  "unset), distinct from coach `instruction`. Use `performed`/`logged` to tell what was recorded or done. That is the reliable " +
   "signal: a session can hold logged sets while the API's own completion flags stay 0, and an " +
   "empty `performed` means nothing was logged for that exercise. For 'did I record anything / " +
   "what did I do', set loggedOnly:true to return only sessions with logged sets (it keeps whole " +
@@ -541,6 +546,38 @@ function registerSessionTools(server: McpServer, ctx: AthleteContext): void {
   );
 }
 
+/** Set the athlete's session note / RPE on a saved workout (coach-visible). */
+function registerWorkoutNoteTool(server: McpServer, ctx: AthleteContext): void {
+  server.registerTool(
+    "athlete_workout_note",
+    {
+      title: "Set your session note or RPE",
+      description:
+        "Athlete-facing write: set the free-text note (and/or session RPE 1–10) on a workout. " +
+        "This is the note box on the workout screen, not the coach's Instructions. programWorkoutId " +
+        "is the `id` from athlete_workouts for that date. Pass notes (empty string clears) and/or " +
+        "rpe; a notes-only write leaves rpe untouched and vice versa. Visible to your coach. " +
+        "Requires confirmation (elicitation or confirm:true).",
+      inputSchema: { ...athleteWorkoutNoteObject.shape, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(athleteWorkoutNoteOutputSchema),
+      annotations: DESTRUCTIVE,
+    },
+    ({ date, programWorkoutId, notes, rpe, confirm }, extra) =>
+      attempt(async () => {
+        const patch = athleteWorkoutNoteArgsSchema.parse(
+          definedProps({ date, programWorkoutId, notes, rpe }),
+        );
+        const blocked = confirmGate(
+          extra,
+          `Set the session note on workout ${toId(patch.programWorkoutId)} on ${patch.date}? This is visible to your coach.`,
+          confirm,
+        );
+        if (blocked) return blocked;
+        return jsonResult(await setAthleteWorkoutNote(ctx.client, patch));
+      }),
+  );
+}
+
 /** Map validated logSession exercises to the SDK's SessionExercise[] (ids coerced, slots trimmed). */
 export function mapSessionExercises(
   exercises: ReadonlyArray<{
@@ -807,6 +844,7 @@ export function registerAthleteTrainingTools(server: McpServer, ctx: AthleteCont
   registerCatalogReads(server, ctx);
   registerLogTargetsTool(server, ctx);
   registerSessionTools(server, ctx);
+  registerWorkoutNoteTool(server, ctx);
   registerLogTool(server, ctx);
   registerSwapTool(server, ctx);
 }

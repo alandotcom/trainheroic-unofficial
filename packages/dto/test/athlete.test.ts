@@ -5,6 +5,7 @@ import {
   athleteProfileSummarySchema,
   athletePrefsSchema,
   athletePrescribeSetArgsSchema,
+  athleteWorkoutNoteArgsSchema,
   athleteUserSchema,
   athleteWorkingMaxListSchema,
   athleteWorkoutRangeArgsSchema,
@@ -106,5 +107,32 @@ describe("athlete input schemas", () => {
     expect(parsed.success).toBe(true);
     expect(parsed.data?.results[0]?.sets[0]).not.toHaveProperty("slot");
     expect(coachPrescribeSetArgsSchema.safeParse({ ...input, athleteId: 1 }).success).toBe(true);
+  });
+
+  it("requires notes and/or rpe for a workout note", () => {
+    expect(
+      athleteWorkoutNoteArgsSchema.safeParse({
+        date: "2026-06-01",
+        programWorkoutId: 123,
+        notes: "felt strong",
+      }).success,
+    ).toBe(true);
+    expect(
+      athleteWorkoutNoteArgsSchema.safeParse({
+        date: "2026-06-01",
+        programWorkoutId: 123,
+        rpe: 8,
+      }).success,
+    ).toBe(true);
+    expect(
+      athleteWorkoutNoteArgsSchema.safeParse({ date: "2026-06-01", programWorkoutId: 123 }).success,
+    ).toBe(false);
+    expect(
+      athleteWorkoutNoteArgsSchema.safeParse({
+        date: "2026-06-01",
+        programWorkoutId: 123,
+        rpe: 11,
+      }).success,
+    ).toBe(false);
   });
 });

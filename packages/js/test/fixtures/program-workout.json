@@ -188,6 +188,8 @@
     },
     "saved_workout": {
       "id": 555000,
+      "notes": "Hips felt tight but the heavy singles were clean.",
+      "rpe": 8,
       "completed": 0,
       "percent_completed": 0,
       "status": 0,

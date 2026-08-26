@@ -259,6 +259,20 @@ describe("write routes (write-mode support)", () => {
     expect(b.writes[0]?.path).toBe("/v5/programWorkouts/5550000");
     expect(b.unmatched).toHaveLength(0);
   });
+
+  it("records an athlete session-note PUT", async () => {
+    const b = await boot(highEnrollmentAthlete());
+    const note = await fetch(`${b.url}/1.0/athlete/savedworkout/5550003`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: 5550003, notes: "felt strong", rpe: 7 }),
+    });
+    expect(note.ok).toBe(true);
+    expect(b.writes).toHaveLength(1);
+    expect(b.writes[0]?.path).toContain("/1.0/athlete/savedworkout/");
+    expect(JSON.stringify(b.writes[0]?.body)).toContain("felt strong");
+    expect(b.unmatched).toHaveLength(0);
+  });
 });
 
 describe("demoAthlete (query bank fixture)", () => {

@@ -11,6 +11,7 @@ import {
   isPersonalSession,
   isRecord,
   mapPool,
+  savedWorkoutOf,
   MAX_PARAM_SLOTS,
   rankSearch,
   str,
@@ -242,6 +243,27 @@ export function fetchAthleteWorkouts(
   );
 }
 
+/**
+ * The program-workout row with this id on this date. Throws if that id is not on the day's range;
+ * callers should take the id from `athlete_workouts`.
+ */
+export async function programWorkoutOnDate(
+  client: TrainHeroicClient,
+  date: string,
+  programWorkoutId: number,
+): Promise<ProgramWorkout> {
+  const day = await fetchAthleteWorkouts(client, date, date);
+  const target = day.find(
+    (pw) => coerceInt((pw as Record<string, unknown>).id) === programWorkoutId,
+  );
+  if (target === undefined) {
+    throw new Error(
+      `No workout with id ${programWorkoutId} on ${date}. Get the id and date from athlete_workouts.`,
+    );
+  }
+  return target;
+}
+
 /** Add `days` to a `YYYY-MM-DD` date (UTC), returning `YYYY-MM-DD`. */
 function shiftDate(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -417,6 +439,8 @@ type MergedWorkout = {
   program: string | null;
   team: string | null;
   instruction: string | null;
+  notes: string | null;
+  rpe: number | null;
   logged: boolean;
   personal: boolean;
   blocks: MergedBlock[];
@@ -532,7 +556,7 @@ function mergeAthleteWorkout(raw: ProgramWorkout): MergedWorkout {
   const rec = raw as Record<string, unknown>;
   const ssw = isRecord(rec.summarizedSavedWorkout) ? rec.summarizedSavedWorkout : {};
   const workout = isRecord(ssw.workout) ? ssw.workout : {};
-  const saved = isRecord(ssw.saved_workout) ? ssw.saved_workout : {};
+  const saved = savedWorkoutOf(rec) ?? {};
   const prescriptionSets = (Array.isArray(workout.workoutSets) ? workout.workoutSets : []).filter(
     isRecord,
   );
@@ -571,6 +595,8 @@ function mergeAthleteWorkout(raw: ProgramWorkout): MergedWorkout {
     program: str(rec.program_title),
     team: str(rec.team_title),
     instruction: str(workout.instruction),
+    notes: str(saved.notes),
+    rpe: coerceInt(saved.rpe),
     logged: blocks.some((b) => b.exercises.some((e) => e.sets.some((s) => s.performed !== null))),
     personal: isPersonalSession(rec),
     blocks,
@@ -624,6 +650,8 @@ export function presentAthleteWorkout(raw: ProgramWorkout): AthleteWorkoutView {
     program: w.program,
     team: w.team,
     instruction: w.instruction,
+    notes: w.notes,
+    rpe: w.rpe,
     logged: w.logged,
     personal: w.personal,
     blocks: w.blocks.map(toStringBlock),
@@ -910,7 +938,7 @@ export function presentCoachAthleteTraining(
       completed: coerceInt(item.completed) === 1,
       rpe: coerceInt(item.rpe),
       durationMin: coerceInt(item.session_duration),
-      notes: typeof item.notes === "string" && item.notes !== "" ? item.notes : null,
+      notes: str(item.notes),
       exercises,
     });
   }

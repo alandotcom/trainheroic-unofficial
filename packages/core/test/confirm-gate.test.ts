@@ -125,6 +125,11 @@ const GATED: Array<{ reg: Register; name: string; args: Record<string, unknown> 
     name: "athlete_swap_exercise",
     args: { savedWorkoutSetExerciseId: 1, exerciseId: 2 },
   },
+  {
+    reg: registerAthleteTrainingTools,
+    name: "athlete_workout_note",
+    args: { date: "2026-06-21", programWorkoutId: 1, notes: "felt strong" },
+  },
 ];
 
 function run(reg: Register, name: string, args: Record<string, unknown>) {
