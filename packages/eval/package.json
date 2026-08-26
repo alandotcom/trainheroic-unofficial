@@ -16,10 +16,10 @@
   "devDependencies": {
     "@hono/node-server": "^2.1.1",
     "@trainheroic-unofficial/core": "workspace:*",
-    "@types/node": "^26.2.0",
-    "hono": "^4.13.2",
+    "@types/node": "^26.3.0",
+    "hono": "^4.13.5",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
