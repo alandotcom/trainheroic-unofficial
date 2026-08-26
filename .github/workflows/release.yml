@@ -57,18 +57,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Maintain the Version Packages PR when changesets are pending. No `publish` command: the npm
-      # publish is handled by publish.yml (below) to keep its OIDC trust binding intact. `version`
-      # runs `changeset version` (bumps the fixed group, writes CHANGELOGs, deletes the changesets).
+      # Maintain the Version Packages PR when changesets are pending. No `publish-script`: the npm
+      # publish is handled by publish.yml (below) to keep its OIDC trust binding intact.
+      # `version-script` runs `changeset version` (bumps the fixed group, writes CHANGELOGs,
+      # deletes the changesets).
       - name: Version PR
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
-          version: pnpm version-packages
-          commit: 'chore(release): version packages'
-          title: 'chore(release): version packages'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          version-script: pnpm version-packages
+          commit-message: 'chore(release): version packages'
+          pr-title: 'chore(release): version packages'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # A push to main with no pending changesets is a release iff the current version has no tag
       # yet — i.e. the Version PR was just merged. Any other push (changesets still pending, or the
@@ -76,7 +76,7 @@ jobs:
       - name: Detect release
         id: gate
         run: |
-          if [ "${{ steps.changesets.outputs.hasChangesets }}" = "true" ]; then
+          if [ "${{ steps.changesets.outputs['has-changesets'] }}" = "true" ]; then
             echo "Version PR created/updated; not a release commit."
             echo "released=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
