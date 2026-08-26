@@ -33,6 +33,8 @@ describe("presentAthleteWorkout", () => {
     expect(view.date).toBe("2026-06-01");
     expect(view.program).toBe("Bodybuilding 202");
     expect(view.instruction).toContain("Back Squat");
+    expect(view.notes).toBe("Hips felt tight but the heavy singles were clean.");
+    expect(view.rpe).toBe(8);
   });
 
   it("flattens blocks in order with positional units and prescribed sets", () => {
@@ -110,6 +112,8 @@ describe("presentAthleteWorkout", () => {
     } as unknown as ProgramWorkout);
     expect(personal.logged).toBe(true);
     expect(personal.personal).toBe(true);
+    expect(personal.notes).toBeNull();
+    expect(personal.rpe).toBeNull();
     const bench = personal.blocks
       .flatMap((b) => b.exercises)
       .find((e) => e.title === "Bench Press");
@@ -126,6 +130,8 @@ describe("selectWorkouts", () => {
     program: null,
     team: null,
     instruction: null,
+    notes: null,
+    rpe: null,
     logged,
     personal: false,
     blocks: [],
@@ -190,6 +196,8 @@ describe("summarizeAthleteWorkouts", () => {
       program: "BB202",
       team: null,
       instruction: null,
+      notes: null,
+      rpe: null,
       logged: true,
       personal: false,
       blocks: [

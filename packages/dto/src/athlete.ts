@@ -325,6 +325,25 @@ export const athleteSessionRemoveArgsSchema = z.object({
 });
 export type AthleteSessionRemoveArgs = z.infer<typeof athleteSessionRemoveArgsSchema>;
 
+/**
+ * Args for the athlete session-note write. `programWorkoutId` is the range item's top-level `id`
+ * (athlete_workouts); `date` locates that day so the SDK can resolve the saved-workout id the PUT
+ * targets. `notes` is the free-text box on the workout screen (empty string clears it). `rpe` is
+ * the session RPE (1–10). At least one of `notes` / `rpe` is required — a notes-only PUT leaves
+ * rpe untouched and vice versa.
+ */
+export const athleteWorkoutNoteObject = z.object({
+  date: dateString,
+  programWorkoutId: idArgSchema,
+  notes: z.string().optional(),
+  rpe: z.number().int().min(1).max(10).optional(),
+});
+export const athleteWorkoutNoteArgsSchema = athleteWorkoutNoteObject.refine(
+  (v) => v.notes !== undefined || v.rpe !== undefined,
+  { message: "Provide notes and/or rpe" },
+);
+export type AthleteWorkoutNoteArgs = z.infer<typeof athleteWorkoutNoteArgsSchema>;
+
 // --- Presented (model-friendly) view schemas, produced by the `js` presenters ---
 
 const presentedNullNumber = z.number().nullable();
@@ -357,6 +376,8 @@ export const athleteWorkoutViewSchema = z.object({
   program: presentedNullString,
   team: presentedNullString,
   instruction: presentedNullString,
+  notes: presentedNullString,
+  rpe: presentedNullNumber,
   logged: z.boolean(),
   personal: z.boolean(),
   blocks: z.array(athleteWorkoutBlockSchema),

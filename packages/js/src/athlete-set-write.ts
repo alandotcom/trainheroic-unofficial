@@ -1,16 +1,24 @@
 // The athlete set-logging write path, split out of athlete.ts (which keeps the reads and
 // presenters). Records entered set results against a saved workout set (log / prescribe), swaps a
-// prescribed exercise, creates personal sessions, and logs a whole session by exercise. It reaches
-// the same TrainHeroic hosts as the reads; the day's range is fetched via athlete.ts's read
-// helpers to resolve the ids each write needs. Runtime-agnostic: no `node:*`, so it runs on workerd.
+// prescribed exercise, creates personal sessions, and logs a whole session by exercise. Session
+// notes live in athlete-workout-note.ts. It reaches the same TrainHeroic hosts as the reads; the
+// day's range is fetched via athlete.ts's read helpers to resolve the ids each write needs.
+// Runtime-agnostic: no `node:*`, so this runs on workerd.
 
-import { coerceInt, exerciseTitle, isPersonalSession, isRecord, str } from "./exercise-util";
+import {
+  coerceInt,
+  exerciseTitle,
+  isPersonalSession,
+  isRecord,
+  savedWorkoutOf,
+  str,
+} from "./exercise-util";
 import {
   buildExerciseSetPayload,
   exerciseIsFullyLogged,
   type SetWriteMode,
 } from "./exercise-set-payload";
-import { fetchAthleteWorkouts } from "./athlete";
+import { fetchAthleteWorkouts, programWorkoutOnDate } from "./athlete";
 import { fetchCoachAthleteWorkouts } from "./coach-athlete-calendar";
 import type { TrainHeroicClient } from "./client";
 import type { ProgramWorkout } from "@trainheroic-unofficial/dto";
@@ -119,9 +127,7 @@ export function findSavedWorkoutSet(
   // single biggest log-set confusion is picking the wrong id field for --set.
   const available: string[] = [];
   for (const pw of workouts) {
-    const rec = pw as Record<string, unknown>;
-    const ssw = isRecord(rec.summarizedSavedWorkout) ? rec.summarizedSavedWorkout : {};
-    const sw = isRecord(ssw.saved_workout) ? ssw.saved_workout : null;
+    const sw = savedWorkoutOf(pw);
     if (!sw) continue;
     const sets = Array.isArray(sw.workoutSets) ? sw.workoutSets : [];
     for (const s of sets) {
@@ -585,15 +591,7 @@ export async function removePersonalWorkout(
   client: TrainHeroicClient,
   args: { programWorkoutId: number; date: string },
 ): Promise<void> {
-  const day = await fetchAthleteWorkouts(client, args.date, args.date);
-  const target = day.find(
-    (pw) => coerceInt((pw as Record<string, unknown>).id) === args.programWorkoutId,
-  );
-  if (target === undefined) {
-    throw new Error(
-      `No workout with id ${args.programWorkoutId} on ${args.date}. Get the id and date from athlete_workouts.`,
-    );
-  }
+  const target = await programWorkoutOnDate(client, args.date, args.programWorkoutId);
   if (!isPersonalSession(target)) {
     throw new Error(
       `Workout ${args.programWorkoutId} on ${args.date} is a coach-scheduled workout, not a ` +
@@ -709,8 +707,7 @@ function eachPrescribedExercise(
   }> = [];
   for (const pw of workouts) {
     const rec = pw as Record<string, unknown>;
-    const ssw = isRecord(rec.summarizedSavedWorkout) ? rec.summarizedSavedWorkout : {};
-    const sw = isRecord(ssw.saved_workout) ? ssw.saved_workout : null;
+    const sw = savedWorkoutOf(rec);
     if (!sw) continue;
     const sets = [
       ...(Array.isArray(sw.workoutSets) ? sw.workoutSets : []),

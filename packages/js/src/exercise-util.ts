@@ -157,6 +157,16 @@ export function isPersonalSession(pw: unknown): boolean {
 }
 
 /**
+ * The `saved_workout` blob on a program-workout range item, or null if the athlete has no saved
+ * copy yet. Session notes, RPE, and set writes all resolve through this.
+ */
+export function savedWorkoutOf(pw: unknown): Record<string, unknown> | null {
+  if (!isRecord(pw)) return null;
+  const ssw = isRecord(pw.summarizedSavedWorkout) ? pw.summarizedSavedWorkout : {};
+  return isRecord(ssw.saved_workout) ? ssw.saved_workout : null;
+}
+
+/**
  * Rank candidate rows for a free-text query (FTS5 replacement). Higher is better:
  * exact title, then prefix, then count of matched tokens, with shorter titles and
  * standard (non-custom) exercises preferred on ties.
