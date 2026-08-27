@@ -1,5 +1,22 @@
 # @trainheroic-unofficial/cli
 
+## 3.4.0
+
+### Minor Changes
+
+- 466e51e: feat(athlete): add a session note (and optional RPE) on a workout
+
+  Athletes can leave the free-text note on a saved workout via `PUT /1.0/athlete/savedworkout/{id}`.
+  Adds SDK `setAthleteWorkoutNote`, MCP `athlete_workout_note`, and CLI `athlete workout-note`.
+  `athlete_workouts` now surfaces `notes` and `rpe` from the saved copy, distinct from coach
+  `instruction`.
+
+### Patch Changes
+
+- Updated dependencies [466e51e]
+  - @trainheroic-unofficial/dto@3.4.0
+  - @trainheroic-unofficial/js@3.4.0
+
 ## 3.3.3
 
 ### Patch Changes

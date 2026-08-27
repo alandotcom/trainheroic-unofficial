@@ -1,5 +1,16 @@
 # @trainheroic-unofficial/cloudflare
 
+## 3.4.0
+
+### Patch Changes
+
+- 4419e25: Update hosted Worker runtime dependencies, including agents 0.21 and the hono 4.13.5 security release.
+- Updated dependencies [466e51e]
+  - @trainheroic-unofficial/dto@3.4.0
+  - @trainheroic-unofficial/js@3.4.0
+  - @trainheroic-unofficial/core@3.4.0
+  - @trainheroic-unofficial/db@3.4.0
+
 ## 3.3.3
 
 ### Patch Changes
