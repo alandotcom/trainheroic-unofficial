@@ -6,6 +6,7 @@ import process from "node:process";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import type { ZodType } from "zod";
 import {
+  athleteExerciseNoteArgsSchema,
   athletePrescribeSetArgsSchema,
   athleteWorkoutNoteArgsSchema,
   coachLogSessionArgsSchema,
@@ -85,6 +86,7 @@ import {
   publishSession,
   selectWorkouts,
   selectWorkoutsByProgram,
+  setAthleteExerciseNote,
   setAthleteWorkoutNote,
   summarizeAthleteWorkouts,
   swapAthleteExercise,
@@ -227,6 +229,7 @@ Athlete — the logged-in user's own training (a coach account works too):
   athlete session-remove --id <programWorkoutId> --date Y-M-D --yes   (delete a stray PERSONAL session; the id is the session 'id' from 'athlete workouts')
   athlete swap-exercise --set-exercise <savedWorkoutSetExerciseId> --exercise <exerciseId> --yes   (substitute one prescribed exercise in a COACH-SCHEDULED slot for a different one — your copy only; slot id from 'athlete log-targets', exerciseId from 'athlete exercises')
   athlete workout-note --date Y-M-D --id <programWorkoutId> [--notes "..."] [--rpe 1-10] --yes   (the free-text note / session RPE on a workout, coach-visible; id is the session 'id' from 'athlete workouts'; empty --notes clears; notes-only leaves rpe untouched and vice versa)
+  athlete exercise-note --set-exercise <savedWorkoutSetExerciseId> --notes "..." --yes   (the per-exercise note on the exercise screen — band color, etc.; slot id from 'athlete log-targets'; empty --notes clears; distinct from workout-note)
       JSON is the exercises array: [{"exerciseId":N,"sets":[{"param1":reps,"param2":weight}, ...]}, ...]
 `;
 
@@ -908,6 +911,35 @@ async function cmdAthleteWorkoutNote(client: TrainHeroicClient, a: string[]): Pr
   return out(await setAthleteWorkoutNote(client, args));
 }
 
+const ATHLETE_EXERCISE_NOTE_USAGE =
+  'athlete exercise-note --set-exercise <savedWorkoutSetExerciseId> --notes "..." --yes';
+
+async function cmdAthleteExerciseNote(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values } = parse(a, {
+    "set-exercise": { type: "string" },
+    notes: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const notes = values.notes as string | undefined;
+  if (notes === undefined) fail(`usage: trainheroic ${ATHLETE_EXERCISE_NOTE_USAGE}`);
+  const args = validate(
+    athleteExerciseNoteArgsSchema,
+    {
+      savedWorkoutSetExerciseId: need(
+        values["set-exercise"] as string | undefined,
+        ATHLETE_EXERCISE_NOTE_USAGE,
+      ),
+      notes,
+    },
+    "exercise-note args",
+  );
+  if (values.yes !== true)
+    fail(
+      `setting the exercise note on slot ${args.savedWorkoutSetExerciseId} is coach-visible; add --yes.`,
+    );
+  return out(await setAthleteExerciseNote(client, args));
+}
+
 async function cmdAthleteWorkouts(client: TrainHeroicClient, a: string[]): Promise<void> {
   const { values } = parse(a, {
     start: { type: "string" },
@@ -1057,9 +1089,11 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
       return cmdAthleteSwapExercise(client, a);
     case "workout-note":
       return cmdAthleteWorkoutNote(client, a);
+    case "exercise-note":
+      return cmdAthleteExerciseNote(client, a);
     default:
       return fail(
-        "usage: trainheroic athlete <whoami|profile|prefs|workouts|log-targets|exercises|recent-exercises|circuits|programs|history|prs|stats|working-maxes|leaderboard|export|log-set|prescribe-set|log-session|session-remove|swap-exercise|workout-note>",
+        "usage: trainheroic athlete <whoami|profile|prefs|workouts|log-targets|exercises|recent-exercises|circuits|programs|history|prs|stats|working-maxes|leaderboard|export|log-set|prescribe-set|log-session|session-remove|swap-exercise|workout-note|exercise-note>",
       );
   }
 }

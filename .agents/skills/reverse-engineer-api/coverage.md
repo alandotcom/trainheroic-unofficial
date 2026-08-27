@@ -63,7 +63,8 @@ analytics POSTs (readiness, 1RM, training-summary, compliance, lift-progress, wo
 
 Athlete: whoami/profile/prefs/working-maxes/workouts/log-targets/exercises/recent-exercises/circuits/programming-programs/history/PRs/stats/leaderboard;
 personal session create/add/remove; log/prescribe/swap set; ad-hoc log session;
-session note `PUT /1.0/athlete/savedworkout/{id}`.
+session note `PUT /1.0/athlete/savedworkout/{id}`; per-exercise note
+`PUT /1.0/athlete/savedworkoutsetexercise/{id}` (`{id, notes}`).
 
 Wrapped 2026-08-16 (not gaps): `DELETE /v5/programs/{programId}` (`program_delete`),
 `DELETE /v5/exercises/{id}` (`exercise_delete`), `GET /1.0/coach/workouts`

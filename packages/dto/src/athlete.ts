@@ -344,6 +344,17 @@ export const athleteWorkoutNoteArgsSchema = athleteWorkoutNoteObject.refine(
 );
 export type AthleteWorkoutNoteArgs = z.infer<typeof athleteWorkoutNoteArgsSchema>;
 
+/**
+ * Args for the athlete per-exercise note write (the "Add exercise note" box on the exercise
+ * screen — band color, etc.). `savedWorkoutSetExerciseId` is the slot id from athlete_log_targets.
+ * Empty `notes` clears the note. Distinct from {@link athleteWorkoutNoteArgsSchema} (session note).
+ */
+export const athleteExerciseNoteArgsSchema = z.object({
+  savedWorkoutSetExerciseId: idArgSchema,
+  notes: z.string(),
+});
+export type AthleteExerciseNoteArgs = z.infer<typeof athleteExerciseNoteArgsSchema>;
+
 // --- Presented (model-friendly) view schemas, produced by the `js` presenters ---
 
 const presentedNullNumber = z.number().nullable();
@@ -354,6 +365,7 @@ export const athleteWorkoutExerciseSchema = z.object({
   exerciseId: presentedNullNumber,
   title: z.string(),
   instruction: presentedNullString,
+  notes: presentedNullString,
   units: z.array(presentedNullString),
   prescribed: z.array(z.string()),
   performed: z.array(z.string()),
@@ -488,6 +500,7 @@ export const rosterActivityOutputSchema = z.array(rosterActivityRowSchema);
 export const presentedExerciseSessionSchema = z.object({
   date: z.string(),
   abr: presentedNullString,
+  notes: presentedNullString,
   estimated1RM: presentedNullNumber,
   sets: z.array(z.object({ setNumber: z.number(), value: presentedNullString })),
 });

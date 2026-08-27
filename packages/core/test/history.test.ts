@@ -7,10 +7,10 @@ const sample: PresentedHistory = {
     { description: "5 Rep Max", reps: 5, weight: 295, units: "lb", date: "2025-09-08" },
   ],
   sessions: [
-    { date: "2026-05-11", abr: "4 x 6 @ 275 lb", estimated1RM: 323, sets: [] },
-    { date: "2026-04-06", abr: "4 x 5 @ 225 lb", estimated1RM: 258, sets: [] },
-    { date: "2026-01-26", abr: "3 x 7 @ 245 lb", estimated1RM: 295, sets: [] },
-    { date: "2025-11-10T18:00:00Z", abr: "singles", estimated1RM: 345, sets: [] },
+    { date: "2026-05-11", abr: "4 x 6 @ 275 lb", notes: null, estimated1RM: 323, sets: [] },
+    { date: "2026-04-06", abr: "4 x 5 @ 225 lb", notes: null, estimated1RM: 258, sets: [] },
+    { date: "2026-01-26", abr: "3 x 7 @ 245 lb", notes: null, estimated1RM: 295, sets: [] },
+    { date: "2025-11-10T18:00:00Z", abr: "singles", notes: null, estimated1RM: 345, sets: [] },
   ],
 };
 

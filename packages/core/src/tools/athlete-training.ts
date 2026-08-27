@@ -7,9 +7,11 @@ import {
   athleteProfileOutputSchema,
   athleteSessionRemoveArgsSchema,
   athleteSessionRemovedOutputSchema,
+  athleteExerciseNoteArgsSchema,
   athleteWorkoutNoteArgsSchema,
   athleteWorkoutNoteObject,
   athleteWorkoutNoteOutputSchema,
+  athleteExerciseNoteOutputSchema,
   athleteWorkoutsOutputSchema,
   athleteWorkingMaxListSchema,
   dateString,
@@ -60,6 +62,7 @@ import {
   selectWorkouts,
   selectWorkoutsByProgram,
   setAthleteWorkoutNote,
+  setAthleteExerciseNote,
   summarizeAthleteWorkouts,
   swapAthleteExercise,
   toSetResults,
@@ -197,7 +200,8 @@ const ATHLETE_WORKOUTS_DESC =
   "Each exercise carries both its `prescribed` sets (what the program called for) and " +
   "`performed` sets (what the athlete actually logged); each workout has a top-level `logged` " +
   "flag. Session `notes` and `rpe` are the athlete's own note/RPE on that workout (null when " +
-  "unset), distinct from coach `instruction`. Use `performed`/`logged` to tell what was recorded or done. That is the reliable " +
+  "unset), distinct from coach `instruction`. Each exercise may also carry `notes` (the " +
+  "per-exercise box on the exercise screen; null when unset). Use `performed`/`logged` to tell what was recorded or done. That is the reliable " +
   "signal: a session can hold logged sets while the API's own completion flags stay 0, and an " +
   "empty `performed` means nothing was logged for that exercise. For 'did I record anything / " +
   "what did I do', set loggedOnly:true to return only sessions with logged sets (it keeps whole " +
@@ -222,7 +226,7 @@ const ATHLETE_LOG_TARGETS_DESC =
   "self-service path for logging into a COACH-SCHEDULED workout: read the ids here, then pass them " +
   "to athlete_log_set. The default view is COMPACT: one row per saved set, each carrying its " +
   "program/programId, the savedWorkoutSetId, and every exercise's savedWorkoutSetExerciseId with " +
-  "prescribed/performed values. When several workouts fall on the same day (you're on more than one " +
+  "prescribed/performed values and any per-exercise `notes`. When several workouts fall on the same day (you're on more than one " +
   "program), narrow to one with program (a case-insensitive title substring, e.g. 'bodybuilding' — " +
   "no id lookup needed), or programId/teamId if you have the id. raw:true returns the untouched API " +
   "objects, but that blob is large and can be truncated when several workouts share a date — prefer " +
@@ -235,7 +239,7 @@ const ATHLETE_EXERCISE_HISTORY_DESC =
   "keep only sessions in that window — use it for 'last 3 months' / 'this year' questions so the " +
   "result stays small. estimated1RM is a formula off the session's best set and reads high when " +
   "a session mixes a heavy single with high-rep backdown work, so treat it as approximate, not a " +
-  "logged single. `liftPRs` are always all-time and ignore since/until, but each carries the date " +
+  "logged single. Each session may carry `notes` (the per-exercise athlete note). `liftPRs` are always all-time and ignore since/until, but each carries the date " +
   "it was set, so filter those dates yourself to answer 'PRs set this year'. Set raw:true for the " +
   "untouched API object. Get the exercise id from athlete_exercises.";
 
@@ -554,7 +558,8 @@ function registerWorkoutNoteTool(server: McpServer, ctx: AthleteContext): void {
       title: "Set your session note or RPE",
       description:
         "Athlete-facing write: set the free-text note (and/or session RPE 1–10) on a workout. " +
-        "This is the note box on the workout screen, not the coach's Instructions. programWorkoutId " +
+        "This is the note box on the workout screen, not the coach's Instructions and not the " +
+        "per-exercise note (use athlete_exercise_note for that). programWorkoutId " +
         "is the `id` from athlete_workouts for that date. Pass notes (empty string clears) and/or " +
         "rpe; a notes-only write leaves rpe untouched and vice versa. Visible to your coach. " +
         "Requires confirmation (elicitation or confirm:true).",
@@ -574,6 +579,37 @@ function registerWorkoutNoteTool(server: McpServer, ctx: AthleteContext): void {
         );
         if (blocked) return blocked;
         return jsonResult(await setAthleteWorkoutNote(ctx.client, patch));
+      }),
+  );
+}
+
+/** Set the athlete's per-exercise note on a saved slot (coach-visible). */
+function registerExerciseNoteTool(server: McpServer, ctx: AthleteContext): void {
+  server.registerTool(
+    "athlete_exercise_note",
+    {
+      title: "Set a per-exercise note",
+      description:
+        "Athlete-facing write: set the free-text note on one exercise in a workout (the " +
+        "'Add exercise note' box on the exercise screen). Use this for things the weight field " +
+        "cannot hold, such as which band you used. Distinct from athlete_workout_note, which " +
+        "writes the session-level note. savedWorkoutSetExerciseId is the slot id from " +
+        "athlete_log_targets. Empty notes clears the note. Visible to your coach. Requires " +
+        "confirmation (elicitation or confirm:true).",
+      inputSchema: { ...athleteExerciseNoteArgsSchema.shape, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(athleteExerciseNoteOutputSchema),
+      annotations: DESTRUCTIVE,
+    },
+    ({ savedWorkoutSetExerciseId, notes, confirm }, extra) =>
+      attempt(async () => {
+        const patch = athleteExerciseNoteArgsSchema.parse({ savedWorkoutSetExerciseId, notes });
+        const blocked = confirmGate(
+          extra,
+          `Set the exercise note on slot ${toId(patch.savedWorkoutSetExerciseId)}? This is visible to your coach.`,
+          confirm,
+        );
+        if (blocked) return blocked;
+        return jsonResult(await setAthleteExerciseNote(ctx.client, patch));
       }),
   );
 }
@@ -845,6 +881,7 @@ export function registerAthleteTrainingTools(server: McpServer, ctx: AthleteCont
   registerLogTargetsTool(server, ctx);
   registerSessionTools(server, ctx);
   registerWorkoutNoteTool(server, ctx);
+  registerExerciseNoteTool(server, ctx);
   registerLogTool(server, ctx);
   registerSwapTool(server, ctx);
 }

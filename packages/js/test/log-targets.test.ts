@@ -12,6 +12,7 @@ function workout(opts: {
   teamId: number;
   savedWorkoutSetId: number;
   savedWorkoutSetExerciseId: number;
+  notes?: string | null;
 }): ProgramWorkout {
   return {
     id: opts.savedWorkoutSetId * 10,
@@ -37,6 +38,7 @@ function workout(opts: {
                 param_2_type: "lb",
                 param_1_data_1: "5",
                 param_2_data_1: "225",
+                notes: opts.notes ?? null,
               },
             ],
           },
@@ -65,6 +67,21 @@ describe("presentLogTargets", () => {
     expect(t?.savedWorkoutSetId).toBe(880006);
     expect(t?.exercises[0]?.savedWorkoutSetExerciseId).toBe(770060);
     expect(t?.exercises[0]?.prescribed).toEqual(["5 @ 225"]);
+    expect(t?.exercises[0]?.notes).toBeNull();
+  });
+
+  it("surfaces a per-exercise note from the saved copy", () => {
+    const targets = presentLogTargets([
+      workout({
+        programId: 1,
+        programTitle: "Bands",
+        teamId: 2,
+        savedWorkoutSetId: 3,
+        savedWorkoutSetExerciseId: 4,
+        notes: "green band",
+      }),
+    ]);
+    expect(targets[0]?.exercises[0]?.notes).toBe("green band");
   });
 });
 

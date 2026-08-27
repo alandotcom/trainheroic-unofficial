@@ -422,6 +422,7 @@ type MergedExerciseMeta = {
   exerciseId: number | null;
   title: string;
   instruction: string | null;
+  notes: string | null;
   units: Array<string | null>;
 };
 type MergedExercise = MergedExerciseMeta & { sets: MergedSet[] };
@@ -484,6 +485,21 @@ function performedSlotsByExerciseId(
   return map;
 }
 
+/** Per-exercise athlete notes keyed by the prescription template id (`workout_set_exercise_id`). */
+function notesByTemplateId(
+  sets: Array<{ exercises: Record<string, unknown>[] }>,
+): Map<number, string> {
+  const map = new Map<number, string>();
+  for (const { exercises } of sets) {
+    for (const ex of exercises) {
+      const id = coerceInt(ex.workout_set_exercise_id);
+      const notes = str(ex.notes);
+      if (id !== null && notes !== null) map.set(id, notes);
+    }
+  }
+  return map;
+}
+
 /** Align an exercise's prescribed slots with the slots the athlete logged, per set index. */
 function mergeExercise(
   prescribed: Map<number, SlotValue>,
@@ -505,6 +521,7 @@ function mergeExercise(
 function mergePrescriptionBlock(
   set: Record<string, unknown>,
   performedById: Map<number, Map<number, SlotValue>>,
+  notesById: Map<number, string>,
 ): MergedBlock {
   const exercises = Array.isArray(set.workoutSetExercises) ? set.workoutSetExercises : [];
   return {
@@ -519,6 +536,7 @@ function mergePrescriptionBlock(
         exerciseId: coerceInt(ex.exercise_id),
         title: typeof ex.title === "string" ? ex.title : "",
         instruction: str(ex.instruction),
+        notes: id !== null ? (notesById.get(id) ?? null) : null,
         units: exerciseUnits(ex.param_1_type, ex.param_2_type),
       });
     }),
@@ -540,6 +558,7 @@ function mergeSavedBlock(
         exerciseId: coerceInt(ex.exercise_id),
         title: typeof ex.exercise_title === "string" ? ex.exercise_title : "",
         instruction: str(ex.instruction),
+        notes: str(ex.notes),
         units: exerciseUnits(ex.param_1_type, ex.param_2_type),
       }),
     ),
@@ -563,10 +582,11 @@ function mergeAthleteWorkout(raw: ProgramWorkout): MergedWorkout {
 
   const logged = savedSets(saved);
   const performedById = performedSlotsByExerciseId(logged);
+  const notesById = notesByTemplateId(logged);
 
   // Prescription blocks, each exercise enriched with what the athlete actually logged.
   const blocks = prescriptionSets
-    .map((s) => mergePrescriptionBlock(s, performedById))
+    .map((s) => mergePrescriptionBlock(s, performedById, notesById))
     .sort((a, b) => a.order - b.order);
 
   // Logged sets with no matching prescription (athlete-added work, personal sessions).
@@ -620,6 +640,7 @@ function toStringExercise(ex: MergedExercise): AthleteWorkoutExercise {
     exerciseId: ex.exerciseId,
     title: ex.title,
     instruction: ex.instruction,
+    notes: ex.notes,
     units: ex.units,
     prescribed: sideStrings(ex.sets, (s) => s.prescribed),
     performed: sideStrings(ex.sets, (s) => s.performed),
@@ -755,6 +776,7 @@ export type LogSetTarget = {
     savedWorkoutSetExerciseId: number;
     title: string;
     units: ReturnType<typeof exerciseUnits>;
+    notes: string | null;
     prescribed: string[];
     performed: string[];
   }>;
@@ -825,6 +847,7 @@ export function presentLogTargets(list: readonly ProgramWorkout[]): LogSetTarget
             savedWorkoutSetExerciseId: id,
             title: exerciseTitle(ex),
             units: exerciseUnits(ex.param_1_type, ex.param_2_type),
+            notes: str(ex.notes),
             prescribed: prescribedStrings(ex),
             performed: performedStrings(ex),
           };
@@ -957,6 +980,7 @@ export function presentExerciseHistory(detail: ExerciseHistoryDetail): Presented
   const sessions = (detail.history ?? []).map((h) => ({
     date: h.dateCompleted,
     abr: h.abr ?? null,
+    notes: str(h.notes),
     estimated1RM: h.bestEstimated1RM ?? null,
     sets: (h.sets ?? []).map((s) => ({
       setNumber: s.setNumber,

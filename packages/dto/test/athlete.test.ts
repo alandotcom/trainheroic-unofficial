@@ -5,6 +5,7 @@ import {
   athleteProfileSummarySchema,
   athletePrefsSchema,
   athletePrescribeSetArgsSchema,
+  athleteExerciseNoteArgsSchema,
   athleteWorkoutNoteArgsSchema,
   athleteUserSchema,
   athleteWorkingMaxListSchema,
@@ -134,5 +135,23 @@ describe("athlete input schemas", () => {
         rpe: 11,
       }).success,
     ).toBe(false);
+  });
+
+  it("accepts a per-exercise note including an empty clear", () => {
+    expect(
+      athleteExerciseNoteArgsSchema.safeParse({
+        savedWorkoutSetExerciseId: 9,
+        notes: "green band",
+      }).success,
+    ).toBe(true);
+    expect(
+      athleteExerciseNoteArgsSchema.safeParse({
+        savedWorkoutSetExerciseId: "9",
+        notes: "",
+      }).success,
+    ).toBe(true);
+    expect(athleteExerciseNoteArgsSchema.safeParse({ savedWorkoutSetExerciseId: 9 }).success).toBe(
+      false,
+    );
   });
 });
