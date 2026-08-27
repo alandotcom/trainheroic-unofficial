@@ -61,6 +61,15 @@ describe("presentAthleteWorkout", () => {
     expect(squat?.prescribed.length).toBeGreaterThan(0);
   });
 
+  it("surfaces the per-exercise athlete note from the saved copy", () => {
+    const squat = view.blocks.flatMap((b) => b.exercises).find((e) => e.title === "Back Squat");
+    expect(squat?.notes).toBe("green band");
+    const split = view.blocks
+      .flatMap((b) => b.exercises)
+      .find((e) => e.title === "Front Foot Elevated Split Squat");
+    expect(split?.notes).toBeNull();
+  });
+
   it("appends athlete-added work that has no prescription as its own block", () => {
     const bike = view.blocks.flatMap((b) => b.exercises).find((e) => e.title === "Assault Bike");
     expect(bike).toBeDefined();
@@ -211,6 +220,7 @@ describe("summarizeAthleteWorkouts", () => {
               exerciseId: 1,
               title: "Bench",
               instruction: null,
+              notes: null,
               units: [],
               prescribed: ["4 @ 225"],
               performed: ["4 @ 225"],
@@ -219,6 +229,7 @@ describe("summarizeAthleteWorkouts", () => {
               exerciseId: 2,
               title: "Fly",
               instruction: null,
+              notes: null,
               units: [],
               prescribed: ["12"],
               performed: [],
@@ -346,6 +357,9 @@ describe("presentExerciseHistory", () => {
     expect(presented.liftPRs[0]?.description).toBeTypeOf("string");
     expect(presented.sessions.length).toBeGreaterThan(0);
     expect(presented.sessions[0]?.date).toBeTypeOf("string");
+    expect(presented.sessions[0]?.notes).toBeNull();
+    const withNote = presented.sessions.find((s) => s.notes !== null);
+    expect(withNote?.notes).toBe("185");
   });
 });
 

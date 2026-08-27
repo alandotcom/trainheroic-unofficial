@@ -1,8 +1,9 @@
 // The athlete set-logging write path, split out of athlete.ts (which keeps the reads and
 // presenters). Records entered set results against a saved workout set (log / prescribe), swaps a
 // prescribed exercise, creates personal sessions, and logs a whole session by exercise. Session
-// notes live in athlete-workout-note.ts. It reaches the same TrainHeroic hosts as the reads; the
-// day's range is fetched via athlete.ts's read helpers to resolve the ids each write needs.
+// notes live in athlete-workout-note.ts; per-exercise notes live in athlete-exercise-note.ts. It
+// reaches the same TrainHeroic hosts as the reads; the day's range is fetched via athlete.ts's
+// read helpers to resolve the ids each write needs.
 // Runtime-agnostic: no `node:*`, so this runs on workerd.
 
 import {

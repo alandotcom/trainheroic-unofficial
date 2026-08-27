@@ -47,6 +47,7 @@ const logSetTargetOutputSchema = z.object({
       savedWorkoutSetExerciseId: z.number(),
       title: z.string(),
       units: z.array(nullableString),
+      notes: nullableString,
       prescribed: z.array(z.string()),
       performed: z.array(z.string()),
     }),
@@ -145,6 +146,12 @@ export const athleteWorkoutNoteOutputSchema = z.object({
   rpe: nullableNumber,
 });
 export type AthleteWorkoutNoteOutput = z.infer<typeof athleteWorkoutNoteOutputSchema>;
+
+export const athleteExerciseNoteOutputSchema = z.object({
+  savedWorkoutSetExerciseId: z.number(),
+  notes: z.string(),
+});
+export type AthleteExerciseNoteOutput = z.infer<typeof athleteExerciseNoteOutputSchema>;
 
 const workoutReadExerciseOutputSchema = z.object({
   order: z.number(),

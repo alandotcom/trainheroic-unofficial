@@ -69,6 +69,7 @@ export const ATHLETE_COMMANDS: Record<string, string> = {
   "athlete session-remove": "athlete_session_remove",
   "athlete swap-exercise": "athlete_swap_exercise",
   "athlete workout-note": "athlete_workout_note",
+  "athlete exercise-note": "athlete_exercise_note",
 };
 
 /** Commands whose first positional token after the command path is an id, keyed by canonical name. */
@@ -104,6 +105,7 @@ const FLAG_MAP: Record<string, string> = {
   raw: "raw",
   notes: "notes",
   rpe: "rpe",
+  "set-exercise": "savedWorkoutSetExerciseId",
 };
 
 const BOOLEAN_FLAGS = new Set(["summary", "logged-only", "raw", "log-ids", "metric"]);

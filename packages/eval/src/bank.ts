@@ -220,6 +220,12 @@ export const ATHLETE_WRITE_BANK: BankEntry[] = [
     // Trailing slash so this does not also match `savedworkoutset`.
     expectWrite: "savedworkout/",
   },
+  {
+    section: "athlete-write",
+    query: "Note on today's Banded Chest Fly that I used the green band.",
+    expect: ["athlete_exercise_note"],
+    expectWrite: "savedworkoutsetexercise",
+  },
 ];
 
 export const COACH_WRITE_BANK: BankEntry[] = [
