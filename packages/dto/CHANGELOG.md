@@ -1,5 +1,18 @@
 # @trainheroic-unofficial/dto
 
+## 3.5.0
+
+### Minor Changes
+
+- 385a944: feat(athlete): add a per-exercise note on a saved slot
+
+  Athletes can write the "Add exercise note" field (band color, etc.) via
+  `PUT /1.0/athlete/savedworkoutsetexercise/{id}` with `{id, notes}`. Adds
+  SDK `setAthleteExerciseNote`, MCP `athlete_exercise_note`, and CLI
+  `athlete exercise-note`. Workout, log-target, and history reads surface the note.
+
+  Fixes TRAINHEROIC-MCP-X
+
 ## 3.4.0
 
 ### Minor Changes
