@@ -1,5 +1,14 @@
 # @trainheroic-unofficial/cli
 
+## 3.5.1
+
+### Patch Changes
+
+- d2692c8: Split exercise prescriptions above TrainHeroic's ten-set limit into consecutive blocks after explicit user confirmation, and reject mismatched per-set rep and weight arrays.
+- Updated dependencies [d2692c8]
+  - @trainheroic-unofficial/js@3.5.1
+  - @trainheroic-unofficial/dto@3.5.1
+
 ## 3.5.0
 
 ### Minor Changes
