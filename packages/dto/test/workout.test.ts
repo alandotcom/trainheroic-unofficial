@@ -37,6 +37,15 @@ describe("workout schemas", () => {
     expect(() => blockSpecSchema.parse({ title: "x", exercises: [{ reps: 5 }] })).toThrow();
   });
 
+  it("rejects mismatched per-set reps and weight arrays", () => {
+    expect(() =>
+      blockSpecSchema.parse({
+        title: "Strength",
+        exercises: [{ id: 1, reps: [5, 5], weight: [100, 110, 120] }],
+      }),
+    ).toThrow(/same length/iu);
+  });
+
   it("parses a full workout spec with a session instruction", () => {
     const spec = workoutSpecSchema.parse({
       blocks: [{ title: "A", exercises: [{ id: 1, reps: 5 }] }],

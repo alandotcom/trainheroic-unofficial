@@ -1,17 +1,33 @@
 import { z } from "zod";
 
 /** A single exercise prescription inside a block. */
-export const exerciseSpecSchema = z.object({
-  id: z.union([z.number(), z.string()]),
-  title: z.string().optional(),
-  reps: z.union([z.number(), z.string(), z.array(z.union([z.number(), z.string()]))]).optional(),
-  sets: z.number().optional(),
-  weight: z.union([z.number(), z.array(z.number())]).optional(),
-  rpe: z.union([z.number(), z.string()]).optional(),
-  instr: z.string().optional(),
-  param_1_type: z.number().optional(),
-  param_2_type: z.number().optional(),
-});
+export const exerciseSpecSchema = z
+  .object({
+    id: z.union([z.number(), z.string()]),
+    title: z.string().optional(),
+    reps: z.union([z.number(), z.string(), z.array(z.union([z.number(), z.string()]))]).optional(),
+    sets: z.number().optional(),
+    weight: z.union([z.number(), z.array(z.number())]).optional(),
+    rpe: z.union([z.number(), z.string()]).optional(),
+    instr: z.string().optional(),
+    param_1_type: z.number().optional(),
+    param_2_type: z.number().optional(),
+  })
+  .superRefine((exercise, ctx) => {
+    if (
+      Array.isArray(exercise.reps) &&
+      Array.isArray(exercise.weight) &&
+      exercise.reps.length !== exercise.weight.length
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          `Per-set reps and weight arrays must have the same length; received ` +
+          `${exercise.reps.length} reps and ${exercise.weight.length} weights.`,
+        path: ["weight"],
+      });
+    }
+  });
 export type ExerciseSpec = z.infer<typeof exerciseSpecSchema>;
 
 /** A block's Red-Zone leaderboard: a unit string/number, or an object with options. */

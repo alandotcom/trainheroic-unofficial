@@ -157,7 +157,9 @@ describe("splitOversizedBlocks", () => {
     const blocks = [
       {
         title: "Strength",
+        type: 2,
         instruction: "Alternate exercises",
+        leaderboard: "weight",
         exercises: [
           { id: 1, title: "Press", sets: 21, reps: 5, weight: 100 },
           { id: 2, title: "Row", sets: 12, reps: 8, weight: 80 },
@@ -168,7 +170,9 @@ describe("splitOversizedBlocks", () => {
     expect(splitOversizedBlocks(blocks)).toEqual([
       {
         title: "Strength",
+        type: 2,
         instruction: "Alternate exercises",
+        leaderboard: "weight",
         exercises: [
           { id: 1, title: "Press", sets: 10, reps: 5, weight: 100 },
           { id: 2, title: "Row", sets: 10, reps: 8, weight: 80 },
@@ -176,7 +180,7 @@ describe("splitOversizedBlocks", () => {
       },
       {
         title: "Strength",
-        instruction: "Alternate exercises",
+        type: 2,
         exercises: [
           { id: 1, title: "Press", sets: 10, reps: 5, weight: 100 },
           { id: 2, title: "Row", sets: 2, reps: 8, weight: 80 },
@@ -184,11 +188,29 @@ describe("splitOversizedBlocks", () => {
       },
       {
         title: "Strength",
-        instruction: "Alternate exercises",
+        type: 2,
         exercises: [{ id: 1, title: "Press", sets: 1, reps: 5, weight: 100 }],
       },
     ]);
     expect(setSplitSummary(blocks)).toContain("Press: 21 sets into 3 blocks");
+  });
+
+  it("splits an oversized weight-only prescription without losing values", () => {
+    const weights = [100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200];
+    const blocks = [
+      { title: "Carries", exercises: [{ id: 1, title: "Farmer Carry", weight: weights }] },
+    ];
+
+    expect(splitOversizedBlocks(blocks)).toEqual([
+      {
+        title: "Carries",
+        exercises: [{ id: 1, title: "Farmer Carry", weight: weights.slice(0, 10) }],
+      },
+      {
+        title: "Carries",
+        exercises: [{ id: 1, title: "Farmer Carry", weight: [200] }],
+      },
+    ]);
   });
 });
 

@@ -227,7 +227,12 @@ export function splitOversizedBlocks(blocks: readonly BlockSpec[]): BlockSpec[] 
       const exercises = block.exercises
         .map((exercise) => sliceExercise(exercise, start))
         .filter((exercise): exercise is ExerciseSpec => exercise !== null);
-      return { ...block, exercises };
+      if (index === 0) return { ...block, exercises };
+      return {
+        title: block.title,
+        ...(block.type === undefined ? {} : { type: block.type }),
+        exercises,
+      };
     });
   });
 }
