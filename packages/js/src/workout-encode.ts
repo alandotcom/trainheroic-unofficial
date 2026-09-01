@@ -6,6 +6,7 @@
 import type { Advisory, BlockSpec, ExerciseSpec } from "@trainheroic-unofficial/dto";
 import {
   type ExerciseIndex,
+  MAX_PARAM_SLOTS,
   PARAM_NONE,
   PARAM_PCT_MAX,
   PARAM_REPS,
@@ -15,8 +16,6 @@ import {
 } from "./exercise-util";
 
 type AdvisoryIndex = Pick<ExerciseIndex, "defaultsMany" | "ensureFresh">;
-
-export const MAX_SETS_PER_EXERCISE = 10;
 
 export type SetSplit = {
   blockTitle: string;
@@ -156,13 +155,13 @@ export function findSetSplits(blocks: readonly BlockSpec[]): SetSplit[] {
   return blocks.flatMap((block) =>
     block.exercises.flatMap((exercise) => {
       const setCount = exerciseSetCount(exercise);
-      if (setCount <= MAX_SETS_PER_EXERCISE) return [];
+      if (setCount <= MAX_PARAM_SLOTS) return [];
       return [
         {
           blockTitle: block.title,
           exerciseTitle: exercise.title ?? String(exercise.id),
           setCount,
-          blockCount: Math.ceil(setCount / MAX_SETS_PER_EXERCISE),
+          blockCount: Math.ceil(setCount / MAX_PARAM_SLOTS),
         },
       ];
     }),
@@ -179,7 +178,7 @@ export function setSplitSummary(blocks: readonly BlockSpec[]): string | null {
     )
     .join("; ");
   return (
-    `TrainHeroic supports at most ${MAX_SETS_PER_EXERCISE} sets per exercise block. ` +
+    `TrainHeroic supports at most ${MAX_PARAM_SLOTS} sets per exercise block. ` +
     `The following will be split into consecutive same-titled blocks: ${details}.`
   );
 }
@@ -188,19 +187,18 @@ function sliceExercise(exercise: ExerciseSpec, start: number): ExerciseSpec | nu
   const setCount = exerciseSetCount(exercise);
   if (start > 0 && setCount <= start) return null;
 
-  const chunkCount =
-    setCount === 0 ? 0 : Math.min(MAX_SETS_PER_EXERCISE, Math.max(0, setCount - start));
+  const chunkCount = setCount === 0 ? 0 : Math.min(MAX_PARAM_SLOTS, Math.max(0, setCount - start));
   const chunk = { ...exercise };
 
   if (Array.isArray(exercise.reps)) {
-    chunk.reps = exercise.reps.slice(start, start + MAX_SETS_PER_EXERCISE);
+    chunk.reps = exercise.reps.slice(start, start + MAX_PARAM_SLOTS);
     delete chunk.sets;
   } else if (exercise.reps !== undefined && exercise.reps !== null) {
     chunk.sets = chunkCount;
   }
 
   if (Array.isArray(exercise.weight)) {
-    chunk.weight = exercise.weight.slice(start, start + MAX_SETS_PER_EXERCISE);
+    chunk.weight = exercise.weight.slice(start, start + MAX_PARAM_SLOTS);
     if (exercise.reps === undefined || exercise.reps === null) delete chunk.sets;
   } else if (
     (exercise.reps === undefined || exercise.reps === null) &&
@@ -221,11 +219,11 @@ function sliceExercise(exercise: ExerciseSpec, start: number): ExerciseSpec | nu
 export function splitOversizedBlocks(blocks: readonly BlockSpec[]): BlockSpec[] {
   return blocks.flatMap((block) => {
     const largestSetCount = Math.max(0, ...block.exercises.map(exerciseSetCount));
-    const chunkCount = Math.max(1, Math.ceil(largestSetCount / MAX_SETS_PER_EXERCISE));
+    const chunkCount = Math.max(1, Math.ceil(largestSetCount / MAX_PARAM_SLOTS));
     if (chunkCount === 1) return [block];
 
     return Array.from({ length: chunkCount }, (_, index) => {
-      const start = index * MAX_SETS_PER_EXERCISE;
+      const start = index * MAX_PARAM_SLOTS;
       const exercises = block.exercises
         .map((exercise) => sliceExercise(exercise, start))
         .filter((exercise): exercise is ExerciseSpec => exercise !== null);
@@ -286,9 +284,9 @@ export function makeExercise(
     use_count: 0,
   };
 
-  const p1 = slots(reps, MAX_SETS_PER_EXERCISE);
-  const p2 = slots(param2Values, MAX_SETS_PER_EXERCISE);
-  for (let i = 0; i < MAX_SETS_PER_EXERCISE; i += 1) {
+  const p1 = slots(reps, MAX_PARAM_SLOTS);
+  const p2 = slots(param2Values, MAX_PARAM_SLOTS);
+  for (let i = 0; i < MAX_PARAM_SLOTS; i += 1) {
     entry[`param_1_data_${i + 1}`] = p1[i] ?? "";
     entry[`param_2_data_${i + 1}`] = p2[i] ?? "";
   }
