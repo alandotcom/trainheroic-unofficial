@@ -197,21 +197,19 @@ function sliceExercise(
   const chunkCount = setCount === 0 ? 0 : Math.min(MAX_PARAM_SLOTS, Math.max(0, setCount - start));
   const chunk = { ...exercise };
   const hasPerSetReps = Array.isArray(exercise.reps) && exercise.reps.length > 0;
+  const hasScalarReps =
+    !Array.isArray(exercise.reps) && exercise.reps !== undefined && exercise.reps !== null;
 
   if (Array.isArray(exercise.reps) && exercise.reps.length > 0) {
     chunk.reps = exercise.reps.slice(start, start + MAX_PARAM_SLOTS);
     delete chunk.sets;
-  } else if (
-    exercise.reps !== undefined &&
-    exercise.reps !== null &&
-    !Array.isArray(exercise.reps)
-  ) {
+  } else if (hasScalarReps) {
     chunk.sets = chunkCount;
   }
 
   if (Array.isArray(exercise.weight)) {
     chunk.weight = exercise.weight.slice(start, start + MAX_PARAM_SLOTS);
-    if (!hasPerSetReps) delete chunk.sets;
+    if (!hasPerSetReps && !hasScalarReps) delete chunk.sets;
   } else if (!hasPerSetReps && exercise.weight !== undefined && exercise.weight !== null) {
     chunk.sets = chunkCount;
   }
