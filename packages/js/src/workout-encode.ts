@@ -198,7 +198,7 @@ function sliceExercise(
   const chunk = { ...exercise };
   const hasPerSetReps = Array.isArray(exercise.reps) && exercise.reps.length > 0;
 
-  if (hasPerSetReps) {
+  if (Array.isArray(exercise.reps) && exercise.reps.length > 0) {
     chunk.reps = exercise.reps.slice(start, start + MAX_PARAM_SLOTS);
     delete chunk.sets;
   } else if (
