@@ -15,7 +15,13 @@ import { z } from "zod";
 import type { TrainHeroicClient } from "./client";
 import { coerceInt, mapPool, unitLabel } from "./exercise-util";
 import { checkResponse } from "./response-check";
-import { buildBlockPayload, LEADERBOARD_LABEL, makeExercise } from "./workout-encode";
+import {
+  buildBlockPayload,
+  LEADERBOARD_LABEL,
+  makeExercise,
+  setSplitSummary,
+  splitOversizedBlocks,
+} from "./workout-encode";
 
 export type BuildOptions = {
   programId: number;
@@ -23,6 +29,8 @@ export type BuildOptions = {
   date?: WorkoutDate;
   timelineDay?: number;
   publish?: boolean;
+  /** Explicitly allow prescriptions above ten sets to become consecutive blocks. */
+  confirmSetSplit?: boolean;
   /** Optional session-level note ("Coach Instructions"), set after the blocks save. */
   instruction?: string;
 };
@@ -84,7 +92,12 @@ export async function buildSession(
   opts: BuildOptions,
 ): Promise<{ pwId: number; workoutId: number }> {
   // dto schema is the single empty-block / Circuit invariant (SDK callers may bypass MCP zod).
-  const blocks = z.array(blockSpecSchema).parse(opts.blocks);
+  const validatedBlocks = z.array(blockSpecSchema).parse(opts.blocks);
+  const splitSummary = setSplitSummary(validatedBlocks);
+  if (splitSummary !== null && opts.confirmSetSplit !== true) {
+    throw new Error(`${splitSummary} Set confirmSetSplit:true to allow this change.`);
+  }
+  const blocks = splitSummary === null ? validatedBlocks : splitOversizedBlocks(validatedBlocks);
   const sess = await req<Record<string, unknown>>(client, "POST", createPath(opts), {});
   checkResponse(sessionCreateResponseSchema, sess, "session create");
   const workoutId = Number(sess.workout_id);

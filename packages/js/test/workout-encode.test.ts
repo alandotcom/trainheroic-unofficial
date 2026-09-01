@@ -3,9 +3,12 @@ import {
   buildBlockPayload,
   collectAdvisories,
   defaultBlockType,
+  findSetSplits,
   makeExercise,
   repsList,
   resolveLeaderboard,
+  setSplitSummary,
+  splitOversizedBlocks,
   unitAdvisory,
 } from "../src/workout-encode";
 
@@ -96,6 +99,94 @@ describe("makeExercise", () => {
     expect(ex.param_2_data_1).toBe("100");
     expect(ex.param_2_data_2).toBe("110");
     expect(ex.set_num).toBe(2);
+  });
+});
+
+describe("splitOversizedBlocks", () => {
+  it("leaves a ten-set block unchanged", () => {
+    const blocks = [{ title: "Squat", exercises: [{ id: 1, reps: Array(10).fill(5) }] }];
+    expect(findSetSplits(blocks)).toEqual([]);
+    expect(splitOversizedBlocks(blocks)).toEqual(blocks);
+  });
+
+  it("splits eleven per-set values into consecutive same-titled blocks", () => {
+    const blocks = [
+      {
+        title: "Squat",
+        exercises: [
+          {
+            id: 1,
+            title: "Back Squat",
+            reps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+            weight: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111],
+          },
+        ],
+      },
+    ];
+
+    expect(findSetSplits(blocks)).toEqual([
+      {
+        blockTitle: "Squat",
+        exerciseTitle: "Back Squat",
+        setCount: 11,
+        blockCount: 2,
+      },
+    ]);
+    expect(splitOversizedBlocks(blocks)).toEqual([
+      {
+        title: "Squat",
+        exercises: [
+          {
+            id: 1,
+            title: "Back Squat",
+            reps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            weight: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
+          },
+        ],
+      },
+      {
+        title: "Squat",
+        exercises: [{ id: 1, title: "Back Squat", reps: [11], weight: [111] }],
+      },
+    ]);
+  });
+
+  it("chunks scalar prescriptions and keeps supersets aligned", () => {
+    const blocks = [
+      {
+        title: "Strength",
+        instruction: "Alternate exercises",
+        exercises: [
+          { id: 1, title: "Press", sets: 21, reps: 5, weight: 100 },
+          { id: 2, title: "Row", sets: 12, reps: 8, weight: 80 },
+        ],
+      },
+    ];
+
+    expect(splitOversizedBlocks(blocks)).toEqual([
+      {
+        title: "Strength",
+        instruction: "Alternate exercises",
+        exercises: [
+          { id: 1, title: "Press", sets: 10, reps: 5, weight: 100 },
+          { id: 2, title: "Row", sets: 10, reps: 8, weight: 80 },
+        ],
+      },
+      {
+        title: "Strength",
+        instruction: "Alternate exercises",
+        exercises: [
+          { id: 1, title: "Press", sets: 10, reps: 5, weight: 100 },
+          { id: 2, title: "Row", sets: 2, reps: 8, weight: 80 },
+        ],
+      },
+      {
+        title: "Strength",
+        instruction: "Alternate exercises",
+        exercises: [{ id: 1, title: "Press", sets: 1, reps: 5, weight: 100 }],
+      },
+    ]);
+    expect(setSplitSummary(blocks)).toContain("Press: 21 sets into 3 blocks");
   });
 });
 

@@ -16,6 +16,15 @@ import {
 
 type AdvisoryIndex = Pick<ExerciseIndex, "defaultsMany" | "ensureFresh">;
 
+export const MAX_SETS_PER_EXERCISE = 10;
+
+export type SetSplit = {
+  blockTitle: string;
+  exerciseTitle: string;
+  setCount: number;
+  blockCount: number;
+};
+
 // Red-Zone leaderboard unit -> redzone_type. Values from the coach app bundle.
 export const LEADERBOARD_TYPE: Readonly<Record<string, number>> = {
   completion: 0,
@@ -132,6 +141,99 @@ export function repsList(ex: ExerciseSpec): string[] {
   return Array.from({ length: sets }, () => String(reps));
 }
 
+/** Number of sets that the encoder will write for an exercise. */
+export function exerciseSetCount(ex: ExerciseSpec): number {
+  const reps = repsList(ex);
+  if (reps.length > 0) return reps.length;
+  if (Array.isArray(ex.weight)) return ex.weight.length;
+  if (ex.weight !== undefined && ex.weight !== null) {
+    return Math.max(1, Math.trunc(Number(ex.sets ?? 1)) || 1);
+  }
+  return 0;
+}
+
+export function findSetSplits(blocks: readonly BlockSpec[]): SetSplit[] {
+  return blocks.flatMap((block) =>
+    block.exercises.flatMap((exercise) => {
+      const setCount = exerciseSetCount(exercise);
+      if (setCount <= MAX_SETS_PER_EXERCISE) return [];
+      return [
+        {
+          blockTitle: block.title,
+          exerciseTitle: exercise.title ?? String(exercise.id),
+          setCount,
+          blockCount: Math.ceil(setCount / MAX_SETS_PER_EXERCISE),
+        },
+      ];
+    }),
+  );
+}
+
+export function setSplitSummary(blocks: readonly BlockSpec[]): string | null {
+  const splits = findSetSplits(blocks);
+  if (splits.length === 0) return null;
+  const details = splits
+    .map(
+      ({ blockTitle, exerciseTitle, setCount, blockCount }) =>
+        `${blockTitle} / ${exerciseTitle}: ${setCount} sets into ${blockCount} blocks`,
+    )
+    .join("; ");
+  return (
+    `TrainHeroic supports at most ${MAX_SETS_PER_EXERCISE} sets per exercise block. ` +
+    `The following will be split into consecutive same-titled blocks: ${details}.`
+  );
+}
+
+function sliceExercise(exercise: ExerciseSpec, start: number): ExerciseSpec | null {
+  const setCount = exerciseSetCount(exercise);
+  if (start > 0 && setCount <= start) return null;
+
+  const chunkCount =
+    setCount === 0 ? 0 : Math.min(MAX_SETS_PER_EXERCISE, Math.max(0, setCount - start));
+  const chunk = { ...exercise };
+
+  if (Array.isArray(exercise.reps)) {
+    chunk.reps = exercise.reps.slice(start, start + MAX_SETS_PER_EXERCISE);
+    delete chunk.sets;
+  } else if (exercise.reps !== undefined && exercise.reps !== null) {
+    chunk.sets = chunkCount;
+  }
+
+  if (Array.isArray(exercise.weight)) {
+    chunk.weight = exercise.weight.slice(start, start + MAX_SETS_PER_EXERCISE);
+    if (exercise.reps === undefined || exercise.reps === null) delete chunk.sets;
+  } else if (
+    (exercise.reps === undefined || exercise.reps === null) &&
+    exercise.weight !== undefined &&
+    exercise.weight !== null
+  ) {
+    chunk.sets = chunkCount;
+  }
+
+  return chunk;
+}
+
+/**
+ * Split blocks so no encoded exercise exceeds TrainHeroic's ten parameter slots.
+ * Exercises in a superset stay aligned by set range; shorter exercises appear only in
+ * chunks where they still have sets.
+ */
+export function splitOversizedBlocks(blocks: readonly BlockSpec[]): BlockSpec[] {
+  return blocks.flatMap((block) => {
+    const largestSetCount = Math.max(0, ...block.exercises.map(exerciseSetCount));
+    const chunkCount = Math.max(1, Math.ceil(largestSetCount / MAX_SETS_PER_EXERCISE));
+    if (chunkCount === 1) return [block];
+
+    return Array.from({ length: chunkCount }, (_, index) => {
+      const start = index * MAX_SETS_PER_EXERCISE;
+      const exercises = block.exercises
+        .map((exercise) => sliceExercise(exercise, start))
+        .filter((exercise): exercise is ExerciseSpec => exercise !== null);
+      return { ...block, exercises };
+    });
+  });
+}
+
 /** Build one saveWorkoutSetExercises payload entry with all ten param slots filled. */
 export function makeExercise(
   ex: ExerciseSpec,
@@ -149,10 +251,7 @@ export function makeExercise(
   // Effective set count: reps drive it; for a weight-only prescription fall back to
   // the weight array length, else the sets count (or 1). Without this a scalar weight
   // with no reps would be silently dropped (reps.length === 0).
-  let count = reps.length;
-  if (count === 0 && hasWeight) {
-    count = weightArr ? weightArr.length : Math.max(1, Math.trunc(Number(ex.sets ?? 1)) || 1);
-  }
+  const count = exerciseSetCount(ex);
 
   let param2Type: number;
   let param2Values: string[] | null;
@@ -187,9 +286,9 @@ export function makeExercise(
     use_count: 0,
   };
 
-  const p1 = slots(reps);
-  const p2 = slots(param2Values);
-  for (let i = 0; i < 10; i += 1) {
+  const p1 = slots(reps, MAX_SETS_PER_EXERCISE);
+  const p2 = slots(param2Values, MAX_SETS_PER_EXERCISE);
+  for (let i = 0; i < MAX_SETS_PER_EXERCISE; i += 1) {
     entry[`param_1_data_${i + 1}`] = p1[i] ?? "";
     entry[`param_2_data_${i + 1}`] = p2[i] ?? "";
   }

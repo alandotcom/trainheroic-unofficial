@@ -24,6 +24,7 @@ import {
   readSession,
   removeSession,
   resolveBuildProgramId,
+  setSplitSummary,
 } from "@trainheroic-unofficial/js";
 import { confirmGate } from "../confirm";
 import {
@@ -54,7 +55,9 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         "superset. A block with empty exercises and a non-empty block instruction is a text-only " +
         "Circuit / Conditioning block (type 1). Add a block 'leaderboard' for a Red-Zone score, " +
         "or a top-level 'instruction' for the session note (Coach Instructions). Returns the " +
-        "draft ids, a read-back, and unit advisories. Review, then workout_publish.",
+        "draft ids, a read-back, and unit advisories. Exercises above 10 sets are split into " +
+        "consecutive same-titled blocks and require confirmation (elicitation, or confirm:true). " +
+        "Review, then workout_publish.",
       inputSchema: {
         programId: z.number().optional(),
         athleteId: idParam.optional(),
@@ -62,15 +65,24 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         timelineDay: z.number().optional(),
         blocks: z.array(blockSpecSchema),
         instruction: z.string().optional(),
+        confirm: z.boolean().optional(),
       },
       outputSchema: toolOutputSchema(workoutBuildOutputSchema),
       annotations: ADDITIVE,
     },
-    ({ programId, athleteId, date, timelineDay, blocks, instruction }) =>
+    ({ programId, athleteId, date, timelineDay, blocks, instruction, confirm }, extra) =>
       attempt(async () => {
         if (date === undefined && timelineDay === undefined) {
           return errorResult("Provide either date (YYYY-M-D) or timelineDay.");
         }
+
+        const typed = blocks as BlockSpec[];
+        const splitSummary = setSplitSummary(typed);
+        if (splitSummary !== null) {
+          const blocked = confirmGate(extra, `${splitSummary} Continue?`, confirm);
+          if (blocked) return blocked;
+        }
+
         const resolveArgs: {
           programId?: number;
           athleteId?: number;
@@ -81,8 +93,8 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         if (date !== undefined) resolveArgs.date = date;
         const resolved = await resolveBuildProgramId(ctx.client, resolveArgs);
 
-        const typed = blocks as BlockSpec[];
         const opts: BuildOptions = { programId: resolved, blocks: typed, publish: false };
+        if (splitSummary !== null) opts.confirmSetSplit = true;
         if (date !== undefined) opts.date = parseWorkoutDate(date);
         if (timelineDay !== undefined) opts.timelineDay = timelineDay;
         if (instruction !== undefined) opts.instruction = instruction;

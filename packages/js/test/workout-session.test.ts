@@ -65,6 +65,72 @@ describe("buildSession", () => {
     expect(second.key).toBe("k::10002");
   });
 
+  it("requires explicit confirmation before splitting more than ten sets", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      buildSession(new TrainHeroicClient("a@b.com", "pw"), {
+        programId: 5,
+        date: [2026, 6, 22],
+        blocks: [{ title: "Squat", exercises: [{ id: 1, sets: 11, reps: 5 }] }],
+      }),
+    ).rejects.toThrow(/confirmSetSplit:true/iu);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("saves confirmed oversized prescriptions as consecutive blocks of at most ten sets", async () => {
+    let blockPayload: Array<Record<string, unknown>> = [];
+    const exercisePayloads: unknown[][] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+        if (url.includes("/createWorkoutForDay/")) return json({ workout_id: 10, id: 20 });
+        if (url.includes("/saveProgramWorkoutSets")) {
+          blockPayload = JSON.parse(String(init?.body)) as Array<Record<string, unknown>>;
+          return json([
+            { order: 1, id: 101 },
+            { order: 2, id: 102 },
+          ]);
+        }
+        if (url.includes("/saveWorkoutSetExercises")) {
+          exercisePayloads.push(JSON.parse(String(init?.body)) as unknown[]);
+          return json({ success: 1 });
+        }
+        return json({});
+      }),
+    );
+
+    await buildSession(new TrainHeroicClient("a@b.com", "pw"), {
+      programId: 5,
+      date: [2026, 6, 22],
+      confirmSetSplit: true,
+      blocks: [
+        {
+          title: "Squat",
+          exercises: [
+            {
+              id: 1,
+              reps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+              weight: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(blockPayload.map((block) => block.title)).toEqual(["Squat", "Squat"]);
+    const first = exercisePayloads[0]?.[0] as Record<string, unknown>;
+    const second = exercisePayloads[1]?.[0] as Record<string, unknown>;
+    expect(first.set_num).toBe(10);
+    expect(first.param_1_data_10).toBe("10");
+    expect(first.param_2_data_10).toBe("110");
+    expect(second.set_num).toBe(1);
+    expect(second.param_1_data_1).toBe("11");
+    expect(second.param_2_data_1).toBe("111");
+  });
+
   it("bounds concurrent exercise-save requests across many blocks", async () => {
     let active = 0;
     let peak = 0;

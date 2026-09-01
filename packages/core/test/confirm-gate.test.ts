@@ -188,3 +188,27 @@ describe("accepted elicitation opens the gate", () => {
     expect((res as { isError?: boolean }).isError).toBeUndefined();
   });
 });
+
+describe("workout_build oversized set confirmation", () => {
+  const args = {
+    programId: 1,
+    date: "2026-06-21",
+    blocks: [{ title: "Squat", exercises: [{ id: 3, title: "Back Squat", sets: 11, reps: 5 }] }],
+  };
+
+  it("requests confirmation before making any API call", async () => {
+    const probe = run(registerWorkoutTools, "workout_build", args);
+    const result = await probe.run(mcpCtx());
+
+    expect(isInputRequiredResult(result)).toBe(true);
+    expect(probe.called()).toBe(false);
+  });
+
+  it("blocks a declined split before making any API call", async () => {
+    const probe = run(registerWorkoutTools, "workout_build", args);
+    const result = await probe.run(mcpCtx({ confirm: { action: "decline" } }));
+
+    expect((result as { isError?: boolean }).isError).toBe(true);
+    expect(probe.called()).toBe(false);
+  });
+});
