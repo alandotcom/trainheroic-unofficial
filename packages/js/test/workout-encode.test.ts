@@ -104,7 +104,9 @@ describe("makeExercise", () => {
 
 describe("splitOversizedBlocks", () => {
   it("leaves a ten-set block unchanged", () => {
-    const blocks = [{ title: "Squat", exercises: [{ id: 1, reps: new Array(10).fill(5) }] }];
+    const blocks = [
+      { title: "Squat", exercises: [{ id: 1, reps: Array.from({ length: 10 }, () => 5) }] },
+    ];
     expect(findSetSplits(blocks)).toEqual([]);
     expect(splitOversizedBlocks(blocks)).toEqual(blocks);
   });
