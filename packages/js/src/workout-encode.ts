@@ -144,10 +144,12 @@ export function repsList(ex: ExerciseSpec): string[] {
 
 /** Number of sets that the encoder will write for an exercise. */
 export function exerciseSetCount(ex: ExerciseSpec): number {
-  const reps = repsList(ex);
-  if (reps.length > 0) return reps.length;
+  if (Array.isArray(ex.reps) && ex.reps.length > 0) return ex.reps.length;
   if (Array.isArray(ex.weight)) return ex.weight.length;
-  if (ex.weight !== undefined && ex.weight !== null) {
+  if (
+    (!Array.isArray(ex.reps) && ex.reps !== undefined && ex.reps !== null) ||
+    (ex.weight !== undefined && ex.weight !== null)
+  ) {
     return Math.max(1, Math.trunc(Number(ex.sets ?? 1)) || 1);
   }
   return 0;
@@ -185,28 +187,32 @@ export function setSplitSummary(blocks: readonly BlockSpec[]): string | null {
   );
 }
 
-function sliceExercise(exercise: ExerciseSpec, start: number): ExerciseSpec | null {
-  const setCount = exerciseSetCount(exercise);
+function sliceExercise(
+  exercise: ExerciseSpec,
+  setCount: number,
+  start: number,
+): ExerciseSpec | null {
   if (start > 0 && setCount <= start) return null;
 
   const chunkCount = setCount === 0 ? 0 : Math.min(MAX_PARAM_SLOTS, Math.max(0, setCount - start));
   const chunk = { ...exercise };
+  const hasPerSetReps = Array.isArray(exercise.reps) && exercise.reps.length > 0;
 
-  if (Array.isArray(exercise.reps)) {
+  if (hasPerSetReps) {
     chunk.reps = exercise.reps.slice(start, start + MAX_PARAM_SLOTS);
     delete chunk.sets;
-  } else if (exercise.reps !== undefined && exercise.reps !== null) {
+  } else if (
+    exercise.reps !== undefined &&
+    exercise.reps !== null &&
+    !Array.isArray(exercise.reps)
+  ) {
     chunk.sets = chunkCount;
   }
 
   if (Array.isArray(exercise.weight)) {
     chunk.weight = exercise.weight.slice(start, start + MAX_PARAM_SLOTS);
-    if (exercise.reps === undefined || exercise.reps === null) delete chunk.sets;
-  } else if (
-    (exercise.reps === undefined || exercise.reps === null) &&
-    exercise.weight !== undefined &&
-    exercise.weight !== null
-  ) {
+    if (!hasPerSetReps) delete chunk.sets;
+  } else if (!hasPerSetReps && exercise.weight !== undefined && exercise.weight !== null) {
     chunk.sets = chunkCount;
   }
 
@@ -220,14 +226,17 @@ function sliceExercise(exercise: ExerciseSpec, start: number): ExerciseSpec | nu
  */
 export function splitOversizedBlocks(blocks: readonly BlockSpec[]): BlockSpec[] {
   return blocks.flatMap((block) => {
-    const largestSetCount = Math.max(0, ...block.exercises.map(exerciseSetCount));
+    const setCounts = block.exercises.map(exerciseSetCount);
+    const largestSetCount = Math.max(0, ...setCounts);
     const chunkCount = Math.max(1, Math.ceil(largestSetCount / MAX_PARAM_SLOTS));
     if (chunkCount === 1) return [block];
 
     return Array.from({ length: chunkCount }, (_, index) => {
       const start = index * MAX_PARAM_SLOTS;
       const exercises = block.exercises
-        .map((exercise) => sliceExercise(exercise, start))
+        .map((exercise, exerciseIndex) =>
+          sliceExercise(exercise, setCounts[exerciseIndex] ?? 0, start),
+        )
         .filter((exercise): exercise is ExerciseSpec => exercise !== null);
       if (index === 0) return { ...block, exercises };
       return {

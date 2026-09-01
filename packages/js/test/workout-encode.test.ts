@@ -234,6 +234,26 @@ describe("splitOversizedBlocks", () => {
       },
     ]);
   });
+
+  it("preserves sets when an empty reps array uses scalar weight", () => {
+    const blocks = [
+      {
+        title: "Carry",
+        exercises: [{ id: 1, title: "Farmer Carry", reps: [], sets: 11, weight: 100 }],
+      },
+    ];
+
+    expect(splitOversizedBlocks(blocks)).toEqual([
+      {
+        title: "Carry",
+        exercises: [{ id: 1, title: "Farmer Carry", reps: [], sets: 10, weight: 100 }],
+      },
+      {
+        title: "Carry",
+        exercises: [{ id: 1, title: "Farmer Carry", reps: [], sets: 1, weight: 100 }],
+      },
+    ]);
+  });
 });
 
 describe("resolveLeaderboard", () => {
