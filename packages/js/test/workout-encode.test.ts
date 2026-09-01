@@ -212,6 +212,28 @@ describe("splitOversizedBlocks", () => {
       },
     ]);
   });
+
+  it("broadcasts scalar reps across an oversized per-set weight array", () => {
+    const weights = [100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200];
+    const blocks = [
+      {
+        title: "Deadlift",
+        exercises: [{ id: 1, title: "Deadlift", reps: 5, weight: weights }],
+      },
+    ];
+
+    expect(findSetSplits(blocks)).toMatchObject([{ setCount: 11, blockCount: 2 }]);
+    expect(splitOversizedBlocks(blocks)).toEqual([
+      {
+        title: "Deadlift",
+        exercises: [{ id: 1, title: "Deadlift", sets: 10, reps: 5, weight: weights.slice(0, 10) }],
+      },
+      {
+        title: "Deadlift",
+        exercises: [{ id: 1, title: "Deadlift", sets: 1, reps: 5, weight: [200] }],
+      },
+    ]);
+  });
 });
 
 describe("resolveLeaderboard", () => {

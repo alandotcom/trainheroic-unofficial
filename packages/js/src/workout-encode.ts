@@ -136,7 +136,9 @@ export function repsList(ex: ExerciseSpec): string[] {
   const reps = ex.reps;
   if (Array.isArray(reps)) return reps.map((r) => String(r));
   if (reps === undefined || reps === null) return [];
-  const sets = Math.max(1, Math.trunc(Number(ex.sets ?? 1)) || 1);
+  const sets = Array.isArray(ex.weight)
+    ? ex.weight.length
+    : Math.max(1, Math.trunc(Number(ex.sets ?? 1)) || 1);
   return Array.from({ length: sets }, () => String(reps));
 }
 
