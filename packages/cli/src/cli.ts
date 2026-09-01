@@ -97,6 +97,7 @@ import {
   resolveAthleteUserId,
   searchExerciseHistory,
   sendComment,
+  setSplitSummary,
   TrainHeroicClient,
 } from "@trainheroic-unofficial/js";
 import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
@@ -197,7 +198,8 @@ Coach — manage a roster (needs a coach account):
   coach exercise stats
 
   workouts (spec: {"blocks":[{"title","exercises":[{"id","sets"?,"reps"?,"weight"?,"rpe"?}]}],"instruction"?};
-            reps/weight may be a scalar or per-set array; omit --publish to leave a draft):
+            reps/weight may be a scalar or per-set array; >10 sets split into consecutive blocks
+            and require --yes; omit --publish to leave a draft):
   coach workout build (--program <id> | --athlete <id>) (--date Y-M-D | --timeline-day <n>) [--publish --yes] <spec.json>|--file f
   coach workout read --program <id> --date Y-M-D --pw <id>
   coach workout publish --pw <id> --yes
@@ -433,9 +435,14 @@ async function cmdWorkoutBuild(client: TrainHeroicClient, a: string[]): Promise<
     "run 'trainheroic skill' for the workout spec format and copy-paste examples.",
   );
   const publish = values.publish === true;
+  const splitSummary = setSplitSummary(spec.blocks);
+  if (splitSummary !== null && values.yes !== true) {
+    fail(`${splitSummary} Add --yes to confirm.`);
+  }
   if (publish && values.yes !== true)
     fail("publishing is athlete-facing; add --yes to build and publish.");
   const opts: BuildOptions = { programId, blocks: spec.blocks, publish };
+  if (splitSummary !== null) opts.confirmSetSplit = true;
   if (values.date !== undefined) opts.date = parseDate(values.date as string);
   if (values["timeline-day"] !== undefined) {
     opts.timelineDay = toInt(values["timeline-day"] as string, "--timeline-day");
