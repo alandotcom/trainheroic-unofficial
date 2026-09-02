@@ -198,7 +198,9 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
 
   async recordDelete(id: number): Promise<void> {
     const org = await this.org();
-    await this.db.delete(exercise).where(and(eq(exercise.orgId, org), eq(exercise.id, id)));
+    await this.exec([
+      this.db.delete(exercise).where(and(eq(exercise.orgId, org), eq(exercise.id, id))),
+    ]);
   }
 
   // -- reads ---------------------------------------------------------------
