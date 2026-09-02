@@ -23,7 +23,12 @@ export type Warehouse = { db: DrizzleDb; exec: BatchExec };
 
 export type CursorUpsert = { cursor?: string | null; generation?: number | null };
 
-/** Build a sync_state upsert. One home for the table's write shape (cursor + generation). */
+/**
+ * Build a sync_state upsert. One home for the table's write shape (cursor + generation). A field
+ * the caller leaves out is left untouched on an existing row: the library sync bumps only the
+ * generation and the programming sync only the cursor, and writing NULL for the other would wipe
+ * a live watermark.
+ */
 export function cursorUpsertStmt(
   db: DrizzleDb,
   org: number,
@@ -34,13 +39,17 @@ export function cursorUpsertStmt(
   const cursor = opts.cursor ?? null;
   const generation = opts.generation ?? null;
   const syncedAt = Date.now();
-  // On conflict, set the same values we just supplied (equivalent to the SQL's excluded.*).
+  const set: { cursor?: string | null; generation?: number | null; syncedAt: number } = {
+    syncedAt,
+  };
+  if (opts.cursor !== undefined) set.cursor = cursor;
+  if (opts.generation !== undefined) set.generation = generation;
   return db
     .insert(syncState)
     .values({ orgId: org, resource, scopeId, cursor, syncedAt, generation })
     .onConflictDoUpdate({
       target: [syncState.orgId, syncState.resource, syncState.scopeId],
-      set: { cursor, syncedAt, generation },
+      set,
     });
 }
 
