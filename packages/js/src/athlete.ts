@@ -510,13 +510,35 @@ export function performedExercises(
 ): Array<{ exerciseId: number; title: string }> {
   const out: Array<{ exerciseId: number; title: string }> = [];
   for (const pw of workouts) {
+    const rec = pw as Record<string, unknown>;
+    const ssw = isRecord(rec.summarizedSavedWorkout) ? rec.summarizedSavedWorkout : {};
+    const workout = isRecord(ssw.workout) ? ssw.workout : {};
+    const templates = new Map<number, { exerciseId: number | null; title: string }>();
+    for (const set of Array.isArray(workout.workoutSets) ? workout.workoutSets : []) {
+      if (!isRecord(set)) continue;
+      const exercises = Array.isArray(set.workoutSetExercises) ? set.workoutSetExercises : [];
+      for (const ex of exercises) {
+        if (!isRecord(ex)) continue;
+        const id = coerceInt(ex.id);
+        if (id !== null) {
+          templates.set(id, {
+            exerciseId: coerceInt(ex.exercise_id),
+            title: exerciseTitle(ex),
+          });
+        }
+      }
+    }
     const saved = savedWorkoutOf(pw);
     if (!saved) continue;
     for (const { exercises } of savedSets(saved)) {
       for (const ex of exercises) {
-        const exerciseId = coerceInt(ex.exercise_id);
+        const templateId = coerceInt(ex.workout_set_exercise_id);
+        const template = templateId === null ? undefined : templates.get(templateId);
+        // Saved identity wins for athlete swaps; the prescription fills fields omitted by compact
+        // saved-copy rows.
+        const exerciseId = coerceInt(ex.exercise_id) ?? template?.exerciseId ?? null;
         if (exerciseId === null || slotValues(ex, true).size === 0) continue;
-        out.push({ exerciseId, title: exerciseTitle(ex) });
+        out.push({ exerciseId, title: exerciseTitle(ex, template?.title) });
       }
     }
   }

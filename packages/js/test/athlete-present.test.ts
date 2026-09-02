@@ -751,4 +751,48 @@ describe("performedExercises", () => {
     expect(fromWalker).toEqual(fromView);
     expect(fromWalker.length).toBeGreaterThan(0);
   });
+
+  it("fills compact saved rows from the template but preserves athlete swaps", () => {
+    const raw = {
+      summarizedSavedWorkout: {
+        workout: {
+          workoutSets: [
+            {
+              workoutSetExercises: [
+                { id: 1001, exercise_id: 7, title: "Back Squat" },
+                { id: 1002, exercise_id: 8, title: "Bench Press" },
+              ],
+            },
+          ],
+        },
+        saved_workout: {
+          workoutSets: [
+            {
+              workoutSetExercises: [
+                {
+                  id: 2001,
+                  workout_set_exercise_id: 1001,
+                  param_1_data_1: "5",
+                  param_1_made: 1,
+                },
+                {
+                  id: 2002,
+                  workout_set_exercise_id: 1002,
+                  exercise_id: 88,
+                  exercise_title: "Incline Dumbbell Press",
+                  param_1_data_1: "8",
+                  param_1_made: 1,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    } as unknown as ProgramWorkout;
+
+    expect(performedExercises([raw])).toEqual([
+      { exerciseId: 7, title: "Back Squat" },
+      { exerciseId: 88, title: "Incline Dumbbell Press" },
+    ]);
+  });
 });

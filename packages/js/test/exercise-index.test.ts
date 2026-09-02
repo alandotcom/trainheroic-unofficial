@@ -140,6 +140,14 @@ describe("ExerciseLibrary", () => {
     expect(requests.filter((url) => url.includes("/v5/exerciseLibrary/all"))).toHaveLength(1);
   });
 
+  it("loads a cold library before resolving defaults", async () => {
+    mockApi([{ id: 1, title: "Back Squat", param_1_type: 3, param_2_type: 1 }]);
+
+    const defaults = await new ExerciseLibrary(client()).defaultsMany([1, 999]);
+
+    expect(defaults).toEqual(new Map([[1, { param1: 3, param2: 1 }]]));
+  });
+
   it("persists through the cache so a fresh instance loads without refetching", async () => {
     const cache = new MemoryLibraryCache();
     mockApi([{ id: 1, title: "Back Squat", param_1_type: 3 }]);
