@@ -437,7 +437,7 @@ describe("logAdHocSession write concurrency", () => {
     expect(peak).toBeGreaterThan(1);
   });
 
-  it("stops new writes after failure but finalizes a set whose values already succeeded", async () => {
+  it("reports partial writes while finalizing sibling sets after a failure", async () => {
     const setIds = [5100, 5101, 5102, 5103, 5104, 5105];
     const day = [
       {
@@ -460,6 +460,16 @@ describe("logAdHocSession write concurrency", () => {
                   exercise_id: 10 + k,
                   exercise_title: `Lift ${k}`,
                 },
+                ...(k === 0
+                  ? [
+                      {
+                        id: 6200,
+                        workout_set_exercise_id: 7200,
+                        exercise_id: 20,
+                        exercise_title: "Lift 0B",
+                      },
+                    ]
+                  : []),
               ],
             })),
           },
@@ -468,7 +478,10 @@ describe("logAdHocSession write concurrency", () => {
     ];
     const added = setIds.map((id, k) => ({
       id,
-      savedWorkoutSetExercises: [{ id: 6100 + k, exerciseId: 10 + k }],
+      savedWorkoutSetExercises: [
+        { id: 6100 + k, exerciseId: 10 + k },
+        ...(k === 0 ? [{ id: 6200, exerciseId: 20 }] : []),
+      ],
     }));
     const puts: string[] = [];
     const exerciseResponses = new Map<number, ReturnType<typeof deferred<Response>>>();
@@ -494,26 +507,28 @@ describe("logAdHocSession write concurrency", () => {
     );
     const run = logAdHocSession(new TrainHeroicClient("a@b.com", "pw"), {
       date: "2026-06-21",
-      exercises: setIds.map((_, k) => ({ exerciseId: 10 + k, sets: [{ param1: 5 }] })),
+      exercises: [
+        { exerciseId: 10, sets: [{ param1: 5 }] },
+        { exerciseId: 20, sets: [{ param1: 5 }] },
+        ...setIds.slice(1).map((_, k) => ({ exerciseId: 11 + k, sets: [{ param1: 5 }] })),
+      ],
     });
     await initialStarted.promise;
-    expect([...exerciseResponses.keys()]).toEqual([6100, 6101, 6102, 6103]);
+    expect([...exerciseResponses.keys()]).toEqual([6100, 6200, 6101, 6102]);
 
-    // Set 5100 finishes its value write first and queues completion behind the remaining values.
-    exerciseResponses.get(6100)!.resolve(json({ ok: 1 }));
-    await Promise.resolve();
-    await Promise.resolve();
-    // A sibling then fails. Already-started requests settle, queued value writes are cancelled,
-    // and the successful set's required completion is allowed through the shared ceiling.
-    exerciseResponses.get(6101)!.resolve(json({}, 500));
+    // One exercise fails while another in the same set succeeds. Sibling sets that already started
+    // still finish and are marked complete, while later queued writes are cancelled.
+    exerciseResponses.get(6100)!.resolve(json({}, 500));
+    exerciseResponses.get(6200)!.resolve(json({ ok: 1 }));
+    exerciseResponses.get(6101)!.resolve(json({ ok: 1 }));
     exerciseResponses.get(6102)!.resolve(json({ ok: 1 }));
-    exerciseResponses.get(6103)!.resolve(json({ ok: 1 }));
-    exerciseResponses.get(6104)?.resolve(json({ ok: 1 }));
 
     await expect(run).rejects.toThrow(
-      /Failed to write exercise 6101.*Set writes confirmed before the failure: 5100/u,
+      /Failed to write exercise 6100.*Confirmed exercise writes in incomplete sets before the failure: set 5100: 6200.*Set writes confirmed before the failure: 5101, 5102/u,
     );
-    expect(puts.some((url) => url.includes("/savedworkoutset/5100"))).toBe(true);
+    expect(puts.some((url) => url.includes("/savedworkoutset/5101"))).toBe(true);
+    expect(puts.some((url) => url.includes("/savedworkoutset/5102"))).toBe(true);
+    expect(puts.some((url) => url.includes("/savedworkoutsetexercise/6103"))).toBe(false);
     expect(puts.some((url) => url.includes("/savedworkoutsetexercise/6105"))).toBe(false);
   });
 });

@@ -498,6 +498,7 @@ async function executeSetWrite(
   prepared: PreparedSetWrite,
   mode: SetWriteMode,
   limit: Limiter,
+  sessionProgress?: Map<number, number[]>,
 ): Promise<{ savedWorkoutSetId: number; exercisesWritten: number; setCompleted: boolean }> {
   const { savedWorkoutSetId, exercises, rawSet, suffix, extra, writes } = prepared;
   const put = (
@@ -538,9 +539,16 @@ async function executeSetWrite(
         return `Failed to write exercise ${id} (HTTP ${status}).${readOnly}`;
       });
       confirmed.push(id);
+      if (sessionProgress) {
+        const sessionConfirmed = sessionProgress.get(savedWorkoutSetId) ?? [];
+        sessionConfirmed.push(id);
+        sessionProgress.set(savedWorkoutSetId, sessionConfirmed);
+      }
     });
   } catch (error) {
-    if (confirmed.length === 0) throw error;
+    // A session reports shared progress after every started set settles, so a cancelled sibling
+    // cannot win the error race and hide successful writes from this set.
+    if (sessionProgress || confirmed.length === 0) throw error;
     confirmed.sort((a, b) => a - b);
     throw new Error(
       `${errorMessage(error)} Confirmed exercise writes before the failure: ${confirmed.join(", ")}. ` +
@@ -892,10 +900,11 @@ async function logResolvedExercises(
   // in its own set, is a couple of waits instead of sixteen sequential round trips. One limiter
   // spans every set, so the per-set exercise fan-out cannot multiply the ceiling.
   const limit = createLimiter(WRITE_CONCURRENCY);
+  const confirmedBySet = new Map<number, number[]>();
   const succeeded: number[] = [];
   try {
     return await mapPool(prepared, WRITE_CONCURRENCY, async (set) => {
-      const written = await executeSetWrite(client, target, set, "log", limit);
+      const written = await executeSetWrite(client, target, set, "log", limit, confirmedBySet);
       succeeded.push(written.savedWorkoutSetId);
       // Keep the per-set shape to the two fields LogSessionResult documents; block completion is a
       // by-set concern that the by-exercise session log does not surface.
@@ -905,12 +914,27 @@ async function logResolvedExercises(
       };
     });
   } catch (error) {
-    if (succeeded.length === 0) throw error;
+    const completed = new Set(succeeded);
+    const incomplete = [...confirmedBySet]
+      .filter(([savedWorkoutSetId]) => !completed.has(savedWorkoutSetId))
+      .sort(([a], [b]) => a - b)
+      .map(
+        ([savedWorkoutSetId, ids]) =>
+          `set ${savedWorkoutSetId}: ${ids.toSorted((a, b) => a - b).join(", ")}`,
+      );
+    if (incomplete.length === 0 && succeeded.length === 0) throw error;
     succeeded.sort((a, b) => a - b);
-    throw new Error(
-      `${errorMessage(error)} Set writes confirmed before the failure: ${succeeded.join(", ")}.`,
-      { cause: error },
-    );
+    const partial =
+      incomplete.length === 0
+        ? ""
+        : ` Confirmed exercise writes in incomplete sets before the failure: ${incomplete.join(
+            "; ",
+          )}. Retry the same request to reconcile them.`;
+    const complete =
+      succeeded.length === 0
+        ? ""
+        : ` Set writes confirmed before the failure: ${succeeded.join(", ")}.`;
+    throw new Error(`${errorMessage(error)}${partial}${complete}`, { cause: error });
   }
 }
 
