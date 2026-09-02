@@ -143,9 +143,29 @@ describe("createLimiter", () => {
       active -= 1;
     };
     await Promise.all([
-      mapPool([1, 2, 3], 3, () => limit(task)),
-      mapPool([4, 5, 6], 3, () => limit(task)),
+      mapPool([1, 2, 3], 3, () => limit.run(task)),
+      mapPool([4, 5, 6], 3, () => limit.run(task)),
     ]);
     expect(peak).toBe(2);
+  });
+
+  it("cancel skips queued tasks and rejects later runs while started tasks finish", async () => {
+    const limit = createLimiter(1);
+    const ran: string[] = [];
+    const boom = new Error("boom");
+    const first = limit.run(async () => {
+      ran.push("first");
+      await tick(2);
+      limit.cancel(boom);
+      return "done";
+    });
+    const second = limit.run(async () => {
+      ran.push("second");
+      return "never";
+    });
+    await expect(first).resolves.toBe("done");
+    await expect(second).rejects.toBe(boom);
+    await expect(limit.run(async () => "late")).rejects.toBe(boom);
+    expect(ran).toEqual(["first"]);
   });
 });

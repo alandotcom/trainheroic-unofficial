@@ -398,4 +398,67 @@ describe("logAdHocSession write concurrency", () => {
     expect(peak).toBeLessThanOrEqual(4);
     expect(peak).toBeGreaterThan(1);
   });
+
+  it("stops the rest of the session after the first failed write", async () => {
+    const setIds = [5100, 5101, 5102, 5103, 5104, 5105];
+    const day = [
+      {
+        id: 12345,
+        date: "2026-06-21",
+        personal_cal: true,
+        workout_id: WORKOUT_ID,
+        summarizedSavedWorkout: {
+          saved_workout: {
+            id: SAVED_ID,
+            workoutSets: setIds.map((id, k) => ({
+              id,
+              workout_set_id: 4000 + k,
+              saved_workout_id: SAVED_ID,
+              unit: "lb",
+              workoutSetExercises: [
+                {
+                  id: 6100 + k,
+                  workout_set_exercise_id: 7100 + k,
+                  exercise_id: 10 + k,
+                  exercise_title: `Lift ${k}`,
+                },
+              ],
+            })),
+          },
+        },
+      },
+    ];
+    const added = setIds.map((id, k) => ({
+      id,
+      savedWorkoutSetExercises: [{ id: 6100 + k, exerciseId: 10 + k }],
+    }));
+    const puts: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+        if (url.includes("/athlete/programworkout/range")) return json(day);
+        if (url.includes("/addExercises")) return json(added);
+        if (init?.method === "PUT") {
+          puts.push(url);
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 3);
+          });
+          // The first exercise write fails; everything queued behind it must be skipped.
+          return url.includes("/savedworkoutsetexercise/6100") ? json({}, 500) : json({ ok: 1 });
+        }
+        return json({});
+      }),
+    );
+    await expect(
+      logAdHocSession(new TrainHeroicClient("a@b.com", "pw"), {
+        date: "2026-06-21",
+        exercises: setIds.map((_, k) => ({ exerciseId: 10 + k, sets: [{ param1: 5 }] })),
+      }),
+    ).rejects.toThrow(/Failed to write exercise 6100/u);
+    // Only the four writes already in flight alongside the failure went out: the two remaining
+    // exercise writes and every set-completion write were skipped.
+    expect(puts).toHaveLength(4);
+    expect(puts.some((u) => u.includes("/savedworkoutset/"))).toBe(false);
+  });
 });

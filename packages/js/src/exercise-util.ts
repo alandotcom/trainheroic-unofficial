@@ -232,41 +232,57 @@ export async function mapPool<T, R>(
   return out;
 }
 
-/** Runs an async task under a shared in-flight cap; see {@link createLimiter}. */
-export type Limiter = <T>(task: () => Promise<T>) => Promise<T>;
-
 /**
  * A concurrency limiter shared across independent call sites: at most `max` tasks run at once,
  * the rest wait in FIFO order. Where {@link mapPool} bounds one fan-out, a limiter bounds the sum
  * of several nested ones (a session write that fans out per set, each of which fans out per
- * exercise) to a single ceiling.
+ * exercise) to a single ceiling. `cancel` stops the queue: tasks not yet started, and any run
+ * after it, reject with the given error, while tasks already running finish normally, so one
+ * failed write halts the rest of a session without abandoning requests already on the wire.
  */
+export type Limiter = {
+  run<T>(task: () => Promise<T>): Promise<T>;
+  cancel(error: unknown): void;
+};
+
 export function createLimiter(max: number): Limiter {
   let active = 0;
-  const waiting: Array<() => void> = [];
+  let cancelled: { error: unknown } | null = null;
+  const waiting: Array<{ start: () => void; abort: (error: unknown) => void }> = [];
   const acquire = (): Promise<void> =>
-    new Promise((resolve) => {
-      if (active < max) {
+    new Promise((resolve, reject) => {
+      if (cancelled !== null) {
+        reject(cancelled.error);
+      } else if (active < max) {
         active += 1;
         resolve();
       } else {
-        waiting.push(() => {
-          active += 1;
-          resolve();
+        waiting.push({
+          start: () => {
+            active += 1;
+            resolve();
+          },
+          abort: reject,
         });
       }
     });
   const release = (): void => {
     active -= 1;
-    waiting.shift()?.();
+    waiting.shift()?.start();
   };
-  return async (task) => {
-    await acquire();
-    try {
-      return await task();
-    } finally {
-      release();
-    }
+  return {
+    async run(task) {
+      await acquire();
+      try {
+        return await task();
+      } finally {
+        release();
+      }
+    },
+    cancel(error) {
+      cancelled ??= { error };
+      for (const entry of waiting.splice(0)) entry.abort(error);
+    },
   };
 }
 

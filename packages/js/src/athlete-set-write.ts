@@ -483,22 +483,33 @@ async function writeSetResults(
   // Then PUT each exercise's data to its own endpoint. The ids are unique (asserted above) and
   // each PUT touches its own row, so the writes fan out with a small pool instead of one round
   // trip per exercise in sequence: a five-exercise circuit is one wait, not five.
-  await mapPool(writes, WRITE_CONCURRENCY, async ({ id, body }) => {
-    const res = await limit(() =>
-      client.request("PUT", `/1.0/${target.role}/savedworkoutsetexercise/${id}${suffix}`, {
-        body,
-      }),
-    );
-    if (!res.ok) {
-      const readOnly =
-        target.role === "coach" && (res.status === 401 || res.status === 403)
-          ? ` Athlete ${target.athleteId} appears to be read-only for changes — TrainHeroic's ` +
-            `seeded demo/sample athletes return ${res.status} here; writes only persist for real ` +
-            `(invited) athletes.`
-          : "";
-      throw new Error(`Failed to write exercise ${id} (HTTP ${res.status}).${readOnly}`);
-    }
-  });
+  // The first failure cancels the shared limiter, so writes queued behind it (from this set or,
+  // in a session write, from sibling sets) are skipped; writes already on the wire complete. The
+  // status check and the cancel run inside the limited task, before its slot is released, so no
+  // queued write can start in the gap between the response landing and the failure being seen.
+  await mapPool(writes, WRITE_CONCURRENCY, ({ id, body }) =>
+    limit.run(async () => {
+      try {
+        const res = await client.request(
+          "PUT",
+          `/1.0/${target.role}/savedworkoutsetexercise/${id}${suffix}`,
+          { body },
+        );
+        if (!res.ok) {
+          const readOnly =
+            target.role === "coach" && (res.status === 401 || res.status === 403)
+              ? ` Athlete ${target.athleteId} appears to be read-only for changes — TrainHeroic's ` +
+                `seeded demo/sample athletes return ${res.status} here; writes only persist for ` +
+                `real (invited) athletes.`
+              : "";
+          throw new Error(`Failed to write exercise ${id} (HTTP ${res.status}).${readOnly}`);
+        }
+      } catch (error) {
+        limit.cancel(error);
+        throw error;
+      }
+    }),
+  );
   const exercisesWritten = writes.length;
   const projectedCompletion = new Map(writes.map((w) => [w.id, w.body.completed === 1]));
 
@@ -512,16 +523,23 @@ async function writeSetResults(
         .map((e) => coerceInt(e.id))
         .filter((n): n is number => n !== null);
       const setBody = { ...buildSetCompletePayload(rawSet, allExerciseIds, true), ...extra };
-      const setRes = await limit(() =>
-        client.request("PUT", `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`, {
-          body: setBody,
-        }),
-      );
-      if (!setRes.ok) {
-        throw new Error(
-          `Failed to mark workout set ${savedWorkoutSetId} completed (HTTP ${setRes.status}).`,
-        );
-      }
+      await limit.run(async () => {
+        try {
+          const setRes = await client.request(
+            "PUT",
+            `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`,
+            { body: setBody },
+          );
+          if (!setRes.ok) {
+            throw new Error(
+              `Failed to mark workout set ${savedWorkoutSetId} completed (HTTP ${setRes.status}).`,
+            );
+          }
+        } catch (error) {
+          limit.cancel(error);
+          throw error;
+        }
+      });
       setCompleted = true;
     }
   }
