@@ -1,17 +1,33 @@
 import { z } from "zod";
 
 /** A single exercise prescription inside a block. */
-export const exerciseSpecSchema = z.object({
-  id: z.union([z.number(), z.string()]),
-  title: z.string().optional(),
-  reps: z.union([z.number(), z.string(), z.array(z.union([z.number(), z.string()]))]).optional(),
-  sets: z.number().optional(),
-  weight: z.union([z.number(), z.array(z.number())]).optional(),
-  rpe: z.union([z.number(), z.string()]).optional(),
-  instr: z.string().optional(),
-  param_1_type: z.number().optional(),
-  param_2_type: z.number().optional(),
-});
+export const exerciseSpecSchema = z
+  .object({
+    id: z.union([z.number(), z.string()]),
+    title: z.string().optional(),
+    reps: z.union([z.number(), z.string(), z.array(z.union([z.number(), z.string()]))]).optional(),
+    sets: z.number().optional(),
+    weight: z.union([z.number(), z.array(z.number())]).optional(),
+    rpe: z.union([z.number(), z.string()]).optional(),
+    instr: z.string().optional(),
+    param_1_type: z.number().optional(),
+    param_2_type: z.number().optional(),
+  })
+  .superRefine((exercise, ctx) => {
+    if (
+      Array.isArray(exercise.reps) &&
+      Array.isArray(exercise.weight) &&
+      exercise.reps.length !== exercise.weight.length
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          `Per-set reps and weight arrays must have the same length; received ` +
+          `${exercise.reps.length} reps and ${exercise.weight.length} weights.`,
+        path: ["weight"],
+      });
+    }
+  });
 export type ExerciseSpec = z.infer<typeof exerciseSpecSchema>;
 
 /** A block's Red-Zone leaderboard: a unit string/number, or an object with options. */
@@ -68,14 +84,20 @@ export type WorkoutDate = readonly [number, number, number];
 /**
  * Parse a `YYYY-M-D` string into the `WorkoutDate` tuple. The single home for this
  * conversion, shared by the MCP tools and the CLI so they cannot drift on what counts
- * as a valid date. Each part must be an integer.
+ * as a valid date. Each part must be a run of digits (`Number("")` is 0, so a blank part such as
+ * the trailing one in "2026-9-" must be rejected explicitly), and month/day must be in range so
+ * a typo cannot land a session on a date the calendar does not have.
  */
 export function parseWorkoutDate(s: string): WorkoutDate {
-  const parts = s.split("-").map((p) => Number(p));
-  if (parts.length !== 3 || parts.some((n) => !Number.isInteger(n))) {
+  const parts = s.split("-");
+  if (parts.length !== 3 || parts.some((p) => !/^\d+$/u.test(p))) {
     throw new Error(`date must be YYYY-M-D, got "${s}".`);
   }
-  return [parts[0] as number, parts[1] as number, parts[2] as number];
+  const [year, month, day] = parts.map(Number) as [number, number, number];
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    throw new Error(`date must be YYYY-M-D with a real month and day, got "${s}".`);
+  }
+  return [year, month, day];
 }
 
 /** Unit advisories surfaced when building: informational notes and override warnings. */

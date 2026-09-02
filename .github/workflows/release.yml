@@ -57,18 +57,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Maintain the Version Packages PR when changesets are pending. No `publish` command: the npm
-      # publish is handled by publish.yml (below) to keep its OIDC trust binding intact. `version`
-      # runs `changeset version` (bumps the fixed group, writes CHANGELOGs, deletes the changesets).
+      # Maintain the Version Packages PR when changesets are pending. No `publish-script`: the npm
+      # publish is handled by publish.yml (below) to keep its OIDC trust binding intact.
+      # `version-script` runs `changeset version` (bumps the fixed group, writes CHANGELOGs,
+      # deletes the changesets).
       - name: Version PR
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
-          version: pnpm version-packages
-          commit: 'chore(release): version packages'
-          title: 'chore(release): version packages'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          version-script: pnpm version-packages
+          commit-message: 'chore(release): version packages'
+          pr-title: 'chore(release): version packages'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # A push to main with no pending changesets is a release iff the current version has no tag
       # yet — i.e. the Version PR was just merged. Any other push (changesets still pending, or the
@@ -76,7 +76,7 @@ jobs:
       - name: Detect release
         id: gate
         run: |
-          if [ "${{ steps.changesets.outputs.hasChangesets }}" = "true" ]; then
+          if [ "${{ steps.changesets.outputs['has-changesets'] }}" = "true" ]; then
             echo "Version PR created/updated; not a release commit."
             echo "released=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
@@ -106,6 +106,11 @@ jobs:
         run: |
           version="${{ steps.gate.outputs.version }}"
           tag="v$version"
+          # Annotated tags need a tagger identity. changesets/action@v1 set this as a side
+          # effect of its git CLI path; v2 talks to the GitHub API instead, so the runner
+          # has no user.name / user.email and `git tag -a` fails with exit 128.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$tag" -m "$tag"
           git push origin "$tag"
           # Notes from the commit log since the previous tag (no PRs to summarize); drop the

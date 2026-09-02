@@ -61,13 +61,14 @@ afterEach(() => {
 });
 
 describe("report_feedback tool", () => {
-  it("registers a single non-destructive tool", () => {
+  it("registers a single destructive external-write tool", () => {
     const { server, registered } = captureServer();
     registerFeedbackTool(server, deps());
     expect(registered.name).toBe("report_feedback");
     expect(registered.config.annotations).toMatchObject({
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
+      openWorldHint: true,
     });
   });
 
@@ -81,6 +82,7 @@ describe("report_feedback tool", () => {
         kind: "bug",
         expected: "this week's sessions",
         actual: "an empty list",
+        confirm: true,
       },
       {},
     );
@@ -116,7 +118,10 @@ describe("report_feedback tool", () => {
     const { server, registered } = captureServer();
     registerFeedbackTool(server, deps());
 
-    const result = registered.handler({ message: "swap is confusing", kind: "idea" }, {});
+    const result = registered.handler(
+      { message: "swap is confusing", kind: "idea", confirm: true },
+      {},
+    );
 
     expect(sentry.captureFeedback).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledTimes(1);
@@ -126,5 +131,18 @@ describe("report_feedback tool", () => {
     expect(payload).toContain("user@example.com");
 
     expect(resultJson(result)).toMatchObject({ status: "logged" });
+  });
+
+  it("does not send feedback before confirmation", () => {
+    const { server, registered } = captureServer();
+    registerFeedbackTool(server, deps());
+
+    const result = registered.handler(
+      { message: "athlete_workouts returned nothing", kind: "bug" },
+      { mcpReq: {} },
+    );
+
+    expect(sentry.captureFeedback).not.toHaveBeenCalled();
+    expect(result).toHaveProperty("inputRequests.confirm");
   });
 });

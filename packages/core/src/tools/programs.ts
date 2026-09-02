@@ -1,11 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/server";
+import {
+  programCreatedOutputSchema,
+  programDeletedOutputSchema,
+  toolOutputSchema,
+} from "@trainheroic-unofficial/dto";
 import { createProgram, deleteProgram, PROGRAM_KINDS } from "@trainheroic-unofficial/js";
 import { z } from "zod";
 import { confirmGate } from "../confirm";
-import { attempt, DESTRUCTIVE, idParam, jsonResult, toId } from "../context";
+import { ADDITIVE, attempt, DESTRUCTIVE, idParam, jsonResult, toId } from "../context";
 import type { ToolContext } from "../context";
-
-const ADDITIVE = { readOnlyHint: false, destructiveHint: false, openWorldHint: true } as const;
 
 /** Standalone program writes. Program reads live in reads.ts. */
 export function registerProgramTools(server: McpServer, ctx: ToolContext): void {
@@ -23,6 +26,7 @@ export function registerProgramTools(server: McpServer, ctx: ToolContext): void 
         kind: z.enum(PROGRAM_KINDS),
         name: z.string().trim().min(1),
       },
+      outputSchema: toolOutputSchema(programCreatedOutputSchema),
       annotations: ADDITIVE,
     },
     ({ kind, name }) =>
@@ -39,6 +43,7 @@ export function registerProgramTools(server: McpServer, ctx: ToolContext): void 
         "id); container ids 401 if sent raw and are resolved automatically. Removes the " +
         "calendar from the live account. Requires confirmation (elicitation, or confirm:true).",
       inputSchema: { programId: idParam, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(programDeletedOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ programId, confirm }, extra) =>

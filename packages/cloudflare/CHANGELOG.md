@@ -1,5 +1,88 @@
 # @trainheroic-unofficial/cloudflare
 
+## 3.5.2
+
+### Patch Changes
+
+- Updated dependencies [c218865]
+- Updated dependencies [c36add1]
+- Updated dependencies [38824dd]
+  - @trainheroic-unofficial/js@3.5.2
+  - @trainheroic-unofficial/core@3.5.2
+  - @trainheroic-unofficial/db@3.5.2
+  - @trainheroic-unofficial/dto@3.5.2
+
+## 3.5.1
+
+### Patch Changes
+
+- Updated dependencies [d2692c8]
+  - @trainheroic-unofficial/js@3.5.1
+  - @trainheroic-unofficial/core@3.5.1
+  - @trainheroic-unofficial/dto@3.5.1
+  - @trainheroic-unofficial/db@3.5.1
+
+## 3.5.0
+
+### Patch Changes
+
+- Updated dependencies [385a944]
+  - @trainheroic-unofficial/dto@3.5.0
+  - @trainheroic-unofficial/js@3.5.0
+  - @trainheroic-unofficial/core@3.5.0
+  - @trainheroic-unofficial/db@3.5.0
+
+## 3.4.0
+
+### Patch Changes
+
+- 4419e25: Update hosted Worker runtime dependencies, including agents 0.21 and the hono 4.13.5 security release.
+- Updated dependencies [466e51e]
+  - @trainheroic-unofficial/dto@3.4.0
+  - @trainheroic-unofficial/js@3.4.0
+  - @trainheroic-unofficial/core@3.4.0
+  - @trainheroic-unofficial/db@3.4.0
+
+## 3.3.3
+
+### Patch Changes
+
+- Updated dependencies [bcb590d]
+  - @trainheroic-unofficial/core@3.3.3
+  - @trainheroic-unofficial/db@3.3.3
+  - @trainheroic-unofficial/dto@3.3.3
+  - @trainheroic-unofficial/js@3.3.3
+
+## 3.3.2
+
+### Patch Changes
+
+- 4af48dc: Fix ChatGPT OAuth redirects and expose the OpenAI Apps domain-verification challenge.
+- @trainheroic-unofficial/core@3.3.2
+  - @trainheroic-unofficial/db@3.3.2
+  - @trainheroic-unofficial/dto@3.3.2
+  - @trainheroic-unofficial/js@3.3.2
+
+## 3.3.1
+
+### Patch Changes
+
+- Updated dependencies [3317d39]
+  - @trainheroic-unofficial/core@3.3.1
+  - @trainheroic-unofficial/db@3.3.1
+  - @trainheroic-unofficial/dto@3.3.1
+  - @trainheroic-unofficial/js@3.3.1
+
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [48fe6bc]
+  - @trainheroic-unofficial/dto@3.3.0
+  - @trainheroic-unofficial/core@3.3.0
+  - @trainheroic-unofficial/db@3.3.0
+  - @trainheroic-unofficial/js@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

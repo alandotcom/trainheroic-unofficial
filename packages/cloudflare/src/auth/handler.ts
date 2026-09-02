@@ -22,6 +22,8 @@ import { reportOAuthInternalError, trainHeroicLoginErrorReporter } from "../sent
 
 const CSRF_COOKIE = "th_csrf";
 const CSRF_TTL_SECONDS = 600;
+// OpenAI fetches this public value at a fixed URL to verify control of the MCP hostname.
+const OPENAI_APPS_CHALLENGE = "_R2qM_yjG8vDiKkhaiGhq6HFwQoKz2xiqXsVHaBJ128";
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -29,27 +31,14 @@ function isSecure(c: AppContext): boolean {
   return new URL(c.req.url).protocol === "https:";
 }
 
-function setSecurityHeaders(c: AppContext, formActionOrigin?: string): void {
-  // The consent POST completes by 302-ing to the client's registered callback (e.g.
-  // https://claude.ai/...). `form-action` is enforced across a form submission's redirect
-  // chain, so that cross-origin hop must be allowlisted or the browser blocks the flow.
-  // We add only this request's own redirect origin, keeping the directive otherwise tight.
-  const formAction = formActionOrigin ? `'self' ${formActionOrigin}` : "'self'";
+function setSecurityHeaders(c: AppContext): void {
   c.header(
     "Content-Security-Policy",
-    `default-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'; form-action ${formAction}; base-uri 'none'`,
+    "default-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
   );
   c.header("X-Frame-Options", "DENY");
   c.header("Referrer-Policy", "no-referrer");
   c.header("Cache-Control", "no-store");
-}
-
-function redirectOrigin(redirectUri: string): string | undefined {
-  try {
-    return new URL(redirectUri).origin;
-  } catch {
-    return undefined;
-  }
 }
 
 function localAuthorizationErrorResponse(c: AppContext, error: unknown): Response {
@@ -153,7 +142,7 @@ async function renderLogin(
     c.env.COOKIE_ENCRYPTION_KEY,
   );
   setCsrfCookie(c, csrf);
-  setSecurityHeaders(c, redirectOrigin(oauthReq.redirectUri));
+  setSecurityHeaders(c);
   return c.html(
     renderLoginPage({
       clientName: client.clientName ?? oauthReq.clientId,
@@ -167,6 +156,8 @@ async function renderLogin(
 }
 
 const app = new Hono<{ Bindings: Env }>();
+
+app.get("/.well-known/openai-apps-challenge", (c) => c.text(OPENAI_APPS_CHALLENGE));
 
 // GET /authorize — render the TrainHeroic login + consent page.
 app.get("/authorize", async (c) => {

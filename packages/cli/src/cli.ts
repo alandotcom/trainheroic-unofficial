@@ -6,7 +6,9 @@ import process from "node:process";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import type { ZodType } from "zod";
 import {
+  athleteExerciseNoteArgsSchema,
   athletePrescribeSetArgsSchema,
+  athleteWorkoutNoteArgsSchema,
   coachLogSessionArgsSchema,
   athleteSessionRemoveArgsSchema,
   coachLogSetArgsSchema,
@@ -79,11 +81,14 @@ import {
   SESSION_TEMPLATES_LIST_PATH,
   presentCoachAthleteTraining,
   presentLogTargets,
+  historyInRange,
   presentExerciseHistory,
   PROGRAM_KINDS,
   publishSession,
   selectWorkouts,
   selectWorkoutsByProgram,
+  setAthleteExerciseNote,
+  setAthleteWorkoutNote,
   summarizeAthleteWorkouts,
   swapAthleteExercise,
   readLive,
@@ -93,10 +98,18 @@ import {
   resolveAthleteUserId,
   searchExerciseHistory,
   sendComment,
+  setSplitSummary,
   TrainHeroicClient,
 } from "@trainheroic-unofficial/js";
 import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
-import { looksLikeJson, parseDate } from "./parse";
+import {
+  looksLikeJson,
+  parseCountArg,
+  parseDate,
+  parseIdList,
+  parseIntArg,
+  requireTeamCalendarReassignmentConfirmation,
+} from "./parse";
 import { loadSession, saveSession } from "./session-cache";
 
 const HELP = `trainheroic — command-line tool for the TrainHeroic API
@@ -120,7 +133,7 @@ Coach — manage a roster (needs a coach account):
   coach program <id> | team <id> | team-codes <id>
 
   roster athlete reads (three lenses — pick by the question):
-  coach roster-activity --athletes <id,id,...> [--metric]                  rank roster by recency; --metric adds session count + training volume. All-time snapshot, NO date range — for a windowed total use 'coach team-volume'. Get the full id list from 'coach athletes'.
+  coach roster-activity --athletes <id,id,...> [--metric]                  rank roster by recency with each athlete's session count + training volume; --metric reports the totals in kg instead of lb. All-time snapshot, NO date range — for a windowed total use 'coach team-volume'. Get the full id list from 'coach athletes'.
   coach team-volume (--team <id> | --athletes <id,id,...>) --start Y-M-D --end Y-M-D   team training volume scoped to a date window: per-athlete rows (only those who logged in range) + rolled-up totals (volume in lb). --team resolves the roster; --athletes passes ids directly.
   coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--program <title>|--program-id <id>|--team <id>] [--logged-only] [--summary] [--raw|--log-ids]   prescribed + logged work over a date range; --program (title substring) / --program-id / --team targets one program when the athlete is on several; --logged-only/--summary narrow it to what was actually logged; --log-ids prints just the savedWorkoutSetId + savedWorkoutSetExerciseId per set that log-set needs
   coach athlete-training --athlete <id> --year <YYYY> --month <1-12>        sessions the athlete LOGGED in one month (empty = nothing logged that month, not an error)
@@ -162,7 +175,7 @@ Coach — manage a roster (needs a coach account):
   coach program-create --kind calendar|fixed --name "..."
   coach program-delete --program <id> --yes
   coach team-create --title "..."
-  coach team-update --team <id> [--title "..."] [--group-program <id>]
+  coach team-update --team <id> [--title "..."] [--group-program <id> --yes]
   coach team-publish-settings (--team <id> | --program <id>) [--pub-enabled 0|1] --yes
   coach team-delete --team <id> --yes
   coach team-code-create --team <id> [--type N]
@@ -176,7 +189,7 @@ Coach — manage a roster (needs a coach account):
   coach session-template-create --title "..." [--instruction "..."]
   coach session-template-delete --id <id> --yes
 
-  analytics (curated metrics; for team training volume/recency use roster-activity --metric instead):
+  analytics (curated metrics; for team training volume/recency use roster-activity instead):
   coach analytics-query [--metric <key>] [--team <id>] [--users id,id] [--exercise <id>] [--date|--start|--end Y-M-D] [--use-metric]
       run with no --metric to list the valid keys + each one's scope and required params
       (these keys are curated and differ from the raw 'coach analytics' categories)
@@ -193,7 +206,8 @@ Coach — manage a roster (needs a coach account):
   coach exercise stats
 
   workouts (spec: {"blocks":[{"title","exercises":[{"id","sets"?,"reps"?,"weight"?,"rpe"?}]}],"instruction"?};
-            reps/weight may be a scalar or per-set array; omit --publish to leave a draft):
+            reps/weight may be a scalar or per-set array; >10 sets split into consecutive blocks
+            and require --yes; omit --publish to leave a draft):
   coach workout build (--program <id> | --athlete <id>) (--date Y-M-D | --timeline-day <n>) [--publish --yes] <spec.json>|--file f
   coach workout read --program <id> --date Y-M-D --pw <id>
   coach workout publish --pw <id> --yes
@@ -224,6 +238,8 @@ Athlete — the logged-in user's own training (a coach account works too):
   athlete log-session --date Y-M-D <exercisesJson>|--file f --yes   (log OFF-PLAN work with no prescription — creates/reuses a personal session for the date, then logs it; exerciseIds from 'athlete exercises')
   athlete session-remove --id <programWorkoutId> --date Y-M-D --yes   (delete a stray PERSONAL session; the id is the session 'id' from 'athlete workouts')
   athlete swap-exercise --set-exercise <savedWorkoutSetExerciseId> --exercise <exerciseId> --yes   (substitute one prescribed exercise in a COACH-SCHEDULED slot for a different one — your copy only; slot id from 'athlete log-targets', exerciseId from 'athlete exercises')
+  athlete workout-note --date Y-M-D --id <programWorkoutId> [--notes "..."] [--rpe 1-10] --yes   (the free-text note / session RPE on a workout, coach-visible; id is the session 'id' from 'athlete workouts'; empty --notes clears; notes-only leaves rpe untouched and vice versa)
+  athlete exercise-note --set-exercise <savedWorkoutSetExerciseId> --notes "..." --yes   (the per-exercise note on the exercise screen — band color, etc.; slot id from 'athlete log-targets'; empty --notes clears; distinct from workout-note)
       JSON is the exercises array: [{"exerciseId":N,"sets":[{"param1":reps,"param2":weight}, ...]}, ...]
 `;
 
@@ -255,9 +271,13 @@ function need(value: string | undefined, usage: string): string {
 }
 
 function toInt(value: string, label: string): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) fail(`${label} must be a number, got "${value}".`);
-  return n;
+  return parseIntArg(value, label);
+}
+
+/** A --limit style count: a positive integer, so 0 / negatives fail instead of emptying or
+ * tail-slicing the result. Matches the MCP tools' `positive()` limit schemas. */
+function toCount(value: string, label: string): number {
+  return parseCountArg(value, label);
 }
 
 /** Validate input against a dto schema, failing with a readable message on mismatch. */
@@ -323,7 +343,7 @@ async function mutate(
 
 /** Parse a comma-separated id list ("1,2,3") into numbers. */
 function idList(value: string, label: string): number[] {
-  return value.split(",").map((s) => toInt(s.trim(), label));
+  return parseIdList(value, label);
 }
 
 function library(client: TrainHeroicClient): ExerciseLibrary {
@@ -344,7 +364,7 @@ async function cmdExercise(client: TrainHeroicClient, rest: string[]): Promise<v
         positionals.join(" ").trim() || undefined,
         "coach exercise search <query>",
       );
-      const limit = values.limit !== undefined ? toInt(values.limit as string, "--limit") : 20;
+      const limit = values.limit !== undefined ? toCount(values.limit as string, "--limit") : 20;
       return out(await lib.search(query, limit));
     }
     case "get":
@@ -427,9 +447,14 @@ async function cmdWorkoutBuild(client: TrainHeroicClient, a: string[]): Promise<
     "run 'trainheroic skill' for the workout spec format and copy-paste examples.",
   );
   const publish = values.publish === true;
+  const splitSummary = setSplitSummary(spec.blocks);
+  if (splitSummary !== null && values.yes !== true) {
+    fail(`${splitSummary} Add --yes to confirm.`);
+  }
   if (publish && values.yes !== true)
     fail("publishing is athlete-facing; add --yes to build and publish.");
   const opts: BuildOptions = { programId, blocks: spec.blocks, publish };
+  if (splitSummary !== null) opts.confirmSetSplit = true;
   if (values.date !== undefined) opts.date = parseDate(values.date as string);
   if (values["timeline-day"] !== undefined) {
     opts.timelineDay = toInt(values["timeline-day"] as string, "--timeline-day");
@@ -537,7 +562,7 @@ async function cmdMessage(client: TrainHeroicClient, rest: string[]): Promise<vo
         need(positionals[0], "coach message read <streamId> [--limit N] [--after <commentId>]"),
         "streamId",
       );
-      const limit = values.limit !== undefined ? toInt(values.limit as string, "--limit") : 20;
+      const limit = values.limit !== undefined ? toCount(values.limit as string, "--limit") : 20;
       const after =
         values.after !== undefined ? toInt(values.after as string, "--after") : undefined;
       return out(await readLive(client, streamId, limit, after));
@@ -877,6 +902,63 @@ async function cmdAthleteSwapExercise(client: TrainHeroicClient, a: string[]): P
   return out(await swapAthleteExercise(client, { savedWorkoutSetExerciseId, exerciseId }));
 }
 
+const ATHLETE_WORKOUT_NOTE_USAGE =
+  'athlete workout-note --date Y-M-D --id <programWorkoutId> [--notes "..."] [--rpe 1-10] --yes';
+
+async function cmdAthleteWorkoutNote(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values } = parse(a, {
+    date: { type: "string" },
+    id: { type: "string" },
+    notes: { type: "string" },
+    rpe: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const args = validate(
+    athleteWorkoutNoteArgsSchema,
+    definedProps({
+      date: isoDate(need(values.date as string | undefined, ATHLETE_WORKOUT_NOTE_USAGE), "--date"),
+      programWorkoutId: need(values.id as string | undefined, ATHLETE_WORKOUT_NOTE_USAGE),
+      notes: values.notes as string | undefined,
+      rpe: values.rpe !== undefined ? toInt(values.rpe as string, "--rpe") : undefined,
+    }),
+    "workout-note args",
+  );
+  if (values.yes !== true)
+    fail(
+      `setting the session note on workout ${args.programWorkoutId} is coach-visible; add --yes.`,
+    );
+  return out(await setAthleteWorkoutNote(client, args));
+}
+
+const ATHLETE_EXERCISE_NOTE_USAGE =
+  'athlete exercise-note --set-exercise <savedWorkoutSetExerciseId> --notes "..." --yes';
+
+async function cmdAthleteExerciseNote(client: TrainHeroicClient, a: string[]): Promise<void> {
+  const { values } = parse(a, {
+    "set-exercise": { type: "string" },
+    notes: { type: "string" },
+    yes: { type: "boolean" },
+  });
+  const notes = values.notes as string | undefined;
+  if (notes === undefined) fail(`usage: trainheroic ${ATHLETE_EXERCISE_NOTE_USAGE}`);
+  const args = validate(
+    athleteExerciseNoteArgsSchema,
+    {
+      savedWorkoutSetExerciseId: need(
+        values["set-exercise"] as string | undefined,
+        ATHLETE_EXERCISE_NOTE_USAGE,
+      ),
+      notes,
+    },
+    "exercise-note args",
+  );
+  if (values.yes !== true)
+    fail(
+      `setting the exercise note on slot ${args.savedWorkoutSetExerciseId} is coach-visible; add --yes.`,
+    );
+  return out(await setAthleteExerciseNote(client, args));
+}
+
 async function cmdAthleteWorkouts(client: TrainHeroicClient, a: string[]): Promise<void> {
   const { values } = parse(a, {
     start: { type: "string" },
@@ -908,11 +990,7 @@ async function cmdAthleteWorkouts(client: TrainHeroicClient, a: string[]): Promi
   }
   const opts: { loggedOnly?: boolean; limit?: number } = {};
   if (values["logged-only"] === true) opts.loggedOnly = true;
-  if (values.limit !== undefined) {
-    const limit = toInt(values.limit as string, "--limit");
-    if (!Number.isInteger(limit) || limit < 0) fail(`--limit must be a non-negative integer.`);
-    opts.limit = limit;
-  }
+  if (values.limit !== undefined) opts.limit = toCount(values.limit as string, "--limit");
   // Chunked so a multi-year export range does not 504 (a single window delegates to the plain
   // fetch, so a normal narrow range is unaffected). Matches the website export.
   const workouts = await fetchAthleteWorkoutsChunked(client, start, end);
@@ -949,13 +1027,18 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
       return cmdAthleteWorkouts(client, a);
     case "exercises": {
       const { values } = parse(a, { q: { type: "string" }, limit: { type: "string" } });
-      const limit = values.limit !== undefined ? toInt(values.limit as string, "--limit") : 20;
+      const limit =
+        values.limit !== undefined ? toCount(values.limit as string, "--limit") : undefined;
       const q = values.q as string | undefined;
-      return out(
-        q !== undefined
-          ? await searchExerciseHistory(client, q, limit)
-          : await fetchExerciseHistoryList(client),
-      );
+      if (q !== undefined) return out(await searchExerciseHistory(client, q, limit ?? 20));
+      // The full catalog honours --limit too (it was accepted and silently ignored before); say so
+      // on stderr when it clips, so a partial catalog never reads as the whole library.
+      const rows = await fetchExerciseHistoryList(client);
+      if (limit !== undefined && rows.length > limit) {
+        logErr(`showing ${limit} of ${rows.length} exercises; drop --limit for the full catalog`);
+        return out(rows.slice(0, limit));
+      }
+      return out(rows);
     }
     case "recent-exercises":
       return out(await fetchRecentExercises(client));
@@ -1024,9 +1107,13 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
       return cmdAthleteSessionRemove(client, a);
     case "swap-exercise":
       return cmdAthleteSwapExercise(client, a);
+    case "workout-note":
+      return cmdAthleteWorkoutNote(client, a);
+    case "exercise-note":
+      return cmdAthleteExerciseNote(client, a);
     default:
       return fail(
-        "usage: trainheroic athlete <whoami|profile|prefs|workouts|log-targets|exercises|recent-exercises|circuits|programs|history|prs|stats|working-maxes|leaderboard|export|log-set|prescribe-set|log-session|session-remove|swap-exercise>",
+        "usage: trainheroic athlete <whoami|profile|prefs|workouts|log-targets|exercises|recent-exercises|circuits|programs|history|prs|stats|working-maxes|leaderboard|export|log-set|prescribe-set|log-session|session-remove|swap-exercise|workout-note|exercise-note>",
       );
   }
 }
@@ -1301,7 +1388,7 @@ async function cmdCoachAthleteWorkouts(client: TrainHeroicClient, a: string[]): 
   // roster athlete's range to just what they logged instead of scanning every prescribed session.
   const opts: { loggedOnly?: boolean; limit?: number } = {};
   if (values["logged-only"] === true) opts.loggedOnly = true;
-  if (values.limit !== undefined) opts.limit = toInt(values.limit as string, "--limit");
+  if (values.limit !== undefined) opts.limit = toCount(values.limit as string, "--limit");
   const selected = selectWorkouts(presentAthleteWorkouts(workouts), opts);
   return out(values.summary === true ? summarizeAthleteWorkouts(selected) : selected);
 }
@@ -1383,16 +1470,18 @@ async function cmdCoachProgramDelete(client: TrainHeroicClient, a: string[]): Pr
 
 async function cmdCoachTeamUpdate(client: TrainHeroicClient, a: string[]): Promise<void> {
   const usage =
-    'coach team-update --team <id> [--title "..."] [--group-program <id>]  (at least one of --title / --group-program)';
+    'coach team-update --team <id> [--title "..."] [--group-program <id> --yes]  (at least one of --title / --group-program)';
   const { values } = parse(a, {
     team: { type: "string" },
     title: { type: "string" },
     "group-program": { type: "string" },
+    yes: { type: "boolean" },
   });
   const teamId = toInt(need(values.team as string | undefined, usage), "--team");
   const title = values.title as string | undefined;
   const groupProgramRaw = values["group-program"] as string | undefined;
   if (title === undefined && groupProgramRaw === undefined) fail(usage);
+  requireTeamCalendarReassignmentConfirmation(teamId, groupProgramRaw, values.yes === true);
   const args: { teamId: number; title?: string; groupProgram?: number } = { teamId };
   if (title !== undefined) args.title = title;
   if (groupProgramRaw !== undefined) args.groupProgram = toInt(groupProgramRaw, "--group-program");
@@ -1613,17 +1702,14 @@ async function cmdCoachAthleteLiftHistory(client: TrainHeroicClient, a: string[]
   const presented = presentExerciseHistory(detail);
   const since = values.since !== undefined ? isoDate(values.since as string, "--since") : undefined;
   const until = values.until !== undefined ? isoDate(values.until as string, "--until") : undefined;
-  const sessions = presented.sessions.filter(
-    (s) => (since === undefined || s.date >= since) && (until === undefined || s.date <= until),
-  );
-  if (sessions.length === 0 && presented.liftPRs.length === 0) {
+  const windowed = historyInRange(presented, since, until);
+  if (windowed.sessions.length === 0 && windowed.liftPRs.length === 0) {
     return out({
-      ...presented,
-      sessions,
+      ...windowed,
       note: `No logged history for exercise ${exerciseId} for athlete ${athleteId}${since !== undefined || until !== undefined ? " in this date window" : ""}. This view only shows sessions where the athlete logged this exact exercise — an empty result means none were logged, not an error. Confirm the exercise id (via 'coach exercise resolve <name>') and widen --since/--until.`,
     });
   }
-  return out({ ...presented, sessions });
+  return out(windowed);
 }
 
 // Main-lift PRs (squat/bench/deadlift/overhead press/clean & jerk/snatch). With --athlete, one

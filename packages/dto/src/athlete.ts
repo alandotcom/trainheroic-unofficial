@@ -325,178 +325,206 @@ export const athleteSessionRemoveArgsSchema = z.object({
 });
 export type AthleteSessionRemoveArgs = z.infer<typeof athleteSessionRemoveArgsSchema>;
 
-// --- Presented (model-friendly) view types, produced by the `js` presenters ---
-
-/** A flattened exercise within a presented workout: prescriptions, logged results, units. */
-export type AthleteWorkoutExercise = {
-  exerciseId: number | null;
-  title: string;
-  instruction: string | null;
-  units: Array<string | null>;
-  /** Per-set prescriptions, e.g. ["5 @ 225 lb", "3 @ 245 lb"] or ["AMRAP"]. */
-  prescribed: string[];
-  /**
-   * Per-set values the athlete actually logged, same shape as `prescribed`. Empty when
-   * nothing was recorded for this exercise. This — not any "completed" flag — is the
-   * reliable signal that a set was performed (the API leaves completion flags at 0 even
-   * when results were entered).
-   */
-  performed: string[];
-};
-
-/** A block (workout set) within a presented workout. */
-export type AthleteWorkoutBlock = {
-  order: number;
-  title: string | null;
-  instruction: string | null;
-  isTest: boolean;
-  exercises: AthleteWorkoutExercise[];
-};
-
-/** A scheduled/completed workout flattened for reading. */
-export type AthleteWorkoutView = {
-  id: number | null;
-  date: string;
-  title: string;
-  program: string | null;
-  team: string | null;
-  instruction: string | null;
-  /**
-   * True when the athlete logged at least one set on this workout (any exercise has
-   * `performed` values). Use this to tell a recorded session from a merely scheduled one;
-   * the API's own completion flags are unreliable.
-   */
-  logged: boolean;
-  /**
-   * True when this is a personal session the athlete created (the API's `personal_cal` flag),
-   * rather than a coach-scheduled workout. Only a personal session can be removed with
-   * `athlete_session_remove`; its `id` is the `programWorkoutId` that tool takes.
-   */
-  personal: boolean;
-  blocks: AthleteWorkoutBlock[];
-};
+/**
+ * Args for the athlete session-note write. `programWorkoutId` is the range item's top-level `id`
+ * (athlete_workouts); `date` locates that day so the SDK can resolve the saved-workout id the PUT
+ * targets. `notes` is the free-text box on the workout screen (empty string clears it). `rpe` is
+ * the session RPE (1–10). At least one of `notes` / `rpe` is required — a notes-only PUT leaves
+ * rpe untouched and vice versa.
+ */
+export const athleteWorkoutNoteObject = z.object({
+  date: dateString,
+  programWorkoutId: idArgSchema,
+  notes: z.string().optional(),
+  rpe: z.number().int().min(1).max(10).optional(),
+});
+export const athleteWorkoutNoteArgsSchema = athleteWorkoutNoteObject.refine(
+  (v) => v.notes !== undefined || v.rpe !== undefined,
+  { message: "Provide notes and/or rpe" },
+);
+export type AthleteWorkoutNoteArgs = z.infer<typeof athleteWorkoutNoteArgsSchema>;
 
 /**
- * A compact per-workout header with no block/exercise detail. Produced by the summary
- * projection so an overview question ("what's on my schedule this week", "what have I been
- * training lately") returns one small row per session instead of the full prescribed/performed
- * sets — a dense multi-program week of `AthleteWorkoutView`s can run tens of KB and force a
- * follow-up drill-in.
+ * Args for the athlete per-exercise note write (the "Add exercise note" box on the exercise
+ * screen — band color, etc.). `savedWorkoutSetExerciseId` is the slot id from athlete_log_targets.
+ * Empty `notes` clears the note. Distinct from {@link athleteWorkoutNoteArgsSchema} (session note).
  */
-export type AthleteWorkoutSummary = {
-  id: number | null;
-  date: string;
-  title: string;
-  program: string | null;
-  team: string | null;
-  /** True when the athlete logged at least one set on this workout. */
-  logged: boolean;
-  /** True when this is a personal session the athlete created, not a coach-scheduled workout. */
-  personal: boolean;
-  /** Total prescribed exercises across all blocks. */
-  exerciseCount: number;
-  /**
-   * How many of those exercises have at least one logged set. Read it against exerciseCount
-   * (e.g. 1 of 12), not in isolation — a low number means the session was mostly unlogged, not
-   * that only one exercise was prescribed.
-   */
-  performedCount: number;
-};
+export const athleteExerciseNoteArgsSchema = z.object({
+  savedWorkoutSetExerciseId: idArgSchema,
+  notes: z.string(),
+});
+export type AthleteExerciseNoteArgs = z.infer<typeof athleteExerciseNoteArgsSchema>;
 
-/** One exercise inside a coach-viewed athlete session (from the calendar summary). */
-export type CoachAthleteExercise = {
-  exerciseId: number | null;
-  title: string;
-  /** The set summary the API returns, e.g. "5 x 2 @ 205 lb" or "3 x 5 @ 24 in". */
-  summary: string | null;
-  completed: boolean;
-};
+// --- Presented (model-friendly) view schemas, produced by the `js` presenters ---
 
-/** One session in a coach's view of a roster athlete's training month. */
-export type CoachAthleteSession = {
-  workoutId: number | null;
-  savedWorkoutId: number | null;
-  title: string;
-  /** True when the athlete logged this session (the reliable did-they-train signal). */
-  logged: boolean;
-  completed: boolean;
-  rpe: number | null;
-  durationMin: number | null;
-  notes: string | null;
-  exercises: CoachAthleteExercise[];
-};
+const presentedNullNumber = z.number().nullable();
+const presentedNullString = z.string().nullable();
 
-/**
- * A coach's month view of a roster athlete's training, presented from
- * `/2.0/coach/athlete/calendar/summary`. Sessions are in calendar order within the month; the
- * API carries no per-session date, so the month comes from year/month.
- */
-export type CoachAthleteTraining = {
-  athleteId: number | null;
-  athleteName: string | null;
-  year: number;
-  month: number;
-  sessions: CoachAthleteSession[];
-};
+/** Flattened exercise within a presented workout: prescriptions, logged results, units. */
+export const athleteWorkoutExerciseSchema = z.object({
+  exerciseId: presentedNullNumber,
+  title: z.string(),
+  instruction: presentedNullString,
+  notes: presentedNullString,
+  units: z.array(presentedNullString),
+  prescribed: z.array(z.string()),
+  performed: z.array(z.string()),
+});
+export type AthleteWorkoutExercise = z.infer<typeof athleteWorkoutExerciseSchema>;
 
-/**
- * One athlete's all-time training snapshot in a coach's roster-activity ranking. `lastLoggedDate`
- * is the real training-recency signal (null means the athlete has never logged a session),
- * distinct from `list_athletes`'s `daysSinceLastLogin`, which is app-login recency.
- */
-export type RosterActivityRow = {
-  athleteId: number;
-  sessionsCount: number | null;
-  firstLoggedDate: string | null;
-  lastLoggedDate: string | null;
-  totalReps: number | null;
-  totalVolume: number | null;
-};
+export const athleteWorkoutBlockSchema = z.object({
+  order: z.number(),
+  title: presentedNullString,
+  instruction: presentedNullString,
+  isTest: z.boolean(),
+  exercises: z.array(athleteWorkoutExerciseSchema),
+});
+export type AthleteWorkoutBlock = z.infer<typeof athleteWorkoutBlockSchema>;
 
-/**
- * One athlete's logged volume over a date window, aggregated from the `training-summary-athlete`
- * analytics report (which returns one row per logged session). `volume` is in pounds.
- */
-export type TeamVolumeAthlete = {
-  athleteId: number;
-  name: string | null;
-  sessions: number;
-  reps: number;
-  volume: number;
-  firstLoggedDate: string | null;
-  lastLoggedDate: string | null;
-};
+export const athleteWorkoutViewSchema = z.object({
+  id: presentedNullNumber,
+  date: z.string(),
+  title: z.string(),
+  program: presentedNullString,
+  team: presentedNullString,
+  instruction: presentedNullString,
+  notes: presentedNullString,
+  rpe: presentedNullNumber,
+  logged: z.boolean(),
+  personal: z.boolean(),
+  blocks: z.array(athleteWorkoutBlockSchema),
+});
+export type AthleteWorkoutView = z.infer<typeof athleteWorkoutViewSchema>;
 
-/**
- * A coach's team-wide training volume over an inclusive `YYYY-MM-DD` window: per-athlete rows
- * (only athletes who logged in range appear) plus the rolled-up team totals. The windowed
- * counterpart to the all-time {@link RosterActivityRow} snapshot.
- */
-export type TeamVolumeReport = {
-  window: { start: string; end: string };
-  athletes: TeamVolumeAthlete[];
-  totals: { athletes: number; sessions: number; reps: number; volume: number };
-};
+export const athleteWorkoutSummarySchema = z.object({
+  id: presentedNullNumber,
+  date: z.string(),
+  title: z.string(),
+  program: presentedNullString,
+  team: presentedNullString,
+  logged: z.boolean(),
+  personal: z.boolean(),
+  exerciseCount: z.number().int().nonnegative(),
+  performedCount: z.number().int().nonnegative(),
+});
+export type AthleteWorkoutSummary = z.infer<typeof athleteWorkoutSummarySchema>;
 
-/** One performed session in a presented exercise history. */
-export type PresentedExerciseSession = {
-  date: string;
-  abr: string | null;
-  estimated1RM: number | null;
-  sets: Array<{ setNumber: number; value: string | null }>;
-};
+/** Presented views first so a summary/detail row cannot be swallowed by the loose raw list. */
+export const athleteWorkoutsOutputSchema = z.union([
+  z.array(athleteWorkoutSummarySchema),
+  z.array(athleteWorkoutViewSchema),
+  programWorkoutListSchema,
+]);
 
-/** A presented per-exercise history: PRs plus the session time-series. */
-export type PresentedExerciseHistory = {
-  liftPRs: Array<{
-    description: string | null;
-    reps: number | null;
-    weight: number | null;
-    units: string | null;
-    date: string | null;
-  }>;
-  sessions: PresentedExerciseSession[];
-};
+export const athleteProfileOutputSchema = z.looseObject({
+  summary: athleteProfileSummarySchema,
+  user: athleteUserSchema,
+});
+
+export const athleteExerciseCatalogOutputSchema = z.array(
+  z.object({
+    id: z.union([z.number(), z.string()]),
+    title: z.string(),
+    isCircuit: z.boolean(),
+    units: z.array(presentedNullString),
+  }),
+);
+
+export const coachAthleteExerciseSchema = z.object({
+  exerciseId: presentedNullNumber,
+  title: z.string(),
+  summary: presentedNullString,
+  completed: z.boolean(),
+});
+export type CoachAthleteExercise = z.infer<typeof coachAthleteExerciseSchema>;
+
+export const coachAthleteSessionSchema = z.object({
+  workoutId: presentedNullNumber,
+  savedWorkoutId: presentedNullNumber,
+  title: z.string(),
+  logged: z.boolean(),
+  completed: z.boolean(),
+  rpe: presentedNullNumber,
+  durationMin: presentedNullNumber,
+  notes: presentedNullString,
+  exercises: z.array(coachAthleteExerciseSchema),
+});
+export type CoachAthleteSession = z.infer<typeof coachAthleteSessionSchema>;
+
+export const coachAthleteTrainingSchema = z.object({
+  athleteId: presentedNullNumber,
+  athleteName: presentedNullString,
+  year: z.number().int(),
+  month: z.number().int(),
+  sessions: z.array(coachAthleteSessionSchema),
+});
+export type CoachAthleteTraining = z.infer<typeof coachAthleteTrainingSchema>;
+export const coachAthleteTrainingOutputSchema = coachAthleteTrainingSchema;
+
+export const rosterActivityRowSchema = z.object({
+  athleteId: z.number(),
+  sessionsCount: presentedNullNumber,
+  firstLoggedDate: presentedNullString,
+  lastLoggedDate: presentedNullString,
+  totalReps: presentedNullNumber,
+  totalVolume: presentedNullNumber,
+});
+export type RosterActivityRow = z.infer<typeof rosterActivityRowSchema>;
+
+export const teamVolumeAthleteSchema = z.object({
+  athleteId: z.number(),
+  name: presentedNullString,
+  sessions: z.number(),
+  reps: z.number(),
+  volume: z.number(),
+  firstLoggedDate: presentedNullString,
+  lastLoggedDate: presentedNullString,
+});
+export type TeamVolumeAthlete = z.infer<typeof teamVolumeAthleteSchema>;
+
+export const teamVolumeReportSchema = z.object({
+  window: z.object({ start: z.string(), end: z.string() }),
+  athletes: z.array(teamVolumeAthleteSchema),
+  totals: z.object({
+    athletes: z.number(),
+    sessions: z.number(),
+    reps: z.number(),
+    volume: z.number(),
+  }),
+});
+export type TeamVolumeReport = z.infer<typeof teamVolumeReportSchema>;
+export const teamVolumeOutputSchema = teamVolumeReportSchema;
+
+export const rosterActivityOutputSchema = z.array(rosterActivityRowSchema);
+
+export const presentedExerciseSessionSchema = z.object({
+  date: z.string(),
+  abr: presentedNullString,
+  notes: presentedNullString,
+  estimated1RM: presentedNullNumber,
+  sets: z.array(z.object({ setNumber: z.number(), value: presentedNullString })),
+});
+export type PresentedExerciseSession = z.infer<typeof presentedExerciseSessionSchema>;
+
+export const presentedExerciseHistorySchema = z.object({
+  liftPRs: z.array(
+    z.object({
+      description: presentedNullString,
+      reps: presentedNullNumber,
+      weight: presentedNullNumber,
+      units: presentedNullString,
+      date: presentedNullString,
+    }),
+  ),
+  sessions: z.array(presentedExerciseSessionSchema),
+});
+export type PresentedExerciseHistory = z.infer<typeof presentedExerciseHistorySchema>;
+
+/** Presented history first so the loose raw detail schema cannot swallow it. */
+export const exerciseHistoryOutputSchema = z.union([
+  presentedExerciseHistorySchema,
+  exerciseHistoryDetailSchema,
+]);
 
 // --- Structured workout-history export (for CSV/JSON/text download) ---
 

@@ -1,6 +1,9 @@
 // Pure helpers for the exercise store. No I/O, so they are unit-testable directly.
 
+import { chunk } from "es-toolkit/array";
 import type { ExerciseRow, ExerciseView, ResolveResult } from "@trainheroic-unofficial/dto";
+
+export { chunk };
 
 /**
  * Display labels for TrainHeroic parameter types. The unit is FIXED PER EXERCISE
@@ -157,6 +160,16 @@ export function isPersonalSession(pw: unknown): boolean {
 }
 
 /**
+ * The `saved_workout` blob on a program-workout range item, or null if the athlete has no saved
+ * copy yet. Session notes, RPE, and set writes all resolve through this.
+ */
+export function savedWorkoutOf(pw: unknown): Record<string, unknown> | null {
+  if (!isRecord(pw)) return null;
+  const ssw = isRecord(pw.summarizedSavedWorkout) ? pw.summarizedSavedWorkout : {};
+  return isRecord(ssw.saved_workout) ? ssw.saved_workout : null;
+}
+
+/**
  * Rank candidate rows for a free-text query (FTS5 replacement). Higher is better:
  * exact title, then prefix, then count of matched tokens, with shorter titles and
  * standard (non-custom) exercises preferred on ties.
@@ -185,12 +198,6 @@ export function rankSearch<T extends { title: string; can_edit?: number }>(
     .map((s) => s.row);
 }
 
-export function chunk<T>(items: readonly T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
-
 /**
  * Map over items with a bounded number of concurrent workers. Used to fan out upstream
  * fetches (per-exercise history, the CLI export) without bursting the host all at once or,
@@ -201,17 +208,106 @@ export async function mapPool<T, R>(
   limit: number,
   fn: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
+  assertPositiveInteger(limit, "Concurrency limit");
   const out: R[] = Array.from({ length: items.length });
   let next = 0;
+  // On the first failure, stop handing out new items but let every started call finish before
+  // rejecting, so a caller never reports an error while writes it issued are still in flight.
+  const state: { failure: { error: unknown } | null } = { failure: null };
   const worker = async (): Promise<void> => {
-    while (next < items.length) {
+    while (next < items.length && state.failure === null) {
       const i = next;
       next += 1;
-      out[i] = await fn(items[i] as T, i);
+      try {
+        out[i] = await fn(items[i] as T, i);
+      } catch (error) {
+        state.failure ??= { error };
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  if (state.failure !== null) throw state.failure.error;
   return out;
+}
+
+/**
+ * A concurrency limiter shared across independent call sites: at most `max` tasks run at once,
+ * the rest wait in FIFO order. Where {@link mapPool} bounds one fan-out, a limiter bounds the sum
+ * of several nested ones (a session write that fans out per set, each of which fans out per
+ * exercise) to a single ceiling. `cancel` stops the queue: tasks not yet started, and any run
+ * after it, reject with the given error, while tasks already running finish normally, so one
+ * failed write halts the rest of a session without abandoning requests already on the wire.
+ */
+export type Limiter = {
+  run<T>(task: () => Promise<T>): Promise<T>;
+  /** Run required finalization even after cancellation, while preserving the same concurrency cap. */
+  runFinalizer<T>(task: () => Promise<T>): Promise<T>;
+  cancel(error: unknown): void;
+};
+
+export function createLimiter(max: number): Limiter {
+  assertPositiveInteger(max, "Maximum concurrency");
+  let active = 0;
+  let cancelled: { error: unknown } | null = null;
+  const waiting: Array<{
+    start: () => void;
+    abort: (error: unknown) => void;
+    finalizer: boolean;
+  }> = [];
+  const acquire = (finalizer: boolean): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (cancelled !== null && !finalizer) {
+        reject(cancelled.error);
+      } else if (active < max) {
+        active += 1;
+        resolve();
+      } else {
+        waiting.push({
+          start: () => {
+            active += 1;
+            resolve();
+          },
+          abort: reject,
+          finalizer,
+        });
+      }
+    });
+  const release = (): void => {
+    active -= 1;
+    waiting.shift()?.start();
+  };
+  return {
+    async run(task) {
+      await acquire(false);
+      try {
+        return await task();
+      } finally {
+        release();
+      }
+    },
+    async runFinalizer(task) {
+      await acquire(true);
+      try {
+        return await task();
+      } finally {
+        release();
+      }
+    },
+    cancel(error) {
+      cancelled ??= { error };
+      const queued = waiting.splice(0);
+      for (const entry of queued) {
+        if (entry.finalizer) waiting.push(entry);
+        else entry.abort(error);
+      }
+    },
+  };
+}
+
+function assertPositiveInteger(value: number, label: string): void {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new RangeError(`${label} must be a positive integer; received ${value}.`);
+  }
 }
 
 /**

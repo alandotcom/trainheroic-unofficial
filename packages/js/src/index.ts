@@ -10,8 +10,11 @@ export type {
 export * from "./response-check";
 export * from "./exercise-util";
 export * from "./athlete";
+export * from "./exercise-history";
 export * from "./coach-athlete-calendar";
 export * from "./athlete-set-write";
+export * from "./athlete-workout-note";
+export * from "./athlete-exercise-note";
 export * from "./workout-export";
 export * from "./main-lifts";
 export * from "./coach";

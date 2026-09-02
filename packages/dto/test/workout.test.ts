@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockSpecSchema, workoutSpecSchema } from "../src/workout";
+import { blockSpecSchema, parseWorkoutDate, workoutSpecSchema } from "../src/workout";
 
 describe("workout schemas", () => {
   it("accepts a valid block", () => {
@@ -37,6 +37,15 @@ describe("workout schemas", () => {
     expect(() => blockSpecSchema.parse({ title: "x", exercises: [{ reps: 5 }] })).toThrow();
   });
 
+  it("rejects mismatched per-set reps and weight arrays", () => {
+    expect(() =>
+      blockSpecSchema.parse({
+        title: "Strength",
+        exercises: [{ id: 1, reps: [5, 5], weight: [100, 110, 120] }],
+      }),
+    ).toThrow(/same length/iu);
+  });
+
   it("parses a full workout spec with a session instruction", () => {
     const spec = workoutSpecSchema.parse({
       blocks: [{ title: "A", exercises: [{ id: 1, reps: 5 }] }],
@@ -53,5 +62,19 @@ describe("workout schemas", () => {
       leaderboard: { unit: "time", lowest_wins: true },
     });
     expect(block.leaderboard).toEqual({ unit: "time", lowest_wins: true });
+  });
+});
+
+describe("parseWorkoutDate", () => {
+  it("parses YYYY-M-D and YYYY-MM-DD", () => {
+    expect(parseWorkoutDate("2026-6-2")).toEqual([2026, 6, 2]);
+    expect(parseWorkoutDate("2026-06-02")).toEqual([2026, 6, 2]);
+  });
+
+  it("rejects a blank part, non-digits, and an impossible month or day", () => {
+    expect(() => parseWorkoutDate("2026-9-")).toThrow(/YYYY-M-D/u);
+    expect(() => parseWorkoutDate("2026-06-02T00:00")).toThrow(/YYYY-M-D/u);
+    expect(() => parseWorkoutDate("2026-0-5")).toThrow(/real month and day/u);
+    expect(() => parseWorkoutDate("2026-2-32")).toThrow(/real month and day/u);
   });
 });

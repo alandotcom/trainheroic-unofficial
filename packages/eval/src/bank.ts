@@ -213,6 +213,19 @@ export const ATHLETE_WRITE_BANK: BankEntry[] = [
     expect: ["athlete_log_session", "athlete_log_set"],
     expectWrite: "savedworkoutset",
   },
+  {
+    section: "athlete-write",
+    query: "Add a note to today's workout: felt strong, hips were tight.",
+    expect: ["athlete_workout_note"],
+    // Trailing slash so this does not also match `savedworkoutset`.
+    expectWrite: "savedworkout/",
+  },
+  {
+    section: "athlete-write",
+    query: "Note on today's Banded Chest Fly that I used the green band.",
+    expect: ["athlete_exercise_note"],
+    expectWrite: "savedworkoutsetexercise",
+  },
 ];
 
 export const COACH_WRITE_BANK: BankEntry[] = [

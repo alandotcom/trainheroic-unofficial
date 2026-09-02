@@ -1,5 +1,53 @@
 # @trainheroic-unofficial/dto
 
+## 3.5.2
+
+### Patch Changes
+
+- 38824dd: Athlete workout presenters: `presentLogTargets` now reports the coach's prescription from the template row instead of the saved copy's slots (which hold the logged values once sets are performed), and `presentAthleteWorkout` / the export honour targets held unperformed on the saved copy, so a `prescribeAthleteSet` override and a personal session's not-yet-logged sets appear as prescribed. `readSession` keeps `reps` and `load` slot-aligned (a reps-only or load-only set no longer shifts the other list) and zero-pads `date`. CLI integer arguments reject blanks and fractions, `--limit` must be positive, `athlete exercises --limit` applies to the full catalog, and the `roster-activity --metric` help text says the flag switches units. `parseWorkoutDate` rejects a blank part and an out-of-range month or day. The messaging warehouse stores a null comment image as NULL rather than the text "null"; `programming_stored` returns a superset block's sets in prescribed exercise order on every read; a `sync_state` upsert leaves a field the caller omits untouched; and the exercise library's `pruned` count is reported on the node:sqlite adapter too.
+
+## 3.5.1
+
+### Patch Changes
+
+- d2692c8: Split exercise prescriptions above TrainHeroic's ten-set limit into consecutive blocks after explicit user confirmation, and reject mismatched per-set rep and weight arrays.
+
+## 3.5.0
+
+### Minor Changes
+
+- 385a944: feat(athlete): add a per-exercise note on a saved slot
+
+  Athletes can write the "Add exercise note" field (band color, etc.) via
+  `PUT /1.0/athlete/savedworkoutsetexercise/{id}` with `{id, notes}`. Adds
+  SDK `setAthleteExerciseNote`, MCP `athlete_exercise_note`, and CLI
+  `athlete exercise-note`. Workout, log-target, and history reads surface the note.
+
+  Fixes TRAINHEROIC-MCP-X
+
+## 3.4.0
+
+### Minor Changes
+
+- 466e51e: feat(athlete): add a session note (and optional RPE) on a workout
+
+  Athletes can leave the free-text note on a saved workout via `PUT /1.0/athlete/savedworkout/{id}`.
+  Adds SDK `setAthleteWorkoutNote`, MCP `athlete_workout_note`, and CLI `athlete workout-note`.
+  `athlete_workouts` now surfaces `notes` and `rpe` from the saved copy, distinct from coach
+  `instruction`.
+
+## 3.3.3
+
+## 3.3.2
+
+## 3.3.1
+
+## 3.3.0
+
+### Minor Changes
+
+- 48fe6bc: Add structured MCP tool results and reusable output schemas for hosted tool validation.
+
 ## 3.2.0
 
 ### Minor Changes

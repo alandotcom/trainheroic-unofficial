@@ -233,11 +233,45 @@ function registerAthleteReads(
   app.get("/3.0/athlete/leaderboard/:id", (c) => c.json({ entries: [] }));
 }
 
+/** Set-write PUTs, split out to keep registerWrites under the line cap. */
+function registerSetWrites(app: Hono, writes: WriteRecord[]): void {
+  app.put("/1.0/coach/savedworkoutsetexercise/:id/:athleteId", async (c) => {
+    await record(c, writes);
+    return c.json({ id: Number(c.req.param("id")), success: true });
+  });
+  app.put("/1.0/coach/savedworkoutset/:id/:athleteId", async (c) => {
+    await record(c, writes);
+    return c.json({ id: Number(c.req.param("id")), completed: "1" });
+  });
+  app.put("/1.0/athlete/savedworkoutsetexercise/:id", async (c) => {
+    await record(c, writes);
+    return c.json({ id: Number(c.req.param("id")), success: true });
+  });
+  app.put("/1.0/athlete/savedworkoutset/:id", async (c) => {
+    await record(c, writes);
+    return c.json({ id: Number(c.req.param("id")), completed: "1" });
+  });
+}
+
+/** Session-note PUT (the saved-workout object, not a set). */
+function registerSavedWorkoutWrite(app: Hono, writes: WriteRecord[]): void {
+  app.put("/1.0/athlete/savedworkout/:id", async (c) => {
+    const body = (await record(c, writes)) as { notes?: string; rpe?: number | null } | null;
+    return c.json({
+      id: Number(c.req.param("id")),
+      notes: body?.notes ?? "",
+      rpe: body?.rpe ?? null,
+    });
+  });
+}
+
 function registerWrites(
   app: Hono,
   writes: WriteRecord[],
   personal: { current: PersonalSession | null },
 ): void {
+  registerSetWrites(app, writes);
+  registerSavedWorkoutWrite(app, writes);
   app.delete("/v5/programs/:id", async (c) => {
     await record(c, writes);
     return c.json("Successfully deleted program");
@@ -261,24 +295,6 @@ function registerWrites(
   app.post("/1.0/coach/team/updatePublishSettings", async (c) => {
     await record(c, writes);
     return c.json({ ok: true });
-  });
-
-  // Set-write step 1 (the data write) + step 2 (mark complete), coach (…/{athleteId}) and athlete.
-  app.put("/1.0/coach/savedworkoutsetexercise/:id/:athleteId", async (c) => {
-    await record(c, writes);
-    return c.json({ id: Number(c.req.param("id")), success: true });
-  });
-  app.put("/1.0/coach/savedworkoutset/:id/:athleteId", async (c) => {
-    await record(c, writes);
-    return c.json({ id: Number(c.req.param("id")), completed: "1" });
-  });
-  app.put("/1.0/athlete/savedworkoutsetexercise/:id", async (c) => {
-    await record(c, writes);
-    return c.json({ id: Number(c.req.param("id")), success: true });
-  });
-  app.put("/1.0/athlete/savedworkoutset/:id", async (c) => {
-    await record(c, writes);
-    return c.json({ id: Number(c.req.param("id")), completed: "1" });
   });
 
   // Per-athlete exercise swap — echoes the swapped row the SDK reads back.

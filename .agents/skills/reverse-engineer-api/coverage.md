@@ -35,7 +35,6 @@ these as done (closed), not as open gaps.
 | `apis.trainheroic.com/user` (`api-token`) | both | Different auth header; not the session-token client |
 | Workout set reorder / move exercises | coach | Path never found |
 | Library settings, coach prefs write | coach | Prefs GET 200; writes 403/405 historically |
-| `PUT /1.0/athlete/savedworkout/{id}` | athlete | Skip — per-set logging is enough |
 | `GET /v5/programs/{,new,free,fixed}` | coach | Marketplace catalog — out of scope |
 | `GET /v5/users/{id}/features` | both | Feature flags — out of scope |
 | `GET /v5/coaches/orgs` | coach | Orgs list — out of scope |
@@ -63,7 +62,9 @@ log/prescribe/swap for athlete; messaging send/delete;
 analytics POSTs (readiness, 1RM, training-summary, compliance, lift-progress, working-max-history).
 
 Athlete: whoami/profile/prefs/working-maxes/workouts/log-targets/exercises/recent-exercises/circuits/programming-programs/history/PRs/stats/leaderboard;
-personal session create/add/remove; log/prescribe/swap set; ad-hoc log session.
+personal session create/add/remove; log/prescribe/swap set; ad-hoc log session;
+session note `PUT /1.0/athlete/savedworkout/{id}`; per-exercise note
+`PUT /1.0/athlete/savedworkoutsetexercise/{id}` (`{id, notes}`).
 
 Wrapped 2026-08-16 (not gaps): `DELETE /v5/programs/{programId}` (`program_delete`),
 `DELETE /v5/exercises/{id}` (`exercise_delete`), `GET /1.0/coach/workouts`

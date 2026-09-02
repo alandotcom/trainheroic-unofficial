@@ -65,6 +65,72 @@ describe("buildSession", () => {
     expect(second.key).toBe("k::10002");
   });
 
+  it("requires explicit confirmation before splitting more than ten sets", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      buildSession(new TrainHeroicClient("a@b.com", "pw"), {
+        programId: 5,
+        date: [2026, 6, 22],
+        blocks: [{ title: "Squat", exercises: [{ id: 1, sets: 11, reps: 5 }] }],
+      }),
+    ).rejects.toThrow(/confirmSetSplit:true/iu);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("saves confirmed oversized prescriptions as consecutive blocks of at most ten sets", async () => {
+    let blockPayload: Array<Record<string, unknown>> = [];
+    const exercisePayloads: unknown[][] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+        if (url.includes("/createWorkoutForDay/")) return json({ workout_id: 10, id: 20 });
+        if (url.includes("/saveProgramWorkoutSets")) {
+          blockPayload = JSON.parse(String(init?.body)) as Array<Record<string, unknown>>;
+          return json([
+            { order: 1, id: 101 },
+            { order: 2, id: 102 },
+          ]);
+        }
+        if (url.includes("/saveWorkoutSetExercises")) {
+          exercisePayloads.push(JSON.parse(String(init?.body)) as unknown[]);
+          return json({ success: 1 });
+        }
+        return json({});
+      }),
+    );
+
+    await buildSession(new TrainHeroicClient("a@b.com", "pw"), {
+      programId: 5,
+      date: [2026, 6, 22],
+      confirmSetSplit: true,
+      blocks: [
+        {
+          title: "Squat",
+          exercises: [
+            {
+              id: 1,
+              reps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+              weight: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(blockPayload.map((block) => block.title)).toEqual(["Squat", "Squat"]);
+    const first = exercisePayloads[0]?.[0] as Record<string, unknown>;
+    const second = exercisePayloads[1]?.[0] as Record<string, unknown>;
+    expect(first.set_num).toBe(10);
+    expect(first.param_1_data_10).toBe("10");
+    expect(first.param_2_data_10).toBe("110");
+    expect(second.set_num).toBe(1);
+    expect(second.param_1_data_1).toBe("11");
+    expect(second.param_2_data_1).toBe("111");
+  });
+
   it("bounds concurrent exercise-save requests across many blocks", async () => {
     let active = 0;
     let peak = 0;
@@ -291,6 +357,65 @@ describe("readSession", () => {
     expect(res.blocks[0]?.leaderboard).toContain("ROUNDS");
     expect(res.blocks[0]?.exercises[0]?.primaryUnit).toBe("reps");
     expect(res.blocks[0]?.exercises[0]?.loadUnit).toBe("lb");
+  });
+
+  it("keeps reps and load slot-aligned and zero-pads the date on read-back", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+        if (url.includes("/1.0/coach/programs/edit/")) {
+          return json({
+            programWorkouts: [
+              {
+                id: 21,
+                year: 2026,
+                month: 6,
+                day: 2,
+                published: 0,
+                sets: {
+                  "1": {
+                    id: 5,
+                    order: 1,
+                    title: "Primary",
+                    exercises: [
+                      {
+                        id: 9,
+                        order: 1,
+                        title: "Bench",
+                        // Set 2 is reps-only, set 4 is load-only ("work up to 225").
+                        param_1_data_1: "5",
+                        param_2_data_1: "185",
+                        param_1_data_2: "5",
+                        param_1_data_3: "5",
+                        param_2_data_3: "205",
+                        param_2_data_4: "225",
+                      },
+                      {
+                        id: 10,
+                        order: 2,
+                        title: "Row",
+                        param_1_data_1: "10",
+                        param_1_data_2: "10",
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          });
+        }
+        return json({});
+      }),
+    );
+    const res = await readSession(new TrainHeroicClient("a@b.com", "pw"), 5, [2026, 6, 2], 21);
+    expect(res.date).toBe("2026-06-02");
+    const bench = res.blocks[0]?.exercises[0];
+    expect(bench?.reps).toEqual(["5", "5", "5", ""]);
+    expect(bench?.load).toEqual(["185", "", "205", "225"]);
+    const row = res.blocks[0]?.exercises[1];
+    expect(row?.reps).toEqual(["10", "10"]);
+    expect(row?.load).toEqual([]);
   });
 
   it("includes block-level instruction on read-back (Circuit free-text)", async () => {

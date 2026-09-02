@@ -40,8 +40,10 @@ completed workouts in an inclusive window. Each item:
     at 0.
 
 The SDK's `presentAthleteWorkout` merges the two copies into `{ id, date, title, program, team,
-instruction, logged, blocks: [{ order, title, instruction, isTest, exercises: [{ exerciseId,
-title, instruction, units, prescribed, performed }] }] }`. `performed` holds the per-set values
+instruction, notes, rpe, logged, blocks: [{ order, title, instruction, isTest, exercises: [{ exerciseId,
+title, instruction, notes, units, prescribed, performed }] }] }`. `instruction` is the coach's session
+note; `notes` / `rpe` are the athlete's own session note and RPE on `saved_workout` (null when
+unset). Each exercise's `notes` is the per-exercise athlete note (null when unset). `performed` holds the per-set values
 the athlete logged (made-gated; empty when nothing was recorded), `logged` is true when any
 exercise has `performed` values, and athlete-added/personal work with no prescription is
 appended as its own blocks. No `--raw` is needed to read logged results.
@@ -69,11 +71,25 @@ resolve the ids from `summarizedSavedWorkout.saved_workout`.
 param_1_data_N, param_2_data_N (10 slots) }`. This is the only path that actually stores
    reps/weight (and it alone surfaces the result in exercise history). The
    `savedworkoutset`/`savedworkout` PUTs accept the same fields but **silently discard** the
-   `param_N_data` values.
+   `param_N_data` values (the savedworkout PUT is the session-note / RPE write, not a log path).
 2. **Mark the set completed** — `PUT /1.0/athlete/savedworkoutset/{savedWorkoutSetId}` with
    the camelCase in-memory model (`sessionId` ← `saved_workout.id`, `workoutSetId` ←
    `workout_set_id`, `isSuperSet`, `exercises: [savedWorkoutSetExerciseId, …]`, `completed`).
    A minimal `{id, sessionId, completed}` body returns 500 — the full mapped body is required.
+
+3. **Session note / RPE** — `PUT /1.0/athlete/savedworkout/{savedWorkoutId}` with `{ id, notes?, rpe? }`.
+   GET on that path 405s; resolve `savedWorkoutId` from the range item's
+   `summarizedSavedWorkout.saved_workout.id`. A notes-only body leaves rpe untouched and vice versa.
+   Empty `notes` clears the note. `session_duration` is not a field on this object (the coach
+   calendar summary's duration is separate). The SDK's `setAthleteWorkoutNote` looks the saved id
+   up from `date` + `programWorkoutId` (the range item's top-level `id`).
+
+4. **Per-exercise note** — `PUT /1.0/athlete/savedworkoutsetexercise/{savedWorkoutSetExerciseId}`
+   with `{ id, notes }`. A notes-only body leaves logged reps/weight untouched; empty `notes`
+   clears. GET on that path 405s. The range read's saved copy and
+   `GET /v5/exercises/{id}/history[].notes` both echo the stored string. Distinct from the
+   session note (step 3) and from coach `instruction`. The SDK's `setAthleteExerciseNote` takes
+   the slot id from `athlete_log_targets`.
 
 There is no GET for a single saved workout set; read it from the workout range's
 `saved_workout.workoutSets[]` (`id` = savedWorkoutSetId, `workoutSetExercises[].id` =
@@ -87,8 +103,10 @@ account) expose:
 - Live reads: `athlete_whoami`, `athlete_profile`, `athlete_prefs`, `athlete_workouts`,
   `athlete_exercises`, `athlete_exercise_history`, `athlete_personal_records`,
   `athlete_exercise_stats`, `athlete_working_maxes`, `athlete_leaderboard`.
-- Gated writes include `athlete_log_set` for performed results and `athlete_prescribe_set` for
-  planned reps/weight that must not mark a set completed (elicitation or `confirm:true`).
+- Gated writes include `athlete_log_set` for performed results, `athlete_prescribe_set` for
+  planned reps/weight that must not mark a set completed, `athlete_workout_note` for the
+  session note / RPE, and `athlete_exercise_note` for the per-exercise note (elicitation or
+  `confirm:true`).
 
 ## Warehouse tools (hosted worker only, D1-backed)
 
@@ -108,5 +126,8 @@ startDate?/endDate? }`.
 Living status table: `.agents/skills/reverse-engineer-api/coverage.md`.
 
 In-scope athlete reads are wrapped (`athlete_circuits`, `athlete_programming_programs`,
-`athlete_recent_exercises`). Closed without a wrap: `PUT /1.0/athlete/savedworkout/{id}`
-(per-set logging is enough); working-max write (read exists; set/update never found).
+`athlete_recent_exercises`). Closed without a wrap: working-max write (read exists; set/update
+never found). `PUT /1.0/athlete/savedworkout/{id}` is wrapped as the session-note / RPE write
+(`athlete_workout_note`); it is not a set-logging path. `PUT /1.0/athlete/savedworkoutsetexercise/{id}`
+with `{id, notes}` is the per-exercise note write (`athlete_exercise_note`); a notes-only body
+does not wipe logged reps/weight.

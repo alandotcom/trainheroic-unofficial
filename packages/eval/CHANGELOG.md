@@ -1,5 +1,88 @@
 # @trainheroic-unofficial/eval
 
+## 3.5.2
+
+### Patch Changes
+
+- Updated dependencies [c218865]
+- Updated dependencies [c36add1]
+- Updated dependencies [38824dd]
+  - @trainheroic-unofficial/js@3.5.2
+  - @trainheroic-unofficial/dto@3.5.2
+
+## 3.5.1
+
+### Patch Changes
+
+- Updated dependencies [d2692c8]
+  - @trainheroic-unofficial/js@3.5.1
+  - @trainheroic-unofficial/dto@3.5.1
+
+## 3.5.0
+
+### Minor Changes
+
+- 385a944: feat(athlete): add a per-exercise note on a saved slot
+
+  Athletes can write the "Add exercise note" field (band color, etc.) via
+  `PUT /1.0/athlete/savedworkoutsetexercise/{id}` with `{id, notes}`. Adds
+  SDK `setAthleteExerciseNote`, MCP `athlete_exercise_note`, and CLI
+  `athlete exercise-note`. Workout, log-target, and history reads surface the note.
+
+  Fixes TRAINHEROIC-MCP-X
+
+### Patch Changes
+
+- Updated dependencies [385a944]
+  - @trainheroic-unofficial/dto@3.5.0
+  - @trainheroic-unofficial/js@3.5.0
+
+## 3.4.0
+
+### Minor Changes
+
+- 466e51e: feat(athlete): add a session note (and optional RPE) on a workout
+
+  Athletes can leave the free-text note on a saved workout via `PUT /1.0/athlete/savedworkout/{id}`.
+  Adds SDK `setAthleteWorkoutNote`, MCP `athlete_workout_note`, and CLI `athlete workout-note`.
+  `athlete_workouts` now surfaces `notes` and `rpe` from the saved copy, distinct from coach
+  `instruction`.
+
+### Patch Changes
+
+- Updated dependencies [466e51e]
+  - @trainheroic-unofficial/dto@3.4.0
+  - @trainheroic-unofficial/js@3.4.0
+
+## 3.3.3
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@3.3.3
+  - @trainheroic-unofficial/js@3.3.3
+
+## 3.3.2
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@3.3.2
+  - @trainheroic-unofficial/js@3.3.2
+
+## 3.3.1
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@3.3.1
+  - @trainheroic-unofficial/js@3.3.1
+
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [48fe6bc]
+  - @trainheroic-unofficial/dto@3.3.0
+  - @trainheroic-unofficial/js@3.3.0
+
 ## 3.2.0
 
 ### Minor Changes

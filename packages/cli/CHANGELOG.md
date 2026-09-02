@@ -1,5 +1,92 @@
 # @trainheroic-unofficial/cli
 
+## 3.5.2
+
+### Patch Changes
+
+- c218865: Fix `searchExerciseHistory` (and the `athlete_exercises` tool / `athlete exercises --q` command built on it) returning up to `limit` unrelated exercises for a query that matches nothing: rows are now filtered to titles carrying every query token before ranking, and a blank query returns no rows. Fix `coach athlete-lift-history --until` dropping a session whose completion date carries a time component, by sharing the `historyInRange` window helper between the SDK, the MCP tools, and the CLI.
+- 38824dd: Athlete workout presenters: `presentLogTargets` now reports the coach's prescription from the template row instead of the saved copy's slots (which hold the logged values once sets are performed), and `presentAthleteWorkout` / the export honour targets held unperformed on the saved copy, so a `prescribeAthleteSet` override and a personal session's not-yet-logged sets appear as prescribed. `readSession` keeps `reps` and `load` slot-aligned (a reps-only or load-only set no longer shifts the other list) and zero-pads `date`. CLI integer arguments reject blanks and fractions, `--limit` must be positive, `athlete exercises --limit` applies to the full catalog, and the `roster-activity --metric` help text says the flag switches units. `parseWorkoutDate` rejects a blank part and an out-of-range month or day. The messaging warehouse stores a null comment image as NULL rather than the text "null"; `programming_stored` returns a superset block's sets in prescribed exercise order on every read; a `sync_state` upsert leaves a field the caller omits untouched; and the exercise library's `pruned` count is reported on the node:sqlite adapter too.
+- Updated dependencies [c218865]
+- Updated dependencies [c36add1]
+- Updated dependencies [38824dd]
+  - @trainheroic-unofficial/js@3.5.2
+  - @trainheroic-unofficial/dto@3.5.2
+
+## 3.5.1
+
+### Patch Changes
+
+- d2692c8: Split exercise prescriptions above TrainHeroic's ten-set limit into consecutive blocks after explicit user confirmation, and reject mismatched per-set rep and weight arrays.
+- Updated dependencies [d2692c8]
+  - @trainheroic-unofficial/js@3.5.1
+  - @trainheroic-unofficial/dto@3.5.1
+
+## 3.5.0
+
+### Minor Changes
+
+- 385a944: feat(athlete): add a per-exercise note on a saved slot
+
+  Athletes can write the "Add exercise note" field (band color, etc.) via
+  `PUT /1.0/athlete/savedworkoutsetexercise/{id}` with `{id, notes}`. Adds
+  SDK `setAthleteExerciseNote`, MCP `athlete_exercise_note`, and CLI
+  `athlete exercise-note`. Workout, log-target, and history reads surface the note.
+
+  Fixes TRAINHEROIC-MCP-X
+
+### Patch Changes
+
+- Updated dependencies [385a944]
+  - @trainheroic-unofficial/dto@3.5.0
+  - @trainheroic-unofficial/js@3.5.0
+
+## 3.4.0
+
+### Minor Changes
+
+- 466e51e: feat(athlete): add a session note (and optional RPE) on a workout
+
+  Athletes can leave the free-text note on a saved workout via `PUT /1.0/athlete/savedworkout/{id}`.
+  Adds SDK `setAthleteWorkoutNote`, MCP `athlete_workout_note`, and CLI `athlete workout-note`.
+  `athlete_workouts` now surfaces `notes` and `rpe` from the saved copy, distinct from coach
+  `instruction`.
+
+### Patch Changes
+
+- Updated dependencies [466e51e]
+  - @trainheroic-unofficial/dto@3.4.0
+  - @trainheroic-unofficial/js@3.4.0
+
+## 3.3.3
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@3.3.3
+  - @trainheroic-unofficial/js@3.3.3
+
+## 3.3.2
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@3.3.2
+  - @trainheroic-unofficial/js@3.3.2
+
+## 3.3.1
+
+### Patch Changes
+
+- d01e9cf: Require explicit CLI confirmation before reassigning a team's live calendar.
+- @trainheroic-unofficial/dto@3.3.1
+  - @trainheroic-unofficial/js@3.3.1
+
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [48fe6bc]
+  - @trainheroic-unofficial/dto@3.3.0
+  - @trainheroic-unofficial/js@3.3.0
+
 ## 3.2.0
 
 ### Minor Changes

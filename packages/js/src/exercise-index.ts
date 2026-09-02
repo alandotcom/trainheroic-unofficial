@@ -78,6 +78,7 @@ export class ExerciseLibrary implements ExerciseIndex {
   #byId = new Map<number, Stored>();
   #loaded = false;
   #fetchedAt = 0;
+  #loading: Promise<unknown> | null = null;
 
   constructor(client: TrainHeroicClient, cache: LibraryCache = new MemoryLibraryCache()) {
     this.#client = client;
@@ -113,11 +114,13 @@ export class ExerciseLibrary implements ExerciseIndex {
   }
 
   async ensureFresh(): Promise<void> {
-    if (!this.#loaded) {
-      await this.#ensureLoaded();
-    } else if (Date.now() - this.#fetchedAt > TTL_MS) {
-      await this.refresh();
-    }
+    if (this.#loaded && Date.now() - this.#fetchedAt <= TTL_MS) return;
+    // Callers that fan out (a workout build resolving many exercises under Promise.all) all
+    // await one load; without this a cold library fetched the whole catalog once per caller.
+    this.#loading ??= (this.#loaded ? this.refresh() : this.#ensureLoaded()).finally(() => {
+      this.#loading = null;
+    });
+    await this.#loading;
   }
 
   async refresh(): Promise<Record<string, unknown>> {
@@ -139,6 +142,7 @@ export class ExerciseLibrary implements ExerciseIndex {
   }
 
   async defaultsMany(ids: readonly number[]): Promise<Map<number, ExerciseDefaults>> {
+    await this.ensureFresh();
     const result = new Map<number, ExerciseDefaults>();
     for (const id of ids) {
       const s = this.#byId.get(id);

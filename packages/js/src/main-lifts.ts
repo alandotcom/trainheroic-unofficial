@@ -5,11 +5,7 @@
 // into lift families, pick the variant they log most, and pull that exercise's PR board. No
 // `node:*` here — this runs unchanged on workerd.
 import { coerceInt, coerceNum, mapPool } from "./exercise-util";
-import {
-  fetchExerciseHistoryDetail,
-  presentAthleteWorkouts,
-  presentExerciseHistory,
-} from "./athlete";
+import { fetchExerciseHistoryDetail, performedExercises, presentExerciseHistory } from "./athlete";
 import { fetchCoachAthleteWorkouts } from "./coach-athlete-calendar";
 import { fetchCoachRoster } from "./coach";
 import type { TrainHeroicClient } from "./client";
@@ -123,19 +119,15 @@ export async function resolveAthleteMainLifts(
     workouts = [];
   }
 
-  for (const view of presentAthleteWorkouts(workouts)) {
-    for (const block of view.blocks) {
-      for (const ex of block.exercises) {
-        // Only count a lift the athlete actually performed (logged a set), not merely prescribed.
-        if (ex.performed.length === 0 || ex.exerciseId === null) continue;
-        const family = classifyMainLift(ex.title);
-        if (family === null) continue;
-        const byId = tally.get(family) ?? new Map<number, { count: number; title: string }>();
-        const prev = byId.get(ex.exerciseId);
-        byId.set(ex.exerciseId, { count: (prev?.count ?? 0) + 1, title: prev?.title ?? ex.title });
-        tally.set(family, byId);
-      }
-    }
+  // Only a lift the athlete actually performed (logged a set) counts, not merely prescribed work;
+  // performedExercises reads that off the saved copies without building the full merged view.
+  for (const ex of performedExercises(workouts)) {
+    const family = classifyMainLift(ex.title);
+    if (family === null) continue;
+    const byId = tally.get(family) ?? new Map<number, { count: number; title: string }>();
+    const prev = byId.get(ex.exerciseId);
+    byId.set(ex.exerciseId, { count: (prev?.count ?? 0) + 1, title: prev?.title ?? ex.title });
+    tally.set(family, byId);
   }
 
   const lifts: ResolvedLift[] = [];

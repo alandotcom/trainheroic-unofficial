@@ -3,8 +3,15 @@ import { z } from "zod";
 import {
   type BlockSpec,
   blockSpecSchema,
+  opaqueOutputSchema,
   parseWorkoutDate,
+  removedSessionOutputSchema,
   sessionTemplateCreateSchema,
+  sessionTemplateCreatedOutputSchema,
+  toolOutputSchema,
+  workoutBuildOutputSchema,
+  workoutPublishOutputSchema,
+  workoutReadOutputSchema,
 } from "@trainheroic-unofficial/dto";
 import {
   buildSession,
@@ -17,9 +24,20 @@ import {
   readSession,
   removeSession,
   resolveBuildProgramId,
+  setSplitSummary,
 } from "@trainheroic-unofficial/js";
 import { confirmGate } from "../confirm";
-import { apiCall, attempt, DESTRUCTIVE, errorResult, idParam, jsonResult, toId } from "../context";
+import {
+  ADDITIVE,
+  apiCall,
+  attempt,
+  DESTRUCTIVE,
+  errorResult,
+  idParam,
+  jsonResult,
+  READ,
+  toId,
+} from "../context";
 import type { ToolContext } from "../context";
 
 /** Build a draft session (workout_build). */
@@ -37,7 +55,9 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         "superset. A block with empty exercises and a non-empty block instruction is a text-only " +
         "Circuit / Conditioning block (type 1). Add a block 'leaderboard' for a Red-Zone score, " +
         "or a top-level 'instruction' for the session note (Coach Instructions). Returns the " +
-        "draft ids, a read-back, and unit advisories. Review, then workout_publish.",
+        "draft ids, a read-back, and unit advisories. Exercises above 10 sets are split into " +
+        "consecutive same-titled blocks and require confirmation (elicitation, or confirm:true). " +
+        "Review, then workout_publish.",
       inputSchema: {
         programId: z.number().optional(),
         athleteId: idParam.optional(),
@@ -45,14 +65,24 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         timelineDay: z.number().optional(),
         blocks: z.array(blockSpecSchema),
         instruction: z.string().optional(),
+        confirm: z.boolean().optional(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      outputSchema: toolOutputSchema(workoutBuildOutputSchema),
+      annotations: ADDITIVE,
     },
-    ({ programId, athleteId, date, timelineDay, blocks, instruction }) =>
+    ({ programId, athleteId, date, timelineDay, blocks, instruction, confirm }, extra) =>
       attempt(async () => {
         if (date === undefined && timelineDay === undefined) {
           return errorResult("Provide either date (YYYY-M-D) or timelineDay.");
         }
+
+        const typed = blocks as BlockSpec[];
+        const splitSummary = setSplitSummary(typed);
+        if (splitSummary !== null) {
+          const blocked = confirmGate(extra, `${splitSummary} Continue?`, confirm);
+          if (blocked) return blocked;
+        }
+
         const resolveArgs: {
           programId?: number;
           athleteId?: number;
@@ -63,8 +93,8 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         if (date !== undefined) resolveArgs.date = date;
         const resolved = await resolveBuildProgramId(ctx.client, resolveArgs);
 
-        const typed = blocks as BlockSpec[];
         const opts: BuildOptions = { programId: resolved, blocks: typed, publish: false };
+        if (splitSummary !== null) opts.confirmSetSplit = true;
         if (date !== undefined) opts.date = parseWorkoutDate(date);
         if (timelineDay !== undefined) opts.timelineDay = timelineDay;
         if (instruction !== undefined) opts.instruction = instruction;
@@ -94,7 +124,8 @@ function registerReadPublish(server: McpServer, ctx: ToolContext): void {
       title: "Read a built session",
       description: "Read-back a session by programId, date (YYYY-M-D), and programWorkout id.",
       inputSchema: { programId: z.number(), date: z.string(), pwId: z.number() },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      outputSchema: toolOutputSchema(workoutReadOutputSchema),
+      annotations: READ,
     },
     ({ programId, date, pwId }) =>
       attempt(async () =>
@@ -115,7 +146,8 @@ function registerReadPublish(server: McpServer, ctx: ToolContext): void {
         pwId: z.number(),
         confirm: z.boolean().optional(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      outputSchema: toolOutputSchema(workoutPublishOutputSchema),
+      annotations: DESTRUCTIVE,
     },
     ({ programId, date, pwId, confirm }, extra) =>
       attempt(async () => {
@@ -153,7 +185,8 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
         pwId: z.number(),
         confirm: z.boolean().optional(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      outputSchema: toolOutputSchema(removedSessionOutputSchema),
+      annotations: DESTRUCTIVE,
     },
     ({ programId, pwId, confirm }, extra) =>
       attempt(async () => {
@@ -176,7 +209,8 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
         "Unpublish a previously published session (POST .../programWorkout/unPublish/{pwId}). It " +
         "is no longer athlete-facing. Requires confirmation (elicitation, or confirm:true).",
       inputSchema: { pwId: z.number(), confirm: z.boolean().optional() },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      outputSchema: opaqueOutputSchema,
+      annotations: DESTRUCTIVE,
     },
     ({ pwId, confirm }, extra) =>
       attempt(async () => {
@@ -200,7 +234,8 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
         "toProgramId may be a team group_program or an athlete calendar program id " +
         "(from /v5/calendars/athletes/{athleteId}?year=&month= / workout_build athleteId).",
       inputSchema: { toProgramId: z.number(), pwId: z.number(), toDate: z.string() },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      outputSchema: opaqueOutputSchema,
+      annotations: ADDITIVE,
     },
     ({ toProgramId, pwId, toDate }) =>
       attempt(async () => jsonResult(await copySession(ctx.client, { toProgramId, pwId, toDate }))),
@@ -214,7 +249,8 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
         "Save an existing session as a reusable template in the session library " +
         "(POST .../programWorkout/saveWorkoutAsTemplate/{workoutId}). Pass the workout_id.",
       inputSchema: { workoutId: z.number() },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      outputSchema: opaqueOutputSchema,
+      annotations: ADDITIVE,
     },
     ({ workoutId }) =>
       apiCall(ctx, "POST", `/2.0/coach/calendar/programWorkout/saveWorkoutAsTemplate/${workoutId}`),
@@ -230,8 +266,9 @@ function registerTemplateLibrary(server: McpServer, ctx: ToolContext): void {
         "Create an empty reusable session template in the library (POST /v5/sessions/template). " +
         "Distinct from session_save_as_template, which copies an existing session. Pass title " +
         "and optional instruction.",
-      inputSchema: sessionTemplateCreateSchema,
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      inputSchema: sessionTemplateCreateSchema.shape,
+      outputSchema: toolOutputSchema(sessionTemplateCreatedOutputSchema),
+      annotations: ADDITIVE,
     },
     ({ title, instruction }) =>
       attempt(async () =>
@@ -247,6 +284,7 @@ function registerTemplateLibrary(server: McpServer, ctx: ToolContext): void {
         "Delete a library session template (DELETE /v5/sessions/template/{id}). Requires " +
         "confirmation (elicitation, or confirm:true).",
       inputSchema: { id: idParam, confirm: z.boolean().optional() },
+      outputSchema: opaqueOutputSchema,
       annotations: DESTRUCTIVE,
     },
     ({ id, confirm }, extra) =>

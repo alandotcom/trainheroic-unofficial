@@ -52,23 +52,25 @@ on a 401/403. Start with `$TH athlete whoami` to confirm auth and get your `id`.
 
 ## What you can do
 
-| Goal                                  | Command                                                                          |
-| ------------------------------------- | -------------------------------------------------------------------------------- |
-| Lifetime totals + profile             | `$TH athlete profile [--metric]`                                                 |
-| Scheduled / completed workouts        | `$TH athlete workouts --start Y-M-D --end Y-M-D [--raw] [--summary]`             |
-| Find an exercise you've logged        | `$TH athlete exercises [--q <text>] [--limit N]`                                 |
-| One lift's PRs + history over time    | `$TH athlete history <exerciseId> [--raw]`                                       |
-| Personal records for a lift           | `$TH athlete prs <exerciseId>`                                                   |
-| Last performance + PR as of a date    | `$TH athlete stats <exerciseId> --date Y-M-D`                                    |
-| Working maxes (drive % prescriptions) | `$TH athlete working-maxes`                                                      |
-| Benchmark leaderboard                 | `$TH athlete leaderboard <workoutId>`                                            |
-| Download all historicals to JSON      | `$TH athlete export [--out dir] [--full]`                                        |
-| Log ids for a scheduled workout       | `$TH athlete log-targets --start Y-M-D --end Y-M-D [--program <title>]`          |
-| Log completed set results (gated)     | `$TH athlete log-set --date Y-M-D --set <id> ... --yes`                          |
-| Set planned reps/weight (gated)       | `$TH athlete prescribe-set --date Y-M-D --set <id> ... --yes`                    |
-| Log an off-plan session (gated)       | `$TH athlete log-session --date Y-M-D '[{"exerciseId":N,"sets":[...]}]' --yes`   |
-| Swap a prescribed exercise (gated)    | `$TH athlete swap-exercise --set-exercise <sweId> --exercise <exerciseId> --yes` |
-| Remove a stray personal session       | `$TH athlete session-remove --id <programWorkoutId> --date Y-M-D --yes`          |
+| Goal                                  | Command                                                                             |
+| ------------------------------------- | ----------------------------------------------------------------------------------- |
+| Lifetime totals + profile             | `$TH athlete profile [--metric]`                                                    |
+| Scheduled / completed workouts        | `$TH athlete workouts --start Y-M-D --end Y-M-D [--raw] [--summary]`                |
+| Find an exercise you've logged        | `$TH athlete exercises [--q <text>] [--limit N]`                                    |
+| One lift's PRs + history over time    | `$TH athlete history <exerciseId> [--raw]`                                          |
+| Personal records for a lift           | `$TH athlete prs <exerciseId>`                                                      |
+| Last performance + PR as of a date    | `$TH athlete stats <exerciseId> --date Y-M-D`                                       |
+| Working maxes (drive % prescriptions) | `$TH athlete working-maxes`                                                         |
+| Benchmark leaderboard                 | `$TH athlete leaderboard <workoutId>`                                               |
+| Download all historicals to JSON      | `$TH athlete export [--out dir] [--full]`                                           |
+| Log ids for a scheduled workout       | `$TH athlete log-targets --start Y-M-D --end Y-M-D [--program <title>]`             |
+| Log completed set results (gated)     | `$TH athlete log-set --date Y-M-D --set <id> ... --yes`                             |
+| Set planned reps/weight (gated)       | `$TH athlete prescribe-set --date Y-M-D --set <id> ... --yes`                       |
+| Log an off-plan session (gated)       | `$TH athlete log-session --date Y-M-D '[{"exerciseId":N,"sets":[...]}]' --yes`      |
+| Swap a prescribed exercise (gated)    | `$TH athlete swap-exercise --set-exercise <sweId> --exercise <exerciseId> --yes`    |
+| Add a session note / RPE (gated)      | `$TH athlete workout-note --date Y-M-D --id <programWorkoutId> --notes "..." --yes` |
+| Add a per-exercise note (gated)       | `$TH athlete exercise-note --set-exercise <sweId> --notes "..." --yes`              |
+| Remove a stray personal session       | `$TH athlete session-remove --id <programWorkoutId> --date Y-M-D --yes`             |
 
 ## Reading training
 
@@ -180,15 +182,40 @@ exercise, so swap first, then log against the new movement as usual. Same `--yes
 the workout with `$TH athlete workouts --start Y-M-D --end Y-M-D` to confirm the slot now shows
 the replacement.
 
+## Session note / RPE
+
+`$TH athlete workout-note` writes the free-text note (and optional session RPE) on a workout —
+the box on the workout screen, not the coach's Instructions. It is coach-visible. The `id` is
+the session `id` from `$TH athlete workouts`. Empty `--notes` clears the note; a notes-only
+write leaves RPE untouched and vice versa.
+
+```bash
+$TH athlete workouts --start 2026-06-01 --end 2026-06-01 --summary
+$TH athlete workout-note --date 2026-06-01 --id 149542413 --notes "Hips felt tight." --rpe 8 --yes
+```
+
+## Per-exercise note
+
+`$TH athlete exercise-note` writes the "Add exercise note" field on one exercise — the place
+an athlete records band color, setup cues, or anything the weight field cannot hold. It is
+coach-visible and distinct from the session note. The slot id is `savedWorkoutSetExerciseId`
+from `$TH athlete log-targets`. Empty `--notes` clears the note.
+
+```bash
+$TH athlete log-targets --start 2026-06-01 --end 2026-06-01
+$TH athlete exercise-note --set-exercise 2712369448 --notes "green band" --yes
+```
+
 ## Gotchas
 
 - `profile` must send `use_metric` and `stats` must send `date`, or the API returns 400.
   The CLI fills `use_metric` (toggle with `--metric`); pass `--date` to `stats`.
 - Units are **fixed per exercise** and surfaced positionally as `[param 1, param 2]` (e.g.
   `["reps", "lb"]`). They are not labelled by role: some exercises reverse the slots.
-- `log-set` writes to your coach-visible log. Gate it behind explicit user confirmation,
-  never run it autonomously, and verify the result. Its request shape was reverse-engineered
-  from the mobile app (a two-step write: log the exercise data, then mark the set completed).
+- `log-set`, `workout-note`, and `exercise-note` write to your coach-visible log. Gate them
+  behind explicit user confirmation, never run them autonomously, and verify the result.
+  `log-set`'s request shape was reverse-engineered from the mobile app (a two-step write:
+  log the exercise data, then mark the set completed).
 - This API is undocumented and can change. `references/athlete-api.md` lists the endpoints
   and shapes.
 

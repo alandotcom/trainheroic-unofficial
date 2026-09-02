@@ -48,7 +48,7 @@ describe("ExerciseLibrary", () => {
 
   it("searches by token and gets full objects", async () => {
     mockApi([
-      { id: 1, title: "Back Squat", param_1_type: 3 },
+      { id: 1, title: "Back Squat", param_1_type: 3, muscle_group: "legs" },
       { id: 1162, title: "Bench Press", param_1_type: 3 },
     ]);
     const lib = new ExerciseLibrary(client());
@@ -56,6 +56,7 @@ describe("ExerciseLibrary", () => {
     const full = await lib.get(1);
     expect(full?.title).toBe("Back Squat");
     expect(full?.units).toEqual(["reps", null]);
+    expect(full?.muscle_group).toBe("legs");
     expect(full).not.toHaveProperty("param_1_type");
     expect(full).not.toHaveProperty("param_2_type");
   });
@@ -128,6 +129,23 @@ describe("ExerciseLibrary", () => {
 
     const requests = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
     expect(requests.filter((url) => url.includes("/v5/exerciseLibrary/all"))).toHaveLength(1);
+  });
+
+  it("fetches a cold library once when several callers wait on it concurrently", async () => {
+    mockApi([{ id: 1, title: "Back Squat", param_1_type: 3 }]);
+    const lib = new ExerciseLibrary(client());
+    // A workout build resolving several exercises under Promise.all hits ensureFresh in parallel.
+    await Promise.all([lib.resolve("Back Squat"), lib.search("squat"), lib.get(1)]);
+    const requests = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(requests.filter((url) => url.includes("/v5/exerciseLibrary/all"))).toHaveLength(1);
+  });
+
+  it("loads a cold library before resolving defaults", async () => {
+    mockApi([{ id: 1, title: "Back Squat", param_1_type: 3, param_2_type: 1 }]);
+
+    const defaults = await new ExerciseLibrary(client()).defaultsMany([1, 999]);
+
+    expect(defaults).toEqual(new Map([[1, { param1: 3, param2: 1 }]]));
   });
 
   it("persists through the cache so a fresh instance loads without refetching", async () => {

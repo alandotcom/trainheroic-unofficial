@@ -1,7 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
+import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
-import { AthleteTrainingStore, athletePr } from "../src/index";
+import { AthleteTrainingStore, ExerciseStore, athletePr, exercise } from "../src/index";
+import { type BatchStmt, cursorUpsertStmt } from "../src/runner";
+import { syncState } from "../src/schema";
 import { applyMigrations, makeSqliteWarehouse } from "../src/sqlite";
 
 // Proves the seam: the SAME store code that runs on D1 in the worker runs on a synchronous
@@ -165,5 +168,140 @@ describe("a store on the node:sqlite driver", () => {
 
     const store = new AthleteTrainingStore(wh, new TrainHeroicClient("a@b.com", "pw"), USER);
     expect(await store.prs(1)).toHaveLength(0);
+  });
+});
+
+describe("cursorUpsertStmt", () => {
+  it("leaves a field the caller omits untouched on an existing row", async () => {
+    const sqlite = freshDb();
+    const wh = makeSqliteWarehouse(sqlite);
+    await wh.exec([cursorUpsertStmt(wh.db, 7, "messaging", 55, { cursor: "9001" })]);
+    // A generation-only bump (the library sync's shape) must not wipe the cursor.
+    await wh.exec([cursorUpsertStmt(wh.db, 7, "messaging", 55, { generation: 2 })]);
+    const row = await wh.db
+      .select({ cursor: syncState.cursor, generation: syncState.generation })
+      .from(syncState)
+      .where(and(eq(syncState.orgId, 7), eq(syncState.scopeId, 55)))
+      .get();
+    expect(row).toEqual({ cursor: "9001", generation: 2 });
+  });
+});
+
+describe("makeSqliteWarehouse exec", () => {
+  it("returns each statement result in order", async () => {
+    const sqlite = freshDb();
+    const wh = makeSqliteWarehouse(sqlite);
+    await wh.exec([
+      wh.db.insert(exercise).values({
+        orgId: 7,
+        id: 101,
+        title: "Temporary",
+        searchText: "temporary",
+        raw: "{}",
+        generation: 1,
+      }),
+    ]);
+
+    const results = await wh.exec([
+      wh.db.delete(exercise).where(and(eq(exercise.orgId, 7), eq(exercise.id, 101))),
+      wh.db.insert(athletePr).values({ userId: USER, exerciseId: 9, reps: 1, weight: 100 }),
+    ]);
+
+    expect(results).toHaveLength(2);
+    expect((results[0] as { changes: number | bigint }).changes).toBe(1);
+    expect((results[1] as { changes: number | bigint }).changes).toBe(1);
+  });
+
+  it("queues store writes behind an unrelated transaction so its rollback cannot undo them", async () => {
+    const sqlite = freshDb();
+    const wh = makeSqliteWarehouse(sqlite);
+    const client = new TrainHeroicClient("a@b.com", "pw");
+    const store = new ExerciseStore(wh, client, 7);
+    await wh.exec([
+      wh.db.insert(exercise).values({
+        orgId: 7,
+        id: 101,
+        title: "Temporary",
+        searchText: "temporary",
+        raw: "{}",
+        generation: 1,
+      }),
+    ]);
+
+    let signalBegun: () => void = () => {};
+    const begun = new Promise<void>((resolve) => {
+      signalBegun = resolve;
+    });
+    let releaseBarrier: () => void = () => {};
+    const barrier = new Promise<void>((resolve) => {
+      releaseBarrier = resolve;
+    });
+    const pausedStatement = {
+      // Deliberate controllable thenable: make exec pause after BEGIN without timing assumptions.
+      // oxlint-disable-next-line unicorn/no-thenable
+      then(resolve: () => void): void {
+        signalBegun();
+        void barrier.then(resolve);
+      },
+    } as unknown as BatchStmt;
+    const group = wh.exec([
+      pausedStatement,
+      wh.db
+        .insert(athletePr)
+        .values({ userId: USER, exerciseId: null as unknown as number, reps: 1, weight: 1 }),
+    ]);
+    const rejected = expect(group).rejects.toThrow();
+    await begun;
+
+    let deleteSettled = false;
+    const deletion = store.recordDelete(101).then(() => (deleteSettled = true));
+    await Promise.resolve();
+    const whilePaused = sqlite
+      .prepare("SELECT COUNT(*) AS n FROM exercise WHERE org_id = 7 AND id = 101")
+      .get() as { n: number };
+    expect(deleteSettled).toBe(false);
+    expect(whilePaused.n).toBe(1);
+
+    releaseBarrier();
+    await rejected;
+    await deletion;
+    const after = sqlite
+      .prepare("SELECT COUNT(*) AS n FROM exercise WHERE org_id = 7 AND id = 101")
+      .get() as { n: number };
+
+    expect(after.n).toBe(0);
+  });
+
+  it("serializes concurrent groups on the one connection instead of nesting transactions", async () => {
+    const sqlite = freshDb();
+    const wh = makeSqliteWarehouse(sqlite);
+    const group = (exerciseId: number) => [
+      wh.db.insert(athletePr).values({ userId: USER, exerciseId, reps: 1, weight: 100 }),
+      wh.db.insert(athletePr).values({ userId: USER, exerciseId, reps: 2, weight: 90 }),
+    ];
+    // Without queuing, the second BEGIN lands inside the first bracket (the executor awaits
+    // between statements) and SQLite rejects it.
+    await Promise.all([wh.exec(group(1)), wh.exec(group(2)), wh.exec(group(3))]);
+    const store = new AthleteTrainingStore(wh, new TrainHeroicClient("a@b.com", "pw"), USER);
+    expect(await store.prs(1)).toHaveLength(2);
+    expect(await store.prs(2)).toHaveLength(2);
+    expect(await store.prs(3)).toHaveLength(2);
+  });
+
+  it("keeps running queued groups after an earlier group rolled back", async () => {
+    const sqlite = freshDb();
+    const wh = makeSqliteWarehouse(sqlite);
+    const bad = wh.exec([
+      wh.db
+        .insert(athletePr)
+        .values({ userId: USER, exerciseId: null as unknown as number, reps: 1, weight: 1 }),
+    ]);
+    const good = wh.exec([
+      wh.db.insert(athletePr).values({ userId: USER, exerciseId: 9, reps: 1, weight: 100 }),
+    ]);
+    await expect(bad).rejects.toThrow();
+    await good;
+    const store = new AthleteTrainingStore(wh, new TrainHeroicClient("a@b.com", "pw"), USER);
+    expect(await store.prs(9)).toHaveLength(1);
   });
 });

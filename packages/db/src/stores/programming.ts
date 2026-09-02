@@ -65,6 +65,29 @@ export type ProgramSessionRow = {
 };
 export type ProgramSessionCursor = { date: string | null; id: number };
 
+export type PrescribedSetRow = {
+  exercise_id: number | null;
+  set_index: number | null;
+  param_1_type: number | null;
+  param_1_value: number | string | null;
+  param_2_type: number | null;
+  param_2_value: number | string | null;
+};
+
+export type ProgramSessionBlock = {
+  id: number;
+  ord: number | null;
+  type: number | null;
+  title: string | null;
+  instruction: string | null;
+  sets: PrescribedSetRow[];
+};
+
+export type ProgramSessionDetail = {
+  sessionId: number;
+  blocks: ProgramSessionBlock[];
+};
+
 /** Programming zone: prescribed programs -> sessions -> blocks -> sets. Accumulate-only. */
 export class ProgrammingStore extends OrgScopedStore {
   /** Calendar ids to sync, mapped to a title: standalone programs + team group-programs. */
@@ -247,7 +270,11 @@ export class ProgrammingStore extends OrgScopedStore {
         instruction: String(blk.instruction ?? ""),
         raw: JSON.stringify(blk),
       });
-      const exercises = Array.isArray(blk.exercises) ? blk.exercises.filter(isRecord) : [];
+      // Insert in prescribed exercise order so rowid order (what getSession sorts on within a
+      // block) reconstructs the block as written: A1..An, then B1..Bn for a superset.
+      const exercises = (Array.isArray(blk.exercises) ? blk.exercises.filter(isRecord) : []).sort(
+        (a, b) => (coerceInt(a.order) ?? 0) - (coerceInt(b.order) ?? 0),
+      );
       for (const ex of exercises) setRows.push(...this.#setRows(org, bid, ex));
     }
     for (const values of chunk(blockRows, BULK_WRITE_ROWS)) {
@@ -365,7 +392,7 @@ export class ProgrammingStore extends OrgScopedStore {
     return rows;
   }
 
-  async getSession(sessionId: number): Promise<{ sessionId: number; blocks: unknown[] }> {
+  async getSession(sessionId: number): Promise<ProgramSessionDetail> {
     const org = await this.org();
     const blockRows = await this.db
       .select({
@@ -404,9 +431,12 @@ export class ProgrammingStore extends OrgScopedStore {
           ),
         ),
       )
-      .orderBy(prescribedSet.blockId, prescribedSet.setIndex);
+      // (block_id, set_index) is not unique once a block holds several exercises (a superset
+      // stores A1..A3 and B1..B3 under the same indices), so order by rowid within the block:
+      // each session's rows are deleted and reinserted together in prescribed exercise order.
+      .orderBy(prescribedSet.blockId, sql`rowid`);
 
-    const byBlock = new Map<number, Record<string, unknown>[]>();
+    const byBlock = new Map<number, PrescribedSetRow[]>();
     for (const { block_id, ...set } of setRows) {
       const bucket = byBlock.get(block_id) ?? [];
       bucket.push(set);

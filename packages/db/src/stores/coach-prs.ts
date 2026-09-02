@@ -1,10 +1,12 @@
 import { and, asc, eq } from "drizzle-orm";
-import { fetchRosterMainLiftPRs } from "@trainheroic-unofficial/js";
+import { chunk, fetchRosterMainLiftPRs } from "@trainheroic-unofficial/js";
 import { OrgScopedStore } from "../base";
 import { type BatchStmt } from "../runner";
 import { coachAthletePr, syncMeta } from "../schema";
 
 const SYNCED_AT_KEY = "coach_main_lift_prs_synced_at";
+// Twelve bound values per PR row; six rows (one per main-lift family) stays well under D1's 100.
+const PR_WRITE_ROWS = 6;
 
 export type CoachPrSyncResult = {
   athletes: number;
@@ -60,28 +62,32 @@ export class CoachAthletePrStore extends OrgScopedStore {
             and(eq(coachAthletePr.orgId, org), eq(coachAthletePr.athleteId, athlete.athleteId)),
           ),
       ];
+      const prRows = [];
       for (const pr of athlete.prs) {
         // Store only families the athlete has logged (a resolved exercise); a never-logged family
         // is left out, so an absent row reads as "no PR yet" on the dashboard.
         if (pr.exerciseId === null) continue;
-        group.push(
-          this.db.insert(coachAthletePr).values({
-            orgId: org,
-            athleteId: athlete.athleteId,
-            athleteName: athlete.athleteName,
-            family: pr.family,
-            label: pr.label,
-            exerciseId: pr.exerciseId,
-            exerciseTitle: pr.title,
-            weight: pr.weight,
-            reps: pr.reps,
-            units: pr.units,
-            date: pr.date,
-            syncedAt,
-          }),
-        );
-        rows += 1;
+        prRows.push({
+          orgId: org,
+          athleteId: athlete.athleteId,
+          athleteName: athlete.athleteName,
+          family: pr.family,
+          label: pr.label,
+          exerciseId: pr.exerciseId,
+          exerciseTitle: pr.title,
+          weight: pr.weight,
+          reps: pr.reps,
+          units: pr.units,
+          date: pr.date,
+          syncedAt,
+        });
       }
+      // One multi-row insert per athlete (at most six lift families, twelve columns each) instead
+      // of a statement per PR, keeping each D1 batch to a fraction of the statements.
+      for (const values of chunk(prRows, PR_WRITE_ROWS)) {
+        group.push(this.db.insert(coachAthletePr).values(values));
+      }
+      rows += prRows.length;
       groups.push(group);
     }
     await this.runGroups(groups);

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   fetchRosterActivity,
+  performedExercises,
   presentAthleteWorkout,
   presentCoachAthleteTraining,
   presentExerciseHistory,
@@ -33,6 +34,8 @@ describe("presentAthleteWorkout", () => {
     expect(view.date).toBe("2026-06-01");
     expect(view.program).toBe("Bodybuilding 202");
     expect(view.instruction).toContain("Back Squat");
+    expect(view.notes).toBe("Hips felt tight but the heavy singles were clean.");
+    expect(view.rpe).toBe(8);
   });
 
   it("flattens blocks in order with positional units and prescribed sets", () => {
@@ -57,6 +60,15 @@ describe("presentAthleteWorkout", () => {
     expect(squat?.performed).toEqual(["3 @ 275", "3 @ 285", "3 @ 295", "3 @ 295"]);
     // The prescription is still present alongside the logged values.
     expect(squat?.prescribed.length).toBeGreaterThan(0);
+  });
+
+  it("surfaces the per-exercise athlete note from the saved copy", () => {
+    const squat = view.blocks.flatMap((b) => b.exercises).find((e) => e.title === "Back Squat");
+    expect(squat?.notes).toBe("green band");
+    const split = view.blocks
+      .flatMap((b) => b.exercises)
+      .find((e) => e.title === "Front Foot Elevated Split Squat");
+    expect(split?.notes).toBeNull();
   });
 
   it("appends athlete-added work that has no prescription as its own block", () => {
@@ -110,6 +122,8 @@ describe("presentAthleteWorkout", () => {
     } as unknown as ProgramWorkout);
     expect(personal.logged).toBe(true);
     expect(personal.personal).toBe(true);
+    expect(personal.notes).toBeNull();
+    expect(personal.rpe).toBeNull();
     const bench = personal.blocks
       .flatMap((b) => b.exercises)
       .find((e) => e.title === "Bench Press");
@@ -126,6 +140,8 @@ describe("selectWorkouts", () => {
     program: null,
     team: null,
     instruction: null,
+    notes: null,
+    rpe: null,
     logged,
     personal: false,
     blocks: [],
@@ -190,6 +206,8 @@ describe("summarizeAthleteWorkouts", () => {
       program: "BB202",
       team: null,
       instruction: null,
+      notes: null,
+      rpe: null,
       logged: true,
       personal: false,
       blocks: [
@@ -203,6 +221,7 @@ describe("summarizeAthleteWorkouts", () => {
               exerciseId: 1,
               title: "Bench",
               instruction: null,
+              notes: null,
               units: [],
               prescribed: ["4 @ 225"],
               performed: ["4 @ 225"],
@@ -211,6 +230,7 @@ describe("summarizeAthleteWorkouts", () => {
               exerciseId: 2,
               title: "Fly",
               instruction: null,
+              notes: null,
               units: [],
               prescribed: ["12"],
               performed: [],
@@ -338,6 +358,9 @@ describe("presentExerciseHistory", () => {
     expect(presented.liftPRs[0]?.description).toBeTypeOf("string");
     expect(presented.sessions.length).toBeGreaterThan(0);
     expect(presented.sessions[0]?.date).toBeTypeOf("string");
+    expect(presented.sessions[0]?.notes).toBeNull();
+    const withNote = presented.sessions.find((s) => s.notes !== null);
+    expect(withNote?.notes).toBe("185");
   });
 });
 
@@ -625,5 +648,151 @@ describe("buildSetCompletePayload", () => {
     expect(() =>
       buildSetCompletePayload({ id: 1, saved_workout_id: 0, workout_set_id: 2 }, [], true),
     ).toThrow(/missing/iu);
+  });
+});
+
+describe("presentAthleteWorkout: saved-copy targets", () => {
+  function savedRow(overrides: Record<string, unknown>): Record<string, unknown> {
+    return {
+      id: 2001,
+      exercise_id: 7,
+      exercise_title: "Back Squat",
+      param_1_type: 3,
+      param_2_type: 1,
+      ...overrides,
+    };
+  }
+
+  it("shows a per-athlete override written with made = 0 over the template's plan", () => {
+    const raw = {
+      id: 1,
+      date: "2026-06-22",
+      workout_title: "Day 1",
+      summarizedSavedWorkout: {
+        workout: {
+          workoutSets: [
+            {
+              id: 10,
+              order: 1,
+              title: "Main",
+              workoutSetExercises: [
+                { id: 1001, exercise_id: 7, title: "Back Squat", param_1_data_1: "3" },
+              ],
+            },
+          ],
+        },
+        saved_workout: {
+          workoutSets: [
+            {
+              id: 20,
+              workout_set_id: 10,
+              workoutSetExercises: [
+                savedRow({
+                  workout_set_exercise_id: 1001,
+                  param_1_data_1: "3",
+                  param_2_data_1: "225",
+                  param_1_made: 0,
+                }),
+              ],
+            },
+          ],
+        },
+      },
+    } as unknown as ProgramWorkout;
+    const ex = presentAthleteWorkout(raw).blocks[0]?.exercises[0];
+    expect(ex?.prescribed).toEqual(["3 @ 225"]);
+    expect(ex?.performed).toEqual([]);
+  });
+
+  it("shows a personal session's prescribed sets before anything is logged", () => {
+    const raw = {
+      id: 2,
+      date: "2026-06-23",
+      workout_title: "Gym",
+      personal_cal: true,
+      summarizedSavedWorkout: {
+        saved_workout: {
+          workoutSets: [
+            {
+              id: 30,
+              title: "A",
+              workoutSetExercises: [
+                savedRow({
+                  workout_set_exercise_id: null,
+                  param_1_data_1: "5",
+                  param_2_data_1: "185",
+                  param_1_made: 0,
+                }),
+              ],
+            },
+          ],
+        },
+      },
+    } as unknown as ProgramWorkout;
+    const view = presentAthleteWorkout(raw);
+    expect(view.logged).toBe(false);
+    expect(view.blocks).toHaveLength(1);
+    expect(view.blocks[0]?.exercises[0]?.prescribed).toEqual(["5 @ 185"]);
+    expect(view.blocks[0]?.exercises[0]?.performed).toEqual([]);
+  });
+});
+
+describe("performedExercises", () => {
+  it("lists exactly the exercises the merged view shows performed sets for", () => {
+    const raw = fixture<ProgramWorkout>("program-workout.json");
+    const fromView = presentAthleteWorkout(raw)
+      .blocks.flatMap((b) => b.exercises)
+      .filter((e) => e.performed.length > 0)
+      .map((e) => e.exerciseId)
+      .sort((a, b) => (a ?? 0) - (b ?? 0));
+    const fromWalker = performedExercises([raw])
+      .map((e) => e.exerciseId)
+      .sort((a, b) => a - b);
+    expect(fromWalker).toEqual(fromView);
+    expect(fromWalker.length).toBeGreaterThan(0);
+  });
+
+  it("fills compact saved rows from the template but preserves athlete swaps", () => {
+    const raw = {
+      summarizedSavedWorkout: {
+        workout: {
+          workoutSets: [
+            {
+              workoutSetExercises: [
+                { id: 1001, exercise_id: 7, title: "Back Squat" },
+                { id: 1002, exercise_id: 8, title: "Bench Press" },
+              ],
+            },
+          ],
+        },
+        saved_workout: {
+          workoutSets: [
+            {
+              workoutSetExercises: [
+                {
+                  id: 2001,
+                  workout_set_exercise_id: 1001,
+                  param_1_data_1: "5",
+                  param_1_made: 1,
+                },
+                {
+                  id: 2002,
+                  workout_set_exercise_id: 1002,
+                  exercise_id: 88,
+                  exercise_title: "Incline Dumbbell Press",
+                  param_1_data_1: "8",
+                  param_1_made: 1,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    } as unknown as ProgramWorkout;
+
+    expect(performedExercises([raw])).toEqual([
+      { exerciseId: 7, title: "Back Squat" },
+      { exerciseId: 88, title: "Incline Dumbbell Press" },
+    ]);
   });
 });

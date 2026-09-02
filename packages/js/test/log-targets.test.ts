@@ -1,6 +1,11 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ProgramWorkout } from "@trainheroic-unofficial/dto";
-import { presentLogTargets, selectWorkoutsByProgram } from "../src/athlete";
+import { presentAthleteWorkout, presentLogTargets, selectWorkoutsByProgram } from "../src/athlete";
+
+const fixture = <T>(name: string): T =>
+  JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", name), "utf8")) as T;
 
 // presentLogTargets is the compact, non-raw path that carries the savedWorkoutSetId +
 // savedWorkoutSetExerciseId a coach needs to log/prescribe, plus the program identity so a
@@ -12,6 +17,7 @@ function workout(opts: {
   teamId: number;
   savedWorkoutSetId: number;
   savedWorkoutSetExerciseId: number;
+  notes?: string | null;
 }): ProgramWorkout {
   return {
     id: opts.savedWorkoutSetId * 10,
@@ -37,6 +43,7 @@ function workout(opts: {
                 param_2_type: "lb",
                 param_1_data_1: "5",
                 param_2_data_1: "225",
+                notes: opts.notes ?? null,
               },
             ],
           },
@@ -65,6 +72,35 @@ describe("presentLogTargets", () => {
     expect(t?.savedWorkoutSetId).toBe(880006);
     expect(t?.exercises[0]?.savedWorkoutSetExerciseId).toBe(770060);
     expect(t?.exercises[0]?.prescribed).toEqual(["5 @ 225"]);
+    expect(t?.exercises[0]?.notes).toBeNull();
+  });
+
+  it("reports the coach's prescription, not the logged values, once sets are performed", () => {
+    // The saved copy is the buffer a log write lands in: after logging, its slots hold what the
+    // athlete did. The prescription must come from the template row it was copied from.
+    const raw = fixture<ProgramWorkout>("program-workout.json");
+    const view = presentAthleteWorkout(raw);
+    const viewSquat = view.blocks.flatMap((b) => b.exercises).find((e) => e.title === "Back Squat");
+    const target = presentLogTargets([raw])
+      .flatMap((t) => t.exercises)
+      .find((e) => e.title === "Back Squat");
+    expect(viewSquat?.prescribed).toEqual(["3", "3", "3", "3"]);
+    expect(target?.prescribed).toEqual(viewSquat?.prescribed);
+    expect(target?.performed).toEqual(["3 @ 275", "3 @ 285", "3 @ 295", "3 @ 295"]);
+  });
+
+  it("surfaces a per-exercise note from the saved copy", () => {
+    const targets = presentLogTargets([
+      workout({
+        programId: 1,
+        programTitle: "Bands",
+        teamId: 2,
+        savedWorkoutSetId: 3,
+        savedWorkoutSetExerciseId: 4,
+        notes: "green band",
+      }),
+    ]);
+    expect(targets[0]?.exercises[0]?.notes).toBe("green band");
   });
 });
 

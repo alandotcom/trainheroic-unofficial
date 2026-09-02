@@ -317,3 +317,87 @@ describe("logAthleteSet superset completion (issue 25)", () => {
     expect(body?.param_2_made).toBe(1);
   });
 });
+
+describe("logAthleteSet write fan-out", () => {
+  it("issues the per-exercise PUTs concurrently and completes the set only after all of them", async () => {
+    const exercises = [
+      prescribeReps(exercise(100, "A"), [5]),
+      prescribeReps(exercise(200, "B"), [5]),
+      prescribeReps(exercise(300, "C"), [5]),
+    ];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const order: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+        if (url.includes("/3.0/athlete/programworkout/range"))
+          return json(dayWithExercises(exercises));
+        if (init?.method === "PUT") {
+          inFlight += 1;
+          maxInFlight = Math.max(maxInFlight, inFlight);
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 5);
+          });
+          inFlight -= 1;
+          order.push(url.includes("/savedworkoutset/") ? "set" : "exercise");
+          return json({ ok: 1 });
+        }
+        return json({});
+      }),
+    );
+    const result = await log([
+      { savedWorkoutSetExerciseId: 100, sets: [{ param1: 5 }] },
+      { savedWorkoutSetExerciseId: 200, sets: [{ param1: 5 }] },
+      { savedWorkoutSetExerciseId: 300, sets: [{ param1: 5 }] },
+    ]);
+    expect(result.exercisesLogged).toBe(3);
+    expect(result.setCompleted).toBe(true);
+    expect(maxInFlight).toBeGreaterThan(1);
+    expect(order).toEqual(["exercise", "exercise", "exercise", "set"]);
+  });
+
+  it("fails on an unknown exercise id before issuing any write", async () => {
+    const { puts } = stubFetch([prescribeReps(exercise(100, "A"), [5])]);
+    await expect(
+      log([
+        { savedWorkoutSetExerciseId: 100, sets: [{ param1: 5 }] },
+        { savedWorkoutSetExerciseId: 999, sets: [{ param1: 5 }] },
+      ]),
+    ).rejects.toThrow(/999 not found/u);
+    expect(puts).toHaveLength(0);
+  });
+
+  it("reports exercise writes confirmed before a sibling failure", async () => {
+    const exercises = [
+      prescribeReps(exercise(100, "A"), [5]),
+      prescribeReps(exercise(200, "B"), [5]),
+      prescribeReps(exercise(300, "C"), [5]),
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+        if (url.includes("/3.0/athlete/programworkout/range"))
+          return json(dayWithExercises(exercises));
+        if (init?.method === "PUT") {
+          return url.includes("/savedworkoutsetexercise/100")
+            ? json({ error: "failed" }, 500)
+            : json({ ok: 1 });
+        }
+        return json({});
+      }),
+    );
+
+    await expect(
+      log([
+        { savedWorkoutSetExerciseId: 100, sets: [{ param1: 5 }] },
+        { savedWorkoutSetExerciseId: 200, sets: [{ param1: 5 }] },
+        { savedWorkoutSetExerciseId: 300, sets: [{ param1: 5 }] },
+      ]),
+    ).rejects.toThrow(
+      /Failed to write exercise 100.*Confirmed exercise writes before the failure: 200, 300.*retry/u,
+    );
+  });
+});

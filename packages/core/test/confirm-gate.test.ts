@@ -38,6 +38,10 @@ function toolCtx(onRequest: () => void): ToolContext {
     },
   };
   const index = {
+    update: async () => {
+      onRequest();
+      return { id: 1 };
+    },
     remove: async () => {
       onRequest();
     },
@@ -53,8 +57,14 @@ const GATED: Array<{ reg: Register; name: string; args: Record<string, unknown> 
   { reg: registerAthleteTools, name: "athlete_invite", args: { teamId: 1, emails: ["a@b.com"] } },
   { reg: registerAthleteTools, name: "athlete_archive", args: { athleteIds: [1] } },
   { reg: registerTeamTools, name: "team_delete", args: { teamId: 1 } },
+  { reg: registerTeamTools, name: "team_update", args: { teamId: 1, title: "Renamed" } },
   { reg: registerProgramTools, name: "program_delete", args: { programId: 1 } },
   { reg: registerExerciseTools, name: "exercise_delete", args: { id: 1 } },
+  {
+    reg: registerExerciseTools,
+    name: "exercise_update",
+    args: { id: 1, exercise: { title: "Renamed exercise" } },
+  },
   { reg: registerTeamTools, name: "team_code_delete", args: { codeId: 1 } },
   { reg: registerMessagingTools, name: "message_send", args: { streamId: 1, text: "hi" } },
   { reg: registerMessagingTools, name: "message_delete", args: { streamId: 1, commentId: 2 } },
@@ -115,6 +125,16 @@ const GATED: Array<{ reg: Register; name: string; args: Record<string, unknown> 
     name: "athlete_swap_exercise",
     args: { savedWorkoutSetExerciseId: 1, exerciseId: 2 },
   },
+  {
+    reg: registerAthleteTrainingTools,
+    name: "athlete_workout_note",
+    args: { date: "2026-06-21", programWorkoutId: 1, notes: "felt strong" },
+  },
+  {
+    reg: registerAthleteTrainingTools,
+    name: "athlete_exercise_note",
+    args: { savedWorkoutSetExerciseId: 1, notes: "green band" },
+  },
 ];
 
 function run(reg: Register, name: string, args: Record<string, unknown>) {
@@ -166,5 +186,29 @@ describe("accepted elicitation opens the gate", () => {
     );
     expect(probe.called()).toBe(true);
     expect((res as { isError?: boolean }).isError).toBeUndefined();
+  });
+});
+
+describe("workout_build oversized set confirmation", () => {
+  const args = {
+    programId: 1,
+    date: "2026-06-21",
+    blocks: [{ title: "Squat", exercises: [{ id: 3, title: "Back Squat", sets: 11, reps: 5 }] }],
+  };
+
+  it("requests confirmation before making any API call", async () => {
+    const probe = run(registerWorkoutTools, "workout_build", args);
+    const result = await probe.run(mcpCtx());
+
+    expect(isInputRequiredResult(result)).toBe(true);
+    expect(probe.called()).toBe(false);
+  });
+
+  it("blocks a declined split before making any API call", async () => {
+    const probe = run(registerWorkoutTools, "workout_build", args);
+    const result = await probe.run(mcpCtx({ confirm: { action: "decline" } }));
+
+    expect((result as { isError?: boolean }).isError).toBe(true);
+    expect(probe.called()).toBe(false);
   });
 });

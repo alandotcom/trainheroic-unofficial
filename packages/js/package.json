@@ -1,6 +1,6 @@
 {
   "name": "@trainheroic-unofficial/js",
-  "version": "3.2.0",
+  "version": "3.5.2",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -42,11 +42,12 @@
   },
   "dependencies": {
     "@trainheroic-unofficial/dto": "workspace:*",
+    "es-toolkit": "^1.52.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.3.0",
     "tsdown": "^0.22.14",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }

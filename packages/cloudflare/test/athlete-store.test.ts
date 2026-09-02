@@ -371,6 +371,12 @@ describe("AthleteTrainingStore", () => {
     expect(first).toMatchObject({ exercisesSynced: 2, remaining: 1 });
     expect(second).toMatchObject({ exercisesSynced: 1, remaining: 0 });
     expect(historyIds.sort((a, b) => a - b)).toEqual([1, 2, 3]);
+    const marker = await env.TH_DB.prepare(
+      "SELECT cursor FROM athlete_sync_state WHERE user_id = ? AND resource = ? AND scope_id = 0",
+    )
+      .bind(USER, "training-full")
+      .first();
+    expect(marker).toBeNull();
   });
 
   it("keeps reserved sync markers isolated to scope zero", async () => {

@@ -1,11 +1,19 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
+  athleteInviteOutputSchema,
   coachLogSessionArgsSchema,
   coachLogSetArgsSchema,
   coachPrescribeSetArgsSchema,
   dateString,
+  exerciseSwapOutputSchema,
+  logTargetsOutputSchema,
+  opaqueOutputSchema,
+  sessionLogOutputSchema,
+  setLogOutputSchema,
+  setPrescriptionOutputSchema,
   swapAthleteExerciseArgsSchema,
+  toolOutputSchema,
 } from "@trainheroic-unofficial/dto";
 import {
   definedProps,
@@ -63,7 +71,8 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
         message: z.string().optional(),
         confirm: z.boolean().optional(),
       },
-      annotations: DESTRUCTIVE,
+      outputSchema: toolOutputSchema(athleteInviteOutputSchema),
+      annotations: { ...DESTRUCTIVE, openWorldHint: true },
     },
     ({ teamId, emails, message, confirm }, extra) =>
       attempt(async () => {
@@ -95,6 +104,7 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
         "data is preserved and they can be restored. Acts on the live account; requires " +
         "confirmation (elicitation, or confirm:true).",
       inputSchema: { athleteIds: z.array(idParam).min(1), confirm: z.boolean().optional() },
+      outputSchema: opaqueOutputSchema,
       annotations: DESTRUCTIVE,
     },
     ({ athleteIds, confirm }, extra) =>
@@ -117,11 +127,12 @@ export function registerAthleteTools(server: McpServer, ctx: ToolContext): void 
       description:
         "Restore previously archived athletes to the active roster (PUT /v5/athletes/restore).",
       inputSchema: { athleteIds: z.array(idParam).min(1) },
+      outputSchema: opaqueOutputSchema,
       annotations: {
         readOnlyHint: false,
         idempotentHint: true,
         destructiveHint: false,
-        openWorldHint: true,
+        openWorldHint: false,
       },
     },
     ({ athleteIds }) =>
@@ -170,6 +181,7 @@ function registerAthleteSavedWorkouts(server: McpServer, ctx: ToolContext): void
         teamId: idParam.optional(),
         raw: z.boolean().optional(),
       },
+      outputSchema: toolOutputSchema(logTargetsOutputSchema),
       annotations: READ,
     },
     ({ athleteId, startDate, endDate, program, programId, teamId, raw }) =>
@@ -220,6 +232,7 @@ function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
         "read-only and will fail; use a real (invited) athlete. Requires confirmation " +
         "(elicitation or confirm:true).",
       inputSchema: { ...coachLogSetArgsSchema.shape, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(setLogOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ athleteId, date, savedWorkoutSetId, results, confirm }, extra) =>
@@ -256,6 +269,7 @@ function registerAthleteLogTools(server: McpServer, ctx: ToolContext): void {
         "and exerciseIds from athlete_saved_workouts. Seeded demo athletes are read-only. " +
         "Requires confirmation (elicitation or confirm:true).",
       inputSchema: { ...coachLogSessionArgsSchema.shape, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(sessionLogOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ athleteId, date, exercises, confirm }, extra) =>
@@ -298,6 +312,7 @@ function registerAthleteSwapTool(server: McpServer, ctx: ToolContext): void {
         "read-only and will fail; use a real (invited) athlete. Requires confirmation " +
         "(elicitation or confirm:true).",
       inputSchema: { ...swapAthleteExerciseArgsSchema.shape, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(exerciseSwapOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ savedWorkoutSetExerciseId, exerciseId, confirm }, extra) =>
@@ -345,6 +360,7 @@ function registerAthletePrescribeTool(server: McpServer, ctx: ToolContext): void
         "instead, use log_athlete_set. Seeded demo athletes are read-only and will fail; use a " +
         "real (invited) athlete. Requires confirmation (elicitation or confirm:true).",
       inputSchema: { ...coachPrescribeSetArgsSchema.shape, confirm: z.boolean().optional() },
+      outputSchema: toolOutputSchema(setPrescriptionOutputSchema),
       annotations: DESTRUCTIVE,
     },
     ({ athleteId, date, savedWorkoutSetId, results, confirm }, extra) =>

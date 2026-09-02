@@ -44,7 +44,10 @@ type OAuthInternalError = {
 // Driven by the `SENTRY_TRACES_SAMPLE_RATE` var so the rate can be dialed from the Cloudflare
 // dashboard without a code change; anything unset, non-numeric, or out of [0, 1] falls back to 1.
 function tracesSampleRate(env: Env): number {
-  const parsed = Number(env.SENTRY_TRACES_SAMPLE_RATE);
+  // A blank value (the dashboard's "cleared" state) must read as unset: Number("") is 0, which
+  // would silently switch tracing off instead of restoring the default.
+  const raw = env.SENTRY_TRACES_SAMPLE_RATE?.trim();
+  const parsed = raw ? Number(raw) : Number.NaN;
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 1;
 }
 export function sentryOptions(env: Env): CloudflareOptions {
