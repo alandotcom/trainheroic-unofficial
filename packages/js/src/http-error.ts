@@ -17,38 +17,10 @@ const RESPONSE_DIAGNOSTIC_KEYS = new Set([
   "status_code",
   "success",
 ]);
-const RESPONSE_CONTAINER_KEYS = new Set(["data", "response", "result"]);
-const RESPONSE_CODE_KEYS = new Set(["code", "error_code"]);
-const RESPONSE_NUMBER_KEYS = new Set(["code", "error_code", "status", "status_code"]);
+const RESPONSE_CONTAINER_KEYS = new Set(["data", "received", "response", "result"]);
+const RESPONSE_STATUS_KEYS = new Set(["status", "status_code"]);
 const RESPONSE_BOOLEAN_KEYS = new Set(["success"]);
-const SENSITIVE_FIELD_PARTS = new Set([
-  "address",
-  "athlete",
-  "authorization",
-  "birthdate",
-  "body",
-  "coach",
-  "content",
-  "cookie",
-  "credential",
-  "credentials",
-  "description",
-  "dob",
-  "email",
-  "instruction",
-  "name",
-  "note",
-  "notes",
-  "passwd",
-  "password",
-  "phone",
-  "secret",
-  "session",
-  "title",
-  "token",
-  "user",
-  "username",
-]);
+const PARAMETER_TYPES = new Set([0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 18]);
 
 type JsonScalar = boolean | number | string | null;
 type DiagnosticBudget = { nodes: number };
@@ -81,23 +53,13 @@ function boundedEntries(object: Record<string, unknown>, limit: number): [string
   return entries;
 }
 
-function isSensitiveField(key: string): boolean {
-  const parts = key
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-  return (
-    parts.some((part) => SENSITIVE_FIELD_PARTS.has(part)) ||
-    parts.at(-1) === "id" ||
-    (parts.includes("api") && parts.includes("key")) ||
-    (parts.includes("private") && parts.includes("key"))
-  );
-}
-
 function safeRequestValue(key: string, value: unknown): JsonScalar | undefined {
   if (key === "is_circuit" && typeof value === "boolean") return value;
-  if (["param_1_type", "param_2_type", "type"].includes(key) && typeof value === "number") {
+  if (
+    ["param_1_type", "param_2_type"].includes(key) &&
+    typeof value === "number" &&
+    PARAMETER_TYPES.has(value)
+  ) {
     return value;
   }
   return undefined;
@@ -139,15 +101,14 @@ function sanitizedDiagnosticValue(
   }
   if (typeof value === "number") {
     return field &&
-      (RESPONSE_NUMBER_KEYS.has(field) || safeRequestValue(field, value) !== undefined)
+      RESPONSE_STATUS_KEYS.has(field) &&
+      Number.isInteger(value) &&
+      value >= 100 &&
+      value <= 599
       ? value
       : "[Redacted]";
   }
-  if (typeof value === "string") {
-    return field && RESPONSE_CODE_KEYS.has(field) && /^[A-Z][A-Z0-9_]{0,63}$/.test(value)
-      ? value
-      : "[Redacted]";
-  }
+  if (typeof value === "string") return "[Redacted]";
   if (depth >= MAX_RESPONSE_DEPTH) return "[Truncated]";
   if (Array.isArray(value)) {
     const result: unknown[] = [];
@@ -168,18 +129,14 @@ function sanitizedDiagnosticValue(
         break;
       }
       const safeKey = safeFieldName(key);
-      if (isSensitiveField(key)) {
-        budget.nodes -= 1;
-        result[safeKey] = "[Redacted]";
-      } else if (
-        (item !== null && typeof item === "object") ||
-        RESPONSE_DIAGNOSTIC_KEYS.has(key) ||
-        safeRequestValue(key, item) !== undefined
-      ) {
+      const safeValue = safeRequestValue(key, item);
+      if (RESPONSE_DIAGNOSTIC_KEYS.has(key)) {
         result[safeKey] = sanitizedDiagnosticValue(item, depth + 1, budget, key);
-      } else {
+      } else if (RESPONSE_CONTAINER_KEYS.has(key) && item && typeof item === "object") {
+        result[safeKey] = sanitizedDiagnosticValue(item, depth + 1, budget);
+      } else if (safeValue !== undefined) {
         budget.nodes -= 1;
-        result[safeKey] = "[Redacted]";
+        result[safeKey] = safeValue;
       }
     }
     return result;
@@ -218,10 +175,7 @@ function responseBodyDiagnostics(body: unknown, budget?: DiagnosticBudget, depth
   }
 
   if (Object.keys(result).length > 0) return result;
-  return {
-    type: "object",
-    keys: boundedEntries(object, MAX_RESPONSE_KEYS).map(([key]) => safeFieldName(key)),
-  };
+  return { type: "object" };
 }
 
 export function parseResponseText(text: string): unknown {

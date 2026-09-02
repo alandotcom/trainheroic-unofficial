@@ -88,8 +88,8 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   non-PII context, with their email as the contact). `src/sentry.ts` keeps
   `sendDefaultPii` off and forces `httpServerIntegration`'s `maxRequestBodySize: "none"` so
   inbound request bodies (the login POST password) are never captured; SDK error diagnostics
-  summarize request field names plus allowlisted enum values and retain only machine-readable
-  fields from provider error responses before they reach Sentry. The email is attached via
+  summarize request field names plus allowlisted enum values and retain only bounded status and
+  boolean fields from provider error responses before they reach Sentry. The email is attached via
   `Sentry.setUser` in the MCP factory (`mcp.ts`) and explicitly scoped onto every reported
   TrainHeroic HTTP failure, including pre-grant login failures. With no `SENTRY_DSN` the SDK is
   disabled and every Sentry call is a no-op (the feedback tool then logs the report to `console`

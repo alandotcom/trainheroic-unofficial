@@ -93,12 +93,10 @@ describe("TrainHeroicClient", () => {
       },
       responseBody: {
         error: {
-          code: "INVALID_EXERCISE",
+          code: "[Redacted]",
           message: "[Redacted]",
           received: {
             param_1_type: 3,
-            session_id: "[Redacted]",
-            title: "[Redacted]",
           },
         },
       },

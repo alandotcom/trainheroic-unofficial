@@ -17,17 +17,31 @@ describe("notifyHttpError", () => {
       responseBody: {
         code: "INVALID_EXERCISE",
         detail: "Private workout detail",
+        status: 15_551_234_567,
         status_code: 500,
         success: false,
       },
     });
 
     expect(error.responseBody).toEqual({
-      code: "INVALID_EXERCISE",
+      code: "[Redacted]",
       detail: "[Redacted]",
+      status: "[Redacted]",
       status_code: 500,
       success: false,
     });
+  });
+
+  it("redacts identifier-shaped response strings and omits unknown nested keys", () => {
+    const error = new TrainHeroicHttpError("GET", "https://api.trainheroic.com/test", 500, {
+      responseBody: {
+        code: "ALICE_ACL_REHAB",
+        errors: { Alice: "invalid", SHORT_LIVE_TOKEN: "rejected" },
+      },
+    });
+
+    expect(error.responseBody).toEqual({ code: "[Redacted]", errors: {} });
+    expect(JSON.stringify(error.responseBody)).not.toMatch(/ALICE|Alice|SHORT_LIVE_TOKEN/);
   });
 
   it("bounds the total response diagnostic tree", () => {
@@ -71,13 +85,7 @@ describe("notifyHttpError", () => {
       values: { is_circuit: false },
     });
     expect(error.responseBody).toEqual({
-      error: {
-        athlete_id: "[Redacted]",
-        authorization: "[Redacted]",
-        message: "[Redacted]",
-        nickname: "[Redacted]",
-        ssn: "[Redacted]",
-      },
+      error: { message: "[Redacted]" },
     });
     expect(JSON.stringify(error)).not.toContain("short-secret");
     expect(JSON.stringify(error)).not.toContain("quoted-secret");
@@ -85,6 +93,23 @@ describe("notifyHttpError", () => {
     expect(JSON.stringify(error)).not.toContain("private-type");
     expect(JSON.stringify(error)).not.toContain("Private Athlete");
     expect(JSON.stringify(error)).not.toContain("123-45-6789");
+  });
+
+  it("retains only documented request enum values", () => {
+    const error = new TrainHeroicHttpError("POST", "https://api.trainheroic.com/test", 500, {
+      requestBody: {
+        param_1_type: 3,
+        param_2_type: 15_551_234_567,
+        type: 3,
+      },
+    });
+
+    expect(error.requestBody).toEqual({
+      keys: ["param_1_type", "param_2_type", "type"],
+      type: "object",
+      values: { param_1_type: 3 },
+    });
+    expect(JSON.stringify(error.requestBody)).not.toContain("15551234567");
   });
 
   it("redacts common credential field-name variants", () => {
@@ -100,15 +125,7 @@ describe("notifyHttpError", () => {
       },
     });
 
-    expect(error.responseBody).toEqual({
-      error: {
-        access_token: "[Redacted]",
-        apiKey: "[Redacted]",
-        clientSecret: "[Redacted]",
-        refreshToken: "[Redacted]",
-        sessionToken: "[Redacted]",
-      },
-    });
+    expect(error.responseBody).toEqual({ error: {} });
     expect(JSON.stringify(error)).not.toMatch(/(?:access|api|client|refresh|session)-value/);
   });
 
