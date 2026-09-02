@@ -883,6 +883,7 @@ async function logResolvedExercises(
   target: LogTarget,
   workouts: readonly ProgramWorkout[],
   resolved: readonly ResolvedExercise[],
+  retryGuidance?: string,
 ): Promise<Array<{ savedWorkoutSetId: number; exercisesLogged: number }>> {
   const bySet = new Map<number, SetResult[]>();
   for (const r of resolved) {
@@ -929,7 +930,7 @@ async function logResolvedExercises(
         ? ""
         : ` Confirmed exercise writes in incomplete sets before the failure: ${incomplete.join(
             "; ",
-          )}. Retry the same request to reconcile them.`;
+          )}.${retryGuidance ? ` ${retryGuidance}` : ""}`;
     const complete =
       succeeded.length === 0
         ? ""
@@ -1034,6 +1035,7 @@ export async function logSessionForAthlete(
     { role: "coach", athleteId: args.athleteId },
     day,
     resolved,
+    "Retry the same request to reconcile them.",
   );
   return { date: args.date, created: false, sets };
 }
