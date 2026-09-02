@@ -137,8 +137,9 @@ needs the `mcp-remote` bridge with `--transport http-only`:
   Sentry's HTTP integration never captures inbound request bodies (so the login POST password
   cannot leak). Failed TrainHeroic calls attach a bounded request-field summary and sanitized
   provider response diagnostics: request values are excluded except for a small allowlist of
-  non-sensitive enum fields, while response error codes/messages are token- and email-redacted.
-  Login failures include response diagnostics but never login request data. Readable stack traces
+  non-sensitive enum fields, while response diagnostics retain machine-readable codes and status
+  fields and redact all free-form strings. Login failures include neither request nor response
+  data. Readable stack traces
   come from source map upload, which `pnpm deploy` does automatically when `SENTRY_AUTH_TOKEN` is
   set; the upload normalizes generated paths to repository-relative source paths and attempts to
   associate the release with its Git commits (see step 4).

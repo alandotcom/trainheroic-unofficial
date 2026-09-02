@@ -3,7 +3,6 @@ const MAX_RESPONSE_DEPTH = 4;
 const MAX_RESPONSE_KEYS = 20;
 const MAX_RESPONSE_ITEMS = 10;
 const MAX_RESPONSE_NODES = 50;
-const MAX_RESPONSE_STRING = 2_000;
 
 const RESPONSE_DIAGNOSTIC_KEYS = new Set([
   "code",
@@ -19,6 +18,9 @@ const RESPONSE_DIAGNOSTIC_KEYS = new Set([
   "success",
 ]);
 const RESPONSE_CONTAINER_KEYS = new Set(["data", "response", "result"]);
+const RESPONSE_CODE_KEYS = new Set(["code", "error_code"]);
+const RESPONSE_NUMBER_KEYS = new Set(["code", "error_code", "status", "status_code"]);
+const RESPONSE_BOOLEAN_KEYS = new Set(["success"]);
 const SENSITIVE_FIELD_PARTS = new Set([
   "address",
   "athlete",
@@ -61,24 +63,6 @@ export type TrainHeroicHttpErrorDiagnostics = {
   responseBody?: unknown;
 };
 
-function redactText(value: string): string {
-  const redacted = value
-    .replace(
-      /\bAuthorization(["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\r\n,;&]+)/gi,
-      (_match, separator: string) => `Authorization${separator}[Redacted]`,
-    )
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [Redacted]")
-    .replace(
-      /\b(password|passwd|secret|session[_-]?id|token|api[_-]?key)(["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;&]+)/gi,
-      (_match, key: string, separator: string) => `${key}${separator}[Redacted]`,
-    )
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[Redacted email]")
-    .replace(/\b(?:bearer\s+)?[a-f0-9]{32,}\b/gi, "[Redacted]");
-  return redacted.length <= MAX_RESPONSE_STRING
-    ? redacted
-    : `${redacted.slice(0, MAX_RESPONSE_STRING)}…[truncated]`;
-}
-
 function safeFieldName(key: string): string {
   if (key === "__proto__" || key === "constructor" || key === "prototype") {
     return "[Redacted key]";
@@ -89,9 +73,9 @@ function safeFieldName(key: string): string {
 
 function boundedEntries(object: Record<string, unknown>, limit: number): [string, unknown][] {
   const entries: [string, unknown][] = [];
-  for (const key in object) {
-    if (!Object.hasOwn(object, key)) continue;
-    entries.push([key, object[key]]);
+  for (const key of Object.keys(object)) {
+    const descriptor = Object.getOwnPropertyDescriptor(object, key);
+    entries.push([key, descriptor && "value" in descriptor ? descriptor.value : undefined]);
     if (entries.length >= limit) break;
   }
   return entries;
@@ -145,11 +129,25 @@ function sanitizedDiagnosticValue(
   value: unknown,
   depth: number,
   budget: DiagnosticBudget,
+  field?: string,
 ): unknown {
   if (budget.nodes <= 0) return "[Truncated]";
   budget.nodes -= 1;
-  if (value === null || typeof value === "boolean" || typeof value === "number") return value;
-  if (typeof value === "string") return redactText(value);
+  if (value === null) return null;
+  if (typeof value === "boolean") {
+    return field && RESPONSE_BOOLEAN_KEYS.has(field) ? value : "[Redacted]";
+  }
+  if (typeof value === "number") {
+    return field &&
+      (RESPONSE_NUMBER_KEYS.has(field) || safeRequestValue(field, value) !== undefined)
+      ? value
+      : "[Redacted]";
+  }
+  if (typeof value === "string") {
+    return field && RESPONSE_CODE_KEYS.has(field) && /^[A-Z][A-Z0-9_]{0,63}$/.test(value)
+      ? value
+      : "[Redacted]";
+  }
   if (depth >= MAX_RESPONSE_DEPTH) return "[Truncated]";
   if (Array.isArray(value)) {
     const result: unknown[] = [];
@@ -178,7 +176,7 @@ function sanitizedDiagnosticValue(
         RESPONSE_DIAGNOSTIC_KEYS.has(key) ||
         safeRequestValue(key, item) !== undefined
       ) {
-        result[safeKey] = sanitizedDiagnosticValue(item, depth + 1, budget);
+        result[safeKey] = sanitizedDiagnosticValue(item, depth + 1, budget, key);
       } else {
         budget.nodes -= 1;
         result[safeKey] = "[Redacted]";
@@ -204,7 +202,7 @@ function responseBodyDiagnostics(body: unknown, budget?: DiagnosticBudget, depth
       break;
     }
     if (RESPONSE_DIAGNOSTIC_KEYS.has(key)) {
-      result[safeFieldName(key)] = sanitizedDiagnosticValue(value, depth + 1, activeBudget);
+      result[safeFieldName(key)] = sanitizedDiagnosticValue(value, depth + 1, activeBudget, key);
       continue;
     }
     if (RESPONSE_CONTAINER_KEYS.has(key) && value && typeof value === "object") {
@@ -235,6 +233,22 @@ export function parseResponseText(text: string): unknown {
   }
 }
 
+function safeRequestBodySummary(body: unknown): RequestBodySummary {
+  try {
+    return requestBodySummary(body);
+  } catch {
+    return { type: "other" };
+  }
+}
+
+function safeResponseBodyDiagnostics(body: unknown): unknown {
+  try {
+    return responseBodyDiagnostics(body);
+  } catch {
+    return "[Unavailable]";
+  }
+}
+
 /** A final non-2xx response plus bounded, telemetry-safe request and response diagnostics. */
 export class TrainHeroicHttpError extends Error {
   override readonly name = "TrainHeroicHttpError";
@@ -259,11 +273,11 @@ export class TrainHeroicHttpError extends Error {
     this.requestBody =
       diagnostics.requestBody === undefined
         ? undefined
-        : requestBodySummary(diagnostics.requestBody);
+        : safeRequestBodySummary(diagnostics.requestBody);
     this.responseBody =
       diagnostics.responseBody === undefined
         ? undefined
-        : responseBodyDiagnostics(diagnostics.responseBody);
+        : safeResponseBodyDiagnostics(diagnostics.responseBody);
   }
 }
 

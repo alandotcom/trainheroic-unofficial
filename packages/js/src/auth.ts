@@ -1,4 +1,4 @@
-import { notifyHttpError, parseResponseText } from "./http-error";
+import { notifyHttpError } from "./http-error";
 import type { TrainHeroicHttpErrorHandler } from "./http-error";
 
 const DEFAULT_AUTH_URL = "https://apis.trainheroic.com/auth";
@@ -59,15 +59,7 @@ export async function loginTrainHeroic(
   });
 
   if (!res.ok) {
-    let responseBody: unknown;
-    try {
-      responseBody = parseResponseText(await res.text());
-    } catch {
-      // A broken error body must not turn an ordinary login rejection into a thrown exception.
-    }
-    notifyHttpError(options.onHttpError, "POST", url, res.status, {
-      responseBody,
-    });
+    notifyHttpError(options.onHttpError, "POST", url, res.status);
     return null;
   }
 

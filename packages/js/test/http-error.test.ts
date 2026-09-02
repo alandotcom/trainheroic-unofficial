@@ -2,23 +2,32 @@ import { describe, expect, it, vi } from "vitest";
 import { TrainHeroicHttpError, notifyHttpError } from "../src/http-error";
 
 describe("notifyHttpError", () => {
-  it("bounds captured response diagnostics", () => {
+  it("redacts free-form provider text", () => {
     const error = new TrainHeroicHttpError("GET", "https://api.trainheroic.com/test", 500, {
-      responseBody: { message: "x".repeat(5_000) },
+      responseBody: {
+        message: "Workout title Alice ACL rehab was rejected; access_token=short-live-token",
+      },
     });
 
-    expect(JSON.stringify(error.responseBody).length).toBeLessThan(2_500);
-    expect(error.responseBody).toEqual({ message: `${"x".repeat(2_000)}…[truncated]` });
+    expect(error.responseBody).toEqual({ message: "[Redacted]" });
   });
 
-  it("redacts whitespace-heavy provider text without polynomial backtracking", () => {
-    const startedAt = performance.now();
+  it("retains only machine-readable response values", () => {
     const error = new TrainHeroicHttpError("GET", "https://api.trainheroic.com/test", 500, {
-      responseBody: { message: `Authorization${" ".repeat(100_000)}!` },
+      responseBody: {
+        code: "INVALID_EXERCISE",
+        detail: "Private workout detail",
+        status_code: 500,
+        success: false,
+      },
     });
 
-    expect(performance.now() - startedAt).toBeLessThan(250);
-    expect(JSON.stringify(error.responseBody).length).toBeLessThan(2_500);
+    expect(error.responseBody).toEqual({
+      code: "INVALID_EXERCISE",
+      detail: "[Redacted]",
+      status_code: 500,
+      success: false,
+    });
   });
 
   it("bounds the total response diagnostic tree", () => {
@@ -65,7 +74,7 @@ describe("notifyHttpError", () => {
       error: {
         athlete_id: "[Redacted]",
         authorization: "[Redacted]",
-        message: 'Authorization: [Redacted]; {"token":[Redacted]}',
+        message: "[Redacted]",
         nickname: "[Redacted]",
         ssn: "[Redacted]",
       },
@@ -122,6 +131,24 @@ describe("notifyHttpError", () => {
 
     expect(error.requestBody).toEqual({ type: "other" });
     expect(JSON.stringify(error)).not.toContain("private-symbol");
+  });
+
+  it("does not invoke request body getters while building diagnostics", () => {
+    const onHttpError = vi.fn();
+    const requestBody = Object.defineProperty({}, "type", {
+      enumerable: true,
+      get() {
+        throw new Error("getter must not run");
+      },
+    });
+
+    notifyHttpError(onHttpError, "POST", "https://api.trainheroic.com/test", 500, {
+      requestBody,
+    });
+
+    expect(onHttpError).toHaveBeenCalledWith(
+      expect.objectContaining({ requestBody: { keys: ["type"], type: "object" } }),
+    );
   });
 
   it("consumes rejected async handler results", async () => {

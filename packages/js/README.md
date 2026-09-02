@@ -123,9 +123,9 @@ const client = new TrainHeroicClient(email, password, savedSession, {
 `onHttpError` receives a `TrainHeroicHttpError` containing the method, status, host, a bounded
 request-body summary, and sanitized provider response diagnostics. The request summary records
 field names plus a small allowlist of non-sensitive enum values; arbitrary request values are
-never included. Response diagnostics retain provider error codes and messages after redacting
-credential fields, tokens, and email addresses, and long strings are truncated. Paths, query
-strings, credentials, session tokens, and login request data remain excluded. A transient 401/403
+never included. Response diagnostics retain machine-readable error codes and status fields while
+redacting all free-form strings. Paths, query strings, credentials, session tokens, and login
+request and response data remain excluded. A transient 401/403
 that succeeds after automatic re-login does not call the hook, and synchronous or asynchronous
 hook failures never change the request result.
 

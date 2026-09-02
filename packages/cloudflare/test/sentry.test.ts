@@ -80,7 +80,7 @@ describe("TrainHeroic Sentry reporters", () => {
         "trainheroic.response_body": {
           error: {
             code: "INVALID_EXERCISE",
-            message: "token=[Redacted] for [Redacted email]",
+            message: "[Redacted]",
           },
         },
       },

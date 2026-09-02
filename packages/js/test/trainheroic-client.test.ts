@@ -40,7 +40,7 @@ describe("TrainHeroicClient", () => {
             keys: ["private"],
             type: "object",
           },
-          responseBody: { error: "upstream rejected the request" },
+          responseBody: { error: "[Redacted]" },
           status,
         }),
       );
@@ -94,7 +94,7 @@ describe("TrainHeroicClient", () => {
       responseBody: {
         error: {
           code: "INVALID_EXERCISE",
-          message: "token=[Redacted] for [Redacted email]",
+          message: "[Redacted]",
           received: {
             param_1_type: 3,
             session_id: "[Redacted]",
@@ -109,6 +109,32 @@ describe("TrainHeroicClient", () => {
     expect(reported).not.toContain("private-password");
     expect(reported).not.toContain("Private exercise title");
     expect(reported).not.toContain("Private Athlete");
+  });
+
+  it("reports failures without reading request body getters twice", async () => {
+    const onHttpError = vi.fn();
+    let reads = 0;
+    const body = Object.defineProperty({}, "type", {
+      enumerable: true,
+      get() {
+        reads += 1;
+        if (reads > 1) throw new Error("getter read twice");
+        return 3;
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ code: "INVALID_REQUEST" }, 500)),
+    );
+    const client = new TrainHeroicClient("a@b.com", "pw", "live-session", { onHttpError });
+
+    const result = await client.request("POST", "/v5/workouts", { body });
+
+    expect(result.ok).toBe(false);
+    expect(reads).toBe(1);
+    expect(onHttpError).toHaveBeenCalledWith(
+      expect.objectContaining({ requestBody: { keys: ["type"], type: "object" } }),
+    );
   });
 
   it("reports the HTTP failure before rethrowing an unreadable error body", async () => {

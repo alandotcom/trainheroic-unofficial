@@ -32,7 +32,7 @@ describe("loginTrainHeroic", () => {
           method: "POST",
           host: "apis.trainheroic.com",
           requestBody: undefined,
-          responseBody: "upstream error",
+          responseBody: undefined,
           status,
         }),
       );
@@ -67,20 +67,27 @@ describe("loginTrainHeroic", () => {
     expect(onHttpError).toHaveBeenCalledWith(expect.objectContaining({ status: 401 }));
   });
 
-  it("still returns null when an error response body cannot be read", async () => {
+  it("returns without reading an error response body", async () => {
     const onHttpError = vi.fn();
+    const text = vi.fn(() => new Promise<string>(() => {}));
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
         ok: false,
         status: 500,
-        text: async () => {
-          throw new Error("body stream failed");
-        },
+        text,
       })),
     );
 
-    expect(await loginTrainHeroic("a@b.com", "pw", { onHttpError })).toBeNull();
+    const result = await Promise.race([
+      loginTrainHeroic("a@b.com", "pw", { onHttpError }),
+      new Promise<"timed out">((resolve) => {
+        setTimeout(() => resolve("timed out"), 50);
+      }),
+    ]);
+
+    expect(result).toBeNull();
+    expect(text).not.toHaveBeenCalled();
     expect(onHttpError).toHaveBeenCalledWith(
       expect.objectContaining({ responseBody: undefined, status: 500 }),
     );
