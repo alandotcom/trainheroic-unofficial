@@ -84,14 +84,20 @@ export type WorkoutDate = readonly [number, number, number];
 /**
  * Parse a `YYYY-M-D` string into the `WorkoutDate` tuple. The single home for this
  * conversion, shared by the MCP tools and the CLI so they cannot drift on what counts
- * as a valid date. Each part must be an integer.
+ * as a valid date. Each part must be a run of digits (`Number("")` is 0, so a blank part such as
+ * the trailing one in "2026-9-" must be rejected explicitly), and month/day must be in range so
+ * a typo cannot land a session on a date the calendar does not have.
  */
 export function parseWorkoutDate(s: string): WorkoutDate {
-  const parts = s.split("-").map((p) => Number(p));
-  if (parts.length !== 3 || parts.some((n) => !Number.isInteger(n))) {
+  const parts = s.split("-");
+  if (parts.length !== 3 || parts.some((p) => !/^\d+$/u.test(p))) {
     throw new Error(`date must be YYYY-M-D, got "${s}".`);
   }
-  return [parts[0] as number, parts[1] as number, parts[2] as number];
+  const [year, month, day] = parts.map(Number) as [number, number, number];
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    throw new Error(`date must be YYYY-M-D with a real month and day, got "${s}".`);
+  }
+  return [year, month, day];
 }
 
 /** Unit advisories surfaced when building: informational notes and override warnings. */

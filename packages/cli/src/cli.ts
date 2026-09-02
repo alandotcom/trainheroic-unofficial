@@ -102,7 +102,14 @@ import {
   TrainHeroicClient,
 } from "@trainheroic-unofficial/js";
 import { JsonFileLibraryCache } from "@trainheroic-unofficial/js/node";
-import { looksLikeJson, parseDate, requireTeamCalendarReassignmentConfirmation } from "./parse";
+import {
+  looksLikeJson,
+  parseCountArg,
+  parseDate,
+  parseIdList,
+  parseIntArg,
+  requireTeamCalendarReassignmentConfirmation,
+} from "./parse";
 import { loadSession, saveSession } from "./session-cache";
 
 const HELP = `trainheroic — command-line tool for the TrainHeroic API
@@ -126,7 +133,7 @@ Coach — manage a roster (needs a coach account):
   coach program <id> | team <id> | team-codes <id>
 
   roster athlete reads (three lenses — pick by the question):
-  coach roster-activity --athletes <id,id,...> [--metric]                  rank roster by recency; --metric adds session count + training volume. All-time snapshot, NO date range — for a windowed total use 'coach team-volume'. Get the full id list from 'coach athletes'.
+  coach roster-activity --athletes <id,id,...> [--metric]                  rank roster by recency with each athlete's session count + training volume; --metric reports the totals in kg instead of lb. All-time snapshot, NO date range — for a windowed total use 'coach team-volume'. Get the full id list from 'coach athletes'.
   coach team-volume (--team <id> | --athletes <id,id,...>) --start Y-M-D --end Y-M-D   team training volume scoped to a date window: per-athlete rows (only those who logged in range) + rolled-up totals (volume in lb). --team resolves the roster; --athletes passes ids directly.
   coach athlete-workouts --athlete <id> --start Y-M-D --end Y-M-D [--program <title>|--program-id <id>|--team <id>] [--logged-only] [--summary] [--raw|--log-ids]   prescribed + logged work over a date range; --program (title substring) / --program-id / --team targets one program when the athlete is on several; --logged-only/--summary narrow it to what was actually logged; --log-ids prints just the savedWorkoutSetId + savedWorkoutSetExerciseId per set that log-set needs
   coach athlete-training --athlete <id> --year <YYYY> --month <1-12>        sessions the athlete LOGGED in one month (empty = nothing logged that month, not an error)
@@ -182,7 +189,7 @@ Coach — manage a roster (needs a coach account):
   coach session-template-create --title "..." [--instruction "..."]
   coach session-template-delete --id <id> --yes
 
-  analytics (curated metrics; for team training volume/recency use roster-activity --metric instead):
+  analytics (curated metrics; for team training volume/recency use roster-activity instead):
   coach analytics-query [--metric <key>] [--team <id>] [--users id,id] [--exercise <id>] [--date|--start|--end Y-M-D] [--use-metric]
       run with no --metric to list the valid keys + each one's scope and required params
       (these keys are curated and differ from the raw 'coach analytics' categories)
@@ -264,9 +271,13 @@ function need(value: string | undefined, usage: string): string {
 }
 
 function toInt(value: string, label: string): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) fail(`${label} must be a number, got "${value}".`);
-  return n;
+  return parseIntArg(value, label);
+}
+
+/** A --limit style count: a positive integer, so 0 / negatives fail instead of emptying or
+ * tail-slicing the result. Matches the MCP tools' `positive()` limit schemas. */
+function toCount(value: string, label: string): number {
+  return parseCountArg(value, label);
 }
 
 /** Validate input against a dto schema, failing with a readable message on mismatch. */
@@ -332,7 +343,7 @@ async function mutate(
 
 /** Parse a comma-separated id list ("1,2,3") into numbers. */
 function idList(value: string, label: string): number[] {
-  return value.split(",").map((s) => toInt(s.trim(), label));
+  return parseIdList(value, label);
 }
 
 function library(client: TrainHeroicClient): ExerciseLibrary {
@@ -353,7 +364,7 @@ async function cmdExercise(client: TrainHeroicClient, rest: string[]): Promise<v
         positionals.join(" ").trim() || undefined,
         "coach exercise search <query>",
       );
-      const limit = values.limit !== undefined ? toInt(values.limit as string, "--limit") : 20;
+      const limit = values.limit !== undefined ? toCount(values.limit as string, "--limit") : 20;
       return out(await lib.search(query, limit));
     }
     case "get":
@@ -551,7 +562,7 @@ async function cmdMessage(client: TrainHeroicClient, rest: string[]): Promise<vo
         need(positionals[0], "coach message read <streamId> [--limit N] [--after <commentId>]"),
         "streamId",
       );
-      const limit = values.limit !== undefined ? toInt(values.limit as string, "--limit") : 20;
+      const limit = values.limit !== undefined ? toCount(values.limit as string, "--limit") : 20;
       const after =
         values.after !== undefined ? toInt(values.after as string, "--after") : undefined;
       return out(await readLive(client, streamId, limit, after));
@@ -979,11 +990,7 @@ async function cmdAthleteWorkouts(client: TrainHeroicClient, a: string[]): Promi
   }
   const opts: { loggedOnly?: boolean; limit?: number } = {};
   if (values["logged-only"] === true) opts.loggedOnly = true;
-  if (values.limit !== undefined) {
-    const limit = toInt(values.limit as string, "--limit");
-    if (!Number.isInteger(limit) || limit < 0) fail(`--limit must be a non-negative integer.`);
-    opts.limit = limit;
-  }
+  if (values.limit !== undefined) opts.limit = toCount(values.limit as string, "--limit");
   // Chunked so a multi-year export range does not 504 (a single window delegates to the plain
   // fetch, so a normal narrow range is unaffected). Matches the website export.
   const workouts = await fetchAthleteWorkoutsChunked(client, start, end);
@@ -1020,13 +1027,18 @@ async function cmdAthlete(client: TrainHeroicClient, rest: string[]): Promise<vo
       return cmdAthleteWorkouts(client, a);
     case "exercises": {
       const { values } = parse(a, { q: { type: "string" }, limit: { type: "string" } });
-      const limit = values.limit !== undefined ? toInt(values.limit as string, "--limit") : 20;
+      const limit =
+        values.limit !== undefined ? toCount(values.limit as string, "--limit") : undefined;
       const q = values.q as string | undefined;
-      return out(
-        q !== undefined
-          ? await searchExerciseHistory(client, q, limit)
-          : await fetchExerciseHistoryList(client),
-      );
+      if (q !== undefined) return out(await searchExerciseHistory(client, q, limit ?? 20));
+      // The full catalog honours --limit too (it was accepted and silently ignored before); say so
+      // on stderr when it clips, so a partial catalog never reads as the whole library.
+      const rows = await fetchExerciseHistoryList(client);
+      if (limit !== undefined && rows.length > limit) {
+        logErr(`showing ${limit} of ${rows.length} exercises; drop --limit for the full catalog`);
+        return out(rows.slice(0, limit));
+      }
+      return out(rows);
     }
     case "recent-exercises":
       return out(await fetchRecentExercises(client));
@@ -1376,7 +1388,7 @@ async function cmdCoachAthleteWorkouts(client: TrainHeroicClient, a: string[]): 
   // roster athlete's range to just what they logged instead of scanning every prescribed session.
   const opts: { loggedOnly?: boolean; limit?: number } = {};
   if (values["logged-only"] === true) opts.loggedOnly = true;
-  if (values.limit !== undefined) opts.limit = toInt(values.limit as string, "--limit");
+  if (values.limit !== undefined) opts.limit = toCount(values.limit as string, "--limit");
   const selected = selectWorkouts(presentAthleteWorkouts(workouts), opts);
   return out(values.summary === true ? summarizeAthleteWorkouts(selected) : selected);
 }
