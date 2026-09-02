@@ -206,22 +206,22 @@ describe("createLimiter", () => {
 
   it("keeps required finalization queued after cancellation", async () => {
     const limit = createLimiter(1);
-    let release: () => void = () => {};
-    const blocked = limit.run(
-      () =>
-        new Promise<void>((resolve) => {
-          release = resolve;
-        }),
-    );
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const blocked = limit.run(async () => {
+      started.resolve();
+      await release.promise;
+    });
+    await started.promise;
     const skipped = limit.run(async () => "skipped");
-    const finalized = limit.runFinalizer(async () => "finalized");
-
     const boom = new Error("boom");
+    const skippedResult = expect(skipped).rejects.toBe(boom);
+    const finalized = limit.runFinalizer(async () => "finalized");
     limit.cancel(boom);
-    release();
+    release.resolve();
 
     await blocked;
-    await expect(skipped).rejects.toBe(boom);
+    await skippedResult;
     await expect(finalized).resolves.toBe("finalized");
   });
 });

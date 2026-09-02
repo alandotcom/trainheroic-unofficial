@@ -340,8 +340,10 @@ describe("logSessionForAthlete (coach)", () => {
 
   it("validates every set before writing any part of the session", async () => {
     const day = dayWithSet(false);
-    delete day[0]!.summarizedSavedWorkout.saved_workout.workoutSets[1]!.workoutSetExercises[0]!
-      .workout_set_exercise_id;
+    Reflect.deleteProperty(
+      day[0]!.summarizedSavedWorkout.saved_workout.workoutSets[1]!.workoutSetExercises[0]!,
+      "workout_set_exercise_id",
+    );
     const puts: string[] = [];
     vi.stubGlobal(
       "fetch",
