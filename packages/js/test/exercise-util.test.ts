@@ -99,7 +99,7 @@ describe("chunk", () => {
   });
 
   it("rejects a non-positive size instead of looping forever", () => {
-    expect(() => chunk([1], 0)).toThrow(RangeError);
+    expect(() => chunk([1], 0)).toThrow(/Size must be an integer greater than zero/u);
   });
 });
 
