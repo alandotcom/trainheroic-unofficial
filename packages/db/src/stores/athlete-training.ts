@@ -71,15 +71,17 @@ export class AthleteTrainingStore extends AthleteScopedStore {
   }
 
   async #finishFullSync(user: number): Promise<void> {
-    await this.db
-      .delete(athleteSyncState)
-      .where(
-        and(
-          eq(athleteSyncState.userId, user),
-          eq(athleteSyncState.resource, FULL_SYNC_STATE),
-          eq(athleteSyncState.scopeId, 0),
+    await this.exec([
+      this.db
+        .delete(athleteSyncState)
+        .where(
+          and(
+            eq(athleteSyncState.userId, user),
+            eq(athleteSyncState.resource, FULL_SYNC_STATE),
+            eq(athleteSyncState.scopeId, 0),
+          ),
         ),
-      );
+    ]);
   }
 
   /** Refresh the exercise catalog. Preserves each row's sessions_synced_at watermark. */

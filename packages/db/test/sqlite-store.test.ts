@@ -188,6 +188,30 @@ describe("cursorUpsertStmt", () => {
 });
 
 describe("makeSqliteWarehouse exec", () => {
+  it("returns each statement result in order", async () => {
+    const sqlite = freshDb();
+    const wh = makeSqliteWarehouse(sqlite);
+    await wh.exec([
+      wh.db.insert(exercise).values({
+        orgId: 7,
+        id: 101,
+        title: "Temporary",
+        searchText: "temporary",
+        raw: "{}",
+        generation: 1,
+      }),
+    ]);
+
+    const results = await wh.exec([
+      wh.db.delete(exercise).where(and(eq(exercise.orgId, 7), eq(exercise.id, 101))),
+      wh.db.insert(athletePr).values({ userId: USER, exerciseId: 9, reps: 1, weight: 100 }),
+    ]);
+
+    expect(results).toHaveLength(2);
+    expect((results[0] as { changes: number | bigint }).changes).toBe(1);
+    expect((results[1] as { changes: number | bigint }).changes).toBe(1);
+  });
+
   it("queues store writes behind an unrelated transaction so its rollback cannot undo them", async () => {
     const sqlite = freshDb();
     const wh = makeSqliteWarehouse(sqlite);

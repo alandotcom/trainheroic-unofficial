@@ -14,9 +14,10 @@ export type BatchStmt = BatchItem<"sqlite">;
  * to `db.batch([...])` (an implicit transaction the backend commits all-or-nothing); the
  * node:sqlite adapter wraps it in a `BEGIN`/`COMMIT`. Stores never call a driver-only batch method
  * directly — they go through this, `runGroups`, or `runBatches`, so the same store body works on
- * both adapters.
+ * both adapters. Results stay in statement order so callers that need driver metadata (for
+ * example, a delete's affected-row count) can inspect it without bypassing the executor.
  */
-export type BatchExec = (statements: readonly BatchStmt[]) => Promise<void>;
+export type BatchExec = (statements: readonly BatchStmt[]) => Promise<unknown[]>;
 
 /** A Drizzle handle plus its atomic-batch executor — what a store is constructed from. */
 export type Warehouse = { db: DrizzleDb; exec: BatchExec };
