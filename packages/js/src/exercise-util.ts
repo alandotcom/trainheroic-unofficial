@@ -240,6 +240,8 @@ export async function mapPool<T, R>(
  */
 export type Limiter = {
   run<T>(task: () => Promise<T>): Promise<T>;
+  /** Run required finalization even after cancellation, while preserving the same concurrency cap. */
+  runFinalizer<T>(task: () => Promise<T>): Promise<T>;
   cancel(error: unknown): void;
 };
 
@@ -247,10 +249,14 @@ export function createLimiter(max: number): Limiter {
   assertPositiveInteger(max, "Maximum concurrency");
   let active = 0;
   let cancelled: { error: unknown } | null = null;
-  const waiting: Array<{ start: () => void; abort: (error: unknown) => void }> = [];
-  const acquire = (): Promise<void> =>
+  const waiting: Array<{
+    start: () => void;
+    abort: (error: unknown) => void;
+    finalizer: boolean;
+  }> = [];
+  const acquire = (finalizer: boolean): Promise<void> =>
     new Promise((resolve, reject) => {
-      if (cancelled !== null) {
+      if (cancelled !== null && !finalizer) {
         reject(cancelled.error);
       } else if (active < max) {
         active += 1;
@@ -262,6 +268,7 @@ export function createLimiter(max: number): Limiter {
             resolve();
           },
           abort: reject,
+          finalizer,
         });
       }
     });
@@ -271,7 +278,15 @@ export function createLimiter(max: number): Limiter {
   };
   return {
     async run(task) {
-      await acquire();
+      await acquire(false);
+      try {
+        return await task();
+      } finally {
+        release();
+      }
+    },
+    async runFinalizer(task) {
+      await acquire(true);
       try {
         return await task();
       } finally {
@@ -280,7 +295,11 @@ export function createLimiter(max: number): Limiter {
     },
     cancel(error) {
       cancelled ??= { error };
-      for (const entry of waiting.splice(0)) entry.abort(error);
+      const queued = waiting.splice(0);
+      for (const entry of queued) {
+        if (entry.finalizer) waiting.push(entry);
+        else entry.abort(error);
+      }
     },
   };
 }

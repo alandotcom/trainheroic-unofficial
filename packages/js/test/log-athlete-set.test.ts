@@ -368,4 +368,36 @@ describe("logAthleteSet write fan-out", () => {
     ).rejects.toThrow(/999 not found/u);
     expect(puts).toHaveLength(0);
   });
+
+  it("reports exercise writes confirmed before a sibling failure", async () => {
+    const exercises = [
+      prescribeReps(exercise(100, "A"), [5]),
+      prescribeReps(exercise(200, "B"), [5]),
+      prescribeReps(exercise(300, "C"), [5]),
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+        if (url.includes("/3.0/athlete/programworkout/range"))
+          return json(dayWithExercises(exercises));
+        if (init?.method === "PUT") {
+          return url.includes("/savedworkoutsetexercise/100")
+            ? json({ error: "failed" }, 500)
+            : json({ ok: 1 });
+        }
+        return json({});
+      }),
+    );
+
+    await expect(
+      log([
+        { savedWorkoutSetExerciseId: 100, sets: [{ param1: 5 }] },
+        { savedWorkoutSetExerciseId: 200, sets: [{ param1: 5 }] },
+        { savedWorkoutSetExerciseId: 300, sets: [{ param1: 5 }] },
+      ]),
+    ).rejects.toThrow(
+      /Failed to write exercise 100.*Confirmed exercise writes before the failure: 200, 300.*retry/u,
+    );
+  });
 });

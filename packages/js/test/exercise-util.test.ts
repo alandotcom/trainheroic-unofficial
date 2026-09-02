@@ -103,14 +103,19 @@ describe("chunk", () => {
   });
 });
 
-const tick = (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
+function deferred<T>() {
+  let resolve: (value: T | PromiseLike<T>) => void = () => {};
+  let reject: (reason?: unknown) => void = () => {};
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
   });
+  return { promise, resolve, reject };
+}
 
 describe("mapPool", () => {
-  it("rejects an invalid concurrency limit", async () => {
-    await expect(mapPool([1], 0, async (value) => value)).rejects.toThrow(
+  it.each([0, -1, 1.5, Number.NaN])("rejects invalid concurrency %s", async (concurrency) => {
+    await expect(mapPool([1], concurrency, async (value) => value)).rejects.toThrow(
       /Concurrency limit must be a positive integer/u,
     );
   });
@@ -118,13 +123,18 @@ describe("mapPool", () => {
   it("stops scheduling after a failure and waits for started calls before rejecting", async () => {
     const started: number[] = [];
     const finished: number[] = [];
+    const gates = Array.from({ length: 4 }, () => deferred<number>());
+    const firstPairStarted = deferred<void>();
     const run = mapPool([0, 1, 2, 3], 2, async (i) => {
       started.push(i);
-      await tick(i === 1 ? 20 : 1);
+      if (started.length === 2) firstPairStarted.resolve();
+      const value = await gates[i]!.promise;
       finished.push(i);
-      if (i === 0) throw new Error("boom");
-      return i;
+      return value;
     });
+    await firstPairStarted.promise;
+    gates[0]!.reject(new Error("boom"));
+    gates[1]!.resolve(1);
     await expect(run).rejects.toThrow("boom");
     // Item 1 was in flight when 0 failed: it ran to completion before the rejection surfaced.
     expect(finished).toContain(1);
@@ -133,33 +143,44 @@ describe("mapPool", () => {
   });
 
   it("keeps results in input order", async () => {
-    const out = await mapPool([3, 1, 2], 3, async (n) => {
-      await tick(n);
-      return n * 10;
+    const gates = new Map([3, 1, 2].map((n) => [n, deferred<number>()]));
+    const run = mapPool([3, 1, 2], 3, async (n) => {
+      return (await gates.get(n)!.promise) * 10;
     });
+    gates.get(1)!.resolve(1);
+    gates.get(2)!.resolve(2);
+    gates.get(3)!.resolve(3);
+    const out = await run;
     expect(out).toEqual([30, 10, 20]);
   });
 });
 
 describe("createLimiter", () => {
-  it("rejects an invalid concurrency limit", () => {
-    expect(() => createLimiter(0)).toThrow(/Maximum concurrency must be a positive integer/u);
+  it.each([0, -1, 1.5, Number.NaN])("rejects invalid concurrency %s", (concurrency) => {
+    expect(() => createLimiter(concurrency)).toThrow(
+      /Maximum concurrency must be a positive integer/u,
+    );
   });
 
   it("caps the number of tasks in flight across independent callers", async () => {
     const limit = createLimiter(2);
+    const release = deferred<void>();
     let active = 0;
     let peak = 0;
     const task = async (): Promise<void> => {
       active += 1;
       peak = Math.max(peak, active);
-      await tick(2);
+      await release.promise;
       active -= 1;
     };
-    await Promise.all([
+    const running = Promise.all([
       mapPool([1, 2, 3], 3, () => limit.run(task)),
       mapPool([4, 5, 6], 3, () => limit.run(task)),
     ]);
+    await Promise.resolve();
+    expect(peak).toBe(2);
+    release.resolve();
+    await running;
     expect(peak).toBe(2);
   });
 
@@ -169,7 +190,7 @@ describe("createLimiter", () => {
     const boom = new Error("boom");
     const first = limit.run(async () => {
       ran.push("first");
-      await tick(2);
+      await Promise.resolve();
       limit.cancel(boom);
       return "done";
     });
@@ -181,5 +202,26 @@ describe("createLimiter", () => {
     await expect(second).rejects.toBe(boom);
     await expect(limit.run(async () => "late")).rejects.toBe(boom);
     expect(ran).toEqual(["first"]);
+  });
+
+  it("keeps required finalization queued after cancellation", async () => {
+    const limit = createLimiter(1);
+    let release: () => void = () => {};
+    const blocked = limit.run(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const skipped = limit.run(async () => "skipped");
+    const finalized = limit.runFinalizer(async () => "finalized");
+
+    const boom = new Error("boom");
+    limit.cancel(boom);
+    release();
+
+    await blocked;
+    await expect(skipped).rejects.toBe(boom);
+    await expect(finalized).resolves.toBe("finalized");
   });
 });
