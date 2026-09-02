@@ -1,5 +1,15 @@
 # @trainheroic-unofficial/js
 
+## 3.5.2
+
+### Patch Changes
+
+- c218865: Fix `searchExerciseHistory` (and the `athlete_exercises` tool / `athlete exercises --q` command built on it) returning up to `limit` unrelated exercises for a query that matches nothing: rows are now filtered to titles carrying every query token before ranking, and a blank query returns no rows. Fix `coach athlete-lift-history --until` dropping a session whose completion date carries a time component, by sharing the `historyInRange` window helper between the SDK, the MCP tools, and the CLI.
+- c36add1: Performance: set-logging writes (`athlete_log_set`, `log_athlete_set`, the prescribe tools, and the session-log tools) fan out their per-exercise and per-set PUTs with a small pool instead of one round trip at a time, with session failures reporting every confirmed partial write; `roster_activity` uses a true pool rather than batches that wait for their slowest member; main-lift discovery tallies performed exercises straight off the saved copies instead of building the full merged workout view for a year of sessions; the MCP result serializer serializes once for both text and structured content and stops walking an oversized list at the first element that no longer fits; the in-memory exercise library dedupes concurrent cold loads; shared collection operations use `es-toolkit`; invalid concurrency limits fail fast; the messaging warehouse syncs streams with a bounded pool; and the coach PR warehouse writes one multi-row insert per athlete.
+- 38824dd: Athlete workout presenters: `presentLogTargets` now reports the coach's prescription from the template row instead of the saved copy's slots (which hold the logged values once sets are performed), and `presentAthleteWorkout` / the export honour targets held unperformed on the saved copy, so a `prescribeAthleteSet` override and a personal session's not-yet-logged sets appear as prescribed. `readSession` keeps `reps` and `load` slot-aligned (a reps-only or load-only set no longer shifts the other list) and zero-pads `date`. CLI integer arguments reject blanks and fractions, `--limit` must be positive, `athlete exercises --limit` applies to the full catalog, and the `roster-activity --metric` help text says the flag switches units. `parseWorkoutDate` rejects a blank part and an out-of-range month or day. The messaging warehouse stores a null comment image as NULL rather than the text "null"; `programming_stored` returns a superset block's sets in prescribed exercise order on every read; a `sync_state` upsert leaves a field the caller omits untouched; and the exercise library's `pruned` count is reported on the node:sqlite adapter too.
+- Updated dependencies [38824dd]
+  - @trainheroic-unofficial/dto@3.5.2
+
 ## 3.5.1
 
 ### Patch Changes

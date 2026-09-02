@@ -1,5 +1,17 @@
 # @trainheroic-unofficial/core
 
+## 3.5.2
+
+### Patch Changes
+
+- c218865: Fix `searchExerciseHistory` (and the `athlete_exercises` tool / `athlete exercises --q` command built on it) returning up to `limit` unrelated exercises for a query that matches nothing: rows are now filtered to titles carrying every query token before ranking, and a blank query returns no rows. Fix `coach athlete-lift-history --until` dropping a session whose completion date carries a time component, by sharing the `historyInRange` window helper between the SDK, the MCP tools, and the CLI.
+- c36add1: Performance: set-logging writes (`athlete_log_set`, `log_athlete_set`, the prescribe tools, and the session-log tools) fan out their per-exercise and per-set PUTs with a small pool instead of one round trip at a time, with session failures reporting every confirmed partial write; `roster_activity` uses a true pool rather than batches that wait for their slowest member; main-lift discovery tallies performed exercises straight off the saved copies instead of building the full merged workout view for a year of sessions; the MCP result serializer serializes once for both text and structured content and stops walking an oversized list at the first element that no longer fits; the in-memory exercise library dedupes concurrent cold loads; shared collection operations use `es-toolkit`; invalid concurrency limits fail fast; the messaging warehouse syncs streams with a bounded pool; and the coach PR warehouse writes one multi-row insert per athlete.
+- Updated dependencies [c218865]
+- Updated dependencies [c36add1]
+- Updated dependencies [38824dd]
+  - @trainheroic-unofficial/js@3.5.2
+  - @trainheroic-unofficial/dto@3.5.2
+
 ## 3.5.1
 
 ### Patch Changes
