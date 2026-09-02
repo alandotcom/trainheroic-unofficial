@@ -1,5 +1,5 @@
 import { loginTrainHeroic } from "./auth";
-import { notifyHttpError } from "./http-error";
+import { notifyHttpError, parseResponseText } from "./http-error";
 import type { TrainHeroicHttpErrorHandler } from "./http-error";
 
 const DEFAULT_COACH_BASE = "https://api.trainheroic.com";
@@ -142,18 +142,25 @@ export class TrainHeroicClient {
       res = await this.#send(method, url, session, options.body);
     }
 
-    if (!res.ok && !options.expectedStatuses?.includes(res.status)) {
-      notifyHttpError(this.#onHttpError, method, url, res.status);
-    }
-
-    const text = await res.text();
-    let data: unknown = text;
-    if (text.length > 0) {
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = text;
+    const shouldReport = !res.ok && !options.expectedStatuses?.includes(res.status);
+    let text: string;
+    try {
+      text = await res.text();
+    } catch (error) {
+      if (shouldReport) {
+        notifyHttpError(this.#onHttpError, method, url, res.status, {
+          requestBody: options.body,
+        });
       }
+      throw error;
+    }
+    const data = parseResponseText(text);
+
+    if (shouldReport) {
+      notifyHttpError(this.#onHttpError, method, url, res.status, {
+        requestBody: options.body,
+        responseBody: data,
+      });
     }
 
     return { status: res.status, ok: res.ok, data: data as T };
