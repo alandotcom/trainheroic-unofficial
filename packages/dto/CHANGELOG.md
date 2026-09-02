@@ -1,5 +1,7 @@
 # @trainheroic-unofficial/dto
 
+## 3.6.0
+
 ## 3.5.2
 
 ### Patch Changes

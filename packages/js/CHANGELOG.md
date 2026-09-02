@@ -1,5 +1,16 @@
 # @trainheroic-unofficial/js
 
+## 3.6.0
+
+### Minor Changes
+
+- 50744bc: Add bounded request summaries and redacted provider response diagnostics to final HTTP error
+  callbacks so production failures can be diagnosed without capturing credentials or raw bodies.
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@3.6.0
+
 ## 3.5.2
 
 ### Patch Changes
