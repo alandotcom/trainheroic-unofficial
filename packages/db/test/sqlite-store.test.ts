@@ -217,7 +217,7 @@ describe("makeSqliteWarehouse exec", () => {
         signalBegun();
         void barrier.then(resolve);
       },
-    } as BatchStmt;
+    } as unknown as BatchStmt;
     const group = wh.exec([
       pausedStatement,
       wh.db
