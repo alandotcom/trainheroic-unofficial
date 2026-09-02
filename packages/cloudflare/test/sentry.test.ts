@@ -26,6 +26,7 @@ import {
   instrumentMcpServer,
   oauthProviderErrorReporter,
   reportOAuthInternalError,
+  sentryOptions,
   trainHeroicHttpErrorReporter,
   trainHeroicLoginErrorReporter,
 } from "../src/sentry";
@@ -147,5 +148,25 @@ describe("OAuth provider Sentry reporter", () => {
     });
 
     expect(sentry.captureException).not.toHaveBeenCalled();
+  });
+});
+
+describe("tracesSampleRate from SENTRY_TRACES_SAMPLE_RATE", () => {
+  const rate = (value: string | undefined): number =>
+    sentryOptions({ SENTRY_TRACES_SAMPLE_RATE: value } as unknown as Env)
+      .tracesSampleRate as number;
+
+  it("uses a valid rate in [0, 1]", () => {
+    expect(rate("0.25")).toBe(0.25);
+    expect(rate("0")).toBe(0);
+  });
+
+  it("falls back to 1 when unset, blank, non-numeric, or out of range", () => {
+    expect(rate(undefined)).toBe(1);
+    // Number("") is 0; a cleared dashboard variable must not switch tracing off.
+    expect(rate("")).toBe(1);
+    expect(rate("   ")).toBe(1);
+    expect(rate("abc")).toBe(1);
+    expect(rate("2")).toBe(1);
   });
 });

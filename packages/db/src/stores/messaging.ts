@@ -87,7 +87,9 @@ export class MessagingStore extends OrgScopedStore {
       content: String(c.content ?? ""),
       authorName: String(c.authorName ?? ""),
       authorLogo: String(c.authorLogo ?? ""),
-      imageUrl: c.imageUrl === undefined ? null : String(c.imageUrl),
+      // A comment without an attachment carries a null imageUrl; String(null) would store the
+      // literal text "null" as if it were a URL.
+      imageUrl: c.imageUrl === undefined || c.imageUrl === null ? null : String(c.imageUrl),
       isAuthor: c.isAuthor ? 1 : 0,
       parentId,
       reactions: JSON.stringify(c.reactions ?? []),

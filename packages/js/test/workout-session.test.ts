@@ -359,6 +359,65 @@ describe("readSession", () => {
     expect(res.blocks[0]?.exercises[0]?.loadUnit).toBe("lb");
   });
 
+  it("keeps reps and load slot-aligned and zero-pads the date on read-back", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+        if (url.includes("/1.0/coach/programs/edit/")) {
+          return json({
+            programWorkouts: [
+              {
+                id: 21,
+                year: 2026,
+                month: 6,
+                day: 2,
+                published: 0,
+                sets: {
+                  "1": {
+                    id: 5,
+                    order: 1,
+                    title: "Primary",
+                    exercises: [
+                      {
+                        id: 9,
+                        order: 1,
+                        title: "Bench",
+                        // Set 2 is reps-only, set 4 is load-only ("work up to 225").
+                        param_1_data_1: "5",
+                        param_2_data_1: "185",
+                        param_1_data_2: "5",
+                        param_1_data_3: "5",
+                        param_2_data_3: "205",
+                        param_2_data_4: "225",
+                      },
+                      {
+                        id: 10,
+                        order: 2,
+                        title: "Row",
+                        param_1_data_1: "10",
+                        param_1_data_2: "10",
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          });
+        }
+        return json({});
+      }),
+    );
+    const res = await readSession(new TrainHeroicClient("a@b.com", "pw"), 5, [2026, 6, 2], 21);
+    expect(res.date).toBe("2026-06-02");
+    const bench = res.blocks[0]?.exercises[0];
+    expect(bench?.reps).toEqual(["5", "5", "5", ""]);
+    expect(bench?.load).toEqual(["185", "", "205", "225"]);
+    const row = res.blocks[0]?.exercises[1];
+    expect(row?.reps).toEqual(["10", "10"]);
+    expect(row?.load).toEqual([]);
+  });
+
   it("includes block-level instruction on read-back (Circuit free-text)", async () => {
     vi.stubGlobal(
       "fetch",

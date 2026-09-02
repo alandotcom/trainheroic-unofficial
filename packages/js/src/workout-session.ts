@@ -13,7 +13,7 @@ import {
 } from "@trainheroic-unofficial/dto";
 import { z } from "zod";
 import type { TrainHeroicClient } from "./client";
-import { coerceInt, mapPool, unitLabel } from "./exercise-util";
+import { coerceInt, MAX_PARAM_SLOTS, mapPool, unitLabel } from "./exercise-util";
 import { checkResponse } from "./response-check";
 import {
   buildBlockPayload,
@@ -200,7 +200,9 @@ export async function readSession(
 
   return {
     pwId,
-    date: `${str(pw.year)}-${str(pw.month)}-${str(pw.day)}`,
+    // Zero-padded so the value round-trips into the YYYY-MM-DD `dateString` args the athlete
+    // tools require.
+    date: `${str(pw.year)}-${str(pw.month).padStart(2, "0")}-${str(pw.day).padStart(2, "0")}`,
     published: pw.published,
     instruction: str(pw.instruction),
     blocks,
@@ -233,14 +235,19 @@ function readBlock(b: Record<string, unknown>): ReadBlock {
 }
 
 function readExercise(ex: Record<string, unknown>): ReadExercise {
-  const reps: string[] = [];
-  const load: string[] = [];
-  for (let i = 1; i <= 10; i += 1) {
-    const r = str(ex[`param_1_data_${i}`]);
-    if (r !== "") reps.push(r);
-    const w = str(ex[`param_2_data_${i}`]);
-    if (w !== "") load.push(w);
+  // `reps[k]` and `load[k]` must describe the same set, so both arrays run over the same slot
+  // range (1 .. the last slot carrying either value) with "" for a gap. Compacting each side on
+  // its own would shift a load onto the wrong set whenever one slot is reps-only or load-only.
+  // A side with no values at all stays an empty array.
+  let last = 0;
+  for (let i = 1; i <= MAX_PARAM_SLOTS; i += 1) {
+    if (str(ex[`param_1_data_${i}`]) !== "" || str(ex[`param_2_data_${i}`]) !== "") last = i;
   }
+  const slots = Array.from({ length: last }, (_, k) => k + 1);
+  const repsRaw = slots.map((i) => str(ex[`param_1_data_${i}`]));
+  const loadRaw = slots.map((i) => str(ex[`param_2_data_${i}`]));
+  const reps = repsRaw.some((r) => r !== "") ? repsRaw : [];
+  const load = loadRaw.some((w) => w !== "") ? loadRaw : [];
   return {
     order: Number(ex.order),
     title: str(ex.title),

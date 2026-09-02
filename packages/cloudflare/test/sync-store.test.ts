@@ -109,6 +109,54 @@ describe("ProgrammingStore", () => {
     expect(detail.blocks[0]?.sets).toHaveLength(2);
   });
 
+  it("returns a superset block's sets in prescribed exercise order, stable across re-syncs", async () => {
+    const superset = {
+      ...SESSION,
+      sets: {
+        "1": {
+          id: 5001,
+          order: 1,
+          type: 2,
+          title: "Superset",
+          instruction: "",
+          exercises: [
+            // Listed out of order on purpose; `order` is the prescription's sequence.
+            {
+              order: 2,
+              exercise_id: 2,
+              param_1_type: 3,
+              param_1_data_1: "10",
+              param_1_data_2: "10",
+            },
+            { order: 1, exercise_id: 1, param_1_type: 3, param_1_data_1: "5", param_1_data_2: "5" },
+          ],
+        },
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+        if (url.includes("/1.0/coach/programs/edit/")) return json({ programWorkouts: [superset] });
+        return json({});
+      }),
+    );
+    const store = new ProgrammingStore(makeD1Warehouse(env.TH_DB), client(), 7);
+    const expected = [
+      [1, 1],
+      [1, 2],
+      [2, 1],
+      [2, 2],
+    ];
+    for (let pass = 0; pass < 2; pass += 1) {
+      await store.syncCalendar(111, "Prog A");
+      const detail = (await store.getSession(9001)) as {
+        blocks: Array<{ sets: Array<{ exercise_id: number; set_index: number }> }>;
+      };
+      expect(detail.blocks[0]?.sets.map((s) => [s.exercise_id, s.set_index])).toEqual(expected);
+    }
+  });
+
   it("is idempotent: re-sync rebuilds sets without duplicating", async () => {
     const store = new ProgrammingStore(makeD1Warehouse(env.TH_DB), client(), 7);
     await store.syncCalendar(111, "Prog A");

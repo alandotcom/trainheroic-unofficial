@@ -270,7 +270,11 @@ export class ProgrammingStore extends OrgScopedStore {
         instruction: String(blk.instruction ?? ""),
         raw: JSON.stringify(blk),
       });
-      const exercises = Array.isArray(blk.exercises) ? blk.exercises.filter(isRecord) : [];
+      // Insert in prescribed exercise order so rowid order (what getSession sorts on within a
+      // block) reconstructs the block as written: A1..An, then B1..Bn for a superset.
+      const exercises = (Array.isArray(blk.exercises) ? blk.exercises.filter(isRecord) : []).sort(
+        (a, b) => (coerceInt(a.order) ?? 0) - (coerceInt(b.order) ?? 0),
+      );
       for (const ex of exercises) setRows.push(...this.#setRows(org, bid, ex));
     }
     for (const values of chunk(blockRows, BULK_WRITE_ROWS)) {
@@ -427,7 +431,10 @@ export class ProgrammingStore extends OrgScopedStore {
           ),
         ),
       )
-      .orderBy(prescribedSet.blockId, prescribedSet.setIndex);
+      // (block_id, set_index) is not unique once a block holds several exercises (a superset
+      // stores A1..A3 and B1..B3 under the same indices), so order by rowid within the block:
+      // each session's rows are deleted and reinserted together in prescribed exercise order.
+      .orderBy(prescribedSet.blockId, sql`rowid`);
 
     const byBlock = new Map<number, PrescribedSetRow[]>();
     for (const { block_id, ...set } of setRows) {

@@ -1,7 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
+import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
 import { AthleteTrainingStore, athletePr } from "../src/index";
+import { cursorUpsertStmt } from "../src/runner";
+import { syncState } from "../src/schema";
 import { applyMigrations, makeSqliteWarehouse } from "../src/sqlite";
 
 // Proves the seam: the SAME store code that runs on D1 in the worker runs on a synchronous
@@ -165,5 +168,21 @@ describe("a store on the node:sqlite driver", () => {
 
     const store = new AthleteTrainingStore(wh, new TrainHeroicClient("a@b.com", "pw"), USER);
     expect(await store.prs(1)).toHaveLength(0);
+  });
+});
+
+describe("cursorUpsertStmt", () => {
+  it("leaves a field the caller omits untouched on an existing row", async () => {
+    const sqlite = freshDb();
+    const wh = makeSqliteWarehouse(sqlite);
+    await wh.exec([cursorUpsertStmt(wh.db, 7, "messaging", 55, { cursor: "9001" })]);
+    // A generation-only bump (the library sync's shape) must not wipe the cursor.
+    await wh.exec([cursorUpsertStmt(wh.db, 7, "messaging", 55, { generation: 2 })]);
+    const row = await wh.db
+      .select({ cursor: syncState.cursor, generation: syncState.generation })
+      .from(syncState)
+      .where(and(eq(syncState.orgId, 7), eq(syncState.scopeId, 55)))
+      .get();
+    expect(row).toEqual({ cursor: "9001", generation: 2 });
   });
 });

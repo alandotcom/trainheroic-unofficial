@@ -649,3 +649,89 @@ describe("buildSetCompletePayload", () => {
     ).toThrow(/missing/iu);
   });
 });
+
+describe("presentAthleteWorkout: saved-copy targets", () => {
+  function savedRow(overrides: Record<string, unknown>): Record<string, unknown> {
+    return {
+      id: 2001,
+      exercise_id: 7,
+      exercise_title: "Back Squat",
+      param_1_type: 3,
+      param_2_type: 1,
+      ...overrides,
+    };
+  }
+
+  it("shows a per-athlete override written with made = 0 over the template's plan", () => {
+    const raw = {
+      id: 1,
+      date: "2026-06-22",
+      workout_title: "Day 1",
+      summarizedSavedWorkout: {
+        workout: {
+          workoutSets: [
+            {
+              id: 10,
+              order: 1,
+              title: "Main",
+              workoutSetExercises: [
+                { id: 1001, exercise_id: 7, title: "Back Squat", param_1_data_1: "3" },
+              ],
+            },
+          ],
+        },
+        saved_workout: {
+          workoutSets: [
+            {
+              id: 20,
+              workout_set_id: 10,
+              workoutSetExercises: [
+                savedRow({
+                  workout_set_exercise_id: 1001,
+                  param_1_data_1: "3",
+                  param_2_data_1: "225",
+                  param_1_made: 0,
+                }),
+              ],
+            },
+          ],
+        },
+      },
+    } as unknown as ProgramWorkout;
+    const ex = presentAthleteWorkout(raw).blocks[0]?.exercises[0];
+    expect(ex?.prescribed).toEqual(["3 @ 225"]);
+    expect(ex?.performed).toEqual([]);
+  });
+
+  it("shows a personal session's prescribed sets before anything is logged", () => {
+    const raw = {
+      id: 2,
+      date: "2026-06-23",
+      workout_title: "Gym",
+      personal_cal: true,
+      summarizedSavedWorkout: {
+        saved_workout: {
+          workoutSets: [
+            {
+              id: 30,
+              title: "A",
+              workoutSetExercises: [
+                savedRow({
+                  workout_set_exercise_id: null,
+                  param_1_data_1: "5",
+                  param_2_data_1: "185",
+                  param_1_made: 0,
+                }),
+              ],
+            },
+          ],
+        },
+      },
+    } as unknown as ProgramWorkout;
+    const view = presentAthleteWorkout(raw);
+    expect(view.logged).toBe(false);
+    expect(view.blocks).toHaveLength(1);
+    expect(view.blocks[0]?.exercises[0]?.prescribed).toEqual(["5 @ 185"]);
+    expect(view.blocks[0]?.exercises[0]?.performed).toEqual([]);
+  });
+});

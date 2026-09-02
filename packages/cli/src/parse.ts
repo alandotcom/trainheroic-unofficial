@@ -19,3 +19,26 @@ export function requireTeamCalendarReassignmentConfirmation(
     );
   }
 }
+
+/**
+ * An integer argument. `Number("")` is 0 and `Number("1.5")` is finite, so a bare `Number` check
+ * let a trailing comma in an id list become id 0 and a fractional --limit slip through; every
+ * integer-valued flag and positional (ids, counts, pages) goes through here instead.
+ */
+export function parseIntArg(value: string, label: string): number {
+  const s = value.trim();
+  if (!/^-?\d+$/u.test(s)) throw new Error(`${label} must be an integer, got "${value}".`);
+  return Number(s);
+}
+
+/** A positive integer argument (a --limit, a page size): 0 and negatives are rejected. */
+export function parseCountArg(value: string, label: string): number {
+  const n = parseIntArg(value, label);
+  if (n < 1) throw new Error(`${label} must be a positive integer, got "${value}".`);
+  return n;
+}
+
+/** A comma-separated list of integer ids; a blank entry (e.g. a trailing comma) is an error. */
+export function parseIdList(value: string, label: string): number[] {
+  return value.split(",").map((s) => parseIntArg(s, label));
+}
