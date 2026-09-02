@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   fetchRosterActivity,
+  performedExercises,
   presentAthleteWorkout,
   presentCoachAthleteTraining,
   presentExerciseHistory,
@@ -733,5 +734,21 @@ describe("presentAthleteWorkout: saved-copy targets", () => {
     expect(view.blocks).toHaveLength(1);
     expect(view.blocks[0]?.exercises[0]?.prescribed).toEqual(["5 @ 185"]);
     expect(view.blocks[0]?.exercises[0]?.performed).toEqual([]);
+  });
+});
+
+describe("performedExercises", () => {
+  it("lists exactly the exercises the merged view shows performed sets for", () => {
+    const raw = fixture<ProgramWorkout>("program-workout.json");
+    const fromView = presentAthleteWorkout(raw)
+      .blocks.flatMap((b) => b.exercises)
+      .filter((e) => e.performed.length > 0)
+      .map((e) => e.exerciseId)
+      .sort((a, b) => (a ?? 0) - (b ?? 0));
+    const fromWalker = performedExercises([raw])
+      .map((e) => e.exerciseId)
+      .sort((a, b) => a - b);
+    expect(fromWalker).toEqual(fromView);
+    expect(fromWalker.length).toBeGreaterThan(0);
   });
 });

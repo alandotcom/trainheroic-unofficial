@@ -118,38 +118,32 @@ export async function fetchRosterActivity(
   athleteIds: readonly number[],
   useMetric = false,
 ): Promise<RosterActivityRow[]> {
-  const rows: RosterActivityRow[] = [];
-  const concurrency = 6;
   const uniqueAthleteIds = [...new Set(athleteIds)];
-  for (let i = 0; i < uniqueAthleteIds.length; i += concurrency) {
-    const chunk = uniqueAthleteIds.slice(i, i + concurrency);
-    const settled = await Promise.all(
-      chunk.map(async (id) => {
-        try {
-          return { id, summary: await fetchAthleteProfileSummary(client, id, useMetric) };
-        } catch {
-          return { id, summary: null };
-        }
-      }),
-    );
-    for (const { id, summary } of settled) {
-      const count = summary?.sessions_count ?? null;
-      // The summary endpoint returns the epoch placeholder "1970-01-01" (not null) for an athlete
-      // who has never logged. Normalize that — and any date when the session count is 0 — to null,
-      // so a null lastLoggedDate means exactly "never logged".
-      const hasSessions = count !== null && count > 0;
-      const normDate = (d: string | undefined): string | null =>
-        hasSessions && d !== undefined && d !== "" && !d.startsWith("1970") ? d : null;
-      rows.push({
-        athleteId: id,
-        sessionsCount: count,
-        firstLoggedDate: normDate(summary?.first_logged_date),
-        lastLoggedDate: normDate(summary?.last_logged_date),
-        totalReps: summary?.reps_sum ?? null,
-        totalVolume: summary?.volume_sum ?? null,
-      });
+  // A true pool (a new request starts as soon as one finishes) rather than batches that each
+  // wait for their slowest member: the same six-in-flight ceiling, without the barrier stalls.
+  const rows = await mapPool(uniqueAthleteIds, 6, async (id): Promise<RosterActivityRow> => {
+    let summary: Awaited<ReturnType<typeof fetchAthleteProfileSummary>> | null;
+    try {
+      summary = await fetchAthleteProfileSummary(client, id, useMetric);
+    } catch {
+      summary = null;
     }
-  }
+    const count = summary?.sessions_count ?? null;
+    // The summary endpoint returns the epoch placeholder "1970-01-01" (not null) for an athlete
+    // who has never logged. Normalize that — and any date when the session count is 0 — to null,
+    // so a null lastLoggedDate means exactly "never logged".
+    const hasSessions = count !== null && count > 0;
+    const normDate = (d: string | undefined): string | null =>
+      hasSessions && d !== undefined && d !== "" && !d.startsWith("1970") ? d : null;
+    return {
+      athleteId: id,
+      sessionsCount: count,
+      firstLoggedDate: normDate(summary?.first_logged_date),
+      lastLoggedDate: normDate(summary?.last_logged_date),
+      totalReps: summary?.reps_sum ?? null,
+      totalVolume: summary?.volume_sum ?? null,
+    };
+  });
   return sortRosterByRecency(rows);
 }
 
@@ -499,6 +493,30 @@ function savedSets(
         Array.isArray(set.workoutSetExercises) ? set.workoutSetExercises : []
       ).filter(isRecord);
       out.push({ set, exercises });
+    }
+  }
+  return out;
+}
+
+/**
+ * Every exercise the athlete performed (logged at least one `param_i_made === 1` slot) across a
+ * list of range items, read straight off the saved copies. This is the cheap tally for callers
+ * that only need "which exercises were logged" (the main-lift discovery over a year of sessions)
+ * and skips the prescription merge and string formatting `presentAthleteWorkouts` does per set.
+ */
+export function performedExercises(
+  workouts: readonly ProgramWorkout[],
+): Array<{ exerciseId: number; title: string }> {
+  const out: Array<{ exerciseId: number; title: string }> = [];
+  for (const pw of workouts) {
+    const saved = savedWorkoutOf(pw);
+    if (!saved) continue;
+    for (const { exercises } of savedSets(saved)) {
+      for (const ex of exercises) {
+        const exerciseId = coerceInt(ex.exercise_id);
+        if (exerciseId === null || slotValues(ex, true).size === 0) continue;
+        out.push({ exerciseId, title: exerciseTitle(ex) });
+      }
     }
   }
   return out;

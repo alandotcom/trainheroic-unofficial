@@ -4,6 +4,8 @@ import {
   buildSearchText,
   chunk,
   coerceInt,
+  createLimiter,
+  mapPool,
   rankSearch,
   unitLabel,
   unwrapEnvelope,
@@ -94,5 +96,76 @@ describe("chunk", () => {
   it("splits into fixed-size groups", () => {
     expect(chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
     expect(chunk([], 3)).toEqual([]);
+  });
+});
+
+const tick = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+describe("mapPool", () => {
+  it("stops scheduling after a failure and waits for started calls before rejecting", async () => {
+    const started: number[] = [];
+    const finished: number[] = [];
+    const run = mapPool([0, 1, 2, 3], 2, async (i) => {
+      started.push(i);
+      await tick(i === 1 ? 20 : 1);
+      finished.push(i);
+      if (i === 0) throw new Error("boom");
+      return i;
+    });
+    await expect(run).rejects.toThrow("boom");
+    // Item 1 was in flight when 0 failed: it ran to completion before the rejection surfaced.
+    expect(finished).toContain(1);
+    // Nothing queued behind the failure was started.
+    expect(started).toEqual([0, 1]);
+  });
+
+  it("keeps results in input order", async () => {
+    const out = await mapPool([3, 1, 2], 3, async (n) => {
+      await tick(n);
+      return n * 10;
+    });
+    expect(out).toEqual([30, 10, 20]);
+  });
+});
+
+describe("createLimiter", () => {
+  it("caps the number of tasks in flight across independent callers", async () => {
+    const limit = createLimiter(2);
+    let active = 0;
+    let peak = 0;
+    const task = async (): Promise<void> => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await tick(2);
+      active -= 1;
+    };
+    await Promise.all([
+      mapPool([1, 2, 3], 3, () => limit.run(task)),
+      mapPool([4, 5, 6], 3, () => limit.run(task)),
+    ]);
+    expect(peak).toBe(2);
+  });
+
+  it("cancel skips queued tasks and rejects later runs while started tasks finish", async () => {
+    const limit = createLimiter(1);
+    const ran: string[] = [];
+    const boom = new Error("boom");
+    const first = limit.run(async () => {
+      ran.push("first");
+      await tick(2);
+      limit.cancel(boom);
+      return "done";
+    });
+    const second = limit.run(async () => {
+      ran.push("second");
+      return "never";
+    });
+    await expect(first).resolves.toBe("done");
+    await expect(second).rejects.toBe(boom);
+    await expect(limit.run(async () => "late")).rejects.toBe(boom);
+    expect(ran).toEqual(["first"]);
   });
 });

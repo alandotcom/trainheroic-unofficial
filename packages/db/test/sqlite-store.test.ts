@@ -186,3 +186,38 @@ describe("cursorUpsertStmt", () => {
     expect(row).toEqual({ cursor: "9001", generation: 2 });
   });
 });
+
+describe("makeSqliteWarehouse exec", () => {
+  it("serializes concurrent groups on the one connection instead of nesting transactions", async () => {
+    const sqlite = freshDb();
+    const wh = makeSqliteWarehouse(sqlite);
+    const group = (exerciseId: number) => [
+      wh.db.insert(athletePr).values({ userId: USER, exerciseId, reps: 1, weight: 100 }),
+      wh.db.insert(athletePr).values({ userId: USER, exerciseId, reps: 2, weight: 90 }),
+    ];
+    // Without queuing, the second BEGIN lands inside the first bracket (the executor awaits
+    // between statements) and SQLite rejects it.
+    await Promise.all([wh.exec(group(1)), wh.exec(group(2)), wh.exec(group(3))]);
+    const store = new AthleteTrainingStore(wh, new TrainHeroicClient("a@b.com", "pw"), USER);
+    expect(await store.prs(1)).toHaveLength(2);
+    expect(await store.prs(2)).toHaveLength(2);
+    expect(await store.prs(3)).toHaveLength(2);
+  });
+
+  it("keeps running queued groups after an earlier group rolled back", async () => {
+    const sqlite = freshDb();
+    const wh = makeSqliteWarehouse(sqlite);
+    const bad = wh.exec([
+      wh.db
+        .insert(athletePr)
+        .values({ userId: USER, exerciseId: null as unknown as number, reps: 1, weight: 1 }),
+    ]);
+    const good = wh.exec([
+      wh.db.insert(athletePr).values({ userId: USER, exerciseId: 9, reps: 1, weight: 100 }),
+    ]);
+    await expect(bad).rejects.toThrow();
+    await good;
+    const store = new AthleteTrainingStore(wh, new TrainHeroicClient("a@b.com", "pw"), USER);
+    expect(await store.prs(9)).toHaveLength(1);
+  });
+});

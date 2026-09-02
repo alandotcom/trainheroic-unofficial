@@ -131,6 +131,15 @@ describe("ExerciseLibrary", () => {
     expect(requests.filter((url) => url.includes("/v5/exerciseLibrary/all"))).toHaveLength(1);
   });
 
+  it("fetches a cold library once when several callers wait on it concurrently", async () => {
+    mockApi([{ id: 1, title: "Back Squat", param_1_type: 3 }]);
+    const lib = new ExerciseLibrary(client());
+    // A workout build resolving several exercises under Promise.all hits ensureFresh in parallel.
+    await Promise.all([lib.resolve("Back Squat"), lib.search("squat"), lib.get(1)]);
+    const requests = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(requests.filter((url) => url.includes("/v5/exerciseLibrary/all"))).toHaveLength(1);
+  });
+
   it("persists through the cache so a fresh instance loads without refetching", async () => {
     const cache = new MemoryLibraryCache();
     mockApi([{ id: 1, title: "Back Squat", param_1_type: 3 }]);

@@ -213,15 +213,77 @@ export async function mapPool<T, R>(
 ): Promise<R[]> {
   const out: R[] = Array.from({ length: items.length });
   let next = 0;
+  // On the first failure, stop handing out new items but let every started call finish before
+  // rejecting, so a caller never reports an error while writes it issued are still in flight.
+  const state: { failure: { error: unknown } | null } = { failure: null };
   const worker = async (): Promise<void> => {
-    while (next < items.length) {
+    while (next < items.length && state.failure === null) {
       const i = next;
       next += 1;
-      out[i] = await fn(items[i] as T, i);
+      try {
+        out[i] = await fn(items[i] as T, i);
+      } catch (error) {
+        state.failure ??= { error };
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  if (state.failure !== null) throw state.failure.error;
   return out;
+}
+
+/**
+ * A concurrency limiter shared across independent call sites: at most `max` tasks run at once,
+ * the rest wait in FIFO order. Where {@link mapPool} bounds one fan-out, a limiter bounds the sum
+ * of several nested ones (a session write that fans out per set, each of which fans out per
+ * exercise) to a single ceiling. `cancel` stops the queue: tasks not yet started, and any run
+ * after it, reject with the given error, while tasks already running finish normally, so one
+ * failed write halts the rest of a session without abandoning requests already on the wire.
+ */
+export type Limiter = {
+  run<T>(task: () => Promise<T>): Promise<T>;
+  cancel(error: unknown): void;
+};
+
+export function createLimiter(max: number): Limiter {
+  let active = 0;
+  let cancelled: { error: unknown } | null = null;
+  const waiting: Array<{ start: () => void; abort: (error: unknown) => void }> = [];
+  const acquire = (): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (cancelled !== null) {
+        reject(cancelled.error);
+      } else if (active < max) {
+        active += 1;
+        resolve();
+      } else {
+        waiting.push({
+          start: () => {
+            active += 1;
+            resolve();
+          },
+          abort: reject,
+        });
+      }
+    });
+  const release = (): void => {
+    active -= 1;
+    waiting.shift()?.start();
+  };
+  return {
+    async run(task) {
+      await acquire();
+      try {
+        return await task();
+      } finally {
+        release();
+      }
+    },
+    cancel(error) {
+      cancelled ??= { error };
+      for (const entry of waiting.splice(0)) entry.abort(error);
+    },
+  };
 }
 
 /**
