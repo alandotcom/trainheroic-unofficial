@@ -6,6 +6,7 @@ export type { TrainHeroicHttpErrorHandler } from "./http-error";
 export * from "./response-check";
 export * from "./exercise-util";
 export * from "./athlete";
+export * from "./exercise-history";
 export * from "./coach-athlete-calendar";
 export * from "./athlete-set-write";
 export * from "./athlete-workout-note";
