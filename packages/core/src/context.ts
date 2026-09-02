@@ -134,14 +134,18 @@ function isPlainObject(value: unknown): value is Record<string, JsonValue> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Largest count k such that the JSON of the first k pre-serialized pieces fits. O(n). */
-function largestPrefixCount(pieces: string[], charBudget: number): number {
+/**
+ * Largest count k such that the JSON of the first k elements fits. Elements are serialized one
+ * at a time and the walk stops at the first overflow, so an oversized 10k-row result costs the
+ * serialization of the rows that fit, not of every row.
+ */
+function largestPrefixCount(elements: readonly unknown[], charBudget: number): number {
   // Start at 2 for the surrounding "[" and "]".
   let used = 2;
   let k = 0;
-  for (const piece of pieces) {
+  for (const element of elements) {
     // Add one for the comma separator after the first element.
-    const add = piece.length + (k > 0 ? 1 : 0);
+    const add = (JSON.stringify(element) ?? "null").length + (k > 0 ? 1 : 0);
     if (used + add > charBudget) break;
     used += add;
     k += 1;
@@ -160,11 +164,14 @@ function hardCap(text: string, budget: number, hint?: string): string {
 }
 
 function largestArrayValuedKey(obj: Record<string, unknown>): string | null {
+  const arrayKeys = Object.keys(obj).filter((key) => Array.isArray(obj[key]));
+  // The usual over-budget object carries one list (a sessions array beside scalar fields); only
+  // several lists need the full serialization to compare their sizes.
+  if (arrayKeys.length <= 1) return arrayKeys[0] ?? null;
   let best: string | null = null;
   let bestLen = -1;
-  for (const [key, value] of Object.entries(obj)) {
-    if (!Array.isArray(value)) continue;
-    const len = (JSON.stringify(value) ?? "[]").length;
+  for (const key of arrayKeys) {
+    const len = (JSON.stringify(obj[key]) ?? "[]").length;
     if (len > bestLen) {
       best = key;
       bestLen = len;
@@ -177,10 +184,6 @@ function largestArrayValuedKey(obj: Record<string, unknown>): string | null {
  * A JSON value that can be carried by MCP `structuredContent`.
  */
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-function jsonValue(data: unknown): JsonValue {
-  return JSON.parse(JSON.stringify(data) ?? "null") as JsonValue;
-}
 
 function previewEnvelope(source: string, budget: number, hint?: string): JsonValue {
   const total = source.length;
@@ -213,16 +216,18 @@ function boundedResult(
 ): { text: string; value: JsonValue } {
   if (typeof data === "string" && data.length <= budget) return { text: data, value: data };
 
-  const value = jsonValue(data);
-  const compact = JSON.stringify(value);
+  // One serialization pass yields both the compact text and, parsed back, the JSON-safe value
+  // for structuredContent (undefined fields dropped, Dates as strings). Re-serializing the parsed
+  // value would produce the identical string, so it is not done.
+  const compact = JSON.stringify(data) ?? "null";
+  const value = JSON.parse(compact) as JsonValue;
   if (compact.length <= budget) {
     const pretty = JSON.stringify(value, null, 2);
     return { text: pretty.length <= budget ? pretty : compact, value };
   }
 
   if (Array.isArray(value)) {
-    const pieces = value.map((element) => JSON.stringify(element));
-    const k = largestPrefixCount(pieces, budget - MARKER_RESERVE);
+    const k = largestPrefixCount(value, budget - MARKER_RESERVE);
     const truncated = clipArray(value, k, hint);
     const text = JSON.stringify(truncated);
     if (text.length <= budget) return { text, value: truncated };
@@ -230,8 +235,7 @@ function boundedResult(
     const key = largestArrayValuedKey(value);
     if (key !== null) {
       const array = value[key] as JsonValue[];
-      const pieces = array.map((element) => JSON.stringify(element));
-      const k = largestPrefixCount(pieces, budget - MARKER_RESERVE);
+      const k = largestPrefixCount(array, budget - MARKER_RESERVE);
       const truncated = clipArray(array, k, hint ?? DEFAULT_OBJECT_HINT, key);
       const text = JSON.stringify(truncated);
       if (text.length <= budget) return { text, value: truncated };

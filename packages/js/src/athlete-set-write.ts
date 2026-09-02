@@ -11,6 +11,7 @@ import {
   exerciseTitle,
   isPersonalSession,
   isRecord,
+  mapPool,
   savedWorkoutOf,
   str,
 } from "./exercise-util";
@@ -23,6 +24,10 @@ import { fetchAthleteWorkouts, programWorkoutOnDate } from "./athlete";
 import { fetchCoachAthleteWorkouts } from "./coach-athlete-calendar";
 import type { TrainHeroicClient } from "./client";
 import type { ProgramWorkout } from "@trainheroic-unofficial/dto";
+
+// Bound the fan-out of independent set writes: enough to collapse a circuit into one wait,
+// small enough to stay polite to the upstream host.
+const WRITE_CONCURRENCY = 4;
 
 /**
  * One set of entered values for a single exercise within a saved workout set.
@@ -432,10 +437,9 @@ async function writeSetResults(
   const suffix = target.role === "coach" ? `/${target.athleteId}` : "";
   const extra = target.role === "coach" ? { athleteId: target.athleteId } : {};
 
-  // Step 1: PUT each exercise's data to its own endpoint.
-  let exercisesWritten = 0;
-  const projectedCompletion = new Map<number, boolean>();
-  for (const result of results) {
+  // Step 1: resolve every target and build every body before any request, so an argument error
+  // (unknown id, missing template pointer) fails fast with nothing written.
+  const writes = results.map((result) => {
     const ex = exercises.find((e) => coerceInt(e.id) === result.savedWorkoutSetExerciseId);
     if (!ex) {
       const valid = exercises
@@ -468,9 +472,16 @@ async function writeSetResults(
       ),
       ...extra,
     };
+    return { id: result.savedWorkoutSetExerciseId, body };
+  });
+
+  // Then PUT each exercise's data to its own endpoint. The ids are unique (asserted above) and
+  // each PUT touches its own row, so the writes fan out with a small pool instead of one round
+  // trip per exercise in sequence: a five-exercise circuit is one wait, not five.
+  await mapPool(writes, WRITE_CONCURRENCY, async ({ id, body }) => {
     const res = await client.request(
       "PUT",
-      `/1.0/${target.role}/savedworkoutsetexercise/${result.savedWorkoutSetExerciseId}${suffix}`,
+      `/1.0/${target.role}/savedworkoutsetexercise/${id}${suffix}`,
       { body },
     );
     if (!res.ok) {
@@ -480,13 +491,11 @@ async function writeSetResults(
             `seeded demo/sample athletes return ${res.status} here; writes only persist for real ` +
             `(invited) athletes.`
           : "";
-      throw new Error(
-        `Failed to write exercise ${result.savedWorkoutSetExerciseId} (HTTP ${res.status}).${readOnly}`,
-      );
+      throw new Error(`Failed to write exercise ${id} (HTTP ${res.status}).${readOnly}`);
     }
-    projectedCompletion.set(result.savedWorkoutSetExerciseId, body.completed === 1);
-    exercisesWritten += 1;
-  }
+  });
+  const exercisesWritten = writes.length;
+  const projectedCompletion = new Map(writes.map((w) => [w.id, w.body.completed === 1]));
 
   // Step 2: mark the set completed — only when logging a performed result, and only when every
   // exercise in the set now has logged data (see isSetFullyLogged). A prescription leaves the set
@@ -800,8 +809,10 @@ async function logResolvedExercises(
     list.push({ savedWorkoutSetExerciseId: r.savedWorkoutSetExerciseId, sets: [...r.sets] });
     bySet.set(r.savedWorkoutSetId, list);
   }
-  const out: Array<{ savedWorkoutSetId: number; exercisesLogged: number }> = [];
-  for (const [savedWorkoutSetId, results] of bySet) {
+  // Each saved set is written (and completed) independently, so the sets fan out with a small
+  // pool; mapPool keeps the result in bySet insertion order. A session of eight exercises, each
+  // in its own set, is a couple of waits instead of sixteen sequential round trips.
+  return mapPool([...bySet], WRITE_CONCURRENCY, async ([savedWorkoutSetId, results]) => {
     const written = await writeSetResults(
       client,
       target,
@@ -812,12 +823,11 @@ async function logResolvedExercises(
     );
     // Keep the per-set shape to the two fields LogSessionResult documents; block completion is a
     // by-set concern that the by-exercise session log does not surface.
-    out.push({
+    return {
       savedWorkoutSetId: written.savedWorkoutSetId,
       exercisesLogged: written.exercisesWritten,
-    });
-  }
-  return out;
+    };
+  });
 }
 
 /**

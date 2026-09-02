@@ -1,13 +1,16 @@
 import { and, desc, eq, inArray, isNotNull, isNull, lt, sql, type SQL } from "drizzle-orm";
 import { chunk, coerceInt, fetchStreams, isRecord } from "@trainheroic-unofficial/js";
 import { OrgScopedStore } from "../base";
-import { type BatchStmt, cursorUpsertStmt } from "../runner";
+import { type BatchStmt, cursorUpsertStmt, mapPool } from "../runner";
 import { messageComment, messageStream, syncState } from "../schema";
 
 // org_id and resource consume two of D1's 100 bound parameters.
 const CURSOR_QUERY_IDS = 98;
 // The expanded comment upsert shape requires a conservative seven-row D1 parameter bound.
 const COMMENT_WRITE_ROWS = 7;
+// Streams sync independently (own cursor, own atomic batch), so a full sync fans them out with
+// the same bounded pool the other stores use instead of one round trip per stream in sequence.
+const STREAM_SYNC_CONCURRENCY = 4;
 
 export type StreamSyncResult = {
   stream: number;
@@ -202,22 +205,21 @@ export class MessagingStore extends OrgScopedStore {
     const streams = await this.listStreams();
     const streamIds = streams.map(({ stream }) => coerceInt(stream.id) ?? 0);
     const cursors = full ? new Map<number, string>() : await this.#cursors(org, streamIds);
-    const out: StreamSyncResult[] = [];
-    for (const { stream, kind } of streams) {
+    // mapPool keeps the result in stream order; a failed stream records its error in place.
+    return mapPool(streams, STREAM_SYNC_CONCURRENCY, async ({ stream, kind }) => {
+      const sid = coerceInt(stream.id) ?? 0;
       try {
-        const sid = coerceInt(stream.id) ?? 0;
-        out.push(await this.#syncStream(org, stream, kind, cursors.get(sid) ?? ""));
+        return await this.#syncStream(org, stream, kind, cursors.get(sid) ?? "");
       } catch (err) {
-        out.push({
-          stream: coerceInt(stream.id) ?? 0,
+        return {
+          stream: sid,
           title: String(stream.title ?? ""),
           kind,
           new: 0,
           error: err instanceof Error ? err.message : String(err),
-        });
+        };
       }
-    }
-    return out;
+    });
   }
 
   async streams(limit = 100, before?: MessageStreamCursor): Promise<StoredMessageStream[]> {
