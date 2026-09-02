@@ -13,6 +13,14 @@ function json(obj: unknown, status = 200): Response {
   });
 }
 
+function deferred<T>() {
+  let resolve: (value: T | PromiseLike<T>) => void = () => {};
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -329,6 +337,81 @@ describe("logSessionForAthlete (coach)", () => {
       }),
     ).rejects.toThrow(/not on athlete 333's calendar/u);
   });
+
+  it("validates every set before writing any part of the session", async () => {
+    const day = dayWithSet(false);
+    Reflect.deleteProperty(
+      day[0]!.summarizedSavedWorkout.saved_workout.workoutSets[1]!.workoutSetExercises[0]!,
+      "workout_set_exercise_id",
+    );
+    const puts: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+        if (url.includes("/coach/athlete/programworkout/range")) return json(day);
+        if (init?.method === "PUT") puts.push(url);
+        return json({ ok: 1 });
+      }),
+    );
+
+    await expect(
+      logSessionForAthlete(new TrainHeroicClient("a@b.com", "pw"), {
+        athleteId: 333,
+        date: "2026-06-21",
+        exercises: [
+          { exerciseId: EXERCISE_ID, sets: [{ param1: 5 }] },
+          { exerciseId: 2, sets: [{ param1: 5 }] },
+        ],
+      }),
+    ).rejects.toThrow(/missing its workout_set_exercise_id/u);
+    expect(puts).toEqual([]);
+  });
+
+  it("recommends retrying partial writes against an existing prescribed set", async () => {
+    const day = dayWithSet(false);
+    day[0]!.summarizedSavedWorkout.saved_workout.workoutSets[0]!.workoutSetExercises.push({
+      id: SWE_ID_2,
+      workout_set_exercise_id: WSE_ID_2,
+      exercise_id: 2,
+      exercise_title: "Bench Press",
+    });
+    const responses = new Map<number, ReturnType<typeof deferred<Response>>>();
+    const started = deferred<void>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+        if (url.includes("/coach/athlete/programworkout/range")) return json(day);
+        if (init?.method === "PUT") {
+          const match = /savedworkoutsetexercise\/(\d+)/u.exec(url);
+          if (!match) return json({ ok: 1 });
+          const id = Number(match[1]);
+          const response = deferred<Response>();
+          responses.set(id, response);
+          if (responses.size === 2) started.resolve();
+          return response.promise;
+        }
+        return json({});
+      }),
+    );
+
+    const run = logSessionForAthlete(new TrainHeroicClient("a@b.com", "pw"), {
+      athleteId: 333,
+      date: "2026-06-21",
+      exercises: [
+        { exerciseId: EXERCISE_ID, sets: [{ param1: 5 }] },
+        { exerciseId: 2, sets: [{ param1: 5 }] },
+      ],
+    });
+    await started.promise;
+    responses.get(SWE_ID)!.resolve(json({}, 500));
+    responses.get(SWE_ID_2)!.resolve(json({ ok: 1 }));
+
+    await expect(run).rejects.toThrow(
+      /Confirmed exercise writes in incomplete sets before the failure: set 5000: 6001\. Retry the same request to reconcile them\./u,
+    );
+  });
 });
 
 describe("logAdHocSession write concurrency", () => {
@@ -399,7 +482,7 @@ describe("logAdHocSession write concurrency", () => {
     expect(peak).toBeGreaterThan(1);
   });
 
-  it("stops the rest of the session after the first failed write", async () => {
+  it("reports partial writes while finalizing sibling sets after a failure", async () => {
     const setIds = [5100, 5101, 5102, 5103, 5104, 5105];
     const day = [
       {
@@ -422,6 +505,16 @@ describe("logAdHocSession write concurrency", () => {
                   exercise_id: 10 + k,
                   exercise_title: `Lift ${k}`,
                 },
+                ...(k === 0
+                  ? [
+                      {
+                        id: 6200,
+                        workout_set_exercise_id: 7200,
+                        exercise_id: 20,
+                        exercise_title: "Lift 0B",
+                      },
+                    ]
+                  : []),
               ],
             })),
           },
@@ -430,9 +523,14 @@ describe("logAdHocSession write concurrency", () => {
     ];
     const added = setIds.map((id, k) => ({
       id,
-      savedWorkoutSetExercises: [{ id: 6100 + k, exerciseId: 10 + k }],
+      savedWorkoutSetExercises: [
+        { id: 6100 + k, exerciseId: 10 + k },
+        ...(k === 0 ? [{ id: 6200, exerciseId: 20 }] : []),
+      ],
     }));
     const puts: string[] = [];
+    const exerciseResponses = new Map<number, ReturnType<typeof deferred<Response>>>();
+    const initialStarted = deferred<void>();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
@@ -441,24 +539,42 @@ describe("logAdHocSession write concurrency", () => {
         if (url.includes("/addExercises")) return json(added);
         if (init?.method === "PUT") {
           puts.push(url);
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, 3);
-          });
-          // The first exercise write fails; everything queued behind it must be skipped.
-          return url.includes("/savedworkoutsetexercise/6100") ? json({}, 500) : json({ ok: 1 });
+          const match = /savedworkoutsetexercise\/(\d+)/u.exec(url);
+          if (!match) return json({ ok: 1 });
+          const id = Number(match[1]);
+          const response = deferred<Response>();
+          exerciseResponses.set(id, response);
+          if (exerciseResponses.size === 4) initialStarted.resolve();
+          return response.promise;
         }
         return json({});
       }),
     );
-    await expect(
-      logAdHocSession(new TrainHeroicClient("a@b.com", "pw"), {
-        date: "2026-06-21",
-        exercises: setIds.map((_, k) => ({ exerciseId: 10 + k, sets: [{ param1: 5 }] })),
-      }),
-    ).rejects.toThrow(/Failed to write exercise 6100/u);
-    // Only the four writes already in flight alongside the failure went out: the two remaining
-    // exercise writes and every set-completion write were skipped.
-    expect(puts).toHaveLength(4);
-    expect(puts.some((u) => u.includes("/savedworkoutset/"))).toBe(false);
+    const run = logAdHocSession(new TrainHeroicClient("a@b.com", "pw"), {
+      date: "2026-06-21",
+      exercises: [
+        { exerciseId: 10, sets: [{ param1: 5 }] },
+        { exerciseId: 20, sets: [{ param1: 5 }] },
+        ...setIds.slice(1).map((_, k) => ({ exerciseId: 11 + k, sets: [{ param1: 5 }] })),
+      ],
+    });
+    await initialStarted.promise;
+    expect([...exerciseResponses.keys()]).toEqual([6100, 6200, 6101, 6102]);
+
+    // One exercise fails while another in the same set succeeds. Sibling sets that already started
+    // still finish and are marked complete, while later queued writes are cancelled.
+    exerciseResponses.get(6100)!.resolve(json({}, 500));
+    exerciseResponses.get(6200)!.resolve(json({ ok: 1 }));
+    exerciseResponses.get(6101)!.resolve(json({ ok: 1 }));
+    exerciseResponses.get(6102)!.resolve(json({ ok: 1 }));
+
+    await expect(run).rejects.toThrow(
+      /Failed to write exercise 6100.*Confirmed exercise writes in incomplete sets before the failure: set 5100: 6200.*Set writes confirmed before the failure: 5101, 5102/u,
+    );
+    await expect(run).rejects.not.toThrow(/Retry the same request/u);
+    expect(puts.some((url) => url.includes("/savedworkoutset/5101"))).toBe(true);
+    expect(puts.some((url) => url.includes("/savedworkoutset/5102"))).toBe(true);
+    expect(puts.some((url) => url.includes("/savedworkoutsetexercise/6103"))).toBe(false);
+    expect(puts.some((url) => url.includes("/savedworkoutsetexercise/6105"))).toBe(false);
   });
 });

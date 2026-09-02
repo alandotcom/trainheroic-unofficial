@@ -3,6 +3,7 @@
 // completed workouts, per-exercise history, PRs, and working maxes. Runtime-agnostic: no
 // `node:*`, so this runs unchanged on workerd.
 
+import { uniq } from "es-toolkit/array";
 import {
   buildSearchText,
   coerceInt,
@@ -118,7 +119,7 @@ export async function fetchRosterActivity(
   athleteIds: readonly number[],
   useMetric = false,
 ): Promise<RosterActivityRow[]> {
-  const uniqueAthleteIds = [...new Set(athleteIds)];
+  const uniqueAthleteIds = uniq(athleteIds);
   // A true pool (a new request starts as soon as one finishes) rather than batches that each
   // wait for their slowest member: the same six-in-flight ceiling, without the barrier stalls.
   const rows = await mapPool(uniqueAthleteIds, 6, async (id): Promise<RosterActivityRow> => {
@@ -509,13 +510,35 @@ export function performedExercises(
 ): Array<{ exerciseId: number; title: string }> {
   const out: Array<{ exerciseId: number; title: string }> = [];
   for (const pw of workouts) {
+    const rec = pw as Record<string, unknown>;
+    const ssw = isRecord(rec.summarizedSavedWorkout) ? rec.summarizedSavedWorkout : {};
+    const workout = isRecord(ssw.workout) ? ssw.workout : {};
+    const templates = new Map<number, { exerciseId: number | null; title: string }>();
+    for (const set of Array.isArray(workout.workoutSets) ? workout.workoutSets : []) {
+      if (!isRecord(set)) continue;
+      const exercises = Array.isArray(set.workoutSetExercises) ? set.workoutSetExercises : [];
+      for (const ex of exercises) {
+        if (!isRecord(ex)) continue;
+        const id = coerceInt(ex.id);
+        if (id !== null) {
+          templates.set(id, {
+            exerciseId: coerceInt(ex.exercise_id),
+            title: exerciseTitle(ex),
+          });
+        }
+      }
+    }
     const saved = savedWorkoutOf(pw);
     if (!saved) continue;
     for (const { exercises } of savedSets(saved)) {
       for (const ex of exercises) {
-        const exerciseId = coerceInt(ex.exercise_id);
+        const templateId = coerceInt(ex.workout_set_exercise_id);
+        const template = templateId === null ? undefined : templates.get(templateId);
+        // Saved identity wins for athlete swaps; the prescription fills fields omitted by compact
+        // saved-copy rows.
+        const exerciseId = coerceInt(ex.exercise_id) ?? template?.exerciseId ?? null;
         if (exerciseId === null || slotValues(ex, true).size === 0) continue;
-        out.push({ exerciseId, title: exerciseTitle(ex) });
+        out.push({ exerciseId, title: exerciseTitle(ex, template?.title) });
       }
     }
   }

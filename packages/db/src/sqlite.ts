@@ -19,12 +19,14 @@ export { MIGRATIONS, type Migration } from "./migrations";
  */
 export function makeSqliteWarehouse(sqlite: DatabaseSync): Warehouse {
   const db = drizzle({ client: sqlite }) as unknown as DrizzleDb;
-  const run = async (statements: readonly BatchStmt[]): Promise<void> => {
-    if (statements.length === 0) return;
+  const run = async (statements: readonly BatchStmt[]): Promise<unknown[]> => {
+    if (statements.length === 0) return [];
     sqlite.exec("BEGIN");
     try {
-      for (const s of statements) await s;
+      const results = [];
+      for (const s of statements) results.push(await s);
       sqlite.exec("COMMIT");
+      return results;
     } catch (err) {
       sqlite.exec("ROLLBACK");
       throw err;
@@ -36,12 +38,9 @@ export function makeSqliteWarehouse(sqlite: DatabaseSync): Warehouse {
   // D1 needs none of this: each batch() is its own request.
   let tail: Promise<unknown> = Promise.resolve();
   const exec: BatchExec = (statements: readonly BatchStmt[]) => {
-    const next = tail.then(
-      () => run(statements),
-      () => run(statements),
-    );
+    const next = tail.then(() => run(statements));
     // A failed group must not poison the queue: the tail only tracks completion.
-    tail = next.catch(() => null);
+    tail = next.catch(() => {});
     return next;
   };
   return { db, exec };

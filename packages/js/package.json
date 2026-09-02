@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "@trainheroic-unofficial/dto": "workspace:*",
+    "es-toolkit": "^1.52.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

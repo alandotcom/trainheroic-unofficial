@@ -24,10 +24,10 @@ export function makeD1Warehouse<T extends AnyD1Database>(
   const db = drizzle(instrument(d1)) as unknown as DrizzleDb;
   // D1's batch() commits a group as one implicit, all-or-nothing transaction. runGroups never
   // passes an empty chunk, but the guard makes that contract explicit (matching the sqlite adapter).
-  const batch = (db as unknown as { batch: (s: readonly BatchStmt[]) => Promise<unknown> }).batch;
+  const batch = (db as unknown as { batch: (s: readonly BatchStmt[]) => Promise<unknown[]> }).batch;
   const exec: BatchExec = async (statements: readonly BatchStmt[]) => {
-    if (statements.length === 0) return;
-    await batch.call(db, statements);
+    if (statements.length === 0) return [];
+    return batch.call(db, statements);
   };
   return { db, exec };
 }

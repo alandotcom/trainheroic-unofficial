@@ -142,6 +142,7 @@ export class ExerciseLibrary implements ExerciseIndex {
   }
 
   async defaultsMany(ids: readonly number[]): Promise<Map<number, ExerciseDefaults>> {
+    await this.ensureFresh();
     const result = new Map<number, ExerciseDefaults>();
     for (const id of ids) {
       const s = this.#byId.get(id);

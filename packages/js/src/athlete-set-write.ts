@@ -413,46 +413,37 @@ export async function swapAthleteExercise(
 /** Which API surface a set-log write targets: the athlete's own, or a coach acting on a roster athlete. */
 type LogTarget = { role: "athlete" } | { role: "coach"; athleteId: number };
 
-/**
- * Shared set-write behind {@link logAthleteSet}, {@link prescribeAthleteSet},
- * {@link logForAthlete}, and {@link prescribeForAthlete}. `target` selects the surface: `athlete`
- * writes `/1.0/athlete/...`; `coach` writes `/1.0/coach/...{athleteId}` and stamps `athleteId` into
- * each body.
- *
- * Step 1 PUTs each exercise's per-set values to its own endpoint (the only path that actually
- * stores reps and weight). `mode` decides what those values mean: `"log"` records them as a
- * performed result and runs Step 2, which marks the set completed (that body needs the app's
- * camelCase in-memory shape and the full list of savedWorkoutSetExercise IDs in the set, not only
- * the written ones); `"prescribe"` writes them as a prescription and skips Step 2, leaving the set
- * open.
- */
-async function writeSetResults(
-  client: TrainHeroicClient,
+type PreparedSetWrite = {
+  savedWorkoutSetId: number;
+  exercises: Record<string, unknown>[];
+  rawSet: Record<string, unknown>;
+  suffix: string;
+  extra: Record<string, number>;
+  writes: Array<{ id: number; body: Record<string, unknown> }>;
+};
+
+function prepareSetWrite(
   target: LogTarget,
   workouts: readonly ProgramWorkout[],
   savedWorkoutSetId: number,
   results: readonly SetResult[],
   mode: SetWriteMode,
-  // A session write passes one limiter shared by every set so the whole session, not each set,
-  // stays under WRITE_CONCURRENCY in-flight requests.
-  limit: Limiter = createLimiter(WRITE_CONCURRENCY),
-): Promise<{ savedWorkoutSetId: number; exercisesWritten: number; setCompleted: boolean }> {
+): PreparedSetWrite {
   const { exercises, rawSet } = findSavedWorkoutSet(workouts, savedWorkoutSetId);
   assertUniqueExerciseResults(results);
   const suffix = target.role === "coach" ? `/${target.athleteId}` : "";
   const extra = target.role === "coach" ? { athleteId: target.athleteId } : {};
-
-  // Step 1: resolve every target and build every body before any request, so an argument error
-  // (unknown id, missing template pointer) fails fast with nothing written.
   const writes = results.map((result) => {
-    const ex = exercises.find((e) => coerceInt(e.id) === result.savedWorkoutSetExerciseId);
+    const ex = exercises.find(
+      (candidate) => coerceInt(candidate.id) === result.savedWorkoutSetExerciseId,
+    );
     if (!ex) {
       const valid = exercises
-        .map((e) => {
-          const id = coerceInt(e.id);
-          return id === null ? null : `${id} (${exerciseTitle(e, "exercise")})`;
+        .map((candidate) => {
+          const id = coerceInt(candidate.id);
+          return id === null ? null : `${id} (${exerciseTitle(candidate, "exercise")})`;
         })
-        .filter((x): x is string => x !== null);
+        .filter((label): label is string => label !== null);
       throw new Error(
         `savedWorkoutSetExerciseId ${result.savedWorkoutSetExerciseId} not found in saved workout set ` +
           `${savedWorkoutSetId}. Exercises in this set: ${valid.join(", ") || "none"}.`,
@@ -466,19 +457,67 @@ async function writeSetResults(
           `savedWorkoutSetExerciseId, not an exercise_id — re-read the ids from athlete_saved_workouts.`,
       );
     }
-    const body = {
-      ...buildExerciseSetPayload(
-        result.savedWorkoutSetExerciseId,
-        savedWorkoutSetId,
-        workoutSetExerciseId,
-        result.sets,
-        mode,
-        ex,
-      ),
-      ...extra,
+    return {
+      id: result.savedWorkoutSetExerciseId,
+      body: {
+        ...buildExerciseSetPayload(
+          result.savedWorkoutSetExerciseId,
+          savedWorkoutSetId,
+          workoutSetExerciseId,
+          result.sets,
+          mode,
+          ex,
+        ),
+        ...extra,
+      },
     };
-    return { id: result.savedWorkoutSetExerciseId, body };
   });
+  return { savedWorkoutSetId, exercises, rawSet, suffix, extra, writes };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Shared set-write behind {@link logAthleteSet}, {@link prescribeAthleteSet},
+ * {@link logForAthlete}, and {@link prescribeForAthlete}. `target` selects the surface: `athlete`
+ * writes `/1.0/athlete/...`; `coach` writes `/1.0/coach/...{athleteId}` and stamps `athleteId` into
+ * each body.
+ *
+ * Step 1 PUTs each exercise's per-set values to its own endpoint (the only path that actually
+ * stores reps and weight). `mode` decides what those values mean: `"log"` records them as a
+ * performed result and runs Step 2, which marks the set completed (that body needs the app's
+ * camelCase in-memory shape and the full list of savedWorkoutSetExercise IDs in the set, not only
+ * the written ones); `"prescribe"` writes them as a prescription and skips Step 2, leaving the set
+ * open.
+ */
+async function executeSetWrite(
+  client: TrainHeroicClient,
+  target: LogTarget,
+  prepared: PreparedSetWrite,
+  mode: SetWriteMode,
+  limit: Limiter,
+  sessionProgress?: Map<number, number[]>,
+): Promise<{ savedWorkoutSetId: number; exercisesWritten: number; setCompleted: boolean }> {
+  const { savedWorkoutSetId, exercises, rawSet, suffix, extra, writes } = prepared;
+  const put = (
+    path: string,
+    body: Record<string, unknown>,
+    failureMessage: (status: number) => string,
+    finalizer = false,
+  ): Promise<void> => {
+    const request = async (): Promise<void> => {
+      try {
+        const res = await client.request("PUT", path, { body });
+        if (!res.ok) throw new Error(failureMessage(res.status));
+      } catch (error) {
+        limit.cancel(error);
+        throw error;
+      }
+    };
+    return finalizer ? limit.runFinalizer(request) : limit.run(request);
+  };
 
   // Then PUT each exercise's data to its own endpoint. The ids are unique (asserted above) and
   // each PUT touches its own row, so the writes fan out with a small pool instead of one round
@@ -487,29 +526,36 @@ async function writeSetResults(
   // in a session write, from sibling sets) are skipped; writes already on the wire complete. The
   // status check and the cancel run inside the limited task, before its slot is released, so no
   // queued write can start in the gap between the response landing and the failure being seen.
-  await mapPool(writes, WRITE_CONCURRENCY, ({ id, body }) =>
-    limit.run(async () => {
-      try {
-        const res = await client.request(
-          "PUT",
-          `/1.0/${target.role}/savedworkoutsetexercise/${id}${suffix}`,
-          { body },
-        );
-        if (!res.ok) {
-          const readOnly =
-            target.role === "coach" && (res.status === 401 || res.status === 403)
-              ? ` Athlete ${target.athleteId} appears to be read-only for changes — TrainHeroic's ` +
-                `seeded demo/sample athletes return ${res.status} here; writes only persist for ` +
-                `real (invited) athletes.`
-              : "";
-          throw new Error(`Failed to write exercise ${id} (HTTP ${res.status}).${readOnly}`);
-        }
-      } catch (error) {
-        limit.cancel(error);
-        throw error;
+  const confirmed: number[] = [];
+  try {
+    await mapPool(writes, WRITE_CONCURRENCY, async ({ id, body }) => {
+      await put(`/1.0/${target.role}/savedworkoutsetexercise/${id}${suffix}`, body, (status) => {
+        const readOnly =
+          target.role === "coach" && (status === 401 || status === 403)
+            ? ` Athlete ${target.athleteId} appears to be read-only for changes — TrainHeroic's ` +
+              `seeded demo/sample athletes return ${status} here; writes only persist for ` +
+              `real (invited) athletes.`
+            : "";
+        return `Failed to write exercise ${id} (HTTP ${status}).${readOnly}`;
+      });
+      confirmed.push(id);
+      if (sessionProgress) {
+        const sessionConfirmed = sessionProgress.get(savedWorkoutSetId) ?? [];
+        sessionConfirmed.push(id);
+        sessionProgress.set(savedWorkoutSetId, sessionConfirmed);
       }
-    }),
-  );
+    });
+  } catch (error) {
+    // A session reports shared progress after every started set settles, so a cancelled sibling
+    // cannot win the error race and hide successful writes from this set.
+    if (sessionProgress || confirmed.length === 0) throw error;
+    confirmed.sort((a, b) => a - b);
+    throw new Error(
+      `${errorMessage(error)} Confirmed exercise writes before the failure: ${confirmed.join(", ")}. ` +
+        "The set was not marked complete; retry the same request to reconcile it.",
+      { cause: error },
+    );
+  }
   const exercisesWritten = writes.length;
   const projectedCompletion = new Map(writes.map((w) => [w.id, w.body.completed === 1]));
 
@@ -523,28 +569,40 @@ async function writeSetResults(
         .map((e) => coerceInt(e.id))
         .filter((n): n is number => n !== null);
       const setBody = { ...buildSetCompletePayload(rawSet, allExerciseIds, true), ...extra };
-      await limit.run(async () => {
-        try {
-          const setRes = await client.request(
-            "PUT",
-            `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`,
-            { body: setBody },
-          );
-          if (!setRes.ok) {
-            throw new Error(
-              `Failed to mark workout set ${savedWorkoutSetId} completed (HTTP ${setRes.status}).`,
-            );
-          }
-        } catch (error) {
-          limit.cancel(error);
-          throw error;
-        }
-      });
+      try {
+        await put(
+          `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`,
+          setBody,
+          (status) => `Failed to mark workout set ${savedWorkoutSetId} completed (HTTP ${status}).`,
+          true,
+        );
+      } catch (error) {
+        throw new Error(
+          `${errorMessage(error)} Exercise values were written successfully; retry the same ` +
+            "request to complete the set.",
+          { cause: error },
+        );
+      }
       setCompleted = true;
     }
   }
 
   return { savedWorkoutSetId, exercisesWritten, setCompleted };
+}
+
+async function writeSetResults(
+  client: TrainHeroicClient,
+  target: LogTarget,
+  workouts: readonly ProgramWorkout[],
+  savedWorkoutSetId: number,
+  results: readonly SetResult[],
+  mode: SetWriteMode,
+  // A session write passes one limiter shared by every set so the whole session, not each set,
+  // stays under WRITE_CONCURRENCY in-flight requests.
+  limit: Limiter = createLimiter(WRITE_CONCURRENCY),
+): Promise<{ savedWorkoutSetId: number; exercisesWritten: number; setCompleted: boolean }> {
+  const prepared = prepareSetWrite(target, workouts, savedWorkoutSetId, results, mode);
+  return executeSetWrite(client, target, prepared, mode, limit);
 }
 
 export type PersonalWorkoutCreated = {
@@ -825,6 +883,7 @@ async function logResolvedExercises(
   target: LogTarget,
   workouts: readonly ProgramWorkout[],
   resolved: readonly ResolvedExercise[],
+  retryGuidance?: string,
 ): Promise<Array<{ savedWorkoutSetId: number; exercisesLogged: number }>> {
   const bySet = new Map<number, SetResult[]>();
   for (const r of resolved) {
@@ -832,28 +891,52 @@ async function logResolvedExercises(
     list.push({ savedWorkoutSetExerciseId: r.savedWorkoutSetExerciseId, sets: [...r.sets] });
     bySet.set(r.savedWorkoutSetId, list);
   }
+  // Validate and build every set before starting any request. Without this session-wide pass, a
+  // malformed sibling set could be discovered only after another set had already been written.
+  const prepared = [...bySet].map(([savedWorkoutSetId, results]) =>
+    prepareSetWrite(target, workouts, savedWorkoutSetId, results, "log"),
+  );
   // Each saved set is written (and completed) independently, so the sets fan out with a small
   // pool; mapPool keeps the result in bySet insertion order. A session of eight exercises, each
   // in its own set, is a couple of waits instead of sixteen sequential round trips. One limiter
   // spans every set, so the per-set exercise fan-out cannot multiply the ceiling.
   const limit = createLimiter(WRITE_CONCURRENCY);
-  return mapPool([...bySet], WRITE_CONCURRENCY, async ([savedWorkoutSetId, results]) => {
-    const written = await writeSetResults(
-      client,
-      target,
-      workouts,
-      savedWorkoutSetId,
-      results,
-      "log",
-      limit,
-    );
-    // Keep the per-set shape to the two fields LogSessionResult documents; block completion is a
-    // by-set concern that the by-exercise session log does not surface.
-    return {
-      savedWorkoutSetId: written.savedWorkoutSetId,
-      exercisesLogged: written.exercisesWritten,
-    };
-  });
+  const confirmedBySet = new Map<number, number[]>();
+  const succeeded: number[] = [];
+  try {
+    return await mapPool(prepared, WRITE_CONCURRENCY, async (set) => {
+      const written = await executeSetWrite(client, target, set, "log", limit, confirmedBySet);
+      succeeded.push(written.savedWorkoutSetId);
+      // Keep the per-set shape to the two fields LogSessionResult documents; block completion is a
+      // by-set concern that the by-exercise session log does not surface.
+      return {
+        savedWorkoutSetId: written.savedWorkoutSetId,
+        exercisesLogged: written.exercisesWritten,
+      };
+    });
+  } catch (error) {
+    const completed = new Set(succeeded);
+    const incomplete = [...confirmedBySet]
+      .filter(([savedWorkoutSetId]) => !completed.has(savedWorkoutSetId))
+      .sort(([a], [b]) => a - b)
+      .map(
+        ([savedWorkoutSetId, ids]) =>
+          `set ${savedWorkoutSetId}: ${ids.toSorted((a, b) => a - b).join(", ")}`,
+      );
+    if (incomplete.length === 0 && succeeded.length === 0) throw error;
+    succeeded.sort((a, b) => a - b);
+    const partial =
+      incomplete.length === 0
+        ? ""
+        : ` Confirmed exercise writes in incomplete sets before the failure: ${incomplete.join(
+            "; ",
+          )}.${retryGuidance ? ` ${retryGuidance}` : ""}`;
+    const complete =
+      succeeded.length === 0
+        ? ""
+        : ` Set writes confirmed before the failure: ${succeeded.join(", ")}.`;
+    throw new Error(`${errorMessage(error)}${partial}${complete}`, { cause: error });
+  }
 }
 
 /**
@@ -952,6 +1035,7 @@ export async function logSessionForAthlete(
     { role: "coach", athleteId: args.athleteId },
     day,
     resolved,
+    "Retry the same request to reconcile them.",
   );
   return { date: args.date, created: false, sets };
 }

@@ -123,11 +123,13 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
 
     let pruned = 0;
     if (list.length >= PRUNE_FLOOR) {
-      const del = await this.db
-        .delete(exercise)
-        .where(and(eq(exercise.orgId, org), lt(exercise.generation, generation)));
+      const [del] = await this.exec([
+        this.db
+          .delete(exercise)
+          .where(and(eq(exercise.orgId, org), lt(exercise.generation, generation))),
+      ]);
       // D1 reports the row count under meta.changes; node:sqlite returns it as changes.
-      const result = del as { meta?: { changes?: number }; changes?: number | bigint };
+      const result = (del ?? {}) as { meta?: { changes?: number }; changes?: number | bigint };
       pruned = result.meta?.changes ?? Number(result.changes ?? 0);
     }
 
@@ -198,7 +200,9 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
 
   async recordDelete(id: number): Promise<void> {
     const org = await this.org();
-    await this.db.delete(exercise).where(and(eq(exercise.orgId, org), eq(exercise.id, id)));
+    await this.exec([
+      this.db.delete(exercise).where(and(eq(exercise.orgId, org), eq(exercise.id, id))),
+    ]);
   }
 
   // -- reads ---------------------------------------------------------------

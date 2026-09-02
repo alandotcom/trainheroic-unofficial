@@ -2,8 +2,8 @@ import { DatabaseSync } from "node:sqlite";
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { TrainHeroicClient } from "@trainheroic-unofficial/js";
-import { AthleteTrainingStore, athletePr } from "../src/index";
-import { cursorUpsertStmt } from "../src/runner";
+import { AthleteTrainingStore, ExerciseStore, athletePr, exercise } from "../src/index";
+import { type BatchStmt, cursorUpsertStmt } from "../src/runner";
 import { syncState } from "../src/schema";
 import { applyMigrations, makeSqliteWarehouse } from "../src/sqlite";
 
@@ -188,6 +188,90 @@ describe("cursorUpsertStmt", () => {
 });
 
 describe("makeSqliteWarehouse exec", () => {
+  it("returns each statement result in order", async () => {
+    const sqlite = freshDb();
+    const wh = makeSqliteWarehouse(sqlite);
+    await wh.exec([
+      wh.db.insert(exercise).values({
+        orgId: 7,
+        id: 101,
+        title: "Temporary",
+        searchText: "temporary",
+        raw: "{}",
+        generation: 1,
+      }),
+    ]);
+
+    const results = await wh.exec([
+      wh.db.delete(exercise).where(and(eq(exercise.orgId, 7), eq(exercise.id, 101))),
+      wh.db.insert(athletePr).values({ userId: USER, exerciseId: 9, reps: 1, weight: 100 }),
+    ]);
+
+    expect(results).toHaveLength(2);
+    expect((results[0] as { changes: number | bigint }).changes).toBe(1);
+    expect((results[1] as { changes: number | bigint }).changes).toBe(1);
+  });
+
+  it("queues store writes behind an unrelated transaction so its rollback cannot undo them", async () => {
+    const sqlite = freshDb();
+    const wh = makeSqliteWarehouse(sqlite);
+    const client = new TrainHeroicClient("a@b.com", "pw");
+    const store = new ExerciseStore(wh, client, 7);
+    await wh.exec([
+      wh.db.insert(exercise).values({
+        orgId: 7,
+        id: 101,
+        title: "Temporary",
+        searchText: "temporary",
+        raw: "{}",
+        generation: 1,
+      }),
+    ]);
+
+    let signalBegun: () => void = () => {};
+    const begun = new Promise<void>((resolve) => {
+      signalBegun = resolve;
+    });
+    let releaseBarrier: () => void = () => {};
+    const barrier = new Promise<void>((resolve) => {
+      releaseBarrier = resolve;
+    });
+    const pausedStatement = {
+      // Deliberate controllable thenable: make exec pause after BEGIN without timing assumptions.
+      // oxlint-disable-next-line unicorn/no-thenable
+      then(resolve: () => void): void {
+        signalBegun();
+        void barrier.then(resolve);
+      },
+    } as unknown as BatchStmt;
+    const group = wh.exec([
+      pausedStatement,
+      wh.db
+        .insert(athletePr)
+        .values({ userId: USER, exerciseId: null as unknown as number, reps: 1, weight: 1 }),
+    ]);
+    const rejected = expect(group).rejects.toThrow();
+    await begun;
+
+    let deleteSettled = false;
+    const deletion = store.recordDelete(101).then(() => (deleteSettled = true));
+    await Promise.resolve();
+    const whilePaused = sqlite
+      .prepare("SELECT COUNT(*) AS n FROM exercise WHERE org_id = 7 AND id = 101")
+      .get() as { n: number };
+    expect(deleteSettled).toBe(false);
+    expect(whilePaused.n).toBe(1);
+
+    releaseBarrier();
+    await rejected;
+    await deletion;
+    const after = sqlite
+      .prepare("SELECT COUNT(*) AS n FROM exercise WHERE org_id = 7 AND id = 101")
+      .get() as { n: number };
+
+    expect(after.n).toBe(0);
+  });
+
   it("serializes concurrent groups on the one connection instead of nesting transactions", async () => {
     const sqlite = freshDb();
     const wh = makeSqliteWarehouse(sqlite);
