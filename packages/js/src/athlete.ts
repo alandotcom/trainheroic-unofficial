@@ -409,6 +409,36 @@ function slotValues(ex: Record<string, unknown>, requireMade: boolean): Map<numb
   return map;
 }
 
+/**
+ * The slots carrying data that the athlete has NOT marked performed (`param_i_made !== 1`). On a
+ * saved-copy row these are the row's own targets: the pre-filled prescription, an athlete- or
+ * coach-level override written with `made = 0` (`prescribeAthleteSet`), or a personal session's
+ * only prescription, since personal work has no template tree at all.
+ */
+function unmadeSlotValues(ex: Record<string, unknown>): Map<number, SlotValue> {
+  const map = slotValues(ex, false);
+  // Deleting the entry under the cursor is safe for Map iteration.
+  for (const i of map.keys()) {
+    if (coerceInt(ex[`param_${i}_made`]) === 1) map.delete(i);
+  }
+  return map;
+}
+
+/**
+ * The prescription for one exercise: the template row's slots, with any target the saved copy
+ * still holds unperformed taking precedence per set index (that is what the athlete's app shows,
+ * and where a per-athlete override lives). Without a template row the saved copy's unperformed
+ * slots are the whole prescription.
+ */
+function prescriptionSlots(
+  template: Record<string, unknown> | undefined,
+  saved: Record<string, unknown> | undefined,
+): Map<number, SlotValue> {
+  const map = template ? slotValues(template, false) : new Map<number, SlotValue>();
+  if (saved) for (const [i, v] of unmadeSlotValues(saved)) map.set(i, v);
+  return map;
+}
+
 /** The joined display for a slot, kept verbatim (`"5 @ 225"`, `"AMRAP"`, `"@ 225"`). */
 function fmtSlot(slot: SlotValue): string {
   const has1 = slot.p1 !== null;
@@ -417,11 +447,6 @@ function fmtSlot(slot: SlotValue): string {
   if (has1) return String(slot.p1);
   if (has2) return `@ ${slot.p2}`;
   return "";
-}
-
-/** Every slot carrying data, joined for display (the prescription reader): `["5 @ 225", "AMRAP"]`. */
-function prescribedStrings(ex: Record<string, unknown>): string[] {
-  return [...slotValues(ex, false).values()].map(fmtSlot);
 }
 
 /** The slots the athlete logged (`param_i_made === 1`), joined for display (the performed reader). */
@@ -499,6 +524,20 @@ function performedSlotsByExerciseId(
   return map;
 }
 
+/** Each saved-copy row keyed by the prescription exercise id it was copied from. */
+function savedRowsByTemplateId(
+  sets: Array<{ exercises: Record<string, unknown>[] }>,
+): Map<number, Record<string, unknown>> {
+  const map = new Map<number, Record<string, unknown>>();
+  for (const { exercises } of sets) {
+    for (const ex of exercises) {
+      const id = coerceInt(ex.workout_set_exercise_id);
+      if (id !== null && !map.has(id)) map.set(id, ex);
+    }
+  }
+  return map;
+}
+
 /** Per-exercise athlete notes keyed by the prescription template id (`workout_set_exercise_id`). */
 function notesByTemplateId(
   sets: Array<{ exercises: Record<string, unknown>[] }>,
@@ -535,6 +574,7 @@ function mergeExercise(
 function mergePrescriptionBlock(
   set: Record<string, unknown>,
   performedById: Map<number, Map<number, SlotValue>>,
+  savedById: Map<number, Record<string, unknown>>,
   notesById: Map<number, string>,
 ): MergedBlock {
   const exercises = Array.isArray(set.workoutSetExercises) ? set.workoutSetExercises : [];
@@ -546,7 +586,8 @@ function mergePrescriptionBlock(
     exercises: exercises.filter(isRecord).map((ex) => {
       const id = coerceInt(ex.id);
       const performed = (id !== null ? performedById.get(id) : undefined) ?? new Map();
-      return mergeExercise(slotValues(ex, false), performed, {
+      const saved = id !== null ? savedById.get(id) : undefined;
+      return mergeExercise(prescriptionSlots(ex, saved), performed, {
         exerciseId: coerceInt(ex.exercise_id),
         title: typeof ex.title === "string" ? ex.title : "",
         instruction: str(ex.instruction),
@@ -557,7 +598,11 @@ function mergePrescriptionBlock(
   };
 }
 
-/** A logged block straight from the saved copy (athlete-added or personal work; no prescription). */
+/**
+ * A block straight from the saved copy (athlete-added or personal work; no template row). Its
+ * unperformed slots are the prescription — a personal session's targets live only here — and its
+ * performed slots are what was logged.
+ */
 function mergeSavedBlock(
   set: Record<string, unknown>,
   exercises: Record<string, unknown>[],
@@ -568,7 +613,7 @@ function mergeSavedBlock(
     instruction: str(set.instruction),
     isTest: coerceInt(set.is_test) === 1,
     exercises: exercises.map((ex) =>
-      mergeExercise(new Map(), slotValues(ex, true), {
+      mergeExercise(prescriptionSlots(undefined, ex), slotValues(ex, true), {
         exerciseId: coerceInt(ex.exercise_id),
         title: typeof ex.exercise_title === "string" ? ex.exercise_title : "",
         instruction: str(ex.instruction),
@@ -596,14 +641,17 @@ function mergeAthleteWorkout(raw: ProgramWorkout): MergedWorkout {
 
   const logged = savedSets(saved);
   const performedById = performedSlotsByExerciseId(logged);
+  const savedById = savedRowsByTemplateId(logged);
   const notesById = notesByTemplateId(logged);
 
   // Prescription blocks, each exercise enriched with what the athlete actually logged.
   const blocks = prescriptionSets
-    .map((s) => mergePrescriptionBlock(s, performedById, notesById))
+    .map((s) => mergePrescriptionBlock(s, performedById, savedById, notesById))
     .sort((a, b) => a.order - b.order);
 
-  // Logged sets with no matching prescription (athlete-added work, personal sessions).
+  // Saved sets with no matching prescription (athlete-added work, personal sessions): kept when
+  // they carry logged values or unperformed targets, so a prescribed-but-not-yet-logged personal
+  // session shows its plan rather than an empty block list.
   const prescribedIds = new Set<number>();
   for (const s of prescriptionSets) {
     const exs = Array.isArray(s.workoutSetExercises) ? s.workoutSetExercises : [];
@@ -615,7 +663,7 @@ function mergeAthleteWorkout(raw: ProgramWorkout): MergedWorkout {
   }
   for (const { set, exercises } of logged) {
     const extra = exercises.filter((ex) => {
-      if (slotValues(ex, true).size === 0) return false;
+      if (slotValues(ex, false).size === 0) return false;
       const id = coerceInt(ex.workout_set_exercise_id);
       return id === null || !prescribedIds.has(id);
     });
@@ -839,6 +887,19 @@ export function presentLogTargets(list: readonly ProgramWorkout[]): LogSetTarget
     const ssw = isRecord(rec.summarizedSavedWorkout) ? rec.summarizedSavedWorkout : {};
     const saved = isRecord(ssw.saved_workout) ? ssw.saved_workout : null;
     if (!saved) continue;
+    // The saved copy is the buffer a log write lands in, so once sets are performed its slots hold
+    // the logged values, not the plan. The prescription comes from the template row (joined by
+    // workout_set_exercise_id), with the saved copy's unperformed targets layered on top.
+    const workout = isRecord(ssw.workout) ? ssw.workout : {};
+    const templatesById = new Map<number, Record<string, unknown>>();
+    for (const tSet of Array.isArray(workout.workoutSets) ? workout.workoutSets : []) {
+      if (!isRecord(tSet)) continue;
+      const tExs = Array.isArray(tSet.workoutSetExercises) ? tSet.workoutSetExercises : [];
+      for (const tEx of tExs) {
+        const tId = isRecord(tEx) ? coerceInt(tEx.id) : null;
+        if (tId !== null && isRecord(tEx)) templatesById.set(tId, tEx);
+      }
+    }
     const date = str(rec.date) ?? "";
     const workoutTitle = str(rec.workout_title) ?? "";
     const program = str(rec.program_title);
@@ -857,12 +918,14 @@ export function presentLogTargets(list: readonly ProgramWorkout[]): LogSetTarget
         .map((ex) => {
           const id = coerceInt(ex.id);
           if (id === null) return null;
+          const templateId = coerceInt(ex.workout_set_exercise_id);
+          const template = templateId === null ? undefined : templatesById.get(templateId);
           return {
             savedWorkoutSetExerciseId: id,
             title: exerciseTitle(ex),
             units: exerciseUnits(ex.param_1_type, ex.param_2_type),
             notes: str(ex.notes),
-            prescribed: prescribedStrings(ex),
+            prescribed: [...prescriptionSlots(template, ex).values()].map(fmtSlot),
             performed: performedStrings(ex),
           };
         })
