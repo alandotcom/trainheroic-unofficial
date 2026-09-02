@@ -8,6 +8,7 @@
 
 import {
   coerceInt,
+  createLimiter,
   exerciseTitle,
   isPersonalSession,
   isRecord,
@@ -22,6 +23,7 @@ import {
 } from "./exercise-set-payload";
 import { fetchAthleteWorkouts, programWorkoutOnDate } from "./athlete";
 import { fetchCoachAthleteWorkouts } from "./coach-athlete-calendar";
+import type { Limiter } from "./exercise-util";
 import type { TrainHeroicClient } from "./client";
 import type { ProgramWorkout } from "@trainheroic-unofficial/dto";
 
@@ -431,6 +433,9 @@ async function writeSetResults(
   savedWorkoutSetId: number,
   results: readonly SetResult[],
   mode: SetWriteMode,
+  // A session write passes one limiter shared by every set so the whole session, not each set,
+  // stays under WRITE_CONCURRENCY in-flight requests.
+  limit: Limiter = createLimiter(WRITE_CONCURRENCY),
 ): Promise<{ savedWorkoutSetId: number; exercisesWritten: number; setCompleted: boolean }> {
   const { exercises, rawSet } = findSavedWorkoutSet(workouts, savedWorkoutSetId);
   assertUniqueExerciseResults(results);
@@ -479,10 +484,10 @@ async function writeSetResults(
   // each PUT touches its own row, so the writes fan out with a small pool instead of one round
   // trip per exercise in sequence: a five-exercise circuit is one wait, not five.
   await mapPool(writes, WRITE_CONCURRENCY, async ({ id, body }) => {
-    const res = await client.request(
-      "PUT",
-      `/1.0/${target.role}/savedworkoutsetexercise/${id}${suffix}`,
-      { body },
+    const res = await limit(() =>
+      client.request("PUT", `/1.0/${target.role}/savedworkoutsetexercise/${id}${suffix}`, {
+        body,
+      }),
     );
     if (!res.ok) {
       const readOnly =
@@ -507,10 +512,10 @@ async function writeSetResults(
         .map((e) => coerceInt(e.id))
         .filter((n): n is number => n !== null);
       const setBody = { ...buildSetCompletePayload(rawSet, allExerciseIds, true), ...extra };
-      const setRes = await client.request(
-        "PUT",
-        `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`,
-        { body: setBody },
+      const setRes = await limit(() =>
+        client.request("PUT", `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`, {
+          body: setBody,
+        }),
       );
       if (!setRes.ok) {
         throw new Error(
@@ -811,7 +816,9 @@ async function logResolvedExercises(
   }
   // Each saved set is written (and completed) independently, so the sets fan out with a small
   // pool; mapPool keeps the result in bySet insertion order. A session of eight exercises, each
-  // in its own set, is a couple of waits instead of sixteen sequential round trips.
+  // in its own set, is a couple of waits instead of sixteen sequential round trips. One limiter
+  // spans every set, so the per-set exercise fan-out cannot multiply the ceiling.
+  const limit = createLimiter(WRITE_CONCURRENCY);
   return mapPool([...bySet], WRITE_CONCURRENCY, async ([savedWorkoutSetId, results]) => {
     const written = await writeSetResults(
       client,
@@ -820,6 +827,7 @@ async function logResolvedExercises(
       savedWorkoutSetId,
       results,
       "log",
+      limit,
     );
     // Keep the per-set shape to the two fields LogSessionResult documents; block completion is a
     // by-set concern that the by-exercise session log does not surface.

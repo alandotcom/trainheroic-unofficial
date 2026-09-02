@@ -19,7 +19,7 @@ export { MIGRATIONS, type Migration } from "./migrations";
  */
 export function makeSqliteWarehouse(sqlite: DatabaseSync): Warehouse {
   const db = drizzle({ client: sqlite }) as unknown as DrizzleDb;
-  const exec: BatchExec = async (statements: readonly BatchStmt[]) => {
+  const run = async (statements: readonly BatchStmt[]): Promise<void> => {
     if (statements.length === 0) return;
     sqlite.exec("BEGIN");
     try {
@@ -29,6 +29,20 @@ export function makeSqliteWarehouse(sqlite: DatabaseSync): Warehouse {
       sqlite.exec("ROLLBACK");
       throw err;
     }
+  };
+  // One connection, one transaction at a time. The bracket awaits between statements, so two
+  // groups started concurrently (the stores fan out with mapPool) would interleave and the second
+  // BEGIN would fail with "cannot start a transaction within a transaction"; queue them instead.
+  // D1 needs none of this: each batch() is its own request.
+  let tail: Promise<unknown> = Promise.resolve();
+  const exec: BatchExec = (statements: readonly BatchStmt[]) => {
+    const next = tail.then(
+      () => run(statements),
+      () => run(statements),
+    );
+    // A failed group must not poison the queue: the tail only tracks completion.
+    tail = next.catch(() => null);
+    return next;
   };
   return { db, exec };
 }
