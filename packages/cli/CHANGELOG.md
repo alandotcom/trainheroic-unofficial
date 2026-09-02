@@ -1,5 +1,13 @@
 # @trainheroic-unofficial/cli
 
+## 3.6.0
+
+### Patch Changes
+
+- Updated dependencies [50744bc]
+  - @trainheroic-unofficial/js@3.6.0
+  - @trainheroic-unofficial/dto@3.6.0
+
 ## 3.5.2
 
 ### Patch Changes
