@@ -4,6 +4,7 @@
 // `node:*`, so this runs unchanged on workerd.
 
 import {
+  buildSearchText,
   coerceInt,
   coerceNum,
   exerciseTitle,
@@ -181,16 +182,29 @@ export function fetchAthleteProgrammingPrograms(client: TrainHeroicClient): Prom
   return getArray(client, "/1.0/athlete/programming/programs", "athlete programming programs");
 }
 
-/** Free-text search over the athlete's logged exercises (FTS replacement via rankSearch). */
+/**
+ * Free-text search over the athlete's logged exercises (FTS replacement via rankSearch). Only
+ * rows whose title carries every query token are candidates; rankSearch scores but never drops a
+ * row, so ranking the whole catalog would pad a no-match query with the shortest titles up to
+ * `limit`. Mirrors the coach `ExerciseLibrary.search` filter, and a blank query returns nothing.
+ */
 export async function searchExerciseHistory(
   client: TrainHeroicClient,
   query: string,
   limit = 20,
 ): Promise<ExerciseHistoryListItem[]> {
+  const tokens = buildSearchText(query)
+    .split(/\s+/u)
+    .filter((t) => t.length > 0);
+  if (tokens.length === 0) return [];
   const rows = await fetchExerciseHistoryList(client);
+  const matches = rows.filter((row) => {
+    const text = buildSearchText(row.title);
+    return tokens.every((t) => text.includes(t));
+  });
   // rankSearch treats a missing can_edit as the standard (non-custom) case, so athlete rows
   // (which have no can_edit) rank directly.
-  return rankSearch(rows, query, limit);
+  return rankSearch(matches, query, limit);
 }
 
 export function fetchExerciseHistoryDetail(

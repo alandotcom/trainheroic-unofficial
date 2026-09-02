@@ -81,6 +81,7 @@ import {
   SESSION_TEMPLATES_LIST_PATH,
   presentCoachAthleteTraining,
   presentLogTargets,
+  historyInRange,
   presentExerciseHistory,
   PROGRAM_KINDS,
   publishSession,
@@ -1689,17 +1690,14 @@ async function cmdCoachAthleteLiftHistory(client: TrainHeroicClient, a: string[]
   const presented = presentExerciseHistory(detail);
   const since = values.since !== undefined ? isoDate(values.since as string, "--since") : undefined;
   const until = values.until !== undefined ? isoDate(values.until as string, "--until") : undefined;
-  const sessions = presented.sessions.filter(
-    (s) => (since === undefined || s.date >= since) && (until === undefined || s.date <= until),
-  );
-  if (sessions.length === 0 && presented.liftPRs.length === 0) {
+  const windowed = historyInRange(presented, since, until);
+  if (windowed.sessions.length === 0 && windowed.liftPRs.length === 0) {
     return out({
-      ...presented,
-      sessions,
+      ...windowed,
       note: `No logged history for exercise ${exerciseId} for athlete ${athleteId}${since !== undefined || until !== undefined ? " in this date window" : ""}. This view only shows sessions where the athlete logged this exact exercise — an empty result means none were logged, not an error. Confirm the exercise id (via 'coach exercise resolve <name>') and widen --since/--until.`,
     });
   }
-  return out({ ...presented, sessions });
+  return out(windowed);
 }
 
 // Main-lift PRs (squat/bench/deadlift/overhead press/clean & jerk/snatch). With --athlete, one
