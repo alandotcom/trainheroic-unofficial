@@ -38,7 +38,7 @@ export function makeSqliteWarehouse(sqlite: DatabaseSync): Warehouse {
   const exec: BatchExec = (statements: readonly BatchStmt[]) => {
     const next = tail.then(() => run(statements));
     // A failed group must not poison the queue: the tail only tracks completion.
-    tail = next.catch(() => undefined);
+    tail = next.catch(() => {});
     return next;
   };
   return { db, exec };

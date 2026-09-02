@@ -213,6 +213,8 @@ describe("makeSqliteWarehouse exec", () => {
       releaseBarrier = resolve;
     });
     const pausedStatement = {
+      // Deliberate controllable thenable: make exec pause after BEGIN without timing assumptions.
+      // oxlint-disable-next-line unicorn/no-thenable
       then(resolve: () => void): void {
         signalBegun();
         void barrier.then(resolve);
@@ -228,9 +230,7 @@ describe("makeSqliteWarehouse exec", () => {
     await begun;
 
     let deleteSettled = false;
-    const deletion = store.recordDelete(101).then(() => {
-      deleteSettled = true;
-    });
+    const deletion = store.recordDelete(101).then(() => (deleteSettled = true));
     await Promise.resolve();
     const whilePaused = sqlite
       .prepare("SELECT COUNT(*) AS n FROM exercise WHERE org_id = 7 AND id = 101")
