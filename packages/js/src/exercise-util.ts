@@ -1,6 +1,9 @@
 // Pure helpers for the exercise store. No I/O, so they are unit-testable directly.
 
+import { chunk } from "es-toolkit/array";
 import type { ExerciseRow, ExerciseView, ResolveResult } from "@trainheroic-unofficial/dto";
+
+export { chunk };
 
 /**
  * Display labels for TrainHeroic parameter types. The unit is FIXED PER EXERCISE
@@ -195,12 +198,6 @@ export function rankSearch<T extends { title: string; can_edit?: number }>(
     .map((s) => s.row);
 }
 
-export function chunk<T>(items: readonly T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
-
 /**
  * Map over items with a bounded number of concurrent workers. Used to fan out upstream
  * fetches (per-exercise history, the CLI export) without bursting the host all at once or,
@@ -211,6 +208,7 @@ export async function mapPool<T, R>(
   limit: number,
   fn: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
+  assertPositiveInteger(limit, "Concurrency limit");
   const out: R[] = Array.from({ length: items.length });
   let next = 0;
   // On the first failure, stop handing out new items but let every started call finish before
@@ -246,6 +244,7 @@ export type Limiter = {
 };
 
 export function createLimiter(max: number): Limiter {
+  assertPositiveInteger(max, "Maximum concurrency");
   let active = 0;
   let cancelled: { error: unknown } | null = null;
   const waiting: Array<{ start: () => void; abort: (error: unknown) => void }> = [];
@@ -284,6 +283,12 @@ export function createLimiter(max: number): Limiter {
       for (const entry of waiting.splice(0)) entry.abort(error);
     },
   };
+}
+
+function assertPositiveInteger(value: number, label: string): void {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new RangeError(`${label} must be a positive integer; received ${value}.`);
+  }
 }
 
 /**

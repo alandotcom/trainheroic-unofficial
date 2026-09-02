@@ -3,6 +3,7 @@
 // completed workouts, per-exercise history, PRs, and working maxes. Runtime-agnostic: no
 // `node:*`, so this runs unchanged on workerd.
 
+import { uniq } from "es-toolkit/array";
 import {
   buildSearchText,
   coerceInt,
@@ -118,7 +119,7 @@ export async function fetchRosterActivity(
   athleteIds: readonly number[],
   useMetric = false,
 ): Promise<RosterActivityRow[]> {
-  const uniqueAthleteIds = [...new Set(athleteIds)];
+  const uniqueAthleteIds = uniq(athleteIds);
   // A true pool (a new request starts as soon as one finishes) rather than batches that each
   // wait for their slowest member: the same six-in-flight ceiling, without the barrier stalls.
   const rows = await mapPool(uniqueAthleteIds, 6, async (id): Promise<RosterActivityRow> => {

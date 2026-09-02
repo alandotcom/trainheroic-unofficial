@@ -97,6 +97,10 @@ describe("chunk", () => {
     expect(chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
     expect(chunk([], 3)).toEqual([]);
   });
+
+  it("rejects a non-positive size instead of looping forever", () => {
+    expect(() => chunk([1], 0)).toThrow(RangeError);
+  });
 });
 
 const tick = (ms: number): Promise<void> =>
@@ -105,6 +109,12 @@ const tick = (ms: number): Promise<void> =>
   });
 
 describe("mapPool", () => {
+  it("rejects an invalid concurrency limit", async () => {
+    await expect(mapPool([1], 0, async (value) => value)).rejects.toThrow(
+      /Concurrency limit must be a positive integer/u,
+    );
+  });
+
   it("stops scheduling after a failure and waits for started calls before rejecting", async () => {
     const started: number[] = [];
     const finished: number[] = [];
@@ -132,6 +142,10 @@ describe("mapPool", () => {
 });
 
 describe("createLimiter", () => {
+  it("rejects an invalid concurrency limit", () => {
+    expect(() => createLimiter(0)).toThrow(/Maximum concurrency must be a positive integer/u);
+  });
+
   it("caps the number of tasks in flight across independent callers", async () => {
     const limit = createLimiter(2);
     let active = 0;

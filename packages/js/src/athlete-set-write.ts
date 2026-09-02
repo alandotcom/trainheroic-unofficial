@@ -441,6 +441,20 @@ async function writeSetResults(
   assertUniqueExerciseResults(results);
   const suffix = target.role === "coach" ? `/${target.athleteId}` : "";
   const extra = target.role === "coach" ? { athleteId: target.athleteId } : {};
+  const put = (
+    path: string,
+    body: Record<string, unknown>,
+    failureMessage: (status: number) => string,
+  ): Promise<void> =>
+    limit.run(async () => {
+      try {
+        const res = await client.request("PUT", path, { body });
+        if (!res.ok) throw new Error(failureMessage(res.status));
+      } catch (error) {
+        limit.cancel(error);
+        throw error;
+      }
+    });
 
   // Step 1: resolve every target and build every body before any request, so an argument error
   // (unknown id, missing template pointer) fails fast with nothing written.
@@ -488,26 +502,14 @@ async function writeSetResults(
   // status check and the cancel run inside the limited task, before its slot is released, so no
   // queued write can start in the gap between the response landing and the failure being seen.
   await mapPool(writes, WRITE_CONCURRENCY, ({ id, body }) =>
-    limit.run(async () => {
-      try {
-        const res = await client.request(
-          "PUT",
-          `/1.0/${target.role}/savedworkoutsetexercise/${id}${suffix}`,
-          { body },
-        );
-        if (!res.ok) {
-          const readOnly =
-            target.role === "coach" && (res.status === 401 || res.status === 403)
-              ? ` Athlete ${target.athleteId} appears to be read-only for changes — TrainHeroic's ` +
-                `seeded demo/sample athletes return ${res.status} here; writes only persist for ` +
-                `real (invited) athletes.`
-              : "";
-          throw new Error(`Failed to write exercise ${id} (HTTP ${res.status}).${readOnly}`);
-        }
-      } catch (error) {
-        limit.cancel(error);
-        throw error;
-      }
+    put(`/1.0/${target.role}/savedworkoutsetexercise/${id}${suffix}`, body, (status) => {
+      const readOnly =
+        target.role === "coach" && (status === 401 || status === 403)
+          ? ` Athlete ${target.athleteId} appears to be read-only for changes — TrainHeroic's ` +
+            `seeded demo/sample athletes return ${status} here; writes only persist for ` +
+            `real (invited) athletes.`
+          : "";
+      return `Failed to write exercise ${id} (HTTP ${status}).${readOnly}`;
     }),
   );
   const exercisesWritten = writes.length;
@@ -523,23 +525,11 @@ async function writeSetResults(
         .map((e) => coerceInt(e.id))
         .filter((n): n is number => n !== null);
       const setBody = { ...buildSetCompletePayload(rawSet, allExerciseIds, true), ...extra };
-      await limit.run(async () => {
-        try {
-          const setRes = await client.request(
-            "PUT",
-            `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`,
-            { body: setBody },
-          );
-          if (!setRes.ok) {
-            throw new Error(
-              `Failed to mark workout set ${savedWorkoutSetId} completed (HTTP ${setRes.status}).`,
-            );
-          }
-        } catch (error) {
-          limit.cancel(error);
-          throw error;
-        }
-      });
+      await put(
+        `/1.0/${target.role}/savedworkoutset/${savedWorkoutSetId}${suffix}`,
+        setBody,
+        (status) => `Failed to mark workout set ${savedWorkoutSetId} completed (HTTP ${status}).`,
+      );
       setCompleted = true;
     }
   }

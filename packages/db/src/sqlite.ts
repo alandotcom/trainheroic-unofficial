@@ -34,14 +34,11 @@ export function makeSqliteWarehouse(sqlite: DatabaseSync): Warehouse {
   // groups started concurrently (the stores fan out with mapPool) would interleave and the second
   // BEGIN would fail with "cannot start a transaction within a transaction"; queue them instead.
   // D1 needs none of this: each batch() is its own request.
-  let tail: Promise<unknown> = Promise.resolve();
+  let tail = Promise.resolve();
   const exec: BatchExec = (statements: readonly BatchStmt[]) => {
-    const next = tail.then(
-      () => run(statements),
-      () => run(statements),
-    );
+    const next = tail.then(() => run(statements));
     // A failed group must not poison the queue: the tail only tracks completion.
-    tail = next.catch(() => null);
+    tail = next.catch(() => undefined);
     return next;
   };
   return { db, exec };
