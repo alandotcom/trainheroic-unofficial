@@ -18,25 +18,25 @@
     "@cfworker/json-schema": "^4.1.1",
     "@cloudflare/workers-oauth-provider": "0.10.3",
     "@modelcontextprotocol/server": "2.0.0",
-    "@sentry/cloudflare": "^10.71.0",
+    "@sentry/cloudflare": "^10.73.0",
     "@trainheroic-unofficial/core": "workspace:*",
     "@trainheroic-unofficial/db": "workspace:*",
     "@trainheroic-unofficial/dto": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
-    "agents": "^0.21.0",
+    "agents": "^0.22.0",
     "drizzle-orm": "1.0.0-rc.5-169397b",
     "hono": "^4.13.5",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@babel/core": "^8.0.1",
     "@cloudflare/vitest-pool-workers": "^0.22.0",
-    "@cloudflare/workers-types": "^5.20260826.1",
+    "@cloudflare/workers-types": "^5.20260902.1",
     "@modelcontextprotocol/client": "2.0.0",
-    "@types/node": "^26.3.0",
+    "@types/node": "^26.4.1",
     "drizzle-kit": "1.0.0-rc.5-ab785fc",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",
-    "wrangler": "^4.126.0"
+    "wrangler": "^4.128.0"
   }
 }
