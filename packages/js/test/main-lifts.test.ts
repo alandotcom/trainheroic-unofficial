@@ -3,7 +3,11 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProgramWorkout } from "@trainheroic-unofficial/dto";
 import { TrainHeroicClient } from "../src/client";
-import { classifyMainLift, fetchAthleteMainLiftPRs } from "../src/main-lifts";
+import {
+  classifyMainLift,
+  fetchAthleteMainLiftPRs,
+  resolveAthleteMainLifts,
+} from "../src/main-lifts";
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -66,6 +70,44 @@ const SQUAT_HISTORY = {
 };
 
 describe("fetchAthleteMainLiftPRs", () => {
+  it("splits long workout history reads into non-overlapping 180-day windows", async () => {
+    const ranges: Array<{ start: string; end: string }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "s" });
+        const parsed = new URL(url);
+        ranges.push({
+          start: parsed.searchParams.get("startDate") ?? "",
+          end: parsed.searchParams.get("endDate") ?? "",
+        });
+        return json([]);
+      }),
+    );
+
+    await resolveAthleteMainLifts(new TrainHeroicClient("a@b.com", "pw"), ATHLETE, {
+      months: 12,
+      now: new Date(2026, 11, 31),
+    });
+
+    expect(ranges).toHaveLength(3);
+    expect(ranges[0]?.start).toBe("2026-01-01");
+    expect(ranges.at(-1)?.end).toBe("2026-12-31");
+    for (const [index, range] of ranges.entries()) {
+      const days =
+        (Date.parse(`${range.end}T00:00:00Z`) - Date.parse(`${range.start}T00:00:00Z`)) /
+          86_400_000 +
+        1;
+      expect(days).toBeLessThanOrEqual(180);
+      const next = ranges[index + 1];
+      if (next) {
+        expect(Date.parse(`${next.start}T00:00:00Z`)).toBe(
+          Date.parse(`${range.end}T00:00:00Z`) + 86_400_000,
+        );
+      }
+    }
+  });
+
   it("discovers the logged variant from the workout range and returns its heaviest PR", async () => {
     vi.stubGlobal(
       "fetch",

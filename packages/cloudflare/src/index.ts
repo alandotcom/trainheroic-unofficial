@@ -4,6 +4,8 @@ import { authHandler } from "./auth/handler";
 import { athleteMcpHandler, coachMcpHandler, fullMcpHandler } from "./mcp";
 import { oauthProviderErrorReporter, sentryOptions } from "./sentry";
 
+export { TrainHeroicUpstream } from "./upstream-coordinator";
+
 const provider = new OAuthProvider({
   // Most specific routes first: `apiHandlers` is matched by prefix in insertion order, so
   // `/mcp/coach` and `/mcp/athlete` must precede `/mcp` or they'd be swallowed by it.

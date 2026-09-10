@@ -1,5 +1,7 @@
 import { notifyHttpError } from "./http-error";
 import type { TrainHeroicHttpErrorHandler } from "./http-error";
+import { defaultTrainHeroicTransport } from "./transport";
+import type { TrainHeroicTransport } from "./transport";
 
 const DEFAULT_AUTH_URL = "https://apis.trainheroic.com/auth";
 
@@ -35,6 +37,8 @@ type AuthResponse = {
 export type LoginOptions = {
   /** Called for every non-2xx login response; callback failures never change the result. */
   onHttpError?: TrainHeroicHttpErrorHandler;
+  /** Override HTTP dispatch while retaining the SDK's request and response behavior. */
+  transport?: TrainHeroicTransport;
 };
 
 /**
@@ -49,7 +53,7 @@ export async function loginTrainHeroic(
   options: LoginOptions = {},
 ): Promise<TrainHeroicSession | null> {
   const url = authUrl();
-  const res = await fetch(url, {
+  const res = await (options.transport ?? defaultTrainHeroicTransport)(url, {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -59,6 +63,7 @@ export async function loginTrainHeroic(
   });
 
   if (!res.ok) {
+    await res.body?.cancel().catch(() => {});
     notifyHttpError(options.onHttpError, "POST", url, res.status);
     return null;
   }

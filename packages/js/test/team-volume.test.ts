@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrainHeroicClient } from "../src/client";
-import { teamVolume } from "../src/coach";
+import { queryAnalytics, teamVolume } from "../src/coach";
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -45,6 +45,46 @@ const REPORT = {
 };
 
 describe("teamVolume", () => {
+  it("batches large training-summary queries and merges their rows", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    let active = 0;
+    let peak = 0;
+    const transport = vi.fn(async (_url: string, init: RequestInit) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      bodies.push(body);
+      await Promise.resolve();
+      active -= 1;
+      return json({
+        title: "Training Summary",
+        columns: ["user_id"],
+        rows: [{ users: body.user_ids, start: body.date_start, end: body.date_end }],
+      });
+    });
+    const result = (await queryAnalytics(
+      new TrainHeroicClient("a@b.com", "pw", "live-session", { transport }),
+      {
+        metric: "training-summary-athlete",
+        userIds: [1, 2, 3, 4, 5, 1, 6, 7],
+        dateStart: "2026-01-01",
+        dateEnd: "2026-04-30",
+      },
+    )) as { title: string; columns: string[]; rows: unknown[] };
+
+    expect(bodies).toHaveLength(4);
+    expect(bodies.every((body) => (body.user_ids as unknown[]).length <= 5)).toBe(true);
+    for (const start of new Set(bodies.map((body) => body.date_start))) {
+      const users = bodies
+        .filter((body) => body.date_start === start)
+        .flatMap((body) => body.user_ids as string[]);
+      expect(new Set(users).size).toBe(users.length);
+    }
+    expect(result).toMatchObject({ title: "Training Summary", columns: ["user_id"] });
+    expect(result.rows).toHaveLength(4);
+    expect(peak).toBe(1);
+  });
+
   it("groups sessions by athlete, sums volume/reps, and rolls up totals", async () => {
     let body: Record<string, unknown> | undefined;
     vi.stubGlobal(

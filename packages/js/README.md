@@ -117,13 +117,18 @@ failures without coupling the SDK to a telemetry vendor:
 const client = new TrainHeroicClient(email, password, savedSession, {
   onSession: saveSession,
   onHttpError: (error) => telemetry.captureException(error),
+  transport: (url, init) => fetch(url, init), // optional host-specific HTTP transport
 });
 ```
 
+The client keeps at most four API operations in flight. A custom `transport` receives the same
+URL and `RequestInit` that the default global `fetch` would receive; hosted runtimes can use this
+seam to add coordination without changing SDK authentication or response parsing.
+
 `onHttpError` receives a `TrainHeroicHttpError` containing the method, status, host, a bounded
 request-body summary, and sanitized provider response diagnostics. The request summary records
-field names plus a small allowlist of non-sensitive enum values; arbitrary request values are
-never included. Response diagnostics retain bounded status fields and boolean success flags while
+field names, array lengths, a derived date-span count, and a small allowlist of non-sensitive enum
+values; arbitrary request values are never included. Response diagnostics retain bounded status fields and boolean success flags while
 redacting all free-form strings and omitting unknown fields. Paths, query strings, credentials,
 session tokens, and login
 request and response data remain excluded. A transient 401/403
@@ -162,7 +167,8 @@ The `.` entry imports no `node:*` modules. Anything that touches the filesystem 
   scheduled and completed workouts, per-exercise history, personal records, and working maxes.
 - **Analytics.** Coach analytics reports via `queryAnalytics`, with `analyticsMetricCatalog`
   and `ANALYTICS_METRIC_KEYS` for discovery. `teamVolume` rolls up per-athlete training
-  summary rows into a team total.
+  summary rows into a team total. Large training summaries are read as sequential five-athlete,
+  90-day batches and merged into one report.
 - **Messaging.** Tools for conversation streams: listing them, reading a stream, and
   building or sending or deleting a comment.
 

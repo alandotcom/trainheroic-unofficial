@@ -14,12 +14,17 @@
   // Emit source maps on deploy so stack traces are readable in Cloudflare's observability and,
   // via `scripts/deploy.sh`, uploadable to Sentry.
   "upload_source_maps": true,
+  "durable_objects": {
+    "bindings": [{ "name": "TRAINHEROIC_UPSTREAM", "class_name": "TrainHeroicUpstream" }]
+  },
   // MCP protocol sessions no longer use Durable Objects (MCP SDK v2 / createMcpHandler).
-  // Migration v3 deletes the legacy McpAgent classes from earlier releases.
+  // Migration v3 deletes the legacy McpAgent classes. V4 adds an account-scoped coordinator
+  // for outbound TrainHeroic requests; it does not hold MCP protocol state.
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["TrainHeroicMCP"] },
     { "tag": "v2", "new_sqlite_classes": ["CoachMCP", "AthleteMCP"] },
-    { "tag": "v3", "deleted_classes": ["TrainHeroicMCP", "CoachMCP", "AthleteMCP"] }
+    { "tag": "v3", "deleted_classes": ["TrainHeroicMCP", "CoachMCP", "AthleteMCP"] },
+    { "tag": "v4", "new_sqlite_classes": ["TrainHeroicUpstream"] }
   ],
   "kv_namespaces": [
     // Create with: wrangler kv namespace create OAUTH_KV  -> paste the id here.

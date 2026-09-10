@@ -32,7 +32,10 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   `test/mcp.test.ts`. Coach tools register through `registerCoachTools` from `core`. The
   factory runs once per HTTP request, so a module-level `sessionCache` keyed by `thUserId`
   holds the TrainHeroic session token; without it every tool call would replay the user's
-  password against `/auth`. Pass `onerror` to `createMcpHandler` for anything that must reach
+  password against `/auth`. Every client's transport uses one `TrainHeroicUpstream` Durable
+  Object named by the verified `thUserId`; its four-slot queue is the account-wide concurrency
+  boundary across Worker isolates. This object carries no MCP protocol state and stores no request
+  or credential data. Pass `onerror` to `createMcpHandler` for anything that must reach
   Sentry — the SDK catches errors and answers 500 without rethrowing, so `withSentry` in
   `index.ts` never sees them. Do not pass `allowedHostnames`: it replaces the SDK's
   localhost/`workers.dev` defaults rather than adding to them, which 403s local dev. No MCP
@@ -66,6 +69,11 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   sessions, traces, logs, and errors correlate on `mcp.session` = `user:<thUserId>` (opaque numeric
   id, stamped in the MCP factory and tool-metrics). D1 queries are traced separately via
   `Sentry.instrumentD1WithSentry`, applied once inside `makeDb` (`store/schema.ts`).
+- `src/upstream-coordinator.ts`: the account-scoped outbound HTTP coordinator. The
+  `TRAINHEROIC_UPSTREAM` binding maps `thUserId` to one SQLite-backed Durable Object and routes all
+  hosted SDK traffic through its four-slot in-memory queue. It accepts only the two TrainHeroic
+  HTTPS origins and never writes headers, bodies, credentials, tokens, responses, or queue state to
+  storage. See ADR 0003.
 - `migrations/`: the D1 schema, applied in order.
 
 ## Invariants and gotchas
@@ -111,6 +119,9 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   two `ratelimits` bindings in `wrangler.jsonc` (`LOGIN_RATE_LIMITER`, `MCP_RATE_LIMITER`).
   It is best-effort and per-colo. Keep it out of `core` so the shared tools stay
   transport-agnostic. Re-run `pnpm cf-typegen` after editing the block.
+- Account-wide upstream concurrency lives in `TrainHeroicUpstream`, not the edge rate-limit
+  bindings or a Worker module global. Keep the object named only from verified grant `thUserId` and
+  keep its request state in memory. See `docs/adr/0003-account-scoped-upstream-coordination.md`.
 - Tools that are not storage-specific belong in `core`, so the local server gets them too.
   Only add a tool here when it genuinely needs D1 or the Worker environment.
 

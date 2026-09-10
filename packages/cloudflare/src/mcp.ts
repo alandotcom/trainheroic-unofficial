@@ -18,6 +18,7 @@ import { registerAthleteSyncTools } from "./tools/athlete-sync";
 import { registerFeedbackTool } from "./tools/feedback";
 import { registerSyncTools } from "./tools/sync";
 import { instrumentToolMetrics } from "./tool-metrics";
+import { createAccountTransport } from "./upstream-coordinator";
 import {
   instrumentMcpServer,
   mcpUserKey,
@@ -155,6 +156,7 @@ export function buildServer(variant: McpVariant, props: Props): McpServer {
     {
       onSession: (sessionId) => cacheSession(props.thUserId, sessionId),
       onHttpError: trainHeroicHttpErrorReporter(props.email),
+      transport: createAccountTransport(env.TRAINHEROIC_UPSTREAM, props.thUserId),
     },
   );
 

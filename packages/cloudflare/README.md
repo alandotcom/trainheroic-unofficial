@@ -1,6 +1,6 @@
 # @trainheroic-unofficial/cloudflare
 
-The hosted, multi-tenant [TrainHeroic](https://www.trainheroic.com) [MCP](https://modelcontextprotocol.io) server on [Cloudflare Workers](https://developers.cloudflare.com/workers/). It runs the same tools as the local servers and supports many users concurrently, with each user signing in through an OAuth flow so their TrainHeroic credentials are held server-side. Per-tenant data (the exercise mirror and the training warehouse) lives in [D1](https://developers.cloudflare.com/d1/), Cloudflare's SQLite database, scoped by account.
+The hosted, multi-tenant [TrainHeroic](https://www.trainheroic.com) [MCP](https://modelcontextprotocol.io) server on [Cloudflare Workers](https://developers.cloudflare.com/workers/). It runs the same tools as the local servers and supports many users concurrently, with each user signing in through an OAuth flow so their TrainHeroic credentials are held server-side. Per-tenant data (the exercise mirror and the training warehouse) lives in [D1](https://developers.cloudflare.com/d1/), Cloudflare's SQLite database, scoped by account. A Durable Object named by TrainHeroic user id coordinates outbound API calls across Worker isolates and caps each account at four active requests; it stores no credentials, tokens, request bodies, or responses.
 
 **To use the public hosted server**, see the [root README](../../README.md); it connects directly from your MCP client.
 
