@@ -61,14 +61,17 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   with tool, surface, ok/error, and `user:<thUserId>`). Lives here, not in `core`, so the shared
   tool layer stays Sentry-agnostic.
 - `src/sentry.ts`: the shared Sentry config (`sentryOptions(env)`) used by `withSentry` (the
-  handler in `index.ts`). Sends the error + user email, aggregate metrics, and traces
+  handler in `index.ts`) and by the separately instrumented upstream Durable Object. Sends the
+  error + user email, aggregate metrics, and traces
   (`SENTRY_TRACES_SAMPLE_RATE` var, default 1). `instrumentMcpServer` applies Sentry's official
   MCP protocol instrumentation with tool inputs and outputs disabled; `tool-metrics.ts` adds the
   app-specific tool span, aggregate metrics, and one privacy-safe structured log inside it. Logs
   use explicit `Sentry.logger` calls rather than blanket console capture. Without MCP protocol
   sessions, traces, logs, and errors correlate on `mcp.session` = `user:<thUserId>` (opaque numeric
   id, stamped in the MCP factory and tool-metrics). D1 queries are traced separately via
-  `Sentry.instrumentD1WithSentry`, applied once inside `makeDb` (`store/schema.ts`).
+  `Sentry.instrumentD1WithSentry`, applied once inside `makeDb` (`store/schema.ts`). RPC trace
+  context is propagated only through `TRAINHEROIC_UPSTREAM`; HTTP trace propagation is disabled so
+  TrainHeroic never receives Sentry trace headers while local fetch spans and breadcrumbs remain.
 - `src/upstream-coordinator.ts`: the account-scoped outbound HTTP coordinator. The
   `TRAINHEROIC_UPSTREAM` binding maps `thUserId` to one SQLite-backed Durable Object and routes all
   hosted SDK traffic through its four-slot in-memory queue. It accepts only the two TrainHeroic
@@ -101,7 +104,9 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   `Sentry.setUser` in the MCP factory (`mcp.ts`) and explicitly scoped onto every reported
   TrainHeroic HTTP failure, including pre-grant login failures. With no `SENTRY_DSN` the SDK is
   disabled and every Sentry call is a no-op (the feedback tool then logs the report to `console`
-  instead). Keep raw paths, query strings, request/response bodies, credentials, session tokens,
+  instead). HTTP trace propagation targets stay empty so outbound requests never carry
+  `sentry-trace` or `baggage`; Durable Object correlation uses the allowlisted RPC binding instead.
+  Keep raw paths, query strings, request/response bodies, credentials, session tokens,
   and arbitrary user-supplied values out of upstream HTTP errors; keep new PII out of tool
   args/results sent to Sentry; and do not set the user to anything but the email.
 - `pnpm deploy` must run `scripts/normalize-sourcemaps.mjs` before its Sentry upload. Wrangler

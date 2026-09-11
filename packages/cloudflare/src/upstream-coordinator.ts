@@ -1,5 +1,7 @@
+import * as Sentry from "@sentry/cloudflare";
 import { DurableObject } from "cloudflare:workers";
 import type { TrainHeroicTransport } from "@trainheroic-unofficial/js";
+import { sentryOptions } from "./sentry";
 
 const MAX_ACCOUNT_CONCURRENCY = 4;
 const TRAINHEROIC_ORIGINS = new Set([
@@ -58,7 +60,7 @@ class Semaphore {
  * The SQLite namespace is used only for object identity. Credentials, request bodies, session
  * tokens, queue state, and responses remain in memory and are never written to storage.
  */
-export class TrainHeroicUpstream extends DurableObject<Env> {
+class TrainHeroicUpstreamBase extends DurableObject<Env> {
   readonly #semaphore = new Semaphore(MAX_ACCOUNT_CONCURRENCY);
 
   async dispatch(request: UpstreamRequest): Promise<Response> {
@@ -90,6 +92,15 @@ export class TrainHeroicUpstream extends DurableObject<Env> {
     }
   }
 }
+
+/** Instrument the RPC receiver separately; the top-level Worker wrapper cannot cross isolates. */
+// The type/value pair preserves the class-shaped name Wrangler emits for this binding.
+// eslint-disable-next-line no-redeclare
+export const TrainHeroicUpstream = Sentry.instrumentDurableObjectWithSentry(
+  sentryOptions,
+  TrainHeroicUpstreamBase,
+);
+export type TrainHeroicUpstream = InstanceType<typeof TrainHeroicUpstream>;
 
 function stringBody(body: BodyInit | null | undefined): string | undefined {
   if (body === null || body === undefined) return undefined;

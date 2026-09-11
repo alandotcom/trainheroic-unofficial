@@ -43,6 +43,10 @@ would increase load and are unsafe for the SDK's write methods.
 7. Record only request field names, array lengths, and a derived date-span count in HTTP failure
    diagnostics. Raw URLs, identifiers, dates, request bodies, credentials, and session tokens remain
    excluded.
+8. Instrument the Durable Object independently with Sentry because it executes in a separate
+   isolate. Propagate trace context only across the `TRAINHEROIC_UPSTREAM` RPC binding. Disable
+   outbound HTTP trace propagation so TrainHeroic receives neither `sentry-trace` nor `baggage`
+   headers; local fetch spans and breadcrumbs remain enabled.
 
 ## Alternatives considered
 
@@ -73,6 +77,8 @@ risk duplicate effects, and retrying the failing reads would add load during an 
   while different accounts remain independent.
 - The coordinator adds one Worker RPC hop to each upstream request and can queue requests when an
   account is busy.
+- Worker and coordinator spans remain connected through binding-scoped Sentry RPC propagation.
+  TrainHeroic requests carry no Sentry trace headers.
 - Response bodies stream through RPC, avoiding the 32 MiB limit for serialized RPC values while
   preserving backpressure and the concurrency permit for the stream lifetime.
 - Queue state is intentionally ephemeral. Ordinary requests for one object identity reach one
