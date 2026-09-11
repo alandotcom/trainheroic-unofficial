@@ -37,7 +37,8 @@ would increase load and are unsafe for the SDK's write methods.
    transport backed by the account Durable Object.
 5. Split coach workout-range reads into sequential windows of at most 180 days. Split
    `training-summary-athlete` reads into sequential batches of at most five users and 90 inclusive
-   days, then merge the report rows.
+   days, then merge the report rows. Reject plans above 100 date windows or 100 total training
+   summary requests before allocating or calling the API.
 6. Do not retry HTTP 504 responses automatically. Callers receive the existing error result and may
    choose a smaller scope or a later retry.
 7. Record only request field names, array lengths, and a derived date-span count in HTTP failure

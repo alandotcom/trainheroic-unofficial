@@ -108,6 +108,26 @@ describe("fetchAthleteMainLiftPRs", () => {
     }
   });
 
+  it("rejects invalid or excessively wide look-back ranges before fetching", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new TrainHeroicClient("a@b.com", "pw");
+
+    await expect(
+      resolveAthleteMainLifts(client, ATHLETE, {
+        months: 0,
+        now: new Date("2026-06-22T00:00:00Z"),
+      }),
+    ).rejects.toThrow(/months must be a positive integer/u);
+    await expect(
+      resolveAthleteMainLifts(client, ATHLETE, {
+        months: 5_000,
+        now: new Date("2026-06-22T00:00:00Z"),
+      }),
+    ).rejects.toThrow(/limited to 100 windows/u);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("discovers the logged variant from the workout range and returns its heaviest PR", async () => {
     vi.stubGlobal(
       "fetch",

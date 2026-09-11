@@ -478,6 +478,7 @@ const ANALYTICS_BODY_KEY: Record<AnalyticsInput, string> = {
 
 const TRAINING_SUMMARY_USER_BATCH = 5;
 const TRAINING_SUMMARY_RANGE_DAYS = 90;
+const MAX_TRAINING_SUMMARY_REQUESTS = 100;
 
 export type AnalyticsQueryArgs = {
   metric: AnalyticsMetric;
@@ -538,7 +539,7 @@ function reportRows(report: unknown): unknown[] | null {
 /**
  * Query one analytics metric. Large training-summary reads are serialized as small user/date
  * batches because that endpoint otherwise spends roughly a minute building one oversized report
- * before its gateway returns 504.
+ * before its gateway returns 504. Rejects plans above 100 total requests.
  */
 export async function queryAnalytics(
   client: TrainHeroicClient,
@@ -556,16 +557,24 @@ export async function queryAnalytics(
 
   const windows = splitDateRange(args.dateStart, args.dateEnd, TRAINING_SUMMARY_RANGE_DAYS);
   if (windows === null) return requestAnalytics(client, args);
-  const requests = chunk([...new Set(args.userIds)], TRAINING_SUMMARY_USER_BATCH).flatMap(
-    (userIds) =>
-      windows.map((window) => ({
-        ...args,
-        userIds,
-        dateStart: window.start,
-        dateEnd: window.end,
-      })),
+  const uniqueUserIds = [...new Set(args.userIds)];
+  const requestCount =
+    Math.ceil(uniqueUserIds.length / TRAINING_SUMMARY_USER_BATCH) * windows.length;
+  if (requestCount > MAX_TRAINING_SUMMARY_REQUESTS) {
+    throw new RangeError(
+      `Training summary is limited to ${MAX_TRAINING_SUMMARY_REQUESTS} batched requests; narrow the date range or pass fewer athletes.`,
+    );
+  }
+  const userBatches = chunk(uniqueUserIds, TRAINING_SUMMARY_USER_BATCH);
+  const requests = userBatches.flatMap((userIds) =>
+    windows.map((window) => ({
+      ...args,
+      userIds,
+      dateStart: window.start,
+      dateEnd: window.end,
+    })),
   );
-  if (requests.length === 1) return requestAnalytics(client, args);
+  if (requests.length === 1) return requestAnalytics(client, requests[0] as AnalyticsQueryArgs);
 
   let merged: Record<string, unknown> | null = null;
   for (const request of requests) {

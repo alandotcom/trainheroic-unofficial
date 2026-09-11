@@ -107,19 +107,22 @@ export async function resolveAthleteMainLifts(
   opts: { months?: number; now?: Date } = {},
 ): Promise<MainLiftResolution> {
   const months = opts.months ?? DEFAULT_MONTHS;
+  if (!Number.isSafeInteger(months) || months < 1) {
+    throw new RangeError("months must be a positive integer.");
+  }
   const now = opts.now ?? new Date();
   const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+  const startDay = isoDay(start);
+  const endDay = isoDay(now);
+  const windows = splitDateRange(startDay, endDay, WORKOUT_RANGE_DAYS) ?? [
+    { start: startDay, end: endDay },
+  ];
 
   // family -> exerciseId -> { count, title }: how often the athlete logged each variant.
   const tally = new Map<MainLiftFamilyKey, Map<number, { count: number; title: string }>>();
 
   let workouts: Awaited<ReturnType<typeof fetchCoachAthleteWorkouts>> = [];
   try {
-    const startDay = isoDay(start);
-    const endDay = isoDay(now);
-    const windows = splitDateRange(startDay, endDay, WORKOUT_RANGE_DAYS) ?? [
-      { start: startDay, end: endDay },
-    ];
     for (const window of windows) {
       workouts.push(
         ...(await fetchCoachAthleteWorkouts(client, athleteId, window.start, window.end)),

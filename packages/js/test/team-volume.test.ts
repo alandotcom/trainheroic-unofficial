@@ -85,6 +85,52 @@ describe("teamVolume", () => {
     expect(peak).toBe(1);
   });
 
+  it("uses deduplicated user ids when one batch covers the request", async () => {
+    let body: Record<string, unknown> | undefined;
+    const transport = vi.fn(async (_url: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return json({ rows: [] });
+    });
+
+    await queryAnalytics(new TrainHeroicClient("a@b.com", "pw", "live-session", { transport }), {
+      metric: "training-summary-athlete",
+      userIds: [11, 11, 22],
+      dateStart: "2026-06-01",
+      dateEnd: "2026-06-30",
+    });
+
+    expect(body?.user_ids).toEqual(["11", "22"]);
+    expect(transport).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a training summary that would create too many requests", async () => {
+    const transport = vi.fn(async () => json({ rows: [] }));
+
+    await expect(
+      queryAnalytics(new TrainHeroicClient("a@b.com", "pw", "live-session", { transport }), {
+        metric: "training-summary-athlete",
+        userIds: Array.from({ length: 501 }, (_, i) => i + 1),
+        dateStart: "2026-06-01",
+        dateEnd: "2026-06-30",
+      }),
+    ).rejects.toThrow(/limited to 100 batched requests/u);
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it("rejects a training summary date range spanning more than 100 windows", async () => {
+    const transport = vi.fn(async () => json({ rows: [] }));
+
+    await expect(
+      queryAnalytics(new TrainHeroicClient("a@b.com", "pw", "live-session", { transport }), {
+        metric: "training-summary-athlete",
+        userIds: [1],
+        dateStart: "1900-01-01",
+        dateEnd: "2026-06-30",
+      }),
+    ).rejects.toThrow(/limited to 100 windows/u);
+    expect(transport).not.toHaveBeenCalled();
+  });
+
   it("groups sessions by athlete, sums volume/reps, and rolls up totals", async () => {
     let body: Record<string, unknown> | undefined;
     vi.stubGlobal(
