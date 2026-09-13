@@ -133,6 +133,10 @@ export class TrainHeroicClient {
     path: string,
     options: RequestOptions = {},
   ): Promise<ClientResult<T>> {
+    // Let every simultaneous cold caller subscribe to the same login promise before any request
+    // waits behind the API concurrency limit. Otherwise each queued wave can start another login
+    // after a failed attempt clears #loginInFlight.
+    await this.#ensureSession();
     return this.#requestLimit.run(() => this.#request<T>(method, path, options));
   }
 

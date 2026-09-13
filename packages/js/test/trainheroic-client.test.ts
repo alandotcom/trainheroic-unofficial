@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TrainHeroicClient } from "../src/client";
+import { TrainHeroicAuthError, TrainHeroicClient } from "../src/client";
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -314,6 +314,38 @@ describe("TrainHeroicClient", () => {
     // A later request reuses the cached session — no second login.
     await client.request("GET", "/d");
     expect(logins).toBe(1);
+  });
+
+  it("shares one failed login across cold requests queued behind the concurrency limit", async () => {
+    let logins = 0;
+    let apiRequests = 0;
+    const onHttpError = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) {
+          logins += 1;
+          return json({ error: "bad credentials" }, 401);
+        }
+        apiRequests += 1;
+        return json({ ok: true });
+      }),
+    );
+    const client = new TrainHeroicClient("a@b.com", "pw", null, { onHttpError });
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 9 }, (_, i) => client.request("GET", `/request/${i}`)),
+    );
+
+    expect(results).toHaveLength(9);
+    expect(
+      results.every(
+        (result) => result.status === "rejected" && result.reason instanceof TrainHeroicAuthError,
+      ),
+    ).toBe(true);
+    expect(logins).toBe(1);
+    expect(apiRequests).toBe(0);
+    expect(onHttpError).toHaveBeenCalledOnce();
   });
 
   it("targets the apis host when base is 'apis'", async () => {
