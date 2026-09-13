@@ -23,9 +23,11 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   Registration (`/register`) is kept for the deprecation window. `resourceMetadata.resource` is
   left unset so the library derives it per request, which is the only value correct for all
   three mount paths and every origin.
-- `src/mcp.ts`: MCP SDK v2 server factories. One module-level `createMcpHandler` per
-  `McpVariant` (`full` | `coach` | `athlete`); bindings come from
-  `import { env } from "cloudflare:workers"`. Credentials come from the OAuth grant via
+- `src/mcp.ts`: MCP SDK v2 server factories. One Worker-shaped adapter exists per
+  `McpVariant` (`full` | `coach` | `athlete`); each adapter creates a stateless MCP handler per
+  request so its server factory can use the Sentry-instrumented request env for the upstream
+  Durable Object binding. Other bindings come from `import { env } from "cloudflare:workers"`.
+  Credentials come from the OAuth grant via
   `getMcpAuthContext`, narrowed by `parseProps` (which normalizes `role` rather than rejecting
   it, so grants issued before `AccountRole` existed keep working). `selectSurfaces` is the
   authorization boundary — an athlete account never gets coach tools — and is pinned by

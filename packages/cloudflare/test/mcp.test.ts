@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
 import {
@@ -100,6 +100,16 @@ describe("buildServer tool surfaces", () => {
     for (const variant of ["full", "coach", "athlete"] as const) {
       expect(registeredAmong(variant, "coach", ["report_feedback"])).toEqual(["report_feedback"]);
     }
+  });
+
+  it("uses the request-scoped upstream namespace when one is supplied", () => {
+    const getByName = vi.fn(() => ({ dispatch: vi.fn() }));
+    const upstreamNamespace = { getByName } as unknown as Env["TRAINHEROIC_UPSTREAM"];
+
+    buildServer("athlete", props("athlete", 204394), upstreamNamespace);
+
+    expect(getByName).toHaveBeenCalledOnce();
+    expect(getByName).toHaveBeenCalledWith("204394");
   });
 
   it("registers complete output metadata for every hosted coach tool", async () => {
