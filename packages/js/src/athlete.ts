@@ -19,6 +19,7 @@ import {
   str,
 } from "./exercise-util";
 import type { TrainHeroicClient } from "./client";
+import { splitDateRange } from "./date-window";
 import type {
   AthleteProfileSummary,
   AthletePrefs,
@@ -273,31 +274,14 @@ export async function programWorkoutOnDate(
   return target;
 }
 
-/** Add `days` to a `YYYY-MM-DD` date (UTC), returning `YYYY-MM-DD`. */
-function shiftDate(iso: string, days: number): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-/** Split an inclusive `[start, end]` range into consecutive non-overlapping windows of `windowDays`. */
+/** Split an inclusive range into at most 100 consecutive, non-overlapping windows. */
 export function dateWindows(
   startDate: string,
   endDate: string,
   windowDays: number,
 ): Array<{ start: string; end: string }> {
   const size = Math.max(1, Math.floor(windowDays));
-  const windows: Array<{ start: string; end: string }> = [];
-  // `cursor` advances by `size` days each step and the loop stops at `endDate`, so a start-after-end
-  // range yields no windows and the loop always terminates.
-  let cursor = startDate;
-  while (cursor <= endDate) {
-    const winEnd = shiftDate(cursor, size - 1);
-    const clamped = winEnd > endDate ? endDate : winEnd;
-    windows.push({ start: cursor, end: clamped });
-    cursor = shiftDate(clamped, 1);
-  }
-  return windows;
+  return splitDateRange(startDate, endDate, size) ?? [];
 }
 
 /**

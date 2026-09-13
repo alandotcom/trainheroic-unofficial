@@ -1,6 +1,6 @@
 # @trainheroic-unofficial/cloudflare
 
-The hosted, multi-tenant [TrainHeroic](https://www.trainheroic.com) [MCP](https://modelcontextprotocol.io) server on [Cloudflare Workers](https://developers.cloudflare.com/workers/). It runs the same tools as the local servers and supports many users concurrently, with each user signing in through an OAuth flow so their TrainHeroic credentials are held server-side. Per-tenant data (the exercise mirror and the training warehouse) lives in [D1](https://developers.cloudflare.com/d1/), Cloudflare's SQLite database, scoped by account.
+The hosted, multi-tenant [TrainHeroic](https://www.trainheroic.com) [MCP](https://modelcontextprotocol.io) server on [Cloudflare Workers](https://developers.cloudflare.com/workers/). It runs the same tools as the local servers and supports many users concurrently, with each user signing in through an OAuth flow so their TrainHeroic credentials are held server-side. Per-tenant data (the exercise mirror and the training warehouse) lives in [D1](https://developers.cloudflare.com/d1/), Cloudflare's SQLite database, scoped by account. A Durable Object named by TrainHeroic user id coordinates outbound API calls across Worker isolates and caps each account at four active requests; it stores no credentials, tokens, request bodies, or responses.
 
 **To use the public hosted server**, see the [root README](../../README.md); it connects directly from your MCP client.
 
@@ -15,7 +15,7 @@ This runs the worker locally with no Cloudflare account, using Miniflare (a loca
 1. Create a `.dev.vars` file (wrangler's local-secrets file). The full set of variables:
    - `COOKIE_ENCRYPTION_KEY` (**required**): signs the OAuth/CSRF round-trip values. Generate one with `openssl rand -hex 32` and paste the output as the value.
    - `ALLOWED_EMAILS` (optional): comma-separated allowlist of TrainHeroic emails permitted to register; empty or unset allows any.
-   - `SENTRY_DSN` (optional): enables error reporting, aggregate usage metrics (auth + per tool call), and per-session tracing; unset disables all of it. The traces sample rate is the `SENTRY_TRACES_SAMPLE_RATE` var (default `1`, in `wrangler.jsonc`), adjustable from the Cloudflare dashboard at runtime.
+   - `SENTRY_DSN` (optional): enables error reporting, aggregate usage metrics (auth + per tool call), and per-session tracing; unset disables all of it. The traces sample rate is the `SENTRY_TRACES_SAMPLE_RATE` var (default `1`, in `wrangler.jsonc`), adjustable from the Cloudflare dashboard at runtime. Trace context crosses the upstream Durable Object RPC boundary, but outbound HTTP trace headers are disabled and are never sent to TrainHeroic.
 
    ```
    COOKIE_ENCRYPTION_KEY=2f1c...your-generated-hex

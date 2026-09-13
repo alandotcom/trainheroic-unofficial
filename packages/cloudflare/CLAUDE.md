@@ -23,16 +23,21 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   Registration (`/register`) is kept for the deprecation window. `resourceMetadata.resource` is
   left unset so the library derives it per request, which is the only value correct for all
   three mount paths and every origin.
-- `src/mcp.ts`: MCP SDK v2 server factories. One module-level `createMcpHandler` per
-  `McpVariant` (`full` | `coach` | `athlete`); bindings come from
-  `import { env } from "cloudflare:workers"`. Credentials come from the OAuth grant via
+- `src/mcp.ts`: MCP SDK v2 server factories. One Worker-shaped adapter exists per
+  `McpVariant` (`full` | `coach` | `athlete`); each adapter creates a stateless MCP handler per
+  request so its server factory can use the Sentry-instrumented request env for the upstream
+  Durable Object binding. Other bindings come from `import { env } from "cloudflare:workers"`.
+  Credentials come from the OAuth grant via
   `getMcpAuthContext`, narrowed by `parseProps` (which normalizes `role` rather than rejecting
   it, so grants issued before `AccountRole` existed keep working). `selectSurfaces` is the
   authorization boundary — an athlete account never gets coach tools — and is pinned by
   `test/mcp.test.ts`. Coach tools register through `registerCoachTools` from `core`. The
   factory runs once per HTTP request, so a module-level `sessionCache` keyed by `thUserId`
   holds the TrainHeroic session token; without it every tool call would replay the user's
-  password against `/auth`. Pass `onerror` to `createMcpHandler` for anything that must reach
+  password against `/auth`. Every client's transport uses one `TrainHeroicUpstream` Durable
+  Object named by the verified `thUserId`; its four-slot queue is the account-wide concurrency
+  boundary across Worker isolates. This object carries no MCP protocol state and stores no request
+  or credential data. Pass `onerror` to `createMcpHandler` for anything that must reach
   Sentry — the SDK catches errors and answers 500 without rethrowing, so `withSentry` in
   `index.ts` never sees them. Do not pass `allowedHostnames`: it replaces the SDK's
   localhost/`workers.dev` defaults rather than adding to them, which 403s local dev. No MCP
@@ -58,14 +63,22 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   with tool, surface, ok/error, and `user:<thUserId>`). Lives here, not in `core`, so the shared
   tool layer stays Sentry-agnostic.
 - `src/sentry.ts`: the shared Sentry config (`sentryOptions(env)`) used by `withSentry` (the
-  handler in `index.ts`). Sends the error + user email, aggregate metrics, and traces
+  handler in `index.ts`) and by the separately instrumented upstream Durable Object. Sends the
+  error + user email, aggregate metrics, and traces
   (`SENTRY_TRACES_SAMPLE_RATE` var, default 1). `instrumentMcpServer` applies Sentry's official
   MCP protocol instrumentation with tool inputs and outputs disabled; `tool-metrics.ts` adds the
   app-specific tool span, aggregate metrics, and one privacy-safe structured log inside it. Logs
   use explicit `Sentry.logger` calls rather than blanket console capture. Without MCP protocol
   sessions, traces, logs, and errors correlate on `mcp.session` = `user:<thUserId>` (opaque numeric
   id, stamped in the MCP factory and tool-metrics). D1 queries are traced separately via
-  `Sentry.instrumentD1WithSentry`, applied once inside `makeDb` (`store/schema.ts`).
+  `Sentry.instrumentD1WithSentry`, applied once inside `makeDb` (`store/schema.ts`). RPC trace
+  context is propagated only through `TRAINHEROIC_UPSTREAM`; HTTP trace propagation is disabled so
+  TrainHeroic never receives Sentry trace headers while local fetch spans and breadcrumbs remain.
+- `src/upstream-coordinator.ts`: the account-scoped outbound HTTP coordinator. The
+  `TRAINHEROIC_UPSTREAM` binding maps `thUserId` to one SQLite-backed Durable Object and routes all
+  hosted SDK traffic through its four-slot in-memory queue. It accepts only the two TrainHeroic
+  HTTPS origins and never writes headers, bodies, credentials, tokens, responses, or queue state to
+  storage. See ADR 0003.
 - `migrations/`: the D1 schema, applied in order.
 
 ## Invariants and gotchas
@@ -93,7 +106,9 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   `Sentry.setUser` in the MCP factory (`mcp.ts`) and explicitly scoped onto every reported
   TrainHeroic HTTP failure, including pre-grant login failures. With no `SENTRY_DSN` the SDK is
   disabled and every Sentry call is a no-op (the feedback tool then logs the report to `console`
-  instead). Keep raw paths, query strings, request/response bodies, credentials, session tokens,
+  instead). HTTP trace propagation targets stay empty so outbound requests never carry
+  `sentry-trace` or `baggage`; Durable Object correlation uses the allowlisted RPC binding instead.
+  Keep raw paths, query strings, request/response bodies, credentials, session tokens,
   and arbitrary user-supplied values out of upstream HTTP errors; keep new PII out of tool
   args/results sent to Sentry; and do not set the user to anything but the email.
 - `pnpm deploy` must run `scripts/normalize-sourcemaps.mjs` before its Sentry upload. Wrangler
@@ -111,6 +126,9 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   two `ratelimits` bindings in `wrangler.jsonc` (`LOGIN_RATE_LIMITER`, `MCP_RATE_LIMITER`).
   It is best-effort and per-colo. Keep it out of `core` so the shared tools stay
   transport-agnostic. Re-run `pnpm cf-typegen` after editing the block.
+- Account-wide upstream concurrency lives in `TrainHeroicUpstream`, not the edge rate-limit
+  bindings or a Worker module global. Keep the object named only from verified grant `thUserId` and
+  keep its request state in memory. See `docs/adr/0003-account-scoped-upstream-coordination.md`.
 - Tools that are not storage-specific belong in `core`, so the local server gets them too.
   Only add a tool here when it genuinely needs D1 or the Worker environment.
 

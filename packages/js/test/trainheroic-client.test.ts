@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TrainHeroicClient } from "../src/client";
+import { TrainHeroicAuthError, TrainHeroicClient } from "../src/client";
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -13,6 +13,49 @@ afterEach(() => {
 });
 
 describe("TrainHeroicClient", () => {
+  it("routes login and API requests through the configured transport", async () => {
+    const transport = vi.fn(async (url: string) =>
+      url.endsWith("/auth") ? json({ id: 1, session_id: "sess" }) : json({ source: "transport" }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("global fetch must not be used");
+      }),
+    );
+
+    const client = new TrainHeroicClient("a@b.com", "pw", null, { transport });
+    const result = await client.request<{ source: string }>("GET", "/user/simple");
+
+    expect(result.data.source).toBe("transport");
+    expect(transport).toHaveBeenCalledTimes(2);
+  });
+
+  it("allows at most four in-flight API requests per client", async () => {
+    let active = 0;
+    let peak = 0;
+    let open: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const transport = vi.fn(async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await gate;
+      active -= 1;
+      return json({ ok: true });
+    });
+    const client = new TrainHeroicClient("a@b.com", "pw", "live-session", { transport });
+
+    const requests = Array.from({ length: 9 }, (_, i) => client.request("GET", `/request/${i}`));
+    await vi.waitFor(() => expect(transport).toHaveBeenCalledTimes(4));
+    expect(peak).toBe(4);
+
+    open?.();
+    await Promise.all(requests);
+    expect(peak).toBe(4);
+  });
+
   it.each([400, 500])(
     "reports a final HTTP %i response without changing the result",
     async (status) => {
@@ -271,6 +314,38 @@ describe("TrainHeroicClient", () => {
     // A later request reuses the cached session — no second login.
     await client.request("GET", "/d");
     expect(logins).toBe(1);
+  });
+
+  it("shares one failed login across cold requests queued behind the concurrency limit", async () => {
+    let logins = 0;
+    let apiRequests = 0;
+    const onHttpError = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) {
+          logins += 1;
+          return json({ error: "bad credentials" }, 401);
+        }
+        apiRequests += 1;
+        return json({ ok: true });
+      }),
+    );
+    const client = new TrainHeroicClient("a@b.com", "pw", null, { onHttpError });
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 9 }, (_, i) => client.request("GET", `/request/${i}`)),
+    );
+
+    expect(results).toHaveLength(9);
+    expect(
+      results.every(
+        (result) => result.status === "rejected" && result.reason instanceof TrainHeroicAuthError,
+      ),
+    ).toBe(true);
+    expect(logins).toBe(1);
+    expect(apiRequests).toBe(0);
+    expect(onHttpError).toHaveBeenCalledOnce();
   });
 
   it("targets the apis host when base is 'apis'", async () => {

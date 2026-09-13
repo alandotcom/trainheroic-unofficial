@@ -30,6 +30,9 @@ type OAuthInternalError = {
  *     (tool-metrics.ts). MCP inputs and outputs are explicitly disabled below. Without protocol
  *     sessions, traces correlate on `mcp.session` = `user:<thUserId>` (opaque numeric id, not
  *     email).
+ *   - Trace context crosses only the `TRAINHEROIC_UPSTREAM` Durable Object RPC binding. HTTP trace
+ *     propagation is disabled, so Sentry still records local fetch spans and breadcrumbs without
+ *     sending `sentry-trace` or `baggage` headers to TrainHeroic.
  *   - Logs are enabled, but console capture is not. `tool-metrics.ts` emits one structured,
  *     trace-linked log per tool invocation from an explicit allowlist of non-PII attributes;
  *     arguments, results, raw errors, and console fallback content never enter Sentry Logs.
@@ -57,6 +60,9 @@ export function sentryOptions(env: Env): CloudflareOptions {
     sendDefaultPii: false,
     enableLogs: true,
     tracesSampleRate: tracesSampleRate(env),
+    enableRpcTracePropagation: true,
+    rpcTracePropagationBindings: ["TRAINHEROIC_UPSTREAM"],
+    tracePropagationTargets: [],
     integrations: [Sentry.httpServerIntegration({ maxRequestBodySize: "none" })],
     beforeSend(event) {
       if (event.user) {

@@ -18,6 +18,7 @@ import { registerAthleteSyncTools } from "./tools/athlete-sync";
 import { registerFeedbackTool } from "./tools/feedback";
 import { registerSyncTools } from "./tools/sync";
 import { instrumentToolMetrics } from "./tool-metrics";
+import { createAccountTransport } from "./upstream-coordinator";
 import {
   instrumentMcpServer,
   mcpUserKey,
@@ -129,10 +130,15 @@ export function selectSurfaces(
 
 /**
  * Build a fresh MCP server for one request (SDK v2 factory), with the grant's props injected so
- * the surface decision is reachable from a test without an OAuth round trip. Bindings come from
- * `import { env } from "cloudflare:workers"`.
+ * the surface decision is reachable from a test without an OAuth round trip. The upstream
+ * namespace can be supplied from the request env so Sentry's binding proxy propagates the active
+ * trace across the Durable Object RPC. Direct callers default to the module env.
  */
-export function buildServer(variant: McpVariant, props: Props): McpServer {
+export function buildServer(
+  variant: McpVariant,
+  props: Props,
+  upstreamNamespace = env.TRAINHEROIC_UPSTREAM,
+): McpServer {
   const correlationId = mcpUserKey(props.thUserId);
 
   Sentry.setUser({ email: props.email });
@@ -155,6 +161,7 @@ export function buildServer(variant: McpVariant, props: Props): McpServer {
     {
       onSession: (sessionId) => cacheSession(props.thUserId, sessionId),
       onHttpError: trainHeroicHttpErrorReporter(props.email),
+      transport: createAccountTransport(upstreamNamespace, props.thUserId),
     },
   );
 
@@ -181,9 +188,10 @@ export function buildServer(variant: McpVariant, props: Props): McpServer {
 }
 
 /**
- * Module-level handlers (one per variant). Bindings come from `cloudflare:workers` env.
- * Thin `{ fetch }` adapter so OAuthProvider's apiHandlers get a Worker-shaped handler
- * (StatelessMcpHandler's own `.fetch` takes request options, not Worker env).
+ * Thin `{ fetch }` adapters (one per variant) so OAuthProvider's apiHandlers get Worker-shaped
+ * handlers. The inner stateless MCP handler is created per request so its server factory closes
+ * over the request env that `withSentry` instruments. Reading `TRAINHEROIC_UPSTREAM` through that
+ * env is what lets Sentry attach trace context to the Durable Object RPC.
  *
  * `allowedHostnames` is deliberately not passed. The Agents wrapper resolves it as
  * `allowedHostnames ?? (localhost defaults | the workers.dev host | no check at all)`, so
@@ -194,18 +202,22 @@ export function buildServer(variant: McpVariant, props: Props): McpServer {
  * prescribe.
  */
 function makeHandler(route: string, variant: McpVariant) {
-  const handler = createMcpHandler(() => buildServer(variant, readProps()), {
-    route,
-    // createMcpHandler catches every error in the request path and answers 500 without
-    // rethrowing, so nothing propagates out to `withSentry` in index.ts. This callback is the
-    // only way an MCP-path failure becomes visible; the DO instrumentation used to cover it.
-    onerror: (error: unknown) => {
-      Sentry.captureException(error, { tags: { "mcp.route": route } });
-      console.error("mcp handler error", route, error);
-    },
-  });
   return {
     fetch(request: Request, workerEnv: Env, ctx: ExecutionContext): Promise<Response> {
+      const handler = createMcpHandler(
+        () => buildServer(variant, readProps(), workerEnv.TRAINHEROIC_UPSTREAM),
+        {
+          route,
+          // createMcpHandler catches every error in the request path and answers 500 without
+          // rethrowing, so nothing propagates out to `withSentry` in index.ts. This callback is
+          // the only way an MCP-path failure becomes visible; the DO instrumentation used to
+          // cover it.
+          onerror: (error: unknown) => {
+            Sentry.captureException(error, { tags: { "mcp.route": route } });
+            console.error("mcp handler error", route, error);
+          },
+        },
+      );
       return handler(request, workerEnv, ctx);
     },
   };

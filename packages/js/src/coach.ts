@@ -19,7 +19,8 @@ import {
   type TeamVolumeReport,
 } from "@trainheroic-unofficial/dto";
 import type { TrainHeroicClient } from "./client";
-import { coerceInt, isRecord } from "./exercise-util";
+import { splitDateRange } from "./date-window";
+import { chunk, coerceInt, isRecord } from "./exercise-util";
 import { checkResponse } from "./response-check";
 import { definedProps } from "./util";
 import { calendarWriteError } from "./workout-session";
@@ -475,6 +476,10 @@ const ANALYTICS_BODY_KEY: Record<AnalyticsInput, string> = {
   useMetric: "use_metric",
 };
 
+const TRAINING_SUMMARY_USER_BATCH = 5;
+const TRAINING_SUMMARY_RANGE_DAYS = 90;
+const MAX_TRAINING_SUMMARY_REQUESTS = 100;
+
 export type AnalyticsQueryArgs = {
   metric: AnalyticsMetric;
   teamId?: number;
@@ -491,7 +496,7 @@ export type AnalyticsQueryArgs = {
  * athlete metrics need one or more `userIds` (passed together — the report returns a row per
  * athlete). Throws a readable Error when a required input is missing or the call fails.
  */
-export async function queryAnalytics(
+async function requestAnalytics(
   client: TrainHeroicClient,
   args: AnalyticsQueryArgs,
 ): Promise<unknown> {
@@ -523,6 +528,68 @@ export async function queryAnalytics(
   const res = await client.request("POST", spec.path, { body });
   if (!res.ok) throw new Error(`Analytics ${args.metric} failed (HTTP ${res.status}).`);
   return res.data;
+}
+
+function reportRows(report: unknown): unknown[] | null {
+  if (report === null || typeof report !== "object") return null;
+  const rows = (report as { rows?: unknown }).rows;
+  return Array.isArray(rows) ? rows : null;
+}
+
+/**
+ * Query one analytics metric. Large training-summary reads are serialized as small user/date
+ * batches because that endpoint otherwise spends roughly a minute building one oversized report
+ * before its gateway returns 504. Rejects plans above 100 total requests.
+ */
+export async function queryAnalytics(
+  client: TrainHeroicClient,
+  args: AnalyticsQueryArgs,
+): Promise<unknown> {
+  if (
+    args.metric !== "training-summary-athlete" ||
+    args.userIds === undefined ||
+    args.userIds.length === 0 ||
+    args.dateStart === undefined ||
+    args.dateEnd === undefined
+  ) {
+    return requestAnalytics(client, args);
+  }
+
+  const windows = splitDateRange(args.dateStart, args.dateEnd, TRAINING_SUMMARY_RANGE_DAYS);
+  if (windows === null) return requestAnalytics(client, args);
+  const uniqueUserIds = [...new Set(args.userIds)];
+  const requestCount =
+    Math.ceil(uniqueUserIds.length / TRAINING_SUMMARY_USER_BATCH) * windows.length;
+  if (requestCount > MAX_TRAINING_SUMMARY_REQUESTS) {
+    throw new RangeError(
+      `Training summary is limited to ${MAX_TRAINING_SUMMARY_REQUESTS} batched requests; narrow the date range or pass fewer athletes.`,
+    );
+  }
+  const userBatches = chunk(uniqueUserIds, TRAINING_SUMMARY_USER_BATCH);
+  const requests = userBatches.flatMap((userIds) =>
+    windows.map((window) => ({
+      ...args,
+      userIds,
+      dateStart: window.start,
+      dateEnd: window.end,
+    })),
+  );
+  if (requests.length === 1) return requestAnalytics(client, requests[0] as AnalyticsQueryArgs);
+
+  let merged: Record<string, unknown> | null = null;
+  for (const request of requests) {
+    const report = await requestAnalytics(client, request);
+    const rows = reportRows(report);
+    if (rows === null) {
+      throw new Error("Training summary returned an unexpected batched report shape.");
+    }
+    if (merged === null) {
+      merged = { ...(report as Record<string, unknown>), rows: [...rows] };
+    } else {
+      (merged.rows as unknown[]).push(...rows);
+    }
+  }
+  return merged;
 }
 
 /**
@@ -568,9 +635,9 @@ function toNum(v: unknown): number {
 
 /**
  * Team-wide training volume over an inclusive date window. The `training-summary-athlete`
- * analytics report already returns the team in one call — one row per logged session across all
- * `athleteIds` — so this fans nothing out: it queries once, groups rows by athlete (summing
- * volume/reps and counting sessions), and rolls the athletes up into a team total. Athletes who
+ * analytics report returns one row per logged session across all `athleteIds`; `queryAnalytics`
+ * splits oversized requests and merges those rows before this function groups them by athlete,
+ * sums volume/reps, counts sessions, and rolls the athletes up into a team total. Athletes who
  * logged nothing in range simply have no rows and are omitted. The windowed counterpart to the
  * all-time `fetchRosterActivity` snapshot, which has no date range.
  */

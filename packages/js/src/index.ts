@@ -1,6 +1,7 @@
 export * from "@trainheroic-unofficial/dto";
 export * from "./auth";
 export * from "./client";
+export type { TrainHeroicTransport } from "./transport";
 export { TrainHeroicHttpError } from "./http-error";
 export type {
   RequestBodySummary,

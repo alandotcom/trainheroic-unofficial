@@ -112,6 +112,25 @@ describe("notifyHttpError", () => {
     expect(JSON.stringify(error.requestBody)).not.toContain("15551234567");
   });
 
+  it("reports collection sizes and date span without exposing values", () => {
+    const error = new TrainHeroicHttpError("POST", "https://api.trainheroic.com/test", 504, {
+      requestBody: {
+        user_ids: [204394, 204395, 204396],
+        date_start: "2026-01-01",
+        date_end: "2026-04-30",
+      },
+    });
+
+    expect(error.requestBody).toEqual({
+      type: "object",
+      keys: ["date_end", "date_start", "user_ids"],
+      arrayLengths: { user_ids: 3 },
+      dateSpanDays: 120,
+    });
+    expect(JSON.stringify(error.requestBody)).not.toContain("204394");
+    expect(JSON.stringify(error.requestBody)).not.toContain("2026-01-01");
+  });
+
   it("redacts common credential field-name variants", () => {
     const error = new TrainHeroicHttpError("GET", "https://api.trainheroic.com/test", 500, {
       responseBody: {

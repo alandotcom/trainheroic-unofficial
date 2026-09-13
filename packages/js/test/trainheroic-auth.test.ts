@@ -70,12 +70,14 @@ describe("loginTrainHeroic", () => {
   it("returns without reading an error response body", async () => {
     const onHttpError = vi.fn();
     const text = vi.fn(() => new Promise<string>(() => {}));
+    const cancel = vi.fn(async () => {});
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
         ok: false,
         status: 500,
         text,
+        body: { cancel },
       })),
     );
 
@@ -88,6 +90,7 @@ describe("loginTrainHeroic", () => {
 
     expect(result).toBeNull();
     expect(text).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
     expect(onHttpError).toHaveBeenCalledWith(
       expect.objectContaining({ responseBody: undefined, status: 500 }),
     );

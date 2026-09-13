@@ -1,3 +1,5 @@
+import { dateSpanDays } from "./date-window";
+
 const MAX_REQUEST_KEYS = 50;
 const MAX_RESPONSE_DEPTH = 4;
 const MAX_RESPONSE_KEYS = 20;
@@ -27,7 +29,13 @@ type DiagnosticBudget = { nodes: number };
 
 export type RequestBodySummary =
   | { type: "array"; length: number }
-  | { type: "object"; keys: string[]; values?: Record<string, JsonScalar> }
+  | {
+      type: "object";
+      keys: string[];
+      values?: Record<string, JsonScalar>;
+      arrayLengths?: Record<string, number>;
+      dateSpanDays?: number;
+    }
   | { type: "boolean" | "number" | "other" | "string" };
 
 export type TrainHeroicHttpErrorDiagnostics = {
@@ -73,13 +81,26 @@ function requestBodySummary(body: unknown): RequestBodySummary {
     );
     const keys = entries.map(([key]) => safeFieldName(key));
     const values: Record<string, JsonScalar> = {};
+    const arrayLengths: Record<string, number> = {};
     for (const [key, value] of entries) {
       const safeValue = safeRequestValue(key, value);
       if (safeValue !== undefined) values[safeFieldName(key)] = safeValue;
+      if (Array.isArray(value)) arrayLengths[safeFieldName(key)] = value.length;
     }
-    return Object.keys(values).length > 0
-      ? { type: "object", keys, values }
-      : { type: "object", keys };
+    const byKey = new Map(entries);
+    const dateStart = byKey.get("date_start");
+    const dateEnd = byKey.get("date_end");
+    const span =
+      typeof dateStart === "string" && typeof dateEnd === "string"
+        ? dateSpanDays(dateStart, dateEnd)
+        : null;
+    return {
+      type: "object",
+      keys,
+      ...(Object.keys(values).length > 0 ? { values } : {}),
+      ...(Object.keys(arrayLengths).length > 0 ? { arrayLengths } : {}),
+      ...(span === null ? {} : { dateSpanDays: span }),
+    };
   }
   const primitive = typeof body;
   return primitive === "boolean" || primitive === "number" || primitive === "string"

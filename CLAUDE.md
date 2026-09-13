@@ -122,7 +122,9 @@ The dependency graph runs one direction; nothing lower depends on anything highe
   (no index, no warehouse — local has no D1), and connects over stdio. Entry: `src/server.ts`.
 - **`cloudflare`** (`@trainheroic-unofficial/cloudflare`): the hosted Worker. OAuth 2.1 via
   `@cloudflare/workers-oauth-provider` and Agents SDK `createMcpHandler` (stateless; no MCP
-  Durable Objects). Tool registration is **role-aware** (`src/mcp.ts`): every account gets the
+  Durable Objects). A separate Durable Object named by verified TrainHeroic user id coordinates
+  outbound API concurrency across Worker isolates; it stores no MCP state or credentials. Tool
+  registration is **role-aware** (`src/mcp.ts`): every account gets the
   athlete surface (live tools + the D1 athlete warehouse); a coach account also gets the
   coaching surface (the core coach tools + a D1-backed `ExerciseStore` + the coach warehouse).
   Served at three paths via separate factories: `/mcp` (full, role-aware), `/mcp/coach`, and

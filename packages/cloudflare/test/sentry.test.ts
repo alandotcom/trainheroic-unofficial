@@ -49,6 +49,19 @@ describe("MCP Sentry instrumentation", () => {
   });
 });
 
+describe("Cloudflare trace propagation", () => {
+  it("propagates RPC traces only to the upstream coordinator", () => {
+    const options = sentryOptions({} as Env);
+
+    expect(options.enableRpcTracePropagation).toBe(true);
+    expect(options.rpcTracePropagationBindings).toEqual(["TRAINHEROIC_UPSTREAM"]);
+  });
+
+  it("does not add Sentry trace headers to outbound HTTP requests", () => {
+    expect(sentryOptions({} as Env).tracePropagationTargets).toEqual([]);
+  });
+});
+
 describe("TrainHeroic Sentry reporters", () => {
   it("captures a sanitized upstream failure with the user's email", () => {
     const error = new TrainHeroicHttpError(

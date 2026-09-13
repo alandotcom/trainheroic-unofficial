@@ -1,9 +1,13 @@
 import { loginTrainHeroic } from "./auth";
+import { createLimiter } from "./exercise-util";
 import { notifyHttpError, parseResponseText } from "./http-error";
 import type { TrainHeroicHttpErrorHandler } from "./http-error";
+import { defaultTrainHeroicTransport } from "./transport";
+import type { TrainHeroicTransport } from "./transport";
 
 const DEFAULT_COACH_BASE = "https://api.trainheroic.com";
 const DEFAULT_APIS_BASE = "https://apis.trainheroic.com";
+const MAX_REQUEST_CONCURRENCY = 4;
 
 /**
  * Resolve an API host, allowing an env override. The override exists so a test harness can point
@@ -53,6 +57,8 @@ export type ClientOptions = {
    * failures never change the API result returned to the caller.
    */
   onHttpError?: TrainHeroicHttpErrorHandler;
+  /** Override HTTP dispatch while retaining authentication, retry, and parsing behavior. */
+  transport?: TrainHeroicTransport;
 };
 
 /**
@@ -71,6 +77,8 @@ export class TrainHeroicClient {
   readonly #password: string;
   readonly #onSession: ((sessionId: string) => void) | undefined;
   readonly #onHttpError: TrainHeroicHttpErrorHandler | undefined;
+  readonly #transport: TrainHeroicTransport;
+  readonly #requestLimit = createLimiter(MAX_REQUEST_CONCURRENCY);
   #sessionId: string | null;
   #loginInFlight: Promise<string> | null = null;
 
@@ -85,6 +93,7 @@ export class TrainHeroicClient {
     this.#sessionId = sessionId;
     this.#onSession = options.onSession;
     this.#onHttpError = options.onHttpError;
+    this.#transport = options.transport ?? defaultTrainHeroicTransport;
   }
 
   get sessionId(): string | null {
@@ -104,11 +113,10 @@ export class TrainHeroicClient {
   }
 
   async #login(): Promise<string> {
-    const session = await loginTrainHeroic(
-      this.#email,
-      this.#password,
-      this.#onHttpError ? { onHttpError: this.#onHttpError } : {},
-    );
+    const session = await loginTrainHeroic(this.#email, this.#password, {
+      ...(this.#onHttpError ? { onHttpError: this.#onHttpError } : {}),
+      transport: this.#transport,
+    });
     if (!session) throw new TrainHeroicAuthError("TrainHeroic login failed");
     this.#sessionId = session.sessionId;
     // Never let a caller's cache bookkeeping break the request that acquired the token.
@@ -125,6 +133,18 @@ export class TrainHeroicClient {
     path: string,
     options: RequestOptions = {},
   ): Promise<ClientResult<T>> {
+    // Let every simultaneous cold caller subscribe to the same login promise before any request
+    // waits behind the API concurrency limit. Otherwise each queued wave can start another login
+    // after a failed attempt clears #loginInFlight.
+    await this.#ensureSession();
+    return this.#requestLimit.run(() => this.#request<T>(method, path, options));
+  }
+
+  async #request<T>(
+    method: string,
+    path: string,
+    options: RequestOptions,
+  ): Promise<ClientResult<T>> {
     const base =
       options.base === "apis"
         ? envBase("TH_APIS_BASE", DEFAULT_APIS_BASE)
@@ -135,6 +155,7 @@ export class TrainHeroicClient {
     let res = await this.#send(method, url, session, options.body);
 
     if (res.status === 401 || res.status === 403) {
+      await res.body?.cancel().catch(() => {});
       // Invalidate only if no concurrent request already swapped in a fresh session;
       // otherwise a late 401 responder would wipe a good token and re-trigger login.
       if (this.#sessionId === session) this.#sessionId = null;
@@ -177,6 +198,6 @@ export class TrainHeroicClient {
       headers["content-type"] = "application/json";
       init.body = JSON.stringify(body);
     }
-    return fetch(url, init);
+    return this.#transport(url, init);
   }
 }

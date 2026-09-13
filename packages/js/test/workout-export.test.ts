@@ -217,6 +217,10 @@ describe("dateWindows", () => {
   it("handles a start after end without looping", () => {
     expect(dateWindows("2026-06-15", "2026-06-01", 180)).toEqual([]);
   });
+
+  it("rejects a range that would allocate more than 100 windows", () => {
+    expect(() => dateWindows("1900-01-01", "2026-06-01", 180)).toThrow(/limited to 100 windows/u);
+  });
 });
 
 describe("serializeWorkoutHistory", () => {
