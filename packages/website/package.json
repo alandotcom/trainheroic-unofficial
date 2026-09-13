@@ -17,7 +17,7 @@
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
     "@trainheroic-unofficial/js": "workspace:*",
-    "astro": "^7.2.7",
+    "astro": "^7.2.8",
     "blume": "^1.5.3"
   },
   "devDependencies": {
