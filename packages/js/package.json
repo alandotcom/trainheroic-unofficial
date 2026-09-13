@@ -43,11 +43,11 @@
   "dependencies": {
     "@trainheroic-unofficial/dto": "workspace:*",
     "es-toolkit": "^1.52.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.1"
   },
   "devDependencies": {
-    "@types/node": "^26.3.0",
-    "tsdown": "^0.22.14",
-    "vitest": "^4.1.11"
+    "@types/node": "^26.5.1",
+    "tsdown": "^0.23.0",
+    "vitest": "^5.0.0"
   }
 }
