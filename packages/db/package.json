@@ -35,12 +35,12 @@
   "dependencies": {
     "@trainheroic-unofficial/dto": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
-    "drizzle-orm": "1.0.0-rc.5-169397b"
+    "drizzle-orm": "1.0.0-rc.5-5935859"
   },
   "devDependencies": {
-    "@types/node": "^26.3.0",
-    "tsdown": "^0.22.14",
+    "@types/node": "^26.5.1",
+    "tsdown": "^0.23.0",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   }
 }
