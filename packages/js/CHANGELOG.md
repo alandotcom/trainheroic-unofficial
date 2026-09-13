@@ -1,5 +1,17 @@
 # @trainheroic-unofficial/js
 
+## 3.7.0
+
+### Minor Changes
+
+- 8ea6507: Cap SDK request concurrency, add an injectable HTTP transport for hosted coordination, and split
+  large workout-history and training-summary reads into smaller sequential requests. Reject request
+  plans above 100 date windows or 100 total training-summary batches.
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@3.7.0
+
 ## 3.6.0
 
 ### Minor Changes
