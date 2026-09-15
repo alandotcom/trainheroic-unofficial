@@ -7,6 +7,7 @@ import {
   exerciseForgottenOutputSchema,
   exerciseGetOutputSchema,
   exerciseResolveOutputSchema,
+  exerciseUpdateSchema,
   exerciseViewSchema,
   opaqueOutputSchema,
   toolOutputSchema,
@@ -32,9 +33,10 @@ function registerExerciseUpdate(server: McpServer, index: ToolContext["index"]):
       title: "Update custom exercise",
       description:
         "Update a custom exercise (POST /2.0/coach/exercise/update/{id}) and write it through " +
-        "to the mirror. Same body as exercise_create. Only works for exercises with can_edit:1. " +
+        "to the mirror. Uses the same writable fields as exercise_create; omitted fields are " +
+        "left unchanged. Only works for exercises with can_edit:1. " +
         "Requires confirmation (elicitation, or confirm:true).",
-      inputSchema: { id: idParam, exercise: exerciseCreateSchema, confirm: z.boolean().optional() },
+      inputSchema: { id: idParam, exercise: exerciseUpdateSchema, confirm: z.boolean().optional() },
       outputSchema: toolOutputSchema(exerciseCreatedOutputSchema),
       annotations: DESTRUCTIVE,
     },
@@ -168,7 +170,8 @@ export function registerExerciseTools(server: McpServer, ctx: ToolContext): void
       title: "Create custom exercise",
       description:
         "Create a custom exercise (POST /2.0/coach/exercise/create) and write it through to the " +
-        'mirror. Body example: {"title":"Sandbag Clean","param_1_type":3,"param_2_type":1}.',
+        'mirror. Body example: {"title":"Sandbag Clean","param_1_type":3,"param_2_type":1}. ' +
+        "The server supplies an empty points_of_performance value when it is omitted.",
       inputSchema: { exercise: exerciseCreateSchema },
       outputSchema: toolOutputSchema(exerciseCreatedOutputSchema),
       annotations: ADDITIVE,

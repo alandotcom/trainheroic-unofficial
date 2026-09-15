@@ -123,6 +123,9 @@ $TH coach exercise delete 7721170 --yes      # live DELETE /v5/exercises/{id} + 
 $TH coach exercise forget 7721170 --yes      # cache-only, if you already deleted via the API
 ```
 
+The create command supplies the provider-required `points_of_performance: ""` field when the
+input omits it.
+
 `$TH coach exercise stats` shows the cached row count.
 
 ## Building a workout

@@ -16,6 +16,7 @@ import {
   presentExercise,
   rankSearch,
   type ResolveResult,
+  trainHeroicApiErrorMessage,
   unwrapEnvelope,
   withUnits,
 } from "@trainheroic-unofficial/js";
@@ -288,7 +289,9 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
   // -- create + stats ------------------------------------------------------
 
   async create(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.#writeThrough(CREATE_PATH, body, "create");
+    const requestBody = { ...body };
+    if (requestBody.points_of_performance === undefined) requestBody.points_of_performance = "";
+    return this.#writeThrough(CREATE_PATH, requestBody, "create");
   }
 
   async update(id: number, body: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -301,7 +304,9 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
     label: string,
   ): Promise<Record<string, unknown>> {
     const res = await this.client.request("POST", path, { body });
-    if (!res.ok) throw new Error(`Exercise ${label} failed (HTTP ${res.status}).`);
+    if (!res.ok) {
+      throw new Error(trainHeroicApiErrorMessage(`Exercise ${label}`, res.status, res.data));
+    }
     const ex = unwrapEnvelope(res.data);
     if (ex && typeof ex === "object") {
       checkResponse(exerciseResponseSchema, ex, `exercise ${label}`);

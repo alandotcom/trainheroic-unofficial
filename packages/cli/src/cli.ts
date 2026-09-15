@@ -14,6 +14,7 @@ import {
   coachLogSetArgsSchema,
   coachPrescribeSetArgsSchema,
   exerciseCreateSchema,
+  exerciseUpdateSchema,
   logSessionArgsSchema,
   logSetArgsSchema,
   sessionTemplateCreateSchema,
@@ -385,7 +386,7 @@ async function cmdExercise(client: TrainHeroicClient, rest: string[]): Promise<v
       const { values, positionals } = parse(a, { file: { type: "string" } });
       const id = toInt(need(positionals[0], "coach exercise update <id> <json>|--file f"), "id");
       const body = await jsonInput(positionals[1], values.file as string | undefined);
-      const exercise = validate(exerciseCreateSchema, body, "exercise");
+      const exercise = validate(exerciseUpdateSchema, body, "exercise");
       return out(await lib.update(id, exercise as Record<string, unknown>));
     }
     case "delete": {

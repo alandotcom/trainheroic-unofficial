@@ -2,14 +2,37 @@ import { describe, expect, it, vi } from "vitest";
 import { TrainHeroicHttpError, notifyHttpError } from "../src/http-error";
 
 describe("notifyHttpError", () => {
-  it("redacts free-form provider text", () => {
+  it("retains bounded provider diagnostics after redacting credentials and email", () => {
     const error = new TrainHeroicHttpError("GET", "https://api.trainheroic.com/test", 500, {
       responseBody: {
-        message: "Workout title Alice ACL rehab was rejected; access_token=short-live-token",
+        message: "Server Error; access_token=short-live-token for coach@example.com",
       },
     });
 
-    expect(error.responseBody).toEqual({ message: "[Redacted]" });
+    expect(error.responseBody).toEqual({
+      message: "Server Error; access_token=[Redacted]",
+    });
+  });
+
+  it("redacts quoted credentials containing escaped quotes", () => {
+    const error = new TrainHeroicHttpError("GET", "https://api.trainheroic.com/test", 500, {
+      responseBody: { message: JSON.stringify({ password: 'first "second secret' }) },
+    });
+
+    expect(error.responseBody).toEqual({ message: '{"password":[Redacted]}' });
+    expect(JSON.stringify(error.responseBody)).not.toMatch(/first|second|secret/u);
+  });
+
+  it("redacts an unterminated quoted credential at the diagnostic size boundary", () => {
+    const error = new TrainHeroicHttpError("GET", "https://api.trainheroic.com/test", 500, {
+      responseBody: {
+        message: `${"x".repeat(1_960)} password="${"private words ".repeat(20)}"`,
+      },
+    });
+
+    const message = (error.responseBody as { message: string }).message;
+    expect(message.endsWith("password=[Redacted]…[truncated]")).toBe(true);
+    expect(message).not.toMatch(/private|words/u);
   });
 
   it("retains only machine-readable response values", () => {
@@ -24,8 +47,8 @@ describe("notifyHttpError", () => {
     });
 
     expect(error.responseBody).toEqual({
-      code: "[Redacted]",
-      detail: "[Redacted]",
+      code: "INVALID_EXERCISE",
+      detail: "Private workout detail",
       status: "[Redacted]",
       status_code: 500,
       success: false,
@@ -40,8 +63,8 @@ describe("notifyHttpError", () => {
       },
     });
 
-    expect(error.responseBody).toEqual({ code: "[Redacted]", errors: {} });
-    expect(JSON.stringify(error.responseBody)).not.toMatch(/ALICE|Alice|SHORT_LIVE_TOKEN/);
+    expect(error.responseBody).toEqual({ code: "ALICE_ACL_REHAB", errors: {} });
+    expect(JSON.stringify(error.responseBody)).not.toMatch(/Alice|SHORT_LIVE_TOKEN/);
   });
 
   it("bounds the total response diagnostic tree", () => {
@@ -59,6 +82,17 @@ describe("notifyHttpError", () => {
     });
 
     expect(JSON.stringify(error.responseBody).length).toBeLessThan(125_000);
+  });
+
+  it("bounds diagnostic strings before applying credential redaction", () => {
+    const error = new TrainHeroicHttpError("GET", "https://api.trainheroic.com/test", 500, {
+      responseBody: { message: `${" ".repeat(100_000)}token=private-token` },
+    });
+
+    const message = (error.responseBody as { message: string }).message;
+    expect(message.length).toBeLessThan(2_100);
+    expect(message).toContain("[truncated]");
+    expect(message).not.toContain("private-token");
   });
 
   it("redacts identifiers and bearer credentials instead of trusting arbitrary values", () => {
@@ -85,7 +119,9 @@ describe("notifyHttpError", () => {
       values: { is_circuit: false },
     });
     expect(error.responseBody).toEqual({
-      error: { message: "[Redacted]" },
+      error: {
+        message: 'Authorization: [Redacted]; {"token":[Redacted]}',
+      },
     });
     expect(JSON.stringify(error)).not.toContain("short-secret");
     expect(JSON.stringify(error)).not.toContain("quoted-secret");

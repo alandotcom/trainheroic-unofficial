@@ -70,7 +70,7 @@ So a write is the same call with a body:
 
 ```ts
 const created = await client.request("POST", "/2.0/coach/exercise/create", {
-  body: { title: "Sled Push" },
+  body: { title: "Sled Push", points_of_performance: "" },
 });
 ```
 
@@ -128,10 +128,11 @@ seam to add coordination without changing SDK authentication or response parsing
 `onHttpError` receives a `TrainHeroicHttpError` containing the method, status, host, a bounded
 request-body summary, and sanitized provider response diagnostics. The request summary records
 field names, array lengths, a derived date-span count, and a small allowlist of non-sensitive enum
-values; arbitrary request values are never included. Response diagnostics retain bounded status fields and boolean success flags while
-redacting all free-form strings and omitting unknown fields. Paths, query strings, credentials,
-session tokens, and login
-request and response data remain excluded. A transient 401/403
+values; arbitrary request values are never included. Response diagnostics retain bounded
+provider error strings, status fields, and boolean success flags. Credential values, email
+addresses, IPv4 addresses, and SSNs are scrubbed from diagnostic strings, and unknown response
+fields are omitted. Paths, query strings, session tokens, and login request and response data
+remain excluded. A transient 401/403
 that succeeds after automatic re-login does not call the hook, and synchronous or asynchronous
 hook failures never change the request result.
 

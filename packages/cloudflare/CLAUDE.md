@@ -95,22 +95,23 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   secret here: each user enters them at login and they live in the OAuth grant's encrypted `props`.
 - Sentry is privacy-constrained on purpose: the data it sends is the error, the TrainHeroic
   account email, sanitized TrainHeroic failure metadata (method, status, host, a bounded
-  request-field summary, and redacted provider response diagnostics), aggregate
+  request-field summary, and sanitized provider response diagnostics), aggregate
   metrics/traces (tool name, surface, ok/error, opaque `user:<thUserId>`), and — only when the
   user explicitly files one — a `report_feedback` report (the user's own message plus that same
   non-PII context, with their email as the contact). `src/sentry.ts` keeps
   `sendDefaultPii` off and forces `httpServerIntegration`'s `maxRequestBodySize: "none"` so
   inbound request bodies (the login POST password) are never captured; SDK error diagnostics
-  summarize request field names plus allowlisted enum values and retain only bounded status and
-  boolean fields from provider error responses before they reach Sentry. The email is attached via
+  summarize request field names plus allowlisted enum values. Provider error responses retain
+  bounded diagnostic strings, status fields, and booleans after credential, email, IPv4, and SSN
+  scrubbing. The email is attached via
   `Sentry.setUser` in the MCP factory (`mcp.ts`) and explicitly scoped onto every reported
   TrainHeroic HTTP failure, including pre-grant login failures. With no `SENTRY_DSN` the SDK is
   disabled and every Sentry call is a no-op (the feedback tool then logs the report to `console`
   instead). HTTP trace propagation targets stay empty so outbound requests never carry
   `sentry-trace` or `baggage`; Durable Object correlation uses the allowlisted RPC binding instead.
-  Keep raw paths, query strings, request/response bodies, credentials, session tokens,
-  and arbitrary user-supplied values out of upstream HTTP errors; keep new PII out of tool
-  args/results sent to Sentry; and do not set the user to anything but the email.
+  Keep raw paths, query strings, request/response bodies, credentials, and session tokens out of
+  upstream HTTP errors. Keep response diagnostics bounded and scrubbed, keep new PII out of
+  tool args/results sent to Sentry, and set the user only to the email.
 - `pnpm deploy` must run `scripts/normalize-sourcemaps.mjs` before its Sentry upload. Wrangler
   emits `sourceRoot: "dist"` alongside map-relative `../../<package>/src/...` entries; uploading
   that unchanged makes Sentry label frames `dist/../../...`. Keep the normalization and release

@@ -92,8 +92,8 @@ describe("TrainHeroic Sentry reporters", () => {
         },
         "trainheroic.response_body": {
           error: {
-            code: "[Redacted]",
-            message: "[Redacted]",
+            code: "INVALID_EXERCISE",
+            message: "token=[Redacted]",
           },
         },
       },
