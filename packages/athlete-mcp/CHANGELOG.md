@@ -1,5 +1,15 @@
 # @trainheroic-unofficial/athlete-mcp
 
+## 3.7.1
+
+### Patch Changes
+
+- 2a4a66f: Refresh runtime dependencies and workspace tooling across the published packages.
+- Updated dependencies [2dc17ec]
+- Updated dependencies [2a4a66f]
+  - @trainheroic-unofficial/js@3.7.1
+  - @trainheroic-unofficial/core@3.7.1
+
 ## 3.7.0
 
 ### Patch Changes

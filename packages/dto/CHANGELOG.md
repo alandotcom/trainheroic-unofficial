@@ -1,5 +1,14 @@
 # @trainheroic-unofficial/dto
 
+## 3.7.1
+
+### Patch Changes
+
+- 2dc17ec: Supply TrainHeroic's required `points_of_performance` field when creating custom exercises,
+  validate exercise parameter-type codes, and preserve bounded, credential-scrubbed provider error
+  diagnostics in telemetry and exercise write failures.
+- 2a4a66f: Refresh runtime dependencies and workspace tooling across the published packages.
+
 ## 3.7.0
 
 ## 3.6.0
