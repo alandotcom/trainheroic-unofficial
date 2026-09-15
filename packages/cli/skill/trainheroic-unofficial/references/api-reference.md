@@ -1064,6 +1064,9 @@ Full exercise library: `GET /v5/exerciseLibrary/all` (~2387 entries: 2067 exerci
 `POST /2.0/coach/exercise/create`
 
 Create exercises not in the standard library. You control the title and parameter types.
+TrainHeroic returns HTTP 500 when `points_of_performance` is absent, although an empty string is
+valid. The SDK exercise stores, MCP tool, and CLI supply `points_of_performance: ""` when callers
+omit it. Direct `TrainHeroicClient.request` calls must include the field explicitly.
 
 **Request body:**
 

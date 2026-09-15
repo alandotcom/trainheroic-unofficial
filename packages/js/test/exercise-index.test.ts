@@ -70,10 +70,36 @@ describe("ExerciseLibrary", () => {
     mockApi([{ id: 1, title: "Back Squat", param_1_type: 3 }]);
     const lib = new ExerciseLibrary(client());
     await lib.refresh();
-    await lib.create({ title: "Made", param_1_type: 3 });
+    await lib.create({ title: "Made", param_1_type: 3, points_of_performance: undefined });
+    const createRequest = vi
+      .mocked(fetch)
+      .mock.calls.find(([url]) => String(url).includes("/2.0/coach/exercise/create"));
+    expect(JSON.parse(String((createRequest?.[1] as RequestInit | undefined)?.body))).toMatchObject(
+      {
+        title: "Made",
+        param_1_type: 3,
+        points_of_performance: "",
+      },
+    );
     expect((await lib.get(555))?.title).toBe("Made");
     await lib.recordDelete(555);
     expect(await lib.get(555)).toBeNull();
+  });
+
+  it("includes the provider diagnostic when create fails", async () => {
+    mockApi([{ id: 1, title: "Back Squat", param_1_type: 3 }]);
+    vi.mocked(fetch).mockImplementation(async (input: string | Request | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+      if (url.includes("/v5/exerciseLibrary/all")) {
+        return json([{ id: 1, title: "Back Squat", param_1_type: 3 }]);
+      }
+      return json({ message: "Server Error" }, 500);
+    });
+
+    await expect(new ExerciseLibrary(client()).create({ title: "Made" })).rejects.toThrow(
+      "Exercise create failed (HTTP 500): Server Error",
+    );
   });
 
   it("write-through update POSTs then refreshes the cached title", async () => {

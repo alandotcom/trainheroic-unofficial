@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { exerciseGetOutputSchema, exerciseViewSchema, toolOutputSchema } from "../src/index";
+import {
+  exerciseCreateSchema,
+  exerciseGetOutputSchema,
+  exerciseUpdateSchema,
+  exerciseViewSchema,
+  toolOutputSchema,
+} from "../src/index";
 
 const presentedGet = {
   id: 1,
@@ -34,5 +40,25 @@ describe("exercise output schemas", () => {
       }).success,
     ).toBe(true);
     expect(exerciseGetOutputSchema.safeParse({ id: 1, title: "Plank" }).success).toBe(false);
+  });
+});
+
+describe("exercise write schemas", () => {
+  it("supplies the provider-required points_of_performance field on create", () => {
+    expect(exerciseCreateSchema.parse({ title: "Made" })).toEqual({
+      title: "Made",
+      points_of_performance: "",
+    });
+  });
+
+  it("does not default points_of_performance on update", () => {
+    expect(exerciseUpdateSchema.parse({ title: "Renamed" })).toEqual({ title: "Renamed" });
+  });
+
+  it("rejects blank titles and unknown parameter types", () => {
+    expect(exerciseCreateSchema.safeParse({ title: "   " }).success).toBe(false);
+    expect(exerciseCreateSchema.safeParse({ title: "Made", param_1_type: 999 }).success).toBe(
+      false,
+    );
   });
 });

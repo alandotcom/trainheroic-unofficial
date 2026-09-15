@@ -47,10 +47,41 @@ export const exerciseResolveOutputSchema = z.object({
 });
 export type ResolveResult = z.infer<typeof exerciseResolveOutputSchema>;
 
+/** TrainHeroic's documented exercise parameter-type codes. */
+export const exerciseParamTypeSchema = z.union([
+  z.literal(0),
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+  z.literal(5),
+  z.literal(6),
+  z.literal(7),
+  z.literal(10),
+  z.literal(11),
+  z.literal(12),
+  z.literal(13),
+  z.literal(14),
+  z.literal(18),
+]);
+
+const exerciseWriteShape = {
+  title: z.string().trim().min(1),
+  param_1_type: exerciseParamTypeSchema.optional(),
+  param_2_type: exerciseParamTypeSchema.optional(),
+};
+
 /** Body for creating a custom exercise; extra fields the API accepts are preserved. */
 export const exerciseCreateSchema = z.looseObject({
-  title: z.string().min(1),
-  param_1_type: z.number().optional(),
-  param_2_type: z.number().optional(),
+  ...exerciseWriteShape,
+  // TrainHeroic returns HTTP 500 when this key is absent, even though an empty value is valid.
+  points_of_performance: z.string().default(""),
 });
-export type ExerciseCreate = z.infer<typeof exerciseCreateSchema>;
+export type ExerciseCreate = z.input<typeof exerciseCreateSchema>;
+
+/** Body for updating a custom exercise without clearing fields the caller omitted. */
+export const exerciseUpdateSchema = z.looseObject({
+  ...exerciseWriteShape,
+  points_of_performance: z.string().optional(),
+});
+export type ExerciseUpdate = z.infer<typeof exerciseUpdateSchema>;

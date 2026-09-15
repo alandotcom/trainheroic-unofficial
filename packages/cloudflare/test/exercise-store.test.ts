@@ -167,6 +167,41 @@ describe("ExerciseStore safety + write-through", () => {
     expect(await store.get(999)).toBeNull();
   });
 
+  it("supplies the provider-required field when creating an exercise", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+        if (url.includes("/2.0/coach/exercise/create")) {
+          expect(JSON.parse(String(init?.body))).toMatchObject({
+            title: "Made",
+            points_of_performance: "",
+          });
+          return json({ id: 555, title: "Made", param_1_type: 3 });
+        }
+        return json([]);
+      }),
+    );
+
+    await expect(
+      newStore().create({ title: "Made", points_of_performance: undefined }),
+    ).resolves.toMatchObject({ title: "Made" });
+  });
+
+  it("includes the provider diagnostic when create fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+        return json({ message: "Server Error" }, 500);
+      }),
+    );
+
+    await expect(newStore().create({ title: "Made" })).rejects.toThrow(
+      "Exercise create failed (HTTP 500): Server Error",
+    );
+  });
+
   it("update POSTs then write-throughs the renamed row", async () => {
     mockApi([{ id: 555, title: "Made", param_1_type: 3, can_edit: 1 }]);
     const store = newStore();
