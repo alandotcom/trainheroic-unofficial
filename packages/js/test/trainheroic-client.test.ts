@@ -83,7 +83,7 @@ describe("TrainHeroicClient", () => {
             keys: ["private"],
             type: "object",
           },
-          responseBody: { error: "[Redacted]" },
+          responseBody: { error: "upstream rejected the request" },
           status,
         }),
       );
@@ -94,7 +94,7 @@ describe("TrainHeroicClient", () => {
     },
   );
 
-  it("reports allowlisted request values and redacted provider diagnostics", async () => {
+  it("reports allowlisted request values and scrubbed provider diagnostics", async () => {
     const onHttpError = vi.fn();
     vi.stubGlobal(
       "fetch",
@@ -136,8 +136,8 @@ describe("TrainHeroicClient", () => {
       },
       responseBody: {
         error: {
-          code: "[Redacted]",
-          message: "[Redacted]",
+          code: "INVALID_EXERCISE",
+          message: "token=[Redacted]",
           received: {
             param_1_type: 3,
           },

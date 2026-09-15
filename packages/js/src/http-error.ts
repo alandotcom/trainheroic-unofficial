@@ -5,6 +5,7 @@ const MAX_RESPONSE_DEPTH = 4;
 const MAX_RESPONSE_KEYS = 20;
 const MAX_RESPONSE_ITEMS = 10;
 const MAX_RESPONSE_NODES = 50;
+const MAX_RESPONSE_STRING = 2_000;
 
 const RESPONSE_DIAGNOSTIC_KEYS = new Set([
   "code",
@@ -42,6 +43,26 @@ export type TrainHeroicHttpErrorDiagnostics = {
   requestBody?: unknown;
   responseBody?: unknown;
 };
+
+/** Keep provider diagnostics useful while removing common credentials and direct identifiers. */
+function redactText(value: string): string {
+  const bounded = value.slice(0, MAX_RESPONSE_STRING);
+  const redacted = bounded
+    .replace(
+      /\bAuthorization(["']?\s*[:=]\s*)(?:"(?:\\(?:[\s\S]|$)|[^"\\])*(?:"|$)|'(?:\\(?:[\s\S]|$)|[^'\\])*(?:'|$)|[^"'\r\n,;&]+)/giu,
+      (_match, separator: string) => `Authorization${separator}[Redacted]`,
+    )
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/giu, "Bearer [Redacted]")
+    .replace(
+      /\b(password|passwd|secret|token|access[_-]?token|refresh[_-]?token|session(?:[_-]?(?:id|token))?|api[_-]?key|client[_-]?secret)(["']?\s*[:=]\s*)(?:"(?:\\(?:[\s\S]|$)|[^"\\])*(?:"|$)|'(?:\\(?:[\s\S]|$)|[^'\\])*(?:'|$)|[^"'\r\n,;&}\]]+)/giu,
+      (_match, key: string, separator: string) => `${key}${separator}[Redacted]`,
+    )
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu, "[Redacted email]")
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/gu, "[Redacted IP]")
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/gu, "[Redacted]")
+    .replace(/\b(?:bearer\s+)?[a-f0-9]{32,}\b/giu, "[Redacted]");
+  return value.length <= MAX_RESPONSE_STRING ? redacted : `${redacted}…[truncated]`;
+}
 
 function safeFieldName(key: string): string {
   if (key === "__proto__" || key === "constructor" || key === "prototype") {
@@ -129,7 +150,7 @@ function sanitizedDiagnosticValue(
       ? value
       : "[Redacted]";
   }
-  if (typeof value === "string") return "[Redacted]";
+  if (typeof value === "string") return redactText(value);
   if (depth >= MAX_RESPONSE_DEPTH) return "[Truncated]";
   if (Array.isArray(value)) {
     const result: unknown[] = [];
@@ -222,6 +243,26 @@ function safeResponseBodyDiagnostics(body: unknown): unknown {
   } catch {
     return "[Unavailable]";
   }
+}
+
+/** Format a bounded provider diagnostic for an in-band tool or SDK error. */
+export function trainHeroicApiErrorMessage(
+  label: string,
+  status: number,
+  responseBody: unknown,
+): string {
+  const diagnostic = safeResponseBodyDiagnostics(responseBody);
+  const detail =
+    diagnostic && typeof diagnostic === "object" && !Array.isArray(diagnostic)
+      ? typeof (diagnostic as Record<string, unknown>).message === "string"
+        ? ((diagnostic as Record<string, unknown>).message as string)
+        : JSON.stringify(diagnostic)
+      : typeof diagnostic === "string"
+        ? diagnostic
+        : JSON.stringify(diagnostic);
+  return detail && detail !== '{"type":"object"}'
+    ? `${label} failed (HTTP ${status}): ${detail}`
+    : `${label} failed (HTTP ${status}).`;
 }
 
 /** A final non-2xx response plus bounded, telemetry-safe request and response diagnostics. */
