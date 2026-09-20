@@ -1,5 +1,9 @@
 # @trainheroic-unofficial/dto
 
+## 3.7.2
+
+No changes in this release.
+
 ## 3.7.1
 
 ### Patch Changes
