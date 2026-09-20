@@ -1,5 +1,10 @@
-import type { ServerContext } from "@modelcontextprotocol/server";
-import { acceptedContent, inputRequired, inputResponse } from "@modelcontextprotocol/server";
+import type { ClientCapabilities, ServerContext } from "@modelcontextprotocol/server";
+import {
+  acceptedContent,
+  CLIENT_CAPABILITIES_META_KEY,
+  inputRequired,
+  inputResponse,
+} from "@modelcontextprotocol/server";
 import { errorResult, type ToolHandlerResult } from "./context";
 
 /**
@@ -12,6 +17,28 @@ export const NOT_CONFIRMED = "Not confirmed — the user declined. Nothing was c
 /** Appended to the prompt so the fallback survives whichever way a client surfaces the request. */
 const FALLBACK_HINT =
   " (If you cannot show this prompt, re-run the tool with confirm:true once the user has agreed.)";
+
+const CONFIRMATION_REQUIRED =
+  "Ask the user to approve this action, then retry the tool with confirm:true only after they " +
+  "agree. Nothing was changed.";
+
+type ModernRequestEnvelope = {
+  [CLIENT_CAPABILITIES_META_KEY]?: ClientCapabilities;
+};
+
+/** `undefined` means a legacy request, whose capability check belongs to the SDK's shim. */
+function modernClientSupportsFormElicitation(ctx: ServerContext): boolean | undefined {
+  // The SDK validates the modern envelope before invoking the handler. Its public
+  // RequestMetaEnvelope type is intentionally neutral, so narrow it at this boundary.
+  const envelope = ctx.mcpReq.envelope as ModernRequestEnvelope | undefined;
+  if (envelope === undefined) return undefined;
+
+  const elicitation = envelope[CLIENT_CAPABILITIES_META_KEY]?.elicitation;
+  if (elicitation === undefined) return false;
+
+  // MCP SDK v2 treats a bare `elicitation: {}` declaration as form support for compatibility.
+  return elicitation.form !== undefined || elicitation.url === undefined;
+}
 
 /**
  * Confirm a destructive/athlete-facing action.
@@ -28,9 +55,9 @@ const FALLBACK_HINT =
  * confirmation message ever needs data fetched first, that fetch must be idempotent.
  *
  * Written once in the 2026 `inputRequired` style: modern clients retry with `inputResponses`.
- * A client that cannot elicit at all never reaches the denial below — the SDK rejects the
- * request before the retry — so it must pass `confirm: true`, which is why the hint rides inside
- * the prompt text itself.
+ * MCP correctly rejects unsupported embedded requests with `-32021`. This application has an
+ * alternate `confirm: true` flow, so a modern client that does not declare form elicitation gets
+ * a model-readable tool error that tells it how to recover while the gate remains closed.
  */
 export function confirmGate(
   ctx: ServerContext,
@@ -48,6 +75,10 @@ export function confirmGate(
   const view = inputResponse(ctx.mcpReq.inputResponses, "confirm");
   if (view.kind !== "missing") {
     return errorResult(NOT_CONFIRMED);
+  }
+
+  if (modernClientSupportsFormElicitation(ctx) === false) {
+    return errorResult(`${message} ${CONFIRMATION_REQUIRED}`);
   }
 
   const prompt = message + FALLBACK_HINT;
