@@ -1,5 +1,12 @@
 # @trainheroic-unofficial/cli
 
+## 3.7.2
+
+### Patch Changes
+
+- @trainheroic-unofficial/dto@3.7.2
+  - @trainheroic-unofficial/js@3.7.2
+
 ## 3.7.1
 
 ### Patch Changes

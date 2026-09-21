@@ -1,5 +1,14 @@
 # @trainheroic-unofficial/core
 
+## 3.7.2
+
+### Patch Changes
+
+- 300caee: Use the explicit `confirm:true` recovery flow when a modern MCP client cannot show confirmation
+  prompts, returning model-readable guidance while keeping the confirmation gate closed.
+- @trainheroic-unofficial/dto@3.7.2
+  - @trainheroic-unofficial/js@3.7.2
+
 ## 3.7.1
 
 ### Patch Changes
