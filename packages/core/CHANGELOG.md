@@ -1,5 +1,17 @@
 # @trainheroic-unofficial/core
 
+## 4.0.0
+
+### Major Changes
+
+- c94a5f9: Require intended units for populated workout exercise slots. `buildSession` now requires an exercise index and checks current TrainHeroic units before creating or publishing a workout. The coach CLI and MCP builder use the same validation.
+
+### Patch Changes
+
+- Updated dependencies [c94a5f9]
+  - @trainheroic-unofficial/dto@4.0.0
+  - @trainheroic-unofficial/js@4.0.0
+
 ## 3.7.2
 
 ### Patch Changes
