@@ -5,7 +5,7 @@ describe("workout schemas", () => {
   it("accepts a valid block", () => {
     const block = {
       title: "Primary",
-      exercises: [{ id: 1162, reps: [10, 8], rpe: 8 }],
+      exercises: [{ id: 1162, reps: [10, 8], primaryUnit: "reps", rpe: 8 }],
       leaderboard: "rounds",
     };
     expect(blockSpecSchema.parse(block).title).toBe("Primary");
@@ -41,14 +41,22 @@ describe("workout schemas", () => {
     expect(() =>
       blockSpecSchema.parse({
         title: "Strength",
-        exercises: [{ id: 1, reps: [5, 5], weight: [100, 110, 120] }],
+        exercises: [
+          {
+            id: 1,
+            reps: [5, 5],
+            primaryUnit: "reps",
+            weight: [100, 110, 120],
+            secondaryUnit: "lb",
+          },
+        ],
       }),
     ).toThrow(/same length/iu);
   });
 
   it("parses a full workout spec with a session instruction", () => {
     const spec = workoutSpecSchema.parse({
-      blocks: [{ title: "A", exercises: [{ id: 1, reps: 5 }] }],
+      blocks: [{ title: "A", exercises: [{ id: 1, reps: 5, primaryUnit: "reps" }] }],
       instruction: "Welcome to Week 12",
     });
     expect(spec.instruction).toBe("Welcome to Week 12");
@@ -62,6 +70,15 @@ describe("workout schemas", () => {
       leaderboard: { unit: "time", lowest_wins: true },
     });
     expect(block.leaderboard).toEqual({ unit: "time", lowest_wins: true });
+  });
+
+  it("requires a stated unit for every populated slot", () => {
+    expect(() =>
+      blockSpecSchema.parse({ title: "Run", exercises: [{ id: 82, reps: 200 }] }),
+    ).toThrow(/primaryUnit/iu);
+    expect(() =>
+      blockSpecSchema.parse({ title: "Hold", exercises: [{ id: 1, weight: 30 }] }),
+    ).toThrow(/secondaryUnit/iu);
   });
 });
 

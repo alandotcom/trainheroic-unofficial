@@ -4,6 +4,7 @@
 import {
   type BlockSpec,
   blockSpecSchema,
+  type Advisory,
   programsEditResponseSchema,
   type ReadBlock,
   type ReadExercise,
@@ -13,10 +14,17 @@ import {
 } from "@trainheroic-unofficial/dto";
 import { z } from "zod";
 import type { TrainHeroicClient } from "./client";
-import { coerceInt, MAX_PARAM_SLOTS, mapPool, unitLabel } from "./exercise-util";
+import {
+  coerceInt,
+  type ExerciseIndex,
+  MAX_PARAM_SLOTS,
+  mapPool,
+  unitLabel,
+} from "./exercise-util";
 import { checkResponse } from "./response-check";
 import {
   buildBlockPayload,
+  collectAdvisories,
   LEADERBOARD_LABEL,
   makeExercise,
   setSplitSummary,
@@ -26,6 +34,8 @@ import {
 export type BuildOptions = {
   programId: number;
   blocks: BlockSpec[];
+  /** Exercise library used to validate every populated slot before the first write. */
+  index: Pick<ExerciseIndex, "currentDefaultsMany">;
   date?: WorkoutDate;
   timelineDay?: number;
   publish?: boolean;
@@ -90,13 +100,14 @@ function createPath(opts: BuildOptions): string {
 export async function buildSession(
   client: TrainHeroicClient,
   opts: BuildOptions,
-): Promise<{ pwId: number; workoutId: number }> {
+): Promise<{ pwId: number; workoutId: number; advisories: Advisory }> {
   // dto schema is the single empty-block / Circuit invariant (SDK callers may bypass MCP zod).
   const validatedBlocks = z.array(blockSpecSchema).parse(opts.blocks);
   const splitSummary = setSplitSummary(validatedBlocks);
   if (splitSummary !== null && opts.confirmSetSplit !== true) {
     throw new Error(`${splitSummary} Set confirmSetSplit:true to allow this change.`);
   }
+  const advisories = await collectAdvisories(validatedBlocks, opts.index);
   const blocks = splitSummary === null ? validatedBlocks : splitOversizedBlocks(validatedBlocks);
   const sess = await req<Record<string, unknown>>(client, "POST", createPath(opts), {});
   checkResponse(sessionCreateResponseSchema, sess, "session create");
@@ -139,7 +150,7 @@ export async function buildSession(
   if (opts.publish ?? false) {
     await req(client, "POST", "/2.0/coach/calendar/programWorkout/publish", [pwId]);
   }
-  return { pwId, workoutId };
+  return { pwId, workoutId, advisories };
 }
 
 /**

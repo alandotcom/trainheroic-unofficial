@@ -12,6 +12,7 @@ import {
   type ExerciseDefaults,
   exerciseLibraryResponseSchema,
   exerciseResponseSchema,
+  fetchCurrentExerciseDefaults,
   type ExerciseView,
   presentExercise,
   rankSearch,
@@ -222,6 +223,10 @@ export class ExerciseStore extends OrgScopedStore implements ExerciseIndex {
       }
     }
     return result;
+  }
+
+  async currentDefaultsMany(ids: readonly number[]): Promise<Map<number, ExerciseDefaults>> {
+    return fetchCurrentExerciseDefaults(this.client, ids);
   }
 
   async get(id: number): Promise<Record<string, unknown> | null> {

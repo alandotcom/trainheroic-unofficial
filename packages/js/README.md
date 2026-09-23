@@ -221,19 +221,31 @@ import { buildSession, type BlockSpec } from "@trainheroic-unofficial/js";
 
 const { match } = await library.resolve("Back Squat");
 if (!match) throw new Error("Resolve to a single exercise before building.");
+if (match.units[0] !== "reps" || match.units[1] !== "lb") {
+  throw new Error("Choose an exercise with reps and pounds as its fixed units.");
+}
 
 const blocks: BlockSpec[] = [
   {
     title: "Strength",
     exercises: [
       // sets/reps/weight scalars; rpe is routed into the instruction text (see the encoder).
-      { id: match.id, sets: 5, reps: 5, weight: 225, rpe: 8 },
+      {
+        id: match.id,
+        sets: 5,
+        reps: 5,
+        primaryUnit: "reps",
+        weight: 225,
+        secondaryUnit: "lb",
+        rpe: 8,
+      },
     ],
   },
 ];
 
 const { pwId, workoutId } = await buildSession(client, {
   programId: 12345,
+  index: library,
   date: [2026, 6, 22], // [year, month, day]; month is 1-based, so 6 = June
   blocks,
   instruction: "Warm up first.",
@@ -243,11 +255,12 @@ const { pwId, workoutId } = await buildSession(client, {
 
 Each exercise needs an `id`; `sets`, `reps`, `weight`, `rpe`, and a per-exercise `instr` are
 optional. `reps` and `weight` take a scalar (broadcast across every set) or a per-set array
-like `reps: [5, 5, 3]`. The full field list is `ExerciseSpec` / `BlockSpec` in
-[`@trainheroic-unofficial/dto`](../dto). Loads are in whatever unit the exercise is configured
-for in TrainHeroic; a mismatch becomes an advisory collected separately (see below).
+like `reps: [5, 5, 3]`. State `primaryUnit` for `reps` and `secondaryUnit` for `weight`.
+The full field list is `ExerciseSpec` / `BlockSpec` in
+[`@trainheroic-unofficial/dto`](../dto). `buildSession` checks those units against the
+exercise library and rejects a mismatch before writing.
 
-`buildSession` returns `{ pwId, workoutId }`: `pwId` is the program-workout id (the
+`buildSession` returns `{ pwId, workoutId, advisories }`: `pwId` is the program-workout id (the
 placement of the session in the program, which is the handle subsequent calls take), and
 `workoutId` is the underlying workout id. Use `pwId` with `readSession(client, programId, date, pwId)`
 to read the session back. `publishSession(client, pwId)` publishes it later;
@@ -298,15 +311,17 @@ console.log(analyticsMetricCatalog());
 
 ## The workout encoder
 
-`buildSession` calls the encoder for you; you only deal with it directly to preview warnings.
+`buildSession` calls the encoder for you; you only deal with it directly to preview values.
 TrainHeroic's exercise payload expects every parameter slot present, so the encoder fills all
 of them (empty slots included) to avoid an HTTP 500. A scalar prescription is broadcast across
 the set count. RPE goes into the instruction text because the API coerces a numeric slot to
-load. Unit mismatches between a spec and the exercise's fixed parameter types surface as
-advisories preserved in the return value of `collectAdvisories`.
+load. Each populated slot in a spec states its intended unit. `collectAdvisories` rejects a
+unit that differs from the exercise's fixed parameter type before a workout is written.
 
-Call `collectAdvisories(blocks, index)` before building (the `index` is an `ExerciseLibrary`)
-to get the unit notes and warnings for a set of blocks.
+`buildSession` calls `collectAdvisories(blocks, index)` before its first write and returns
+its non-blocking notes and warnings in `advisories`. Call `collectAdvisories` directly to
+preview validation without writing a workout. Validation fetches current units from
+TrainHeroic; an unavailable library response stops the build.
 
 ## Develop
 

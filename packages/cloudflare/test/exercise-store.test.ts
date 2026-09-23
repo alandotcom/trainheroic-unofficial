@@ -101,6 +101,16 @@ describe("ExerciseStore refresh + reads", () => {
       ]),
     );
   });
+
+  it("fetches current defaults without trusting or refreshing the D1 mirror", async () => {
+    mockApi([{ id: 1, title: "Run", param_1_type: 6, param_2_type: 0 }]);
+    const store = newStore();
+    await store.refresh();
+
+    mockApi([{ id: 1, title: "Run", param_1_type: 10, param_2_type: 0 }]);
+    expect(await store.currentDefaultsMany([1])).toEqual(new Map([[1, { param1: 10, param2: 0 }]]));
+    expect(await store.defaultsMany([1])).toEqual(new Map([[1, { param1: 6, param2: 0 }]]));
+  });
 });
 
 describe("ExerciseStore safety + write-through", () => {

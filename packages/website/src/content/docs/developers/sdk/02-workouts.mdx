@@ -22,15 +22,29 @@ import { buildSession } from "@trainheroic-unofficial/js";
 
 const { match } = await library.resolve("Back Squat");
 if (!match) throw new Error("Choose one exercise before building");
+if (match.units[0] !== "reps" || match.units[1] !== "lb") {
+  throw new Error("Choose an exercise with reps and pounds as its fixed units");
+}
 
 const { pwId, workoutId } = await buildSession(client, {
   programId: 12345,
+  index: library,
   date: [2026, 8, 17], // [year, month, day], with a 1-based month
   instruction: "Warm up first.",
   blocks: [
     {
       title: "Strength",
-      exercises: [{ id: match.id, sets: 5, reps: 5, weight: 225, rpe: 8 }],
+      exercises: [
+        {
+          id: match.id,
+          sets: 5,
+          reps: 5,
+          primaryUnit: "reps",
+          weight: 225,
+          secondaryUnit: "lb",
+          rpe: 8,
+        },
+      ],
     },
   ],
   publish: false,
@@ -38,7 +52,8 @@ const { pwId, workoutId } = await buildSession(client, {
 ```
 
 `reps` and `weight` accept one scalar for every set or a per-set array such as
-`reps: [5, 5, 3]`. Loads use the unit configured on the exercise in TrainHeroic.
+`reps: [5, 5, 3]`. State `primaryUnit` for the `reps` slot and `secondaryUnit` for the
+`weight` slot. `buildSession` checks both against the exercise library before writing.
 
 ## Session handles
 

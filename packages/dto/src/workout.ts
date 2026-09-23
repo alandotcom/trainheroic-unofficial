@@ -5,15 +5,47 @@ export const exerciseSpecSchema = z
   .object({
     id: z.union([z.number(), z.string()]),
     title: z.string().optional(),
-    reps: z.union([z.number(), z.string(), z.array(z.union([z.number(), z.string()]))]).optional(),
+    reps: z
+      .union([z.number(), z.string(), z.array(z.union([z.number(), z.string()]))])
+      .optional()
+      .describe("Primary slot values; may be reps, distance, or time. State primaryUnit."),
     sets: z.number().optional(),
-    weight: z.union([z.number(), z.array(z.number())]).optional(),
+    weight: z
+      .union([z.number(), z.array(z.number())])
+      .optional()
+      .describe("Secondary slot values; may be weight or time. State secondaryUnit."),
+    primaryUnit: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe("Intended primary unit from exercise_resolve, such as reps, m, mi, or sec."),
+    secondaryUnit: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe("Intended secondary unit from exercise_resolve, such as lb or sec."),
     rpe: z.union([z.number(), z.string()]).optional(),
     instr: z.string().optional(),
     param_1_type: z.number().optional(),
     param_2_type: z.number().optional(),
   })
   .superRefine((exercise, ctx) => {
+    if (exercise.reps !== undefined && exercise.primaryUnit === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: "primaryUnit is required when reps contains primary slot values.",
+        path: ["primaryUnit"],
+      });
+    }
+    if (exercise.weight !== undefined && exercise.secondaryUnit === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: "secondaryUnit is required when weight contains secondary slot values.",
+        path: ["secondaryUnit"],
+      });
+    }
     if (
       Array.isArray(exercise.reps) &&
       Array.isArray(exercise.weight) &&

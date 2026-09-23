@@ -369,11 +369,79 @@ describe("unitAdvisory", () => {
 });
 
 describe("collectAdvisories", () => {
-  it("loads defaults for all unique exercise ids in one bulk request", async () => {
+  it("accepts stated distance and time units that match their exercise slots", async () => {
+    const index = {
+      currentDefaultsMany: async () =>
+        new Map([
+          [1, { param1: 6, param2: 0 }],
+          [2, { param1: 3, param2: 4 }],
+        ]),
+    };
+    await expect(
+      collectAdvisories(
+        [
+          { title: "Run", exercises: [{ id: 1, reps: 200, primaryUnit: "meters" }] },
+          {
+            title: "Hold",
+            exercises: [
+              { id: 2, reps: 1, primaryUnit: "reps", weight: 30, secondaryUnit: "seconds" },
+            ],
+          },
+        ],
+        index,
+      ),
+    ).resolves.toMatchObject({ warnings: [] });
+  });
+
+  it("allows pounds in an exercise's unset secondary slot", async () => {
+    const index = {
+      currentDefaultsMany: async () => new Map([[1, { param1: 3, param2: 0 }]]),
+    };
+    await expect(
+      collectAdvisories(
+        [
+          {
+            title: "Pull-up",
+            exercises: [{ id: 1, reps: 5, primaryUnit: "reps", weight: 20, secondaryUnit: "lb" }],
+          },
+        ],
+        index,
+      ),
+    ).resolves.toMatchObject({ warnings: [] });
+  });
+
+  it.each([
+    {
+      name: "meters saved as miles",
+      exercise: { id: 1, title: "Run", reps: 200, primaryUnit: "m", param_1_type: 6 },
+      defaults: { param1: 10, param2: 0 },
+      expected: /Run.*m.*mi/iu,
+    },
+    {
+      name: "time saved as weight",
+      exercise: { id: 1, title: "Hold", weight: 30, secondaryUnit: "sec", param_2_type: 4 },
+      defaults: { param1: 3, param2: 1 },
+      expected: /Hold.*sec.*lb/iu,
+    },
+    {
+      name: "weight saved as time",
+      exercise: { id: 1, title: "Hold", weight: 30, secondaryUnit: "lb" },
+      defaults: { param1: 3, param2: 4 },
+      expected: /Hold.*lb.*sec/iu,
+    },
+  ])("rejects $name before the draft is created", async ({ exercise, defaults, expected }) => {
+    const index = {
+      currentDefaultsMany: async () => new Map([[1, defaults]]),
+    };
+    await expect(
+      collectAdvisories([{ title: "Conditioning", exercises: [exercise] }], index),
+    ).rejects.toThrow(expected);
+  });
+
+  it("fetches current defaults for all unique exercise ids in one request", async () => {
     let requestedIds: readonly number[] = [];
     const index = {
-      ensureFresh: async () => undefined,
-      defaultsMany: async (ids: readonly number[]) => {
+      currentDefaultsMany: async (ids: readonly number[]) => {
         requestedIds = ids;
         return new Map([
           [1, { param1: 3, param2: 1 }],
@@ -387,9 +455,9 @@ describe("collectAdvisories", () => {
         {
           title: "Strength",
           exercises: [
-            { id: 1, reps: 5 },
-            { id: 2, reps: 400 },
-            { id: 1, reps: 3 },
+            { id: 1, reps: 5, primaryUnit: "reps" },
+            { id: 2, reps: 400, primaryUnit: "mi" },
+            { id: 1, reps: 3, primaryUnit: "reps" },
           ],
         },
       ],

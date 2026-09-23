@@ -16,7 +16,6 @@ import {
 import {
   buildSession,
   type BuildOptions,
-  collectAdvisories,
   copySession,
   createSessionTemplate,
   definedProps,
@@ -55,8 +54,12 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         "superset. A block with empty exercises and a non-empty block instruction is a text-only " +
         "Circuit / Conditioning block (type 1). Add a block 'leaderboard' for a Red-Zone score, " +
         "or a top-level 'instruction' for the session note (Coach Instructions). Returns the " +
-        "draft ids, a read-back, and unit advisories. Exercises above 10 sets are split into " +
-        "consecutive same-titled blocks and require confirmation (elicitation, or confirm:true). " +
+        "draft ids and a read-back. For each exercise, state primaryUnit when reps is present " +
+        "and secondaryUnit when weight is present; these are positional values, even when the " +
+        "unit is distance or time. Use exercise_resolve to check the exercise's fixed units " +
+        "before building. A mismatch fails before the draft is created. Exercises above 10 " +
+        "sets are split into consecutive same-titled blocks and require confirmation " +
+        "(elicitation, or confirm:true). " +
         "Review, then workout_publish.",
       inputSchema: {
         programId: z.number().optional(),
@@ -93,13 +96,17 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         if (date !== undefined) resolveArgs.date = date;
         const resolved = await resolveBuildProgramId(ctx.client, resolveArgs);
 
-        const opts: BuildOptions = { programId: resolved, blocks: typed, publish: false };
+        const opts: BuildOptions = {
+          programId: resolved,
+          blocks: typed,
+          index: ctx.index,
+          publish: false,
+        };
         if (splitSummary !== null) opts.confirmSetSplit = true;
         if (date !== undefined) opts.date = parseWorkoutDate(date);
         if (timelineDay !== undefined) opts.timelineDay = timelineDay;
         if (instruction !== undefined) opts.instruction = instruction;
 
-        const advisories = await collectAdvisories(typed, ctx.index);
         const built = await buildSession(ctx.client, opts);
         const readback = opts.date
           ? await readSession(ctx.client, resolved, opts.date, built.pwId)
@@ -108,7 +115,6 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
           ...built,
           programId: resolved,
           published: false,
-          advisories,
           readback,
           note: "Draft created (unpublished). Review, then call workout_publish to make it athlete-facing.",
         });

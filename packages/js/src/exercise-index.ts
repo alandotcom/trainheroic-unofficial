@@ -27,6 +27,32 @@ const UPDATE_PATH = (id: number): string => `/2.0/coach/exercise/update/${id}`;
 const DELETE_PATH = (id: number): string => `/v5/exercises/${id}`;
 const TTL_MS = 7 * 24 * 3600 * 1000;
 
+/** Read current parameter types without refreshing or trusting the search mirror. */
+export async function fetchCurrentExerciseDefaults(
+  client: TrainHeroicClient,
+  ids: readonly number[],
+): Promise<Map<number, ExerciseDefaults>> {
+  if (ids.length === 0) return new Map();
+  const res = await client.request("GET", LIBRARY_PATH);
+  if (!res.ok) throw new Error(`Exercise library fetch failed (HTTP ${res.status}).`);
+  const list = asExerciseList(res.data);
+  if (list.length === 0) throw new Error("Exercise library returned no rows.");
+  checkResponse(exerciseLibraryResponseSchema, list, "exercise library");
+
+  const requested = new Set(ids);
+  const defaults = new Map<number, ExerciseDefaults>();
+  for (const exercise of list) {
+    const id = coerceInt(exercise.id);
+    if (id !== null && requested.has(id)) {
+      defaults.set(id, {
+        param1: coerceInt(exercise.param_1_type),
+        param2: coerceInt(exercise.param_2_type),
+      });
+    }
+  }
+  return defaults;
+}
+
 type Stored = {
   id: number;
   title: string;
@@ -150,6 +176,10 @@ export class ExerciseLibrary implements ExerciseIndex {
       if (s) result.set(id, { param1: s.param_1_type, param2: s.param_2_type });
     }
     return result;
+  }
+
+  async currentDefaultsMany(ids: readonly number[]): Promise<Map<number, ExerciseDefaults>> {
+    return fetchCurrentExerciseDefaults(this.#client, ids);
   }
 
   async search(query: string, limit = 20): Promise<ExerciseView[]> {

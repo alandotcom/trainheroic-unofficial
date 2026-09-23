@@ -37,8 +37,9 @@ new helper goes, ask whether it must work on workerd; if yes, it cannot touch `n
 - Two hosts, selected by `RequestOptions.base`. Default is the coach host.
 - The workout encoder has non-obvious rules driven by the real API: fill every parameter
   slot (the HTTP 500 guard), broadcast scalars across sets, route RPE into the instruction,
-  and emit advisories on unit mismatch rather than dropping data. The encoder tests pin
-  this behavior; keep them green.
+  and reject values whose stated units differ from current TrainHeroic exercise data before
+  a workout write. The search mirror's seven-day cache cannot establish write-time units.
+  The encoder tests pin this behavior; keep them green.
 - Shapes come from `dto`. Do not redefine a type here that already exists there.
 
 ## Commands

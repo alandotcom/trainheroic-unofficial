@@ -54,8 +54,9 @@ re-exported through `index.ts`. The central pieces:
   block type, where athletes are ranked on a score).
 - The read-back types (`ReadResult`, `ReadBlock`, `ReadExercise`) describe a session decoded
   back out of the API into a readable shape, and `Advisory` carries the unit notes and
-  warnings the encoder emits (for example, a prescription whose unit does not match the
-  exercise's parameter type).
+  warnings the encoder emits. Workout input requires `primaryUnit` for populated `reps`
+  and `secondaryUnit` for populated `weight`; the builder checks those units against the
+  exercise library before writing.
 - The `responses` module holds the tolerant schemas the SDK uses to sanity-check an API
   response before trusting it; these schemas accept unknown fields.
 

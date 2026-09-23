@@ -139,18 +139,18 @@ explicit confirmation before publishing. Build a draft (the default), show the r
 for review, and only publish once the user confirms.
 
 `$TH coach workout build` runs the whole sequence (program → session → blocks → exercises),
-fills every field that otherwise makes the exercise step return HTTP 500, encodes
-prescriptions correctly, and prints unit advisories plus a read-back. Feed it a JSON spec
+fills every field that otherwise makes the exercise step return HTTP 500, validates
+the stated units against the exercise library, and prints a read-back. Feed it a JSON spec
 (inline, `--file`, or stdin):
 
 ```bash
 cat > day.json <<'JSON'
 { "blocks": [
   { "title": "Primary Press", "exercises": [
-    { "id": 1162, "title": "Bench Press", "reps": [10,10,8,8], "rpe": 8 } ] },
+    { "id": 1162, "title": "Bench Press", "reps": [10,10,8,8], "primaryUnit": "reps", "rpe": 8 } ] },
   { "title": "Accessory", "instruction": "Superset", "exercises": [
-    { "id": 903, "title": "Dips", "sets": 3, "reps": 12, "rpe": 8 },
-    { "id": 6535, "title": "Tricep Pushdown", "reps": [15,15,15], "rpe": 8 } ] }
+    { "id": 903, "title": "Dips", "sets": 3, "reps": 12, "primaryUnit": "reps", "rpe": 8 },
+    { "id": 6535, "title": "Tricep Pushdown", "reps": [15,15,15], "primaryUnit": "reps", "rpe": 8 } ] }
 ] }
 JSON
 
@@ -245,8 +245,10 @@ Environment-specific facts that defy reasonable assumptions:
   coerce to weight on a weight lift, rendering as pounds — put % or RPE in the
   `instruction` (the builder does this from `rpe`). You _can_ add weight (`1`) to a
   no-secondary-param lift (weighted Pull-Ups). Check units with `$TH coach exercise resolve`
-  (the `units` array, ordered by entry slot `[param 1, param 2]`); the builder prints a
-  warning when a sent type will be overridden. "Max"/"AMRAP" reps work as free text in the
+  (the `units` array, ordered by entry slot `[param 1, param 2]`). Include
+  `primaryUnit` with every `reps` value and `secondaryUnit` with every `weight` value;
+  these fields name the intended unit for each positional slot. The builder rejects
+  mismatches before creating a draft. "Max"/"AMRAP" reps work as free text in the
   rep slots.
 - **`saveWorkoutSetExercises` returns HTTP 500** unless every field is present: all ten
   `param_1_data_N`/`param_2_data_N` slots (empty string for unused), `set_num`, `key`,

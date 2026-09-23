@@ -54,7 +54,10 @@ stdin) and writes it into a program on a date. `--program` is a program id (find
 program's URL in the TrainHeroic web app, or run `trainheroic coach programs`). The spec is
 `{ blocks, instruction? }` (a bare blocks array is also accepted). Each exercise's `id` is a
 library id; get one with `coach exercise resolve`. `reps` and `weight` take a scalar or a
-per-set array (`"reps": [5, 5, 3]`); loads use the exercise's configured unit. The full schema
+per-set array (`"reps": [5, 5, 3]`). `reps` is the primary value slot and `weight` is the
+secondary slot, so either can represent distance or time on an exercise configured that way.
+State `primaryUnit` for `reps` and `secondaryUnit` for `weight` using the fixed units returned
+by `coach exercise resolve`. The build stops before writing if a unit differs. The full schema
 is `WorkoutSpec` in [`@trainheroic-unofficial/dto`](../dto).
 
 ```jsonc
@@ -64,7 +67,17 @@ is `WorkoutSpec` in [`@trainheroic-unofficial/dto`](../dto).
   "blocks": [
     {
       "title": "Strength",
-      "exercises": [{ "id": 41822, "sets": 5, "reps": 5, "weight": 225, "rpe": 8 }],
+      "exercises": [
+        {
+          "id": 41822,
+          "sets": 5,
+          "reps": 5,
+          "primaryUnit": "reps",
+          "weight": 225,
+          "secondaryUnit": "lb",
+          "rpe": 8,
+        },
+      ],
     },
   ],
 }
