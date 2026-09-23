@@ -323,6 +323,8 @@ export interface ExerciseIndex {
   search(query: string, limit?: number): Promise<ExerciseView[]>;
   get(id: number): Promise<Record<string, unknown> | null>;
   defaultsMany(ids: readonly number[]): Promise<Map<number, ExerciseDefaults>>;
+  /** Fetch current units from TrainHeroic for a write, bypassing the search mirror's TTL. */
+  currentDefaultsMany(ids: readonly number[]): Promise<Map<number, ExerciseDefaults>>;
   create(body: Record<string, unknown>): Promise<Record<string, unknown>>;
   /** POST an update to a custom exercise on TrainHeroic, then refresh the mirror row. */
   update(id: number, body: Record<string, unknown>): Promise<Record<string, unknown>>;

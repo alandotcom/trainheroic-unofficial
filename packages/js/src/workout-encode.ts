@@ -15,7 +15,7 @@ import {
   unitLabel,
 } from "./exercise-util";
 
-type AdvisoryIndex = Pick<ExerciseIndex, "defaultsMany" | "ensureFresh">;
+type AdvisoryIndex = Pick<ExerciseIndex, "currentDefaultsMany">;
 
 export type SetSplit = {
   blockTitle: string;
@@ -347,6 +347,96 @@ function unitOr(t: number | null): string {
   return unitLabel(t) ?? "?";
 }
 
+const UNIT_ALIASES: Readonly<Record<string, string>> = {
+  rep: "reps",
+  reps: "reps",
+  lb: "lb",
+  lbs: "lb",
+  pound: "lb",
+  pounds: "lb",
+  sec: "sec",
+  second: "sec",
+  seconds: "sec",
+  s: "sec",
+  yd: "yd",
+  yard: "yd",
+  yards: "yd",
+  m: "m",
+  meter: "m",
+  meters: "m",
+  metre: "m",
+  metres: "m",
+  mi: "mi",
+  mile: "mi",
+  miles: "mi",
+  ft: "ft",
+  foot: "ft",
+  feet: "ft",
+  in: "in",
+  inch: "in",
+  inches: "in",
+  bpm: "bpm",
+  rpe: "RPE",
+  "%max": "%max",
+};
+
+function statedUnit(value: string, label: string): string {
+  const normalized = UNIT_ALIASES[value.trim().toLowerCase()];
+  if (normalized === undefined) {
+    throw new Error(
+      `${label}: unknown unit '${value}'. Use a concrete exercise unit such as reps, lb, sec, m, or mi.`,
+    );
+  }
+  return normalized;
+}
+
+function validateSlotUnit(
+  label: string,
+  field: string,
+  stated: string | undefined,
+  paramType: number | undefined,
+  fixedType: number | null,
+  allowAddedWeight = false,
+): void {
+  if (stated === undefined) throw new Error(`${label}: ${field} is required for this value.`);
+  const intended = statedUnit(stated, `${label} / ${field}`);
+  const fixed = unitLabel(fixedType);
+  const addedWeight =
+    allowAddedWeight && (fixedType === PARAM_NONE || fixedType === null) && intended === "lb";
+  if (intended !== fixed && !addedWeight) {
+    throw new Error(
+      `${label}: ${field} ${intended} does not match the exercise's fixed ${fixed ?? "unset"} unit. Choose an exercise with the requested unit before building.`,
+    );
+  }
+  if (paramType !== undefined && unitLabel(paramType) !== intended) {
+    throw new Error(
+      `${label}: ${field} ${intended} conflicts with param type ${paramType} (${unitLabel(paramType) ?? "unset"}).`,
+    );
+  }
+}
+
+/** Validate both populated slots against the library before any workout write. */
+function validateExerciseUnits(
+  blockTitle: string,
+  ex: ExerciseSpec,
+  defaults: { param1: number | null; param2: number | null },
+): void {
+  const label = `${blockTitle} / ${ex.title ?? ex.id}`;
+  if (ex.reps !== undefined) {
+    validateSlotUnit(label, "primaryUnit", ex.primaryUnit, ex.param_1_type, defaults.param1);
+  }
+  if (ex.weight !== undefined) {
+    validateSlotUnit(
+      label,
+      "secondaryUnit",
+      ex.secondaryUnit,
+      ex.param_2_type,
+      defaults.param2,
+      true,
+    );
+  }
+}
+
 /** Flag spec params the API will silently override to the exercise's fixed units. */
 export function unitAdvisory(
   blockTitle: string,
@@ -379,9 +469,9 @@ export function unitAdvisory(
   }
 
   if (ex.weight !== undefined && ex.weight !== null) {
-    const sentP2 = Math.trunc(Number(ex.param_2_type ?? PARAM_WEIGHT));
     const effP2 =
       defaults.param2 === PARAM_NONE || defaults.param2 === null ? PARAM_WEIGHT : defaults.param2;
+    const sentP2 = Math.trunc(Number(ex.param_2_type ?? effP2));
     if (sentP2 !== effP2) {
       if (sentP2 === PARAM_PCT_MAX || sentP2 === PARAM_RPE) {
         warnings.push(
@@ -398,24 +488,27 @@ export function unitAdvisory(
 }
 
 /**
- * Run unit advisories across a whole block list against an exercise index. Shared by the
- * MCP workout_build tool and the CLI so both surface the same notes/warnings. Ensures the
- * index is loaded first, otherwise the defaults map is empty on a cold index and every
- * advisory is silently dropped.
+ * Validate every populated value's stated unit against current TrainHeroic exercise data,
+ * then collect non-blocking advisories. The write path calls this before creating a workout;
+ * TrainHeroic silently replaces mismatched types.
  */
 export async function collectAdvisories(
   blocks: readonly BlockSpec[],
   index: AdvisoryIndex,
 ): Promise<Advisory> {
-  await index.ensureFresh();
   const pairs = blocks.flatMap((b) => b.exercises.map((ex) => ({ block: b, ex })));
   const ids = [...new Set(pairs.map((p) => Number(p.ex.id)).filter((id) => Number.isFinite(id)))];
-  const defaultsById = await index.defaultsMany(ids);
+  const defaultsById = await index.currentDefaultsMany(ids);
   const notes: string[] = [];
   const warnings: string[] = [];
   pairs.forEach((p) => {
     const def = defaultsById.get(Number(p.ex.id));
-    if (!def) return;
+    if (!def) {
+      throw new Error(
+        `${p.block.title} / ${p.ex.title ?? p.ex.id}: exercise id ${p.ex.id} was not found in the library.`,
+      );
+    }
+    validateExerciseUnits(p.block.title, p.ex, def);
     const advisory = unitAdvisory(p.block.title, p.ex, def);
     notes.push(...advisory.notes);
     warnings.push(...advisory.warnings);

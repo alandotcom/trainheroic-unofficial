@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrainHeroicClient } from "../src/client";
+import { ExerciseLibrary } from "../src/exercise-index";
+import { MemoryLibraryCache } from "../src/library-cache";
 import { buildSession, readSession } from "../src/workout-session";
 
 function json(obj: unknown, status = 200): Response {
@@ -9,11 +11,103 @@ function json(obj: unknown, status = 200): Response {
   });
 }
 
+const index = {
+  currentDefaultsMany: async (ids: readonly number[]) =>
+    new Map(ids.map((id) => [id, { param1: 3, param2: 1 }])),
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("buildSession", () => {
+  it("checks current units when a cached exercise changed from meters to miles", async () => {
+    const cache = new MemoryLibraryCache();
+    await cache.save({
+      fetchedAt: Date.now() - 24 * 60 * 60 * 1000,
+      exercises: [{ id: 1, title: "Run", param_1_type: 6, param_2_type: 0 }],
+    });
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+      if (url.includes("/v5/exerciseLibrary/all")) {
+        return json([{ id: 1, title: "Run", param_1_type: 10, param_2_type: 0 }]);
+      }
+      if (url.includes("/createWorkoutForDay/")) return json({ workout_id: 10, id: 20 });
+      if (url.includes("/saveProgramWorkoutSets")) return json([{ order: 1, id: 101 }]);
+      return json({ success: 1 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new TrainHeroicClient("a@b.com", "pw");
+
+    await expect(
+      buildSession(client, {
+        programId: 5,
+        date: [2026, 6, 22],
+        publish: true,
+        index: new ExerciseLibrary(client, cache),
+        blocks: [{ title: "Conditioning", exercises: [{ id: 1, reps: 200, primaryUnit: "m" }] }],
+      }),
+    ).rejects.toThrow(/primaryUnit m.*mi/iu);
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url.includes("/v5/exerciseLibrary/all")),
+    ).toHaveLength(1);
+    expect(fetchMock.mock.calls.some(([url]) => url.includes("/createWorkoutForDay/"))).toBe(false);
+  });
+
+  it("does not write a draft when the current exercise library cannot be read", async () => {
+    const cache = new MemoryLibraryCache();
+    await cache.save({
+      fetchedAt: Date.now() - 24 * 60 * 60 * 1000,
+      exercises: [{ id: 1, title: "Run", param_1_type: 6, param_2_type: 0 }],
+    });
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/auth")) return json({ id: 1, session_id: "sess" });
+      return json({ message: "unavailable" }, 503);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new TrainHeroicClient("a@b.com", "pw");
+
+    await expect(
+      buildSession(client, {
+        programId: 5,
+        date: [2026, 6, 22],
+        index: new ExerciseLibrary(client, cache),
+        blocks: [{ title: "Conditioning", exercises: [{ id: 1, reps: 200, primaryUnit: "m" }] }],
+      }),
+    ).rejects.toThrow(/Exercise library fetch failed.*503/iu);
+    expect(fetchMock.mock.calls.some(([url]) => url.includes("/createWorkoutForDay/"))).toBe(false);
+  });
+
+  it.each([
+    {
+      name: "meters on a miles exercise",
+      exercise: { id: 1, reps: 200, primaryUnit: "m" },
+      defaults: { param1: 10, param2: 0 },
+      expected: /primaryUnit m.*mi/iu,
+    },
+    {
+      name: "time on a weight exercise",
+      exercise: { id: 1, weight: 30, secondaryUnit: "sec" },
+      defaults: { param1: 3, param2: 1 },
+      expected: /secondaryUnit sec.*lb/iu,
+    },
+  ])("rejects $name before any SDK write", async ({ exercise, defaults, expected }) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      buildSession(new TrainHeroicClient("a@b.com", "pw"), {
+        programId: 5,
+        date: [2026, 6, 22],
+        publish: true,
+        index: {
+          currentDefaultsMany: async () => new Map([[1, defaults]]),
+        },
+        blocks: [{ title: "Conditioning", exercises: [exercise] }],
+      }),
+    ).rejects.toThrow(expected);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("runs create -> blocks -> exercises with a global key counter and per-block set ids", async () => {
     const exercisePayloads: unknown[][] = [];
     let publishCalled = false;
@@ -44,15 +138,16 @@ describe("buildSession", () => {
     const client = new TrainHeroicClient("a@b.com", "pw");
     const result = await buildSession(client, {
       programId: 5,
+      index,
       date: [2026, 6, 22],
       publish: false,
       blocks: [
-        { title: "A", exercises: [{ id: 1, reps: [5] }] },
-        { title: "B", exercises: [{ id: 2, reps: [3] }] },
+        { title: "A", exercises: [{ id: 1, reps: [5], primaryUnit: "reps" }] },
+        { title: "B", exercises: [{ id: 2, reps: [3], primaryUnit: "reps" }] },
       ],
     });
 
-    expect(result).toEqual({ pwId: 20, workoutId: 10 });
+    expect(result).toEqual({ pwId: 20, workoutId: 10, advisories: { notes: [], warnings: [] } });
     expect(publishCalled).toBe(false);
     expect(exercisePayloads).toHaveLength(2);
 
@@ -72,8 +167,11 @@ describe("buildSession", () => {
     await expect(
       buildSession(new TrainHeroicClient("a@b.com", "pw"), {
         programId: 5,
+        index,
         date: [2026, 6, 22],
-        blocks: [{ title: "Squat", exercises: [{ id: 1, sets: 11, reps: 5 }] }],
+        blocks: [
+          { title: "Squat", exercises: [{ id: 1, sets: 11, reps: 5, primaryUnit: "reps" }] },
+        ],
       }),
     ).rejects.toThrow(/confirmSetSplit:true/iu);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -104,6 +202,7 @@ describe("buildSession", () => {
 
     await buildSession(new TrainHeroicClient("a@b.com", "pw"), {
       programId: 5,
+      index,
       date: [2026, 6, 22],
       confirmSetSplit: true,
       blocks: [
@@ -113,7 +212,9 @@ describe("buildSession", () => {
             {
               id: 1,
               reps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+              primaryUnit: "reps",
               weight: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111],
+              secondaryUnit: "lb",
             },
           ],
         },
@@ -158,10 +259,11 @@ describe("buildSession", () => {
 
     await buildSession(new TrainHeroicClient("a@b.com", "pw"), {
       programId: 5,
+      index,
       date: [2026, 6, 22],
-      blocks: Array.from({ length: 10 }, (_, index) => ({
-        title: `Block ${index + 1}`,
-        exercises: [{ id: index + 1, reps: [5] }],
+      blocks: Array.from({ length: 10 }, (_, position) => ({
+        title: `Block ${position + 1}`,
+        exercises: [{ id: position + 1, reps: [5], primaryUnit: "reps" }],
       })),
     });
 
@@ -188,9 +290,10 @@ describe("buildSession", () => {
     const client = new TrainHeroicClient("a@b.com", "pw");
     await buildSession(client, {
       programId: 5,
+      index,
       date: [2026, 6, 22],
       publish: true,
-      blocks: [{ title: "A", exercises: [{ id: 1, reps: [5] }] }],
+      blocks: [{ title: "A", exercises: [{ id: 1, reps: [5], primaryUnit: "reps" }] }],
     });
 
     expect(publishBody).toEqual([20]);
@@ -223,12 +326,13 @@ describe("buildSession", () => {
 
     await buildSession(new TrainHeroicClient("a@b.com", "pw"), {
       programId: 5,
+      index,
       date: [2026, 6, 22],
       publish: false,
       instruction: "Welcome to Week 12",
       blocks: [
-        { title: "A", exercises: [{ id: 1, reps: [5] }] },
-        { title: "B", exercises: [{ id: 2, reps: [3] }] },
+        { title: "A", exercises: [{ id: 1, reps: [5], primaryUnit: "reps" }] },
+        { title: "B", exercises: [{ id: 2, reps: [3], primaryUnit: "reps" }] },
       ],
     });
 
@@ -261,6 +365,7 @@ describe("buildSession", () => {
 
     await buildSession(new TrainHeroicClient("a@b.com", "pw"), {
       programId: 5,
+      index,
       date: [2026, 6, 22],
       blocks: [
         {
@@ -285,6 +390,7 @@ describe("buildSession", () => {
     await expect(
       buildSession(new TrainHeroicClient("a@b.com", "pw"), {
         programId: 5,
+        index,
         date: [2026, 6, 22],
         blocks: [{ title: "Broken", exercises: [] }],
       }),
@@ -305,8 +411,9 @@ describe("buildSession", () => {
     await expect(
       buildSession(new TrainHeroicClient("a@b.com", "pw"), {
         programId: 3302593,
+        index,
         date: [2026, 8, 1],
-        blocks: [{ title: "A", exercises: [{ id: 1, reps: [5] }] }],
+        blocks: [{ title: "A", exercises: [{ id: 1, reps: [5], primaryUnit: "reps" }] }],
       }),
     ).rejects.toThrow(/calendars\/athletes|coach-writable|programId/iu);
   });

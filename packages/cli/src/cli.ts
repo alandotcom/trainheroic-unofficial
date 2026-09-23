@@ -30,7 +30,6 @@ import {
   buildSession,
   type BuildOptions,
   buildCommentPayload,
-  collectAdvisories,
   copySession,
   createProgram,
   createSessionTemplate,
@@ -454,17 +453,16 @@ async function cmdWorkoutBuild(client: TrainHeroicClient, a: string[]): Promise<
   }
   if (publish && values.yes !== true)
     fail("publishing is athlete-facing; add --yes to build and publish.");
-  const opts: BuildOptions = { programId, blocks: spec.blocks, publish };
+  const opts: BuildOptions = { programId, blocks: spec.blocks, index: library(client), publish };
   if (splitSummary !== null) opts.confirmSetSplit = true;
   if (values.date !== undefined) opts.date = parseDate(values.date as string);
   if (values["timeline-day"] !== undefined) {
     opts.timelineDay = toInt(values["timeline-day"] as string, "--timeline-day");
   }
   if (spec.instruction !== undefined) opts.instruction = spec.instruction;
-  const advice = await collectAdvisories(spec.blocks, library(client));
   const built = await buildSession(client, opts);
   const readback = opts.date ? await readSession(client, programId, opts.date, built.pwId) : null;
-  return out({ ...built, programId, published: publish, advisories: advice, readback });
+  return out({ ...built, programId, published: publish, readback });
 }
 
 async function cmdWorkout(client: TrainHeroicClient, rest: string[]): Promise<void> {
