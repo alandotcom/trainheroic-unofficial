@@ -1,0 +1,37 @@
+<!doctype html>
+<!--
+  GitHub Pages redirect for alandotcom.github.io/trainheroic-unofficial.
+
+  The site lives at https://trainheroic-unofficial.com. The website.yml workflow publishes this
+  file to GitHub Pages twice: as index.html, and as 404.html, which GitHub Pages serves for every
+  path it has no file for. So every old github.io URL loads this page, and the script sends the
+  reader to the same page on the custom domain, keeping the query string and fragment.
+
+  The canonical link and noindex keep search engines from treating the github.io copy as a
+  duplicate of the real site. Without JavaScript, the meta refresh falls back to the home page.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>trainheroic unofficial has moved</title>
+    <meta name="robots" content="noindex" />
+    <link rel="canonical" href="https://trainheroic-unofficial.com/" />
+    <meta http-equiv="refresh" content="0; url=https://trainheroic-unofficial.com/" />
+    <script>
+      (() => {
+        const origin = "https://trainheroic-unofficial.com";
+        // Drop the project-page prefix, then the trailing slash GitHub Pages adds, because the
+        // custom domain serves each page at its slashless URL (/connect, not /connect/).
+        let path = location.pathname.replace(/^\/trainheroic-unofficial(?=\/|$)/, "");
+        if (path.length > 1) path = path.replace(/\/+$/, "");
+        location.replace(origin + (path || "/") + location.search + location.hash);
+      })();
+    </script>
+  </head>
+  <body>
+    <p>
+      This site moved to
+      <a href="https://trainheroic-unofficial.com/">trainheroic-unofficial.com</a>.
+    </p>
+  </body>
+</html>

@@ -161,7 +161,7 @@ trainheroic help
 
 ## Documentation site
 
-Static site at [trainheroic-unofficial.com](https://trainheroic-unofficial.com) (Cloudflare Workers static assets) and [alandotcom.github.io/trainheroic-unofficial](https://alandotcom.github.io/trainheroic-unofficial/) (GitHub Pages):
+Static site at [trainheroic-unofficial.com](https://trainheroic-unofficial.com), served from Cloudflare Workers static assets. The old GitHub Pages address redirects there:
 
 ```bash
 pnpm website:dev     # http://localhost:4321
