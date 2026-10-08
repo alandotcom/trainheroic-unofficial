@@ -21,3 +21,26 @@
   color: #171714;
   background: #8aa8ff;
 }
+
+/* Mermaid diagrams. Mermaid draws its default lavender theme with id-scoped styles inside each
+   SVG, so these rules use !important to recolor nodes, edges, and labels with the site tokens.
+   The tokens switch with the theme, so the diagram follows dark mode too. */
+svg[id^="blume-mermaid"] .node rect,
+svg[id^="blume-mermaid"] .node polygon {
+  fill: var(--blume-muted) !important;
+  stroke: var(--blume-accent) !important;
+  stroke-width: 1.5px !important;
+}
+svg[id^="blume-mermaid"] .flowchart-link,
+svg[id^="blume-mermaid"] .edgePath path {
+  stroke: var(--blume-muted-foreground) !important;
+}
+svg[id^="blume-mermaid"] .arrowMarkerPath {
+  fill: var(--blume-muted-foreground) !important;
+  stroke: var(--blume-muted-foreground) !important;
+}
+svg[id^="blume-mermaid"] .nodeLabel,
+svg[id^="blume-mermaid"] .label {
+  color: var(--blume-foreground) !important;
+  fill: var(--blume-foreground) !important;
+}

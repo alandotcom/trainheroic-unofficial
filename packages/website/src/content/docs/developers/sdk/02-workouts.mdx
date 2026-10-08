@@ -1,6 +1,11 @@
 ---
 title: Build workouts
-description: Resolve exercises, build a draft session, read it back, and publish separately.
+description: Resolve exercises, build a TrainHeroic session as a draft, read it back, and publish it to athletes as a separate, deliberate step.
+search:
+  keywords: [buildSession, workout, session, program, publish, draft, sets, reps]
+related:
+  - /developers/sdk/exercises
+  - /developers/mcp/tools
 ---
 
 `buildSession()` creates one session inside a program, saves its blocks and exercises, and can
@@ -17,7 +22,7 @@ optionally publish it. The safer workflow is draft first, inspect second, publis
   </Step>
 </Steps>
 
-```ts
+```ts lineNumbers expandable {30}
 import { buildSession } from "@trainheroic-unofficial/js";
 
 const { match } = await library.resolve("Back Squat");
@@ -55,11 +60,67 @@ const { pwId, workoutId } = await buildSession(client, {
 `reps: [5, 5, 3]`. State `primaryUnit` for the `reps` slot and `secondaryUnit` for the
 `weight` slot. `buildSession` checks both against the exercise library before writing.
 
-## Session handles
+## Options
 
-- `pwId` identifies the session's placement in the program. Read, publish, unpublish, copy,
-  and remove operations use it.
-- `workoutId` identifies the underlying workout record.
+<TypeTable
+  type={{
+    programId: {
+      type: "number",
+      required: true,
+      description:
+        "The program that receives the session. Use a team's program or a roster athlete's calendar; a personal calendar rejects coach writes.",
+    },
+    index: {
+      type: "ExerciseIndex",
+      required: true,
+      description:
+        "The exercise library. Every exercise and its units are checked against it before the first write.",
+    },
+    blocks: {
+      type: "BlockSpec[]",
+      required: true,
+      description: "The session's blocks, each with a title and its exercises.",
+    },
+    date: {
+      type: "[year, month, day]",
+      description:
+        "The calendar day for the session, with a 1-based month. Required unless you pass timelineDay.",
+    },
+    timelineDay: {
+      type: "number",
+      description: "The day number in a fixed-length program. Use it in place of date.",
+    },
+    publish: {
+      type: "boolean",
+      default: "false",
+      description: "Publish the session to athletes after it saves. Leave it off to build a draft.",
+    },
+    instruction: {
+      type: "string",
+      description: "The session's coach instructions, saved after the blocks.",
+    },
+    confirmSetSplit: {
+      type: "boolean",
+      default: "false",
+      description: "Allow a prescription above ten sets to become consecutive blocks.",
+    },
+  }}
+/>
+
+## What it returns
+
+<ResponseField name="pwId" type="number" required>
+  The session's placement in the program. Read, publish, unpublish, copy, and remove operations
+  use it.
+</ResponseField>
+
+<ResponseField name="workoutId" type="number" required>
+  The underlying workout record.
+</ResponseField>
+
+<ResponseField name="advisories" type="{ notes: string[]; warnings: string[] }" required>
+  Notes and warnings from the build, such as a set count that was split across blocks.
+</ResponseField>
 
 :::warning
 Publishing makes the session visible to athletes. The MCP and CLI surfaces require explicit

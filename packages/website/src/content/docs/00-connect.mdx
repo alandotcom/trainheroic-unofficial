@@ -1,6 +1,9 @@
 ---
 title: Connect TrainHeroic to Claude
-description: Ask Claude about your roster, programming, progress, and training history.
+description: Add TrainHeroic as a custom connector in Claude.ai, sign in with your TrainHeroic account, and ask about your roster or your training.
+search:
+  keywords: [claude, connector, setup, sign in, oauth, install, custom connector]
+  boost: 2
 ---
 
 Give Claude access to your existing TrainHeroic account. Coaches get roster and programming
@@ -17,7 +20,7 @@ tools; athletes get their own workouts, history, PRs, and working maxes.
     Name it **TrainHeroic** and paste this URL:
 
     ```text
-    https://mcp.trainheroic-unofficial.com/mcp
+    {{mcp-url}}
     ```
 
   </Step>
@@ -59,6 +62,17 @@ This connector does not create a TrainHeroic account or replace the TrainHeroic 
 
 Claude asks for confirmation before publishing workouts, sending messages, deleting data,
 or logging athlete-facing results.
+
+## If something goes wrong
+
+Ask Claude to report the problem. The hosted connector can send the maintainers a short report
+with recent tool context, after you approve it.
+
+<Prompt description="Send a problem report from Claude." actions={["copy"]}>
+  That did not work. Report this problem to the TrainHeroic Unofficial maintainers.
+</Prompt>
+
+For anything else, the [support page](/support) lists what to include in an email.
 
 ## Next
 

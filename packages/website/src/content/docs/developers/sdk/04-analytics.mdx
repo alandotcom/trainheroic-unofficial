@@ -1,6 +1,10 @@
 ---
 title: Analytics
-description: Query coach readiness, compliance, training volume, and lift-progress reports.
+description: Query TrainHeroic coach analytics from the SDK, including team readiness, compliance, training volume, one-rep-max history, and lift progress.
+search:
+  keywords: [analytics, readiness, compliance, volume, 1rm, working max, reports, queryAnalytics]
+related:
+  - /developers/sdk/athletes
 ---
 
 Analytics helpers are read-only. TrainHeroic happens to use POST for these report queries, but
@@ -19,15 +23,61 @@ console.log(readiness);
 console.log(analyticsMetricCatalog());
 ```
 
-## Metric inputs
+## Metrics
 
-| Scope   | Metrics                                                       | Required identifiers |
-| ------- | ------------------------------------------------------------- | -------------------- |
-| Team    | Readiness, compliance, lift progress                          | `teamId`             |
-| Athlete | Readiness, training summary, 1RM history, working-max history | `userIds`            |
+| Metric                     | Scope   | Required inputs                       |
+| -------------------------- | ------- | ------------------------------------- |
+| `readiness-team`           | Team    | `date`                                |
+| `compliance-team`          | Team    | `dateStart`, `dateEnd`                |
+| `lift-progress-team`       | Team    | `exerciseId`, `dateStart`, `dateEnd`  |
+| `readiness-athlete`        | Athlete | `dateStart`, `dateEnd`                |
+| `training-summary-athlete` | Athlete | `dateStart`, `dateEnd`                |
+| `lift-1rm-history`         | Athlete | `exerciseId`, `dateStart`, `dateEnd`  |
+| `working-max-history`      | Athlete | `exerciseId`                          |
 
-`readiness-team` takes one `date`. Range-based metrics take `dateStart` and `dateEnd`. Lift
-metrics also need `exerciseId`. Dates are `YYYY-MM-DD`.
+`queryAnalytics` throws a readable error that names any required input you left out.
+
+## Query inputs
+
+<TypeTable
+  type={{
+    metric: {
+      type: "AnalyticsMetric",
+      required: true,
+      description: "One of the metric names in the metrics table.",
+    },
+    teamId: {
+      type: "number",
+      description: "The team to report on. Required for team metrics.",
+    },
+    userIds: {
+      type: "number[]",
+      description: "One or more athlete ids. Required for athlete metrics; the report returns one row per athlete.",
+    },
+    date: {
+      type: "string",
+      description: "A single day as YYYY-MM-DD, for readiness-team.",
+    },
+    dateStart: {
+      type: "string",
+      description: "The first day of a range, as YYYY-MM-DD.",
+    },
+    dateEnd: {
+      type: "string",
+      description: "The last day of a range, as YYYY-MM-DD.",
+    },
+    exerciseId: {
+      type: "number",
+      description: "The lift to report on, for the lift metrics.",
+    },
+    useMetric: {
+      type: "boolean",
+      description: "Report weights in kilograms, for lift-1rm-history and working-max-history.",
+    },
+  }}
+/>
+
+## Team volume
 
 There is no raw team-volume metric. Pass every athlete id to `training-summary-athlete`, or
 use `teamVolume()` to group the per-athlete rows into one rollup.

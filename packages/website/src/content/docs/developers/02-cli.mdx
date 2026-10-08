@@ -1,6 +1,11 @@
 ---
 title: Command-line interface
-description: Install the trainheroic CLI, authenticate, and run JSON-oriented coach and athlete commands.
+description: Install the trainheroic CLI, sign in with environment variables, and run coach and athlete commands that print JSON for scripts and agents.
+search:
+  keywords: [cli, terminal, command line, shell, json, jq, npm]
+related:
+  - /developers/skill
+  - /developers/sdk
 ---
 
 The CLI is designed for terminals, scripts, and AI agents. Successful commands print JSON to
@@ -10,46 +15,60 @@ stdout; failures write to stderr and exit nonzero.
 
 <CodeGroup>
 
-```bash Global install
-npm install -g @trainheroic-unofficial/cli
+```console Global install
+$ npm install -g @trainheroic-unofficial/cli
 ```
 
-```bash Run once
-npx @trainheroic-unofficial/cli whoami
+```console Run once
+$ npx @trainheroic-unofficial/cli whoami
 ```
 
 </CodeGroup>
 
 ## Authenticate
 
-```bash
-export TRAINHEROIC_EMAIL=coach@example.com
-export TRAINHEROIC_PASSWORD=yourpassword
-trainheroic whoami
+The CLI reads your TrainHeroic login from two environment variables and signs in on the first
+command.
+
+```console
+$ export TRAINHEROIC_EMAIL=coach@example.com
+$ export TRAINHEROIC_PASSWORD=yourpassword
+$ trainheroic whoami
 ```
 
 ## Common commands
 
 <Tabs>
   <Tab title="Coach">
-    ```bash
-    trainheroic coach athletes
-    trainheroic coach teams
-    trainheroic coach programs
-    trainheroic coach exercise resolve "Back Squat"
-    trainheroic coach message list
+    ```console
+    $ trainheroic coach athletes
+    $ trainheroic coach teams
+    $ trainheroic coach programs
+    $ trainheroic coach exercise resolve "Back Squat"
+    $ trainheroic coach message list
     ```
   </Tab>
   <Tab title="Athlete">
-    ```bash
-    trainheroic athlete profile
-    trainheroic athlete workouts --start 2026-08-01 --end 2026-08-31
-    trainheroic athlete export
+    ```console
+    $ trainheroic athlete profile
+    $ trainheroic athlete workouts --start 2026-08-01 --end 2026-08-31
+    $ trainheroic athlete export
     ```
   </Tab>
 </Tabs>
 
 Run `trainheroic` with no arguments for the full command tree.
+
+## Compose with other tools
+
+Because every result is JSON, you can redirect it to a file or pipe it into `jq` and other
+programs. `athlete export` writes a folder of files, and `--out` chooses where it goes.
+
+```console
+$ trainheroic coach athletes > roster.json
+$ trainheroic athlete working-maxes | jq .
+$ trainheroic athlete export --out ./training-history
+```
 
 ## Input and confirmation
 
@@ -58,6 +77,11 @@ Inputs are validated against the shared DTO schemas before the request is sent.
 
 Actions that publish, delete, send, archive, or write athlete results require `--yes`. Building
 a draft does not; building and publishing in one command does.
+
+```console
+$ trainheroic coach workout build --program 12345 --date 2026-08-17 --file squat.json
+$ trainheroic coach workout publish --pw 67890 --yes
+```
 
 :::info
 Sessions and the exercise library are cached under `~/.trainheroic/`. The CLI and local coach
