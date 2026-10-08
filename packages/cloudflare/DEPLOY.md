@@ -74,7 +74,8 @@ best-effort so an integration outage cannot prevent the already-built Worker fro
 it prints a warning while still uploading the source maps.
 
 The daily KV-hygiene cron (`triggers.crons`) is deployed with the Worker and calls
-`purgeExpiredData`.
+`purgeExpiredData`. Each run checks up to 100 grants and 100 tokens; when the sweep is
+unfinished it stores its resume point under the `purge-cursor` key in `OAUTH_KV`.
 
 ## 5. Connect an MCP client
 
@@ -111,12 +112,14 @@ needs the `mcp-remote` bridge with `--transport http-only`:
 
 ## Notes
 
-- **Protected resource metadata.** `resourceMetadata.resource` is deliberately left unset in
-  `src/index.ts`, so the library derives the RFC 9728 identifier from the request. That is
-  correct on every origin (custom domain, `workers.dev`, localhost) and for each of the three
-  mount paths. Do not pin it: a fixed value would advertise `/mcp` to a client that connected
-  to `/mcp/coach`, and would bind every issued token's audience to one origin, so any other
-  origin gets a 401 `Invalid audience`.
+- **Protected resource metadata.** `src/index.ts` builds the OAuth provider per request with
+  `resourceMetadata.resource` set to `<request origin>/mcp`, so each origin (custom domain,
+  `workers.dev`, localhost) issues tokens bound to its own `/mcp`. `/mcp/coach` and
+  `/mcp/athlete` are path descendants of `/mcp`, so the same token works on all three, and
+  their 401 challenges point at `/.well-known/oauth-protected-resource/mcp`. The provider
+  compares a token's audience with the configured resource exactly, so changing the resource
+  signs out every user whose grant carries the old value. Before changing it, read the
+  `resource` field of the live `grant:*` records in `OAUTH_KV`.
 - **Client ID Metadata Documents.** `clientIdMetadataDocumentEnabled` requires the
   `global_fetch_strictly_public` compatibility flag in `wrangler.jsonc`. The two move together:
   without the flag the provider advertises CIMD as unsupported and throws (a 500) on any

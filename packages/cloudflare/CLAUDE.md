@@ -20,9 +20,11 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   `/mcp/coach`, `/mcp/athlete` — each to a `createMcpHandler` factory from `mcp.ts`. OAuth
   enables Client ID Metadata Documents (CIMD), which requires the `global_fetch_strictly_public`
   compatibility flag in `wrangler.jsonc` — enable the two together or not at all. Dynamic Client
-  Registration (`/register`) is kept for the deprecation window. `resourceMetadata.resource` is
-  left unset so the library derives it per request, which is the only value correct for all
-  three mount paths and every origin.
+  Registration (`/register`) is kept for the deprecation window. The provider is built per
+  request with `resourceMetadata.resource` = `<request origin>/mcp`, which covers all three
+  mount paths on every origin. Existing grants are bound to that exact value, so changing it
+  signs those users out. The cron purge resumes from a cursor stored under `purge-cursor` in
+  `OAUTH_KV`.
 - `src/mcp.ts`: MCP SDK v2 server factories. One Worker-shaped adapter exists per
   `McpVariant` (`full` | `coach` | `athlete`); each adapter creates a stateless MCP handler per
   request so its server factory can use the Sentry-instrumented request env for the upstream

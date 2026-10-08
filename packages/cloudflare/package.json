@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
-    "@cloudflare/workers-oauth-provider": "0.10.3",
+    "@cloudflare/workers-oauth-provider": "1.2.3",
     "@modelcontextprotocol/server": "2.0.0",
     "@sentry/cloudflare": "^10.74.0",
     "@trainheroic-unofficial/core": "workspace:*",

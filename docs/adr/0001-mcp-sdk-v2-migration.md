@@ -26,6 +26,10 @@ v1, and pushed `elicitInput` inside `confirmGate`.
    until the 2027 sunset. `resourceMetadata.resource` stays unset so the library
    derives it per request — a pinned value is wrong for `/mcp/coach` and
    `/mcp/athlete` and binds every token's audience to one origin.
+   Amended for `@cloudflare/workers-oauth-provider` 1.x, which requires the
+   resource: the provider is built per request with `<request origin>/mcp`, which
+   matches the resource stored on existing grants and covers both variant paths
+   as descendants.
 5. Sentry correlation uses `user:<thUserId>` (`mcp.session` tag, kept under that
    name so existing queries survive) instead of `mcp-session-id`. Feedback reports
    the same correlation id; there is no recent-call ring buffer — Sentry tool

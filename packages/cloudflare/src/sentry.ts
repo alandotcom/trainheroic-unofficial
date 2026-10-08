@@ -103,9 +103,24 @@ export function reportOAuthInternalError(error: OAuthInternalError): void {
   });
 }
 
-/** Adapt the provider's diagnostic callback to the application's privacy-safe reporter. */
+/**
+ * Provider error categories worth an error event even though the response is a 4xx. The provider
+ * tags every OAuth error with a `{ category, reason }` diagnosis, and most 4xx responses are
+ * routine client behaviour (an expired access token, a malformed request), so only these reach
+ * Sentry:
+ * - `client-id-metadata-document`: a client's CIMD document could not be fetched or parsed.
+ * - `resource-indicator`: a token or refresh request named a resource this Worker does not serve.
+ *   A burst of these after a deploy means `resourceMetadata.resource` in `index.ts` no longer
+ *   matches the resource stored on existing grants, which signs those users out.
+ */
+const REPORTED_OAUTH_CATEGORIES = new Set(["client-id-metadata-document", "resource-indicator"]);
+
+/**
+ * Adapt the provider's diagnostic callback to the application's privacy-safe reporter. Reports
+ * every 5xx, plus the 4xx categories in `REPORTED_OAUTH_CATEGORIES`.
+ */
 export function oauthProviderErrorReporter(error: OAuthProviderError): void {
-  if (!error.internal) return;
+  if (error.status < 500 && !REPORTED_OAUTH_CATEGORIES.has(error.internal.category)) return;
   reportOAuthInternalError({
     code: error.code,
     status: error.status,

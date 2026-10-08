@@ -177,15 +177,40 @@ describe("OAuth provider Sentry reporter", () => {
     expect(JSON.stringify(sentry.captureException.mock.calls[0])).not.toContain("secret");
   });
 
-  it("does not report ordinary client errors without an internal diagnosis", () => {
+  it("does not report routine client errors", () => {
     oauthProviderErrorReporter({
-      code: "invalid_request",
-      description: "Missing grant_type",
-      status: 400,
+      code: "invalid_token",
+      description: "Invalid access token",
+      status: 401,
       headers: {},
+      internal: { category: "protected-resource", reason: "token_expired" },
     });
 
     expect(sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it("reports a refresh that names a resource the Worker does not serve", () => {
+    oauthProviderErrorReporter({
+      code: "invalid_target",
+      description: "The resource parameter must name exactly one configured protected resource",
+      status: 400,
+      headers: {},
+      internal: { category: "resource-indicator", reason: "resource_not_configured" },
+    });
+
+    expect(sentry.captureException).toHaveBeenCalledOnce();
+  });
+
+  it("reports every server error whatever its category", () => {
+    oauthProviderErrorReporter({
+      code: "temporarily_unavailable",
+      description: "Try again later",
+      status: 503,
+      headers: {},
+      internal: { category: "token-issuance", reason: "kv_rate_limited" },
+    });
+
+    expect(sentry.captureException).toHaveBeenCalledOnce();
   });
 });
 
