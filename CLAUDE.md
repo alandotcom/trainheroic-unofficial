@@ -133,8 +133,9 @@ The dependency graph runs one direction; nothing lower depends on anything highe
   MCP. It caches the session under `~/.trainheroic/`. Has an `athlete` command group and an
   `athlete export` that dumps historicals to JSON (the local counterpart to the hosted warehouse).
 - **`website`** (`@trainheroic-unofficial/website`): static Astro site for Claude.ai connector
-  setup and developer docs (skill, SDK, MCP reference). All pages are Starlight content in
-  `src/content/docs/` except the interactive export page, which stays a bespoke Astro route.
+  setup and developer docs (skill, SDK, MCP reference), built with Blume. All docs pages are
+  MDX content in `src/content/docs/`; the home page and the interactive export page are custom
+  Astro routes in `src/pages/`.
   The MCP tool index is generated at build
   time from `packages/eval/src/tools.ts` plus hosted-only tools in
   `packages/website/src/data/mcp-tool-catalog.ts`. GitHub Pages via
