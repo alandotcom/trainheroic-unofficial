@@ -11,7 +11,6 @@ export default defineConfig({
     pages: "src/pages",
   },
   deployment: {
-    output: "static",
     site,
     ...(base ? { base } : {}),
   },
