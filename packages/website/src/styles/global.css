@@ -554,6 +554,10 @@ p {
   background: var(--color-accent);
 }
 
+/* The global h1-h3 rule sets an ink color, so the heading needs its own override to stay legible
+   on the cobalt hover fill. */
+.goal-row:hover h2,
+.goal-row:focus-visible h2,
 .goal-row:hover p,
 .goal-row:focus-visible p,
 .goal-row:hover .goal-row__action,
