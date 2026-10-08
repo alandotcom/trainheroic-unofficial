@@ -1,6 +1,11 @@
 ---
 title: Claude Code skill
-description: Install the TrainHeroic skill and let Claude Code use the version-matched CLI workflow.
+description: Install the TrainHeroic skill so Claude Code can work with your coach or athlete account through the version-matched CLI workflows.
+search:
+  keywords: [claude code, skill, agent, npx skills]
+related:
+  - /developers/cli
+  - /developers/mcp
 ---
 
 The skill teaches Claude Code the TrainHeroic workflows and command shapes. It invokes the CLI,
@@ -8,15 +13,15 @@ so results stay structured and destructive commands retain their confirmation ch
 
 ## Install
 
-```bash
-npx skills add alandotcom/trainheroic-unofficial
+```console
+$ npx skills add alandotcom/trainheroic-unofficial
 ```
 
 Set your login in the shell that launches Claude Code:
 
-```bash
-export TRAINHEROIC_EMAIL=coach@example.com
-export TRAINHEROIC_PASSWORD=yourpassword
+```console
+$ export TRAINHEROIC_EMAIL=coach@example.com
+$ export TRAINHEROIC_PASSWORD=yourpassword
 ```
 
 :::warning[Credentials are plaintext]
@@ -51,9 +56,9 @@ them to a repository.
 
 The CLI can print the exact workflow guide bundled with its installed version:
 
-```bash
-trainheroic skill
-trainheroic skill --full
+```console
+$ trainheroic skill
+$ trainheroic skill --full
 ```
 
 Use `--full` when the task involves workout JSON or low-level API shapes.

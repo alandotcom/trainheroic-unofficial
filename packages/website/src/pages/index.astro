@@ -3,9 +3,8 @@ import Footer from "../components/Footer.astro";
 import GoalIndex from "../components/GoalIndex.astro";
 import Header from "../components/Header.astro";
 import Layout from "../layouts/Layout.astro";
+import { MCP_URL } from "../data/site.ts";
 import { pageHref } from "../lib/paths.ts";
-
-const MCP_ENDPOINT = "https://mcp.trainheroic-unofficial.com/mcp";
 
 interface ProofFact {
   label: string;
@@ -31,7 +30,7 @@ const proofs: Proof[] = [
     statement: "Get the last four weeks of training.",
     facts: [
       { label: "Your prompt", value: "Show my training over the last four weeks." },
-      { label: "Endpoint", value: MCP_ENDPOINT, code: true, copy: true },
+      { label: "Endpoint", value: MCP_URL, code: true, copy: true },
     ],
     action: { href: "/connect", label: "Connect hosted MCP" },
     aside: { href: "/developers/mcp", label: "See every MCP option" },
@@ -90,7 +89,7 @@ const proofs: Proof[] = [
 <Layout
   directionContract
   title="TrainHeroic beyond the app"
-  description="One unofficial toolkit for using TrainHeroic with AI, code, and your own data."
+  description="An unofficial toolkit for TrainHeroic: connect Claude to your roster or training, script it from a CLI or TypeScript SDK, and export your own history."
 >
   <Header />
 

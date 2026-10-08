@@ -1,10 +1,14 @@
 ---
 title: TypeScript SDK
-description: Authenticate with TrainHeroic and call the runtime-agnostic TypeScript client.
+description: Install @trainheroic-unofficial/js, sign in to TrainHeroic, and call the runtime-agnostic client from Node, Cloudflare Workers, or the browser.
+search:
+  keywords: [sdk, typescript, javascript, npm, client, library, fetch]
 ---
 
 `@trainheroic-unofficial/js` provides the client, auth renewal, exercise library, workout
-builder, athlete reads, analytics, and messaging helpers.
+builder, athlete reads, analytics, and messaging helpers. A common first project is to
+[build workouts](/developers/sdk/workouts) from a spreadsheet or to pull
+[analytics reports](/developers/sdk/analytics) into your own dashboard.
 
 ## Install
 
@@ -33,10 +37,23 @@ if (response.ok) {
 The client signs in lazily on the first request. If a request returns 401 or 403, it signs in
 again once and retries. Concurrent requests on a cold client share one login.
 
-:::info
-`request()` returns `{ status, ok, data }` for HTTP responses. Check `ok`; an HTTP error status
-does not throw. A failed login throws `TrainHeroicAuthError`.
-:::
+## What `request()` returns
+
+An HTTP error status does not throw, so check `ok` before reading `data`. A failed login throws
+`TrainHeroicAuthError`.
+
+<ResponseField name="ok" type="boolean" required>
+  `true` for a 2xx status.
+</ResponseField>
+
+<ResponseField name="status" type="number" required>
+  The HTTP status code TrainHeroic returned.
+</ResponseField>
+
+<ResponseField name="data" type="T" required>
+  The response body, parsed as JSON when it is JSON and left as text otherwise. It is typed by
+  the generic you pass to `request<T>()`, and on an error status it holds the error body.
+</ResponseField>
 
 ## Two entry points
 
@@ -56,18 +73,3 @@ The main entry imports no `node:*` modules. Filesystem-backed caching stays behi
 the same SDK can run inside Cloudflare Workers.
 
 ## Guides
-
-<CardGroup cols={2}>
-  <Card title="Exercise library" href="/developers/sdk/exercises" icon="search">
-    Resolve names to ids and persist the library locally.
-  </Card>
-  <Card title="Build workouts" href="/developers/sdk/workouts" icon="dumbbell">
-    Create draft sessions, prescribe sets, and publish deliberately.
-  </Card>
-  <Card title="Read athlete training" href="/developers/sdk/athletes" icon="activity">
-    Query profiles, workouts, lift history, PRs, and working maxes.
-  </Card>
-  <Card title="Query analytics" href="/developers/sdk/analytics" icon="chart-no-axes-combined">
-    Pull readiness, compliance, volume, and lift-progress reports.
-  </Card>
-</CardGroup>

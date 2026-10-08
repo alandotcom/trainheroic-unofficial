@@ -1,8 +1,7 @@
 ---
 import "@fontsource-variable/archivo";
 import data from "blume:data";
-import type { UIStrings } from "blume/core/i18n-ui.ts";
-import type { Navigation } from "blume/core/types.ts";
+import type { Navigation, UIStrings } from "blume";
 import Search from "blume/components/layout/Search.astro";
 import { pageHref, sitePath } from "../lib/paths.ts";
 
@@ -59,14 +58,18 @@ const docsCurrent = path === "/developers" || path.startsWith("/developers/");
         >Connect MCP</a>
       </nav>
 
+      {/* Every page shares one theme preference, stored under Blume's "blume-theme" key, so the
+          toggle appears on docs pages and custom pages alike. The label names the theme a click
+          switches to. */}
+      <button class="site-nav__theme" data-site-theme-toggle type="button">
+        <span class="site-nav__theme-to-dark">Dark</span>
+        <span class="site-nav__theme-to-light">Light</span>
+        <span class="site-nav__sr-only"> mode</span>
+      </button>
+
       {
         navigation ? (
           <div class="site-nav__doc-tools">
-            <button class="site-nav__theme" data-site-theme-toggle type="button">
-              <span class="dark:hidden">Dark</span>
-              <span class="hidden dark:inline">Light</span>
-              <span class="sr-only"> mode</span>
-            </button>
             <button
               aria-label="Open documentation navigation"
               class="site-nav__menu"
@@ -113,7 +116,10 @@ const docsCurrent = path === "/developers" || path.startsWith("/developers/");
       const root = document.documentElement;
       const next = root.dataset.theme === "dark" ? "light" : "dark";
       root.dataset.theme = next;
-      localStorage.setItem("blume-theme", next);
+      // Storage throws where the browser blocks it; the theme still applies to this page.
+      try {
+        localStorage.setItem("blume-theme", next);
+      } catch {}
     }
 
     if (target.closest("[data-blume-nav-toggle]")) {
@@ -141,6 +147,10 @@ const docsCurrent = path === "/developers" || path.startsWith("/developers/");
     --nav-ink: var(--blume-foreground, var(--color-ink));
     --nav-muted: var(--blume-muted-foreground, var(--color-muted));
     --nav-line: var(--blume-border, var(--color-line));
+    /* Docs pages define the --blume-* tokens and custom pages define the global.css tokens,
+       so each nav token reads the Blume value first and falls back to the site palette. */
+    --nav-action: var(--blume-action, var(--color-accent));
+    --nav-on-action: var(--blume-action-foreground, var(--color-on-accent));
     position: sticky;
     top: 0;
     z-index: 40;
@@ -228,26 +238,43 @@ const docsCurrent = path === "/developers" || path.startsWith("/developers/");
   .site-nav__links .site-nav__primary {
     min-width: 7.75rem;
     margin-left: 0.5rem;
-    color: var(--color-on-accent);
-    background: var(--color-accent);
+    color: var(--nav-on-action);
+    background: var(--nav-action);
     font-variation-settings: "wdth" 92, "wght" 620;
   }
 
   .site-nav__links .site-nav__primary:hover {
-    background: var(--color-accent-hover);
+    background: color-mix(in oklab, var(--nav-action) 82%, black);
   }
 
   .site-nav a:focus-visible,
   .site-nav button:focus-visible,
   .site-nav summary:focus-visible {
-    outline: 3px solid var(--color-accent);
+    outline: 3px solid var(--nav-action);
     outline-offset: 3px;
   }
 
-  .site-nav__theme,
   .site-nav__menu,
   .site-nav__local-menu {
     display: none;
+  }
+
+  .site-nav__theme-to-light,
+  :global(:root[data-theme="dark"]) .site-nav__theme-to-dark {
+    display: none;
+  }
+
+  :global(:root[data-theme="dark"]) .site-nav__theme-to-light {
+    display: inline;
+  }
+
+  .site-nav__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .site-nav__local-menu {
@@ -287,14 +314,31 @@ const docsCurrent = path === "/developers" || path.startsWith("/developers/");
     border-bottom: 0;
   }
 
+  /* Blume renders the search trigger as a round icon button. The site nav shows it as a square
+     text control with the localized "Search" label Blume already puts in data-label. */
   :global(.site-nav__search [data-blume-search-open]) {
+    width: auto;
     min-width: auto !important;
     min-height: 44px;
     padding-inline: 0.75rem;
+    gap: 0.45rem;
     color: var(--nav-muted);
     background: transparent;
     border: 0;
     border-radius: 0;
+    font-size: 0.875rem;
+  }
+
+  /* ::after belongs to Blume's hover tooltip, so the visible label uses ::before and the flex
+     order places it after the icon. */
+  :global(.site-nav__search [data-blume-search-open]::before) {
+    content: attr(data-label);
+    order: 1;
+  }
+
+  :global(.site-nav__search [data-blume-search-open]:hover) {
+    color: var(--nav-ink);
+    background: transparent;
   }
 
   :global(.site-nav__search [data-blume-search-open] kbd) {
@@ -309,10 +353,6 @@ const docsCurrent = path === "/developers" || path.startsWith("/developers/");
     .site-nav__menu,
     .site-nav__local-menu {
       display: block;
-    }
-
-    .site-nav__theme {
-      display: inline-flex;
     }
   }
 

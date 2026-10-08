@@ -1,27 +1,12 @@
 ---
 title: Developer docs
-description: Choose the skill, CLI, TypeScript SDK, or MCP server for your integration.
+description: Build on TrainHeroic with a Claude Code skill, a JSON command-line tool, a TypeScript SDK, or MCP servers that share one typed client.
+search:
+  keywords: [api, integration, getting started, quickstart, developer]
 ---
 
-The toolkit has four entry points over the same TrainHeroic client and typed data shapes.
-Choose based on who should drive the work.
-
-<CardGroup cols={2}>
-  <Card title="Claude Code skill" href="/developers/skill" icon="sparkles">
-    The fastest way to let a coding agent inspect or operate your TrainHeroic account.
-  </Card>
-  <Card title="Command-line interface" href="/developers/cli" icon="terminal">
-    JSON-in, JSON-out commands for scripts, terminals, and agent subprocesses.
-  </Card>
-  <Card title="TypeScript SDK" href="/developers/sdk" icon="braces">
-    Runtime-agnostic auth, exercises, workouts, athlete history, analytics, and messaging.
-  </Card>
-  <Card title="MCP servers" href="/developers/mcp" icon="plug">
-    Hosted OAuth or local stdio tools for Claude, Cursor, and other MCP clients.
-  </Card>
-</CardGroup>
-
-## Pick a surface
+The toolkit has four entry points over the same TrainHeroic client and typed data shapes. Pick
+the one that matches who drives the work, and the page shows that surface's first request.
 
 | If you need to…                            | Start with…                            |
 | ------------------------------------------ | -------------------------------------- |
@@ -29,6 +14,101 @@ Choose based on who should drive the work.
 | Run repeatable shell commands or emit JSON | [CLI](/developers/cli)                 |
 | Build an application or automation         | [TypeScript SDK](/developers/sdk)      |
 | Connect an AI client to typed tools        | [MCP server](/developers/mcp)          |
+
+<View title="Skill" icon="sparkles">
+
+## First request with the skill
+
+The skill teaches Claude Code the TrainHeroic workflows and runs the CLI for each step.
+
+```console
+$ npx skills add alandotcom/trainheroic-unofficial
+$ export TRAINHEROIC_EMAIL=coach@example.com
+$ export TRAINHEROIC_PASSWORD=yourpassword
+$ claude
+```
+
+<Prompt description="Ask for last week's training." actions={["copy"]}>
+  /trainheroic-unofficial Which athletes on my roster trained last week, and who missed sessions?
+</Prompt>
+
+Read the [skill guide](/developers/skill) for the athlete variant and the version-matched
+reference.
+
+</View>
+
+<View title="CLI" icon="terminal">
+
+## First request with the CLI
+
+Every command prints JSON to stdout, so you can pipe it into `jq` or another program.
+
+```console
+$ npm install -g @trainheroic-unofficial/cli
+$ export TRAINHEROIC_EMAIL=athlete@example.com
+$ export TRAINHEROIC_PASSWORD=yourpassword
+$ trainheroic athlete workouts --start 2026-08-01 --end 2026-08-31
+```
+
+Read the [CLI guide](/developers/cli) for coach commands, JSON input, and confirmation flags.
+
+</View>
+
+<View title="SDK" icon="braces">
+
+## First request with the SDK
+
+```package-install
+@trainheroic-unofficial/js
+```
+
+```ts
+import { TrainHeroicClient, fetchAthleteProfileSummary, resolveAthleteUserId } from "@trainheroic-unofficial/js";
+
+const client = new TrainHeroicClient(process.env.TRAINHEROIC_EMAIL!, process.env.TRAINHEROIC_PASSWORD!);
+
+const userId = await resolveAthleteUserId(client);
+console.log(await fetchAthleteProfileSummary(client, userId));
+```
+
+Read the [SDK guide](/developers/sdk) for auth behavior, the exercise library, workout building,
+and analytics.
+
+</View>
+
+<View title="MCP" icon="plug">
+
+## First request over MCP
+
+Add the hosted server to Claude Code. It opens the TrainHeroic sign-in the first time a tool runs.
+
+```console
+$ claude mcp add trainheroic --transport http {{mcp-url}}
+```
+
+<Prompt description="Ask through the connected tools." actions={["copy"]}>
+  Show my back squat PRs from this year.
+</Prompt>
+
+Read the [MCP guide](/developers/mcp) for other clients, role-scoped endpoints, and local stdio
+servers.
+
+</View>
+
+## How the pieces fit
+
+Every surface reuses the layer below it, so a fix in the SDK reaches the CLI and every MCP
+server in the same release.
+
+```mermaid
+flowchart LR
+  dto["dto<br/>zod schemas"] --> js["js<br/>TypeScript SDK"]
+  js --> core["core<br/>MCP tool layer"]
+  js --> cli["cli"]
+  core --> local["coach-mcp<br/>athlete-mcp"]
+  core --> hosted["Hosted MCP<br/>Cloudflare Worker"]
+  cli --> skill["Claude Code skill"]
+```
 
 ## Runtime requirements
 

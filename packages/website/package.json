@@ -7,9 +7,9 @@
   "scripts": {
     "gen:mcp-tools": "tsx scripts/gen-mcp-tools.mts",
     "gen:social-images": "tsx scripts/gen-social-images.mts",
-    "predev": "pnpm gen:mcp-tools && pnpm gen:social-images",
+    "predev": "pnpm gen:mcp-tools",
     "dev": "blume dev",
-    "prebuild": "pnpm gen:mcp-tools && pnpm gen:social-images",
+    "prebuild": "pnpm gen:mcp-tools",
     "build": "blume validate --strict && blume build --strict",
     "preview": "blume preview",
     "typecheck": "blume check --strict"
@@ -18,7 +18,7 @@
     "@fontsource-variable/archivo": "^5.3.0",
     "@trainheroic-unofficial/js": "workspace:*",
     "astro": "^7.3.2",
-    "blume": "^1.5.3"
+    "blume": "^2.2.1"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",

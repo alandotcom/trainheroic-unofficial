@@ -1,17 +1,40 @@
 ---
 title: Support
-description: Get help with the TrainHeroic Unofficial connector, website, CLI, SDK, or MCP servers.
+description: Get help with the TrainHeroic Unofficial connector, website, CLI, SDK, or MCP servers, and learn what to include so a problem can be reproduced.
+search:
+  keywords: [help, contact, email, bug, issue, feedback, problem]
+related:
+  - /privacy
+  - /terms
 ---
 
 For help with TrainHeroic Unofficial, email
-[support@trainheroic-unofficial.com](mailto:support@trainheroic-unofficial.com).
-
-Include what you were trying to do, which surface you were using (hosted connector, local MCP,
-CLI, SDK, or browser export), what happened, and what you expected. Error text is useful, but do
-not send your TrainHeroic password, session token, OAuth token, or unnecessary athlete data.
+[{{support-email}}](mailto:{{support-email}}).
 
 This inbox supports the unofficial integration only. For the TrainHeroic product, billing, or
 your TrainHeroic account, contact TrainHeroic directly.
 
-You can also [report a software issue on GitHub](https://github.com/alandotcom/trainheroic-unofficial/issues)
-if it does not contain private account or athlete information.
+## What to include
+
+- The surface you were using: hosted connector, local MCP server, CLI, SDK, or browser export.
+- What you asked for or ran, what happened, and what you expected.
+- Any error text, copied exactly.
+
+:::danger[Leave out your credentials]
+Never send your TrainHeroic password, session token, or OAuth token. Leave out athlete data the
+problem does not need. The [privacy policy](/privacy) explains what the Service keeps.
+:::
+
+## Report from Claude
+
+When you use the hosted connector, Claude can file the report for you. It sends recent tool
+context to the maintainers after you approve the report.
+
+<Prompt description="Send a problem report from Claude." actions={["copy"]}>
+  That did not work. Report this problem to the TrainHeroic Unofficial maintainers.
+</Prompt>
+
+## Report on GitHub
+
+You can also [report a software issue on GitHub]({{repo-url}}/issues). GitHub issues are public,
+so file one only when it contains no private account or athlete information.

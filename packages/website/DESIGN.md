@@ -118,6 +118,24 @@ The palette is a warm neutral field with near-black ink and a single, decisive c
 - **Code Paper** (`#e9e6dc`): Inline and block code surfaces in documentation.
 - **Success Green** (`#25672c`): Confirmation text after a completed utility action.
 
+### Dark mode
+
+Every page offers a dark theme. One preference covers the whole site: the header's Dark/Light
+toggle stores it under Blume's `blume-theme` key, and a reader without a stored choice follows the
+OS setting. The dark theme keeps the same roles with these values:
+
+- **Night Ink** (`#141412`): Page background, a warm near-black.
+- **Night Surface** (`#1c1c19`): Raised surfaces and muted fills.
+- **Night Paper Ink** (`#ecebe4`): Body text and headings.
+- **Night Graphite** (`#a8a69c`): Secondary text. Faint text uses `#8f8d84`.
+- **Night Rules** (`#4a4943` strong, `#2e2d29` soft): Borders and table rules.
+- **Night Code** (`#1f1e1b`): Code surfaces.
+- **Night Cobalt** (`#8aa8ff`): The accent, lightened so accent text keeps AA contrast on Night
+  Ink. Labels on a Night Cobalt fill use Night Ink.
+
+The custom pages read these values from `:root[data-theme="dark"]` in `src/styles/global.css`, and
+the Blume docs shell reads them from `blume.config.ts` and `theme.css`.
+
 ### Named Rules
 
 **The One Lane Rule.** Cobalt is the only expressive accent. Do not introduce audience colors,

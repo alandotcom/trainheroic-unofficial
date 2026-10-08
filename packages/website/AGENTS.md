@@ -23,11 +23,24 @@ Two kinds of pages:
   SEO, AI-readable output, and custom-page mount. Navigation follows the filesystem: root pages
   serve connector users, while `developers/` contains the skill, CLI, SDK, and MCP sections.
   Use Blume's built-in Markdown and MDX components directly; prefer plain content over local
-  component wrappers.
+  component wrappers. The docs palette comes from `theme` in `blume.config.ts` (accent,
+  background, square radius) plus `theme.css` for the other `--blume-*` tokens; both carry the
+  DESIGN.md colors.
 - **Bespoke** (`/export`): an interactive `.astro` app in `src/pages/` using `Layout.astro`,
   `Header`/`Footer`, and `src/styles/global.css`. Blume mounts it as a custom page.
 
 Blume rewrites internal links for both hosts (root domain and the GitHub Pages subpath).
+
+Repeated addresses (the hosted MCP URL, the support email, the repository URL) live in
+`src/data/site.ts`. The custom pages import them, and `blume.config.ts` exposes them to MDX as
+Blume variables, so docs pages write `{{mcp-url}}`, `{{support-email}}`, or `{{repo-url}}`.
+
+## Social images
+
+`public/og-image.png` and `public/apple-touch-icon.png` are committed renders of the matching
+SVGs. After editing an SVG, run `pnpm gen:social-images` and commit the PNGs. The build does not
+regenerate them, because resvg uses the machine's installed fonts and the output bytes vary by
+machine.
 
 ## MCP tool catalog
 

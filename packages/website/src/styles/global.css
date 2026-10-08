@@ -14,11 +14,34 @@
   --color-on-accent: #fff;
   --color-success: #25672c;
   --color-danger: #a51f1f;
+  --color-scroll-shadow: rgb(0 0 0 / 12%);
   --font-body: "Archivo Variable", "Arial Narrow", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", monospace;
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --measure: 42rem;
   --measure-wide: 72rem;
+}
+
+/* Dark mode, set by the theme script in Layout.astro (or the header toggle) through
+   `data-theme` on <html>. The values are the DESIGN.md dark palette, which theme.css also applies
+   to the Blume docs shell, so both kinds of page look the same in the dark. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #141412;
+  --color-surface: #1c1c19;
+  --color-ink: #ecebe4;
+  --color-muted: #a8a69c;
+  --color-faint: #8f8d84;
+  --color-line: #4a4943;
+  --color-line-soft: #2e2d29;
+  --color-program-rule: rgb(236 235 228 / 6%);
+  --color-code-bg: #1f1e1b;
+  --color-accent: #8aa8ff;
+  --color-accent-hover: #a9bfff;
+  --color-on-accent: #141412;
+  --color-success: #7cc480;
+  --color-danger: #f08a80;
+  --color-scroll-shadow: rgb(0 0 0 / 45%);
 }
 
 *,
@@ -554,6 +577,10 @@ p {
   background: var(--color-accent);
 }
 
+/* The global h1-h3 rule sets an ink color, so the heading needs its own override to stay legible
+   on the cobalt hover fill. */
+.goal-row:hover h2,
+.goal-row:focus-visible h2,
 .goal-row:hover p,
 .goal-row:focus-visible p,
 .goal-row:hover .goal-row__action,

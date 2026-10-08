@@ -1,55 +1,60 @@
 ---
 title: MCP servers
-description: Connect an MCP client to TrainHeroic over HTTP with OAuth authentication.
+description: Connect Claude Code, Cursor, or any MCP client to the hosted TrainHeroic server over HTTP with OAuth sign-in, or run a local stdio server instead.
+search:
+  keywords: [mcp, model context protocol, oauth, claude code, cursor, http, endpoint]
 ---
 
 The hosted server is the simplest MCP deployment: one URL, OAuth login, and a tool set selected
-from the role on your TrainHeroic account.
+from the role on your TrainHeroic account. To keep the server process and your credentials on
+your own machine, run a [local stdio server](/developers/mcp/local) instead.
 
 ```text
-https://mcp.trainheroic-unofficial.com/mcp
+{{mcp-url}}
 ```
 
-## Claude Code
+## Add the server
 
-```bash
-claude mcp add trainheroic --transport http \
-  https://mcp.trainheroic-unofficial.com/mcp
+<CodeGroup>
+
+```console Claude Code
+$ claude mcp add trainheroic --transport http {{mcp-url}}
 ```
 
-Claude Code opens the OAuth flow the first time the server needs authorization.
-
-## Other MCP clients
-
-Use the main URL as an HTTP MCP server:
-
-```json
+```json Other MCP clients
 {
   "mcpServers": {
     "trainheroic": {
-      "url": "https://mcp.trainheroic-unofficial.com/mcp"
+      "url": "{{mcp-url}}"
     }
   }
 }
 ```
 
+</CodeGroup>
+
+The client opens the TrainHeroic sign-in the first time the server needs authorization. The
+server keeps your TrainHeroic credentials inside the encrypted OAuth grant and never forwards
+the client's bearer token to TrainHeroic. The [privacy policy](/privacy) has the details.
+
 ## Role-aware tools
 
 <Tabs>
-  <Tab title="Coach account">
-    Gets the coaching surface plus the account's own athlete-training tools.
+  <Tab title="Coach">
+    A coach account gets the coaching surface plus the account's own athlete-training tools.
   </Tab>
-  <Tab title="Athlete account">
-    Gets profile, workouts, history, PR, working-max, leaderboard, and set-logging tools.
+  <Tab title="Athlete">
+    An athlete account gets profile, workouts, history, PR, working-max, leaderboard, and
+    set-logging tools.
   </Tab>
 </Tabs>
 
 Two optional endpoints narrow the connection to one role:
 
-| Endpoint                                             | Scope                       |
-| ---------------------------------------------------- | --------------------------- |
-| `https://mcp.trainheroic-unofficial.com/mcp/coach`   | Coaching tools only         |
-| `https://mcp.trainheroic-unofficial.com/mcp/athlete` | Athlete-training tools only |
+| Endpoint                | Scope                       |
+| ----------------------- | --------------------------- |
+| `{{mcp-url}}/coach`     | Coaching tools only         |
+| `{{mcp-url}}/athlete`   | Athlete-training tools only |
 
 The coach-only endpoint exposes no tools when the signed-in account is athlete-only.
 
@@ -57,12 +62,3 @@ The coach-only endpoint exposes no tools when the signed-in account is athlete-o
 
 The hosted server adds D1-backed history warehouses and a feedback tool. Ask the assistant to
 report a problem and it can attach recent tool context for the maintainers.
-
-<CardGroup cols={2}>
-  <Card title="Run a local server" href="/developers/mcp/local" icon="laptop">
-    Keep the MCP process and credentials on your own machine.
-  </Card>
-  <Card title="Browse every tool" href="/developers/mcp/tools" icon="list-tree">
-    Read the generated coach, athlete, and hosted-only catalog.
-  </Card>
-</CardGroup>

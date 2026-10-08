@@ -1,0 +1,58 @@
+/*
+ * Blume design-token overrides for the docs shell. Values come from DESIGN.md so the docs
+ * pages share the homepage palette. Accent, background, and radius are set in
+ * blume.config.ts; this file covers the tokens the config has no key for.
+ */
+:root {
+  --blume-foreground: #171714;
+  --blume-muted: #faf9f4;
+  --blume-muted-foreground: #55554f;
+  --blume-border: #d3d0c6;
+  --blume-code-background: #e9e6dc;
+  --blume-action-foreground: #ffffff;
+}
+
+/* The warm DESIGN.md dark palette, matching the custom pages' tokens in src/styles/global.css.
+   Blume's own dark defaults are neutral greys, which read cold against the Night Ink
+   background set in blume.config.ts. */
+:root[data-theme="dark"] {
+  --blume-foreground: #ecebe4;
+  --blume-muted: #1c1c19;
+  --blume-muted-foreground: #a8a69c;
+  --blume-border: #2e2d29;
+  --blume-code-background: #1f1e1b;
+  --blume-action-foreground: #141412;
+}
+
+::selection {
+  color: #ffffff;
+  background: #2457d6;
+}
+
+:root[data-theme="dark"] ::selection {
+  color: #171714;
+  background: #8aa8ff;
+}
+
+/* Mermaid diagrams. Mermaid draws its default lavender theme with id-scoped styles inside each
+   SVG, so these rules use !important to recolor nodes, edges, and labels with the site tokens.
+   The tokens switch with the theme, so the diagram follows dark mode too. */
+svg[id^="blume-mermaid"] .node rect,
+svg[id^="blume-mermaid"] .node polygon {
+  fill: var(--blume-muted) !important;
+  stroke: var(--blume-accent) !important;
+  stroke-width: 1.5px !important;
+}
+svg[id^="blume-mermaid"] .flowchart-link,
+svg[id^="blume-mermaid"] .edgePath path {
+  stroke: var(--blume-muted-foreground) !important;
+}
+svg[id^="blume-mermaid"] .arrowMarkerPath {
+  fill: var(--blume-muted-foreground) !important;
+  stroke: var(--blume-muted-foreground) !important;
+}
+svg[id^="blume-mermaid"] .nodeLabel,
+svg[id^="blume-mermaid"] .label {
+  color: var(--blume-foreground) !important;
+  fill: var(--blume-foreground) !important;
+}

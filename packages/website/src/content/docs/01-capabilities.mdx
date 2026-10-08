@@ -1,40 +1,78 @@
 ---
 title: What you can do
-description: TrainHeroic tools for coaches and athletes, including the actions that require confirmation.
+description: What Claude can read, build, and change in TrainHeroic for coaches and athletes, and which actions wait for your approval first.
+search:
+  keywords: [features, tools, coach, athlete, permissions, confirmation]
+related:
+  - /developers/mcp/tools
+  - /privacy
 ---
 
 The connector changes its tool set to match the account you sign in with. A coach account also
-has athlete scope, so coaches can query their own training alongside their roster.
+has athlete scope, so coaches can query their own training alongside their roster. Choose a
+role to see what Claude can do for it.
 
-<Tabs>
-  <Tab title="Coach">
-    ## Coach tools
+<View title="Coach" icon="clipboard-list">
 
-    - Browse athletes, teams, programs, notifications, and roster activity.
-    - Build workouts as drafts, read them back, publish them, copy them, or save templates.
-    - Resolve exercises by name against the TrainHeroic exercise library.
-    - Pull readiness, compliance, volume, lift history, and PR reports.
-    - Invite, archive, and restore athletes; manage teams and join codes.
-    - Read conversations, draft messages, and send them after confirmation.
+## Your roster
 
-  </Tab>
-  <Tab title="Athlete">
-    ## Athlete tools
+- Browse athletes, teams, programs, notifications, and recent roster activity.
+- Pull readiness, compliance, volume, lift history, and main-lift PR reports.
+- Invite, archive, and restore athletes, and manage teams and join codes.
 
-    - Review scheduled and completed workouts across a date range.
-    - Search exercises you have logged and inspect the full history for one lift.
-    - Read personal records, working maxes, benchmark leaderboards, and lifetime totals.
-    - Export workout history as CSV, JSON, or plain text.
-    - Log a completed set after explicit confirmation.
+<Prompt description="Find athletes who need a check-in." actions={["copy"]}>
+  Which athletes on my roster have not trained in the last seven days?
+</Prompt>
 
-  </Tab>
-</Tabs>
+## Your programming
+
+- Build workouts as drafts, read them back, publish them, copy them, or save them as templates.
+- Resolve exercise names against the TrainHeroic exercise library before anything is written.
+- Prescribe or log sets for one athlete, or swap an exercise for that athlete only.
+
+<Prompt description="Draft a session for review." actions={["copy"]}>
+  Draft a five-by-five back squat session for Monday on my strength team, then read it back to
+  me before publishing.
+</Prompt>
+
+## Your messages
+
+- Read conversations and draft messages to athletes or teams.
+- Send or delete a message after you approve it.
+
+</View>
+
+<View title="Athlete" icon="dumbbell">
+
+## Your training
+
+- Review scheduled and completed workouts across a date range.
+- See what is on today's log and add notes or RPE to a workout or exercise.
+- Create a session for unprogrammed training and log it set by set.
+
+<Prompt description="Plan around today's session." actions={["copy"]}>
+  What is on my program today, and what did I lift for those exercises last time?
+</Prompt>
+
+## Your progress
+
+- Search the exercises you have logged and inspect the full history for one lift.
+- Read personal records, working maxes, benchmark leaderboards, and lifetime totals.
+- Export your workout history as CSV, JSON, or plain text, from Claude or from the
+  [browser export](/export).
+
+<Prompt description="Review a lift's trend." actions={["copy"]}>
+  Compare my last five back squat sessions and summarize the trend.
+</Prompt>
+
+</View>
 
 ## Confirmation is part of the tool
 
 Publishing, sending, deleting, archiving, and logging athlete-facing results are gated inside
 the MCP server. A client that supports MCP elicitation shows a confirmation prompt. Other
 clients must pass an explicit confirmation value, and the operation fails closed without it.
+The [tool catalog](/developers/mcp/tools) marks every tool that confirms.
 
 :::info
 The model can draft a workout or message without confirmation. Confirmation is required when
@@ -45,4 +83,4 @@ the action becomes visible to an athlete or changes remote data.
 
 This project drives the same private endpoints used by the TrainHeroic web app. Those endpoints
 can change without notice, so treat the integration as a practical toolkit rather than an
-official compatibility guarantee.
+official compatibility guarantee. The [terms](/terms) describe what that means for your use.

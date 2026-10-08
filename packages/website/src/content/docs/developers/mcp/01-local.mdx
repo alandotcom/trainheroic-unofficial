@@ -1,6 +1,11 @@
 ---
 title: Local MCP servers
-description: Run the coach or athlete MCP server over stdio on your own machine.
+description: Run the coach or athlete TrainHeroic MCP server over stdio on your own machine, with credentials passed in by your MCP client.
+search:
+  keywords: [stdio, local, npx, claude desktop, cursor, coach-mcp, athlete-mcp]
+related:
+  - /developers/mcp/tools
+  - /privacy
 ---
 
 Local servers run as child processes of the MCP client. They need no database or OAuth setup;
@@ -10,22 +15,22 @@ the client passes TrainHeroic credentials through environment variables.
   <Tab title="Coach">
     The coach server includes the full coaching surface and the account's own athlete tools.
 
-    ```bash
-    claude mcp add trainheroic \
-      -e TRAINHEROIC_EMAIL=coach@example.com \
-      -e TRAINHEROIC_PASSWORD=yourpassword \
-      -- npx -y @trainheroic-unofficial/coach-mcp
+    ```console
+    $ claude mcp add trainheroic \
+        -e TRAINHEROIC_EMAIL=coach@example.com \
+        -e TRAINHEROIC_PASSWORD=yourpassword \
+        -- npx -y @trainheroic-unofficial/coach-mcp
     ```
 
   </Tab>
   <Tab title="Athlete">
     The athlete server exposes only the signed-in account's training tools.
 
-    ```bash
-    claude mcp add trainheroic-athlete \
-      -e TRAINHEROIC_EMAIL=athlete@example.com \
-      -e TRAINHEROIC_PASSWORD=yourpassword \
-      -- npx -y @trainheroic-unofficial/athlete-mcp
+    ```console
+    $ claude mcp add trainheroic-athlete \
+        -e TRAINHEROIC_EMAIL=athlete@example.com \
+        -e TRAINHEROIC_PASSWORD=yourpassword \
+        -- npx -y @trainheroic-unofficial/athlete-mcp
     ```
 
   </Tab>
