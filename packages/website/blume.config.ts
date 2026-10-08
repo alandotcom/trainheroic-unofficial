@@ -1,4 +1,5 @@
 import { defineConfig } from "blume";
+import { MCP_URL, NPM_ORG_URL, REPO_URL, SUPPORT_EMAIL } from "./src/data/site.ts";
 
 const base = process.env.ASTRO_BASE;
 const site = process.env.ASTRO_SITE ?? "https://trainheroic-unofficial.com";
@@ -34,7 +35,26 @@ export default defineConfig({
     repo: "trainheroic-unofficial",
     dir: "packages/website",
   },
-  navigation: { repo: false },
+  // Pages write `{{mcp-url}}` and the other names below in prose, links, and code blocks, and
+  // Blume substitutes the values from src/data/site.ts at build time. The custom pages import the
+  // same constants, so the endpoint and contact addresses are defined in one place.
+  variables: {
+    "mcp-url": MCP_URL,
+    "support-email": SUPPORT_EMAIL,
+    "repo-url": REPO_URL,
+  },
+  // The docs footer carries the same disclaimer and links as src/components/Footer.astro, which
+  // the custom pages render. Blume adds a GitHub icon for the `github` repository above.
+  footer: {
+    copyright: "Unofficial project. TrainHeroic is a separate company.",
+    links: [
+      { label: "Support", href: "/support" },
+      { label: "Privacy", href: "/privacy" },
+      { label: "Terms", href: "/terms" },
+      { label: "npm", href: NPM_ORG_URL },
+      { label: "Hosted MCP", href: MCP_URL },
+    ],
+  },
   // The "Was this page helpful?" rating reports through analytics adapters, and this site
   // configures none, so a reader's answer would be recorded nowhere.
   feedback: false,

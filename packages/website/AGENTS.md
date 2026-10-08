@@ -31,6 +31,10 @@ Two kinds of pages:
 
 Blume rewrites internal links for both hosts (root domain and the GitHub Pages subpath).
 
+Repeated addresses (the hosted MCP URL, the support email, the repository URL) live in
+`src/data/site.ts`. The custom pages import them, and `blume.config.ts` exposes them to MDX as
+Blume variables, so docs pages write `{{mcp-url}}`, `{{support-email}}`, or `{{repo-url}}`.
+
 ## Social images
 
 `public/og-image.png` and `public/apple-touch-icon.png` are committed renders of the matching

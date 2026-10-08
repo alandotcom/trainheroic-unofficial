@@ -1,4 +1,5 @@
 ---
+import { MCP_URL, NPM_ORG_URL, REPO_URL } from "../data/site.ts";
 import { pageHref, sitePath } from "../lib/paths.ts";
 
 const path = sitePath(Astro.url.pathname);
@@ -10,8 +11,8 @@ const path = sitePath(Astro.url.pathname);
     <a href={pageHref("/support", path)}>Support</a>
     <a href={pageHref("/privacy", path)}>Privacy</a>
     <a href={pageHref("/terms", path)}>Terms</a>
-    <a href="https://github.com/alandotcom/trainheroic-unofficial" aria-label="GitHub (opens in new tab)" target="_blank" rel="noopener noreferrer">GitHub</a>
-    <a href="https://www.npmjs.com/org/trainheroic-unofficial" aria-label="npm (opens in new tab)" target="_blank" rel="noopener noreferrer">npm</a>
-    <a href="https://mcp.trainheroic-unofficial.com/mcp">Hosted MCP</a>
+    <a href={REPO_URL} aria-label="GitHub (opens in new tab)" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a href={NPM_ORG_URL} aria-label="npm (opens in new tab)" target="_blank" rel="noopener noreferrer">npm</a>
+    <a href={MCP_URL}>Hosted MCP</a>
   </div>
 </footer>
