@@ -19,6 +19,28 @@ export const HOSTED_ONLY_TOOL_NAMES = [
   "athlete_training_stored",
 ] as const;
 
+/**
+ * What each hosted-only tool can do, as shown in the catalog's Access column. The core tools get
+ * theirs from their registered MCP annotations; these live in packages/cloudflare, which the
+ * generator does not load, so they are listed here. `confirm` marks a tool gated by
+ * `confirmGate`, `write` a tool that changes stored data without a gate, and `read` a read-only
+ * tool. The `*_sync` tools write only to the hosted D1 warehouse.
+ */
+export const HOSTED_ONLY_TOOL_ACCESS: Record<
+  (typeof HOSTED_ONLY_TOOL_NAMES)[number],
+  "read" | "write" | "confirm"
+> = {
+  report_feedback: "confirm",
+  programming_sync: "write",
+  programming_stored: "read",
+  messaging_sync: "write",
+  messaging_stored: "read",
+  athlete_workouts_sync: "write",
+  athlete_workouts_stored: "read",
+  athlete_training_sync: "write",
+  athlete_training_stored: "read",
+};
+
 /** One-line summary per tool name (coach, athlete, and hosted). */
 export const TOOL_SUMMARIES: Record<string, string> = {
   whoami: "Your coach profile and roles",
