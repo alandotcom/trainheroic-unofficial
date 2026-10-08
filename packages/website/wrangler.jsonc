@@ -8,7 +8,12 @@
   "preview_urls": true,
   "assets": {
     "directory": "./dist",
-    "html_handling": "auto-trailing-slash"
+    // Blume writes each page as <route>/index.html but links to it, lists it in sitemap.xml, and
+    // declares it canonical without a trailing slash (/connect). This mode serves the index file
+    // at that slashless URL and redirects /connect/ to it, so every sitemap URL answers 200.
+    "html_handling": "drop-trailing-slash",
+    // Serve Blume's built 404.html, with a 404 status, for paths that match no asset.
+    "not_found_handling": "404-page"
   },
   "routes": [
     { "pattern": "trainheroic-unofficial.com", "custom_domain": true },
