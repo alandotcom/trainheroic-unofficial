@@ -40,7 +40,21 @@ const ogImage = new URL(withBase(image), site);
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#f3f1e9" />
+    <meta name="theme-color" content="#f3f1e9" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141412" media="(prefers-color-scheme: dark)" />
+    {/* Blume's docs pages pick the theme from the "blume-theme" key in localStorage, falling
+        back to the OS setting. The custom pages run the same rule before first paint, so a
+        reader moving between docs and custom pages keeps one theme and never sees a flash. */}
+    <script is:inline>
+      (() => {
+        let stored = null;
+        try {
+          stored = localStorage.getItem("blume-theme");
+        } catch {}
+        const system = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = stored ?? system;
+      })();
+    </script>
     <link rel="canonical" href={canonical} />
     <link rel="icon" type="image/svg+xml" href={pageHref("favicon.svg", Astro.url.pathname)} />
     <link

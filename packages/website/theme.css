@@ -12,6 +12,18 @@
   --blume-action-foreground: #ffffff;
 }
 
+/* The warm DESIGN.md dark palette, matching the custom pages' tokens in src/styles/global.css.
+   Blume's own dark defaults are neutral greys, which read cold against the Night Ink
+   background set in blume.config.ts. */
+:root[data-theme="dark"] {
+  --blume-foreground: #ecebe4;
+  --blume-muted: #1c1c19;
+  --blume-muted-foreground: #a8a69c;
+  --blume-border: #2e2d29;
+  --blume-code-background: #1f1e1b;
+  --blume-action-foreground: #141412;
+}
+
 ::selection {
   color: #ffffff;
   background: #2457d6;

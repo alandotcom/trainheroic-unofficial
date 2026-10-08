@@ -58,14 +58,18 @@ const docsCurrent = path === "/developers" || path.startsWith("/developers/");
         >Connect MCP</a>
       </nav>
 
+      {/* Every page shares one theme preference, stored under Blume's "blume-theme" key, so the
+          toggle appears on docs pages and custom pages alike. The label names the theme a click
+          switches to. */}
+      <button class="site-nav__theme" data-site-theme-toggle type="button">
+        <span class="site-nav__theme-to-dark">Dark</span>
+        <span class="site-nav__theme-to-light">Light</span>
+        <span class="site-nav__sr-only"> mode</span>
+      </button>
+
       {
         navigation ? (
           <div class="site-nav__doc-tools">
-            <button class="site-nav__theme" data-site-theme-toggle type="button">
-              <span class="dark:hidden">Dark</span>
-              <span class="hidden dark:inline">Light</span>
-              <span class="sr-only"> mode</span>
-            </button>
             <button
               aria-label="Open documentation navigation"
               class="site-nav__menu"
@@ -112,7 +116,10 @@ const docsCurrent = path === "/developers" || path.startsWith("/developers/");
       const root = document.documentElement;
       const next = root.dataset.theme === "dark" ? "light" : "dark";
       root.dataset.theme = next;
-      localStorage.setItem("blume-theme", next);
+      // Storage throws where the browser blocks it; the theme still applies to this page.
+      try {
+        localStorage.setItem("blume-theme", next);
+      } catch {}
     }
 
     if (target.closest("[data-blume-nav-toggle]")) {
@@ -247,10 +254,27 @@ const docsCurrent = path === "/developers" || path.startsWith("/developers/");
     outline-offset: 3px;
   }
 
-  .site-nav__theme,
   .site-nav__menu,
   .site-nav__local-menu {
     display: none;
+  }
+
+  .site-nav__theme-to-light,
+  :global(:root[data-theme="dark"]) .site-nav__theme-to-dark {
+    display: none;
+  }
+
+  :global(:root[data-theme="dark"]) .site-nav__theme-to-light {
+    display: inline;
+  }
+
+  .site-nav__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .site-nav__local-menu {
@@ -329,10 +353,6 @@ const docsCurrent = path === "/developers" || path.startsWith("/developers/");
     .site-nav__menu,
     .site-nav__local-menu {
       display: block;
-    }
-
-    .site-nav__theme {
-      display: inline-flex;
     }
   }
 
