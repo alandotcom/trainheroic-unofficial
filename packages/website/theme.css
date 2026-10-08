@@ -1,0 +1,23 @@
+/*
+ * Blume design-token overrides for the docs shell. Values come from DESIGN.md so the docs
+ * pages share the homepage palette. Accent, background, and radius are set in
+ * blume.config.ts; this file covers the tokens the config has no key for.
+ */
+:root {
+  --blume-foreground: #171714;
+  --blume-muted: #faf9f4;
+  --blume-muted-foreground: #55554f;
+  --blume-border: #d3d0c6;
+  --blume-code-background: #e9e6dc;
+  --blume-action-foreground: #ffffff;
+}
+
+::selection {
+  color: #ffffff;
+  background: #2457d6;
+}
+
+:root[data-theme="dark"] ::selection {
+  color: #171714;
+  background: #8aa8ff;
+}

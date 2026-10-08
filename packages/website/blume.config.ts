@@ -14,9 +14,15 @@ export default defineConfig({
     site,
     ...(base ? { base } : {}),
   },
-  // Self-host Archivo via Fontsource so docs match the marketing surface and the build
-  // does not fetch Blume's default Inter Tight from Google Fonts (404 under Astro 7.2.2).
+  // The docs shell carries the DESIGN.md tokens: Lane Cobalt as the only accent, Warm Paper
+  // (with a warm near-black in dark mode) as the background, and square corners on cards,
+  // callouts, tabs, and code blocks. `theme.css` sets the remaining surface, text, and rule
+  // tokens. Archivo is self-hosted through Fontsource so docs match the custom pages and the
+  // build does not fetch Blume's default font from Google Fonts.
   theme: {
+    accent: { light: "#2457d6", dark: "#8aa8ff" },
+    background: { light: "#f3f1e9", dark: "#141412" },
+    radius: "none",
     fonts: {
       display: { name: "Archivo", provider: "fontsource", weights: ["100..900"] },
       body: { name: "Archivo", provider: "fontsource", weights: ["100..900"] },
@@ -29,4 +35,7 @@ export default defineConfig({
     dir: "packages/website",
   },
   navigation: { repo: false },
+  // The "Was this page helpful?" rating reports through analytics adapters, and this site
+  // configures none, so a reader's answer would be recorded nowhere.
+  feedback: false,
 });
