@@ -6,11 +6,16 @@ export function appPath(segment: string): string {
   return `/${segment.replace(/^\//, "")}`;
 }
 
-/** Prefix an app-relative path with the Astro base (GitHub Pages subpath in CI). */
+/**
+ * Prefix an app-relative path with the Astro base (GitHub Pages subpath in CI). Astro passes
+ * `ASTRO_BASE` through as written, so the base may arrive as `/sub` or `/sub/`; both produce
+ * `/sub/path`.
+ */
 export function withBase(path: string): string {
   const base = import.meta.env.BASE_URL;
+  const prefix = base.endsWith("/") ? base : `${base}/`;
   const segment = path.startsWith("/") ? path.slice(1) : path;
-  return `${base}${segment}`;
+  return `${prefix}${segment}`;
 }
 
 /**
