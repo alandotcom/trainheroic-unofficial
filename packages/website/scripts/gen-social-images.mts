@@ -1,3 +1,9 @@
+/**
+ * Render public/og-image.svg and public/apple-touch-icon.svg to the committed PNGs. Run it by hand
+ * with `pnpm gen:social-images` after editing either SVG, and commit the PNGs. resvg draws the
+ * SVG text with whatever fonts the machine has installed, so the PNG bytes differ between
+ * machines; for that reason the script runs on demand and stays out of `predev` and `prebuild`.
+ */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Resvg } from "@resvg/resvg-js";

@@ -31,6 +31,13 @@ Two kinds of pages:
 
 Blume rewrites internal links for both hosts (root domain and the GitHub Pages subpath).
 
+## Social images
+
+`public/og-image.png` and `public/apple-touch-icon.png` are committed renders of the matching
+SVGs. After editing an SVG, run `pnpm gen:social-images` and commit the PNGs. The build does not
+regenerate them, because resvg uses the machine's installed fonts and the output bytes vary by
+machine.
+
 ## MCP tool catalog
 
 The tool list on `/developers/mcp/tools` is generated from `packages/eval/src/tools.ts` and
