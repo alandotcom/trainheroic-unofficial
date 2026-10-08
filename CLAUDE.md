@@ -138,8 +138,9 @@ The dependency graph runs one direction; nothing lower depends on anything highe
   Astro routes in `src/pages/`.
   The MCP tool index is generated at build
   time from `packages/eval/src/tools.ts` plus hosted-only tools in
-  `packages/website/src/data/mcp-tool-catalog.ts`. GitHub Pages via
-  `.github/workflows/website.yml`; Cloudflare Workers static assets via Workers Builds.
+  `packages/website/src/data/mcp-tool-catalog.ts`. Served at trainheroic-unofficial.com from
+  Cloudflare Workers static assets via Workers Builds. `.github/workflows/website.yml` only
+  publishes a redirect page to the old GitHub Pages address.
 
 The central seam is the `ExerciseIndex` interface (in `js`). Local implements it in memory
 (`ExerciseLibrary`); hosted implements it over D1 (`cloudflare/src/store/exercises.ts`).

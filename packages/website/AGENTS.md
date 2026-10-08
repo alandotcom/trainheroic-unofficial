@@ -29,7 +29,10 @@ Two kinds of pages:
 - **Bespoke** (`/export`): an interactive `.astro` app in `src/pages/` using `Layout.astro`,
   `Header`/`Footer`, and `src/styles/global.css`. Blume mounts it as a custom page.
 
-Blume rewrites internal links for both hosts (root domain and the GitHub Pages subpath).
+The site is served at the root of trainheroic-unofficial.com. The old GitHub Pages address
+(`alandotcom.github.io/trainheroic-unofficial`) only serves `pages-redirect/index.html`, which
+sends each path to the same page on the custom domain. Internal links still go through Blume's
+base handling and `src/lib/paths.ts`, so a build with `ASTRO_BASE` set still works under a subpath.
 
 Repeated addresses (the hosted MCP URL, the support email, the repository URL) live in
 `src/data/site.ts`. The custom pages import them, and `blume.config.ts` exposes them to MDX as

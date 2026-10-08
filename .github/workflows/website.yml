@@ -1,11 +1,17 @@
 name: Deploy website
 
-# Build the static site and publish to GitHub Pages on pushes to main and manual dispatch.
-# Cloudflare Workers static assets build separately via Workers Builds (see packages/website/README.md).
+# The website is served from https://trainheroic-unofficial.com by Cloudflare Workers Builds (see
+# packages/website/wrangler.jsonc). This workflow keeps the old GitHub Pages address,
+# alandotcom.github.io/trainheroic-unofficial, sending readers there: it publishes the redirect
+# page in packages/website/pages-redirect/ as both index.html and 404.html, so every old path
+# lands on the same page on the custom domain.
 
 on:
   push:
     branches: [main]
+    paths:
+      - packages/website/pages-redirect/**
+      - .github/workflows/website.yml
   workflow_dispatch:
 
 permissions:
@@ -23,27 +29,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Build website
-        run: pnpm --filter @trainheroic-unofficial/website run build
-        env:
-          # Project Pages URL: https://alandotcom.github.io/trainheroic-unofficial/
-          ASTRO_BASE: /trainheroic-unofficial/
-          ASTRO_SITE: https://alandotcom.github.io/trainheroic-unofficial
+      - name: Stage the redirect page
+        run: |
+          mkdir -p _site
+          cp packages/website/pages-redirect/index.html _site/index.html
+          cp packages/website/pages-redirect/index.html _site/404.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: packages/website/dist
+          path: _site
 
   deploy:
     needs: build

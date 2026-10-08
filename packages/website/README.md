@@ -1,19 +1,20 @@
 ## Deploy
 
-Two hosts, two builds:
+The site is served from `https://trainheroic-unofficial.com` by
+[Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/), built at the root path
+with no `ASTRO_BASE`.
 
-| Host                                                   | Builder                                                                                    | Build env                             |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------- |
-| `https://alandotcom.github.io/trainheroic-unofficial/` | GitHub Actions (`.github/workflows/website.yml`)                                           | `ASTRO_BASE=/trainheroic-unofficial/` |
-| `https://trainheroic-unofficial.com`                   | [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) (connected repo) | none (defaults to `/`)                |
+### Old GitHub Pages address
 
-### GitHub Pages
-
-Pushes to `main` build with the project subpath and deploy via GitHub Pages. Enable Pages in repo **Settings → Pages** with source **GitHub Actions**.
+`https://alandotcom.github.io/trainheroic-unofficial/` only redirects.
+`.github/workflows/website.yml` publishes `pages-redirect/index.html` to GitHub Pages as both
+`index.html` and `404.html`, so every old path loads it and the page sends the reader to the same
+path on the custom domain. The workflow runs when that file or the workflow changes. Pages stays
+enabled in repo **Settings → Pages** with source **GitHub Actions**.
 
 ### Cloudflare Worker (static assets)
 
-The site is a static-assets Worker (`trainheroic-website`) — no Worker script, just `assets.directory` in `wrangler.jsonc`. Connect this repository via **Workers & Pages → Create → Import from Git** and enable [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/).
+The site is a static-assets Worker (`trainheroic-unofficial`) — no Worker script, just `assets.directory` in `wrangler.jsonc`. Connect this repository via **Workers & Pages → Create → Import from Git** and enable [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/).
 
 Use the **repository root** as the project root:
 
