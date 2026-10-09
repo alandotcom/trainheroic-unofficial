@@ -7,6 +7,14 @@ packages:
 overrides:
   js-yaml@3: "^3.15.0"
 
+# agents pins the MCP SDK peers to exactly 2.0.0. The Worker runs agents' createMcpHandler on
+# SDK 2.3.1; test/oauth-resource.test.ts drives it over HTTP on all three /mcp paths. Remove
+# these entries once an agents release accepts the installed SDK version.
+peerDependencyRules:
+  allowedVersions:
+    agents>@modelcontextprotocol/server: "2.3.1"
+    agents>@modelcontextprotocol/client: "2.3.1"
+
 # pnpm 11 build-script policy (replaces package.json's "pnpm.onlyBuiltDependencies").
 # Every dependency with an install script needs an explicit decision, or pnpm fails the
 # deps-status check with ERR_PNPM_IGNORED_BUILDS. Only the toolchain binaries we actually

@@ -5,6 +5,7 @@ import {
   SELF,
   waitOnExecutionContext,
 } from "cloudflare:test";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 
@@ -104,6 +105,58 @@ describe("OAuth protected resource", () => {
     const bad = await exchange(refused.clientId, refused.code, "http://localhost/mcp/coach");
     expect(bad.status).toBe(400);
     expect(((await bad.json()) as { error: string }).error).toBe("invalid_target");
+  });
+});
+
+// List tools over Streamable HTTP through the Worker's real fetch handler, so the OAuth provider,
+// the agents `createMcpHandler` adapter, and the MCP SDK are exercised together.
+async function listToolsOverHttp(
+  url: string,
+  accessToken: string,
+  era: "auto" | "legacy",
+): Promise<string[]> {
+  const transport = new StreamableHTTPClientTransport(new URL(url), {
+    requestInit: { headers: { authorization: `Bearer ${accessToken}` } },
+    // SELF.fetch sends no Host header, and the MCP handler's DNS-rebinding check requires one.
+    fetch: (input, init) => {
+      const headers = new Headers(init?.headers);
+      headers.set("host", new URL(url).host);
+      return SELF.fetch(input, { ...init, headers });
+    },
+  });
+  const client = new Client({ name: "oauth-resource-test", version: "1.0.0" });
+  await (era === "legacy"
+    ? client.connect(transport, { prior: { kind: "legacy" } })
+    : client.connect(transport));
+  try {
+    return (await client.listTools()).tools.map((tool) => tool.name);
+  } finally {
+    await client.close();
+  }
+}
+
+describe("MCP over HTTP with an issued token", () => {
+  it("serves all three mount paths to a token bound to /mcp, in both protocol eras", async () => {
+    const { clientId, code } = await signIn();
+    const tokens = (await (await exchange(clientId, code, "http://localhost/mcp")).json()) as {
+      access_token: string;
+    };
+
+    for (const era of ["auto", "legacy"] as const) {
+      const full = await listToolsOverHttp("http://localhost/mcp", tokens.access_token, era);
+      const coach = await listToolsOverHttp("http://localhost/mcp/coach", tokens.access_token, era);
+      const athlete = await listToolsOverHttp(
+        "http://localhost/mcp/athlete",
+        tokens.access_token,
+        era,
+      );
+
+      expect(full).toContain("list_athletes");
+      expect(full).toContain("athlete_whoami");
+      expect(coach).toContain("list_athletes");
+      expect(athlete).toContain("athlete_whoami");
+      expect(athlete).not.toContain("list_athletes");
+    }
   });
 });
 

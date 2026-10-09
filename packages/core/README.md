@@ -26,7 +26,7 @@ D1-backed store).
 Install it alongside the MCP SDK and the `js` client (both peers you construct from):
 
 ```bash
-npm install @trainheroic-unofficial/core @trainheroic-unofficial/js @modelcontextprotocol/server@2.0.0
+npm install @trainheroic-unofficial/core @trainheroic-unofficial/js @modelcontextprotocol/server@2.3.1
 ```
 
 ```ts
