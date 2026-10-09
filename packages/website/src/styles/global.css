@@ -709,14 +709,13 @@ p {
     display: block;
   }
 
-  .proof-tabs {
-    overflow-x: auto;
-    grid-template-columns: repeat(4, minmax(6.75rem, 1fr));
-    scrollbar-width: thin;
-  }
-
+  /* All four tabs share the screen width. A two-word label such as "Hosted MCP" wraps onto a
+     second line inside its tab. */
   .proof-tab {
     min-height: 4.5rem;
+    padding: 0.75rem 0.5rem;
+    font-size: 0.9375rem;
+    line-height: 1.2;
   }
 
   .proof-panel {
