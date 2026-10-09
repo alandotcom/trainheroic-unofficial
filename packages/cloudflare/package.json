@@ -32,7 +32,7 @@
     "@babel/core": "^8.0.5",
     "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@cloudflare/workers-types": "^5.20260911.1",
-    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/client": "2.2.0",
     "@types/node": "^26.5.1",
     "drizzle-kit": "1.0.0-rc.5-ab785fc",
     "typescript": "^7.0.2",
