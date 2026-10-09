@@ -136,9 +136,11 @@ needs the `mcp-remote` bridge with `--transport http-only`:
 - **Error monitoring (Sentry).** Configured in `src/sentry.ts` and gated on the `SENTRY_DSN`
   secret. `withSentry` reports errors from the top-level fetch and cron handlers; the MCP
   factory (`src/mcp.ts`) attaches the signed-in user's email and correlates traces on
-  `mcp.session` = `user:<thUserId>`. `sendDefaultPii` is off (no IPs/cookies/auth headers), and
-  Sentry's HTTP integration never captures inbound request bodies (so the login POST password
-  cannot leak). Failed TrainHeroic calls attach a bounded request-field summary and sanitized
+  `mcp.session` = `user:<thUserId>`. `dataCollection` turns off every category Sentry would
+  otherwise collect (headers including `Authorization`, cookies, query strings, request and
+  response bodies, D1 query parameters, and inferred user fields such as the IP address), and
+  Sentry's HTTP integration also has inbound body capture disabled, so the login POST password
+  cannot leak. Failed TrainHeroic calls attach a bounded request-field summary and sanitized
   provider response diagnostics: request values are excluded except for a small allowlist of
   non-sensitive enum fields, while response diagnostics retain bounded status and boolean fields,
   redact all free-form strings, and omit unknown fields. Login failures include neither request

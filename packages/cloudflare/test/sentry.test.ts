@@ -49,11 +49,27 @@ describe("MCP Sentry instrumentation", () => {
   });
 });
 
+describe("Sentry data collection", () => {
+  it("collects no headers, bodies, cookies, query strings, query data, or inferred user fields", () => {
+    expect(sentryOptions({} as Env).dataCollection).toEqual({
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      httpBodies: [],
+      urlQueryParams: false,
+      graphQL: { document: false, variables: false },
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      stackFrameVariables: false,
+    });
+  });
+});
+
 describe("Cloudflare trace propagation", () => {
   it("propagates RPC traces only to the upstream coordinator", () => {
     const options = sentryOptions({} as Env);
 
-    expect(options.enableRpcTracePropagation).toBe(true);
     expect(options.rpcTracePropagationBindings).toEqual(["TRAINHEROIC_UPSTREAM"]);
   });
 

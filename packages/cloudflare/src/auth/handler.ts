@@ -82,7 +82,7 @@ async function recordAccount(
   // distinguishes a first-time signup from a returning login.
   const now = Date.now();
   try {
-    const row = await makeD1Warehouse(c.env.TH_DB, { instrument: Sentry.instrumentD1WithSentry })
+    const row = await makeD1Warehouse(c.env.TH_DB)
       .db.insert(account)
       .values({
         thUserId: session.thUserId,

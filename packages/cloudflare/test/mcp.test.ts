@@ -1,3 +1,4 @@
+import { env } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
@@ -106,7 +107,10 @@ describe("buildServer tool surfaces", () => {
     const getByName = vi.fn(() => ({ dispatch: vi.fn() }));
     const upstreamNamespace = { getByName } as unknown as Env["TRAINHEROIC_UPSTREAM"];
 
-    buildServer("athlete", props("athlete", 204394), upstreamNamespace);
+    buildServer("athlete", props("athlete", 204394), {
+      TH_DB: env.TH_DB,
+      TRAINHEROIC_UPSTREAM: upstreamNamespace,
+    });
 
     expect(getByName).toHaveBeenCalledOnce();
     expect(getByName).toHaveBeenCalledWith("204394");

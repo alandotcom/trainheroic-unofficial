@@ -148,7 +148,8 @@ export function registerFeedbackTool(server: McpServer, deps: FeedbackToolDeps):
         if (Sentry.isEnabled()) {
           // captureFeedback sends a `type: "feedback"` event, which the `beforeSend` user-clamp
           // in sentry.ts does NOT run on. The privacy invariant on this path rests entirely on
-          // `sendDefaultPii: false` plus only ever calling `setUser` with the email — keep it so.
+          // `dataCollection.userInfo: false` plus only ever calling `setUser` with the email — keep
+          // it so.
           const eventId = Sentry.withScope((scope) => {
             scope.setContext("mcp", {
               kind: report.kind,

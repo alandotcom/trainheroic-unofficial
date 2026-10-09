@@ -72,8 +72,10 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   app-specific tool span, aggregate metrics, and one privacy-safe structured log inside it. Logs
   use explicit `Sentry.logger` calls rather than blanket console capture. Without MCP protocol
   sessions, traces, logs, and errors correlate on `mcp.session` = `user:<thUserId>` (opaque numeric
-  id, stamped in the MCP factory and tool-metrics). D1 queries are traced separately via
-  `Sentry.instrumentD1WithSentry`, applied once inside `makeDb` (`store/schema.ts`). RPC trace
+  id, stamped in the MCP factory and tool-metrics). D1 queries are traced because every
+  `makeD1Warehouse` call receives `TH_DB` from the request env that `withSentry` instruments
+  (`buildServer` takes it as part of `ServerBindings`; the login handler reads `c.env`). The
+  `cloudflare:workers` module env is not instrumented, so D1 read through it has no spans. RPC trace
   context is propagated only through `TRAINHEROIC_UPSTREAM`; HTTP trace propagation is disabled so
   TrainHeroic never receives Sentry trace headers while local fetch spans and breadcrumbs remain.
 - `src/upstream-coordinator.ts`: the account-scoped outbound HTTP coordinator. The
@@ -100,8 +102,9 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   request-field summary, and sanitized provider response diagnostics), aggregate
   metrics/traces (tool name, surface, ok/error, opaque `user:<thUserId>`), and — only when the
   user explicitly files one — a `report_feedback` report (the user's own message plus that same
-  non-PII context, with their email as the contact). `src/sentry.ts` keeps
-  `sendDefaultPii` off and forces `httpServerIntegration`'s `maxRequestBodySize: "none"` so
+  non-PII context, with their email as the contact). `src/sentry.ts` sets every
+  `dataCollection` category off (Sentry 11 collects headers, bodies, cookies, query strings, and
+  D1 parameters by default) and forces `httpServerIntegration`'s `maxRequestBodySize: "none"` so
   inbound request bodies (the login POST password) are never captured; SDK error diagnostics
   summarize request field names plus allowlisted enum values. Provider error responses retain
   bounded diagnostic strings, status fields, and booleans after credential, email, IPv4, and SSN

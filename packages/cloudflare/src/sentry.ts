@@ -20,11 +20,15 @@ type OAuthInternalError = {
  * a no-op, so local dev and the test suite run untouched.
  *
  * Privacy invariant — we keep the error and the signed-in user's email, nothing else:
- *   - `sendDefaultPii: false` keeps IP addresses, cookies, and auth headers off the events.
- *   - `httpServerIntegration({ maxRequestBodySize: "none" })` disables request-body capture, so
- *     the login POST (which carries the TrainHeroic password) can never reach Sentry. Listing the
- *     integration overrides the default one of the same name rather than adding a second, which
- *     is what makes this effective.
+ *   - `dataCollection` turns every collection category off. The SDK's defaults collect request
+ *     and response headers (the `Authorization` header carries the MCP bearer token), bodies (the
+ *     login POST carries the TrainHeroic password), cookies, query strings (`/authorize` carries
+ *     OAuth parameters), D1 bound parameters (the account upsert carries the email), and stack
+ *     frame variables. `userInfo: false` stops the SDK inferring user fields such as the IP
+ *     address; the email set explicitly with `Sentry.setUser` is still sent.
+ *   - `httpServerIntegration({ maxRequestBodySize: "none" })` disables request-body capture a
+ *     second way, so the password stays out even if a future default re-enables bodies. Listing
+ *     the integration overrides the default one of the same name rather than adding a second.
  *   - Tracing is on (`tracesSampleRate`). Sentry's MCP wrapper emits the standard protocol spans,
  *     while every tool call also runs inside its aggregate-metrics `mcp.tool/<name>` span
  *     (tool-metrics.ts). MCP inputs and outputs are explicitly disabled below. Without protocol
@@ -33,13 +37,14 @@ type OAuthInternalError = {
  *   - Trace context crosses only the `TRAINHEROIC_UPSTREAM` Durable Object RPC binding. HTTP trace
  *     propagation is disabled, so Sentry still records local fetch spans and breadcrumbs without
  *     sending `sentry-trace` or `baggage` headers to TrainHeroic.
- *   - Logs are enabled, but console capture is not. `tool-metrics.ts` emits one structured,
- *     trace-linked log per tool invocation from an explicit allowlist of non-PII attributes;
- *     arguments, results, raw errors, and console fallback content never enter Sentry Logs.
+ *   - Logs come only from explicit `Sentry.logger` calls; console capture is not enabled.
+ *     `tool-metrics.ts` emits one structured, trace-linked log per tool invocation from an
+ *     explicit allowlist of non-PII attributes; arguments, results, raw errors, and console
+ *     fallback content never enter Sentry Logs.
  *   - The email is attached explicitly via `Sentry.setUser` in the MCP factory, and `beforeSend`
  *     clamps `event.user` down to just the email so nothing else (id, username, geo) leaks. Note
  *     `beforeSend` does NOT run on `type: "feedback"` events, so the `report_feedback` path
- *     (tools/feedback.ts) is guarded only by `sendDefaultPii: false` plus the rule that
+ *     (tools/feedback.ts) is guarded only by `dataCollection.userInfo: false` plus the rule that
  *     `setUser` only ever receives the email — keep it so.
  *   - Aggregate metrics carry only low-cardinality tags (`role`, tool name, ok/error), never the
  *     email or any other PII.
@@ -57,10 +62,19 @@ export function sentryOptions(env: Env): CloudflareOptions {
   return {
     dsn: env.SENTRY_DSN,
     release: env.SENTRY_RELEASE,
-    sendDefaultPii: false,
-    enableLogs: true,
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      httpBodies: [],
+      urlQueryParams: false,
+      graphQL: { document: false, variables: false },
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      stackFrameVariables: false,
+    },
     tracesSampleRate: tracesSampleRate(env),
-    enableRpcTracePropagation: true,
     rpcTracePropagationBindings: ["TRAINHEROIC_UPSTREAM"],
     tracePropagationTargets: [],
     integrations: [Sentry.httpServerIntegration({ maxRequestBodySize: "none" })],
@@ -131,15 +145,17 @@ export function oauthProviderErrorReporter(error: OAuthProviderError): void {
 
 /**
  * Stamp the current execution context with a correlation key so one user's traces and error
- * events share a queryable tag. Sets a scope tag (carried by error events) and an attribute on
- * the active span (carried by the enclosing transaction); every MCP entry point calls it,
- * because each request gets a fresh isolation scope. No-op when `SENTRY_DSN` is unset.
+ * events share a queryable key. Sets a scope tag (carried by error events), a scope attribute
+ * (carried by every span, log, and metric created afterwards), and an attribute on the span that
+ * is already open, which the scope attribute misses. Every MCP entry point calls it, because each
+ * request gets a fresh isolation scope. No-op when `SENTRY_DSN` is unset.
  *
  * The tag key stays `mcp.session` even though the value is now a user id, so Sentry queries and
  * saved views built before the SDK v2 migration keep working. The value is never PII.
  */
 export function tagMcpUser(key: string): void {
   Sentry.setTag("mcp.session", key);
+  Sentry.setAttribute("mcp.session", key);
   Sentry.getActiveSpan()?.setAttribute("mcp.session", key);
 }
 
