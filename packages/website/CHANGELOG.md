@@ -1,5 +1,11 @@
 # @trainheroic-unofficial/website
 
+## 0.0.31
+
+### Patch Changes
+
+- 5b27fe7: Fit the home page's Hosted MCP, CLI, SDK, and Export tabs across the full width of a phone screen, so all four labels show and stray scrollbars no longer appear around the tab strip.
+
 ## 0.0.30
 
 ### Patch Changes
