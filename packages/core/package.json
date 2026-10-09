@@ -37,10 +37,10 @@
     "@modelcontextprotocol/server": "2.3.1",
     "@trainheroic-unofficial/dto": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
-    "zod": "^4.6.3"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.4",
     "tsdown": "^0.23.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
