@@ -279,7 +279,7 @@ Environment-specific facts that defy reasonable assumptions:
 
   The CLI enforces a `--yes` flag on `coach message send`/`coach message delete`,
   `coach workout publish`, `coach workout remove`, `coach exercise forget`, `coach
-athlete-invite`, `coach athlete-archive`, `coach team-delete`, `coach team-code-delete`,
+  athlete-invite`, `coach athlete-archive`, `coach team-delete`, `coach team-code-delete`,
   `coach session-unpublish`, and `coach log-set`, but the gate above still applies: confirm
   in the moment before adding `--yes`.
 

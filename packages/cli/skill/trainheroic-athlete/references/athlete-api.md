@@ -68,7 +68,7 @@ resolve the ids from `summarizedSavedWorkout.saved_workout`.
 
 1. **Persist the entered data** — `PUT /1.0/athlete/savedworkoutsetexercise/{savedWorkoutSetExerciseId}`
    with `{ id, saved_workout_set_id, workout_set_exercise_id, completed:1, param_N_made,
-param_1_data_N, param_2_data_N (10 slots) }`. This is the only path that actually stores
+   param_1_data_N, param_2_data_N (10 slots) }`. This is the only path that actually stores
    reps/weight (and it alone surfaces the result in exercise history). The
    `savedworkoutset`/`savedworkout` PUTs accept the same fields but **silently discard** the
    `param_N_data` values (the savedworkout PUT is the session-note / RPE write, not a log path).
@@ -114,9 +114,9 @@ Download historicals into D1 so they can be queried over time without re-hitting
 One sync verb populates each zone; one query tool reads it.
 
 - `athlete_workouts_sync { startDate, endDate }` → `athlete_workouts_stored { workoutId? |
-startDate?/endDate? }`.
+  startDate?/endDate? }`.
 - `athlete_training_sync { exerciseId? | batchSize?, full? }` → `athlete_training_stored
-{ q? | exerciseId? (+prs?) | workingMaxes? }`. Omitting `exerciseId` syncs the catalog +
+  { q? | exerciseId? (+prs?) | workingMaxes? }`. Omitting `exerciseId` syncs the catalog +
   working maxes and drains a **batch** of un-synced exercises (repeat until `remaining` is 0
   — bounded per call to respect Worker subrequest limits). `full:true` re-pulls every
   exercise.

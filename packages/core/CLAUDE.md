@@ -33,7 +33,7 @@ export a `registerXxxTools(server, ctx)` function.
 - Gate every destructive or athlete-facing action with `confirmGate` from `src/confirm.ts`.
   It returns `undefined` to proceed, or a `ToolHandlerResult` to return (`input_required` /
   MRTR elicitation, or an in-band denial). Prefer `const blocked = confirmGate(...); if
-(blocked) return blocked;`. Clients that already pass `confirm: true` skip elicitation.
+  (blocked) return blocked;`. Clients that already pass `confirm: true` skip elicitation.
 - Coach servers should call `registerCoachTools(server, ctx)` rather than enumerating the
   individual coach `registerXxxTools` functions.
 
