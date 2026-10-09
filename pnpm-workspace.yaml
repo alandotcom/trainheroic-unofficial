@@ -44,3 +44,8 @@ minimumReleaseAgeExclude:
   - astro@7.0.4 || 7.2.7
   - hono
   - '@cloudflare/workers-types@5.20260816.1 || 5.20260826.1'
+  # @cloudflare/vitest-plugin 1.4.0 is the first release that supports vitest 5, and it pins
+  # these exact wrangler and miniflare versions. All three were published 2026-10-08.
+  - '@cloudflare/vitest-plugin@1.4.0'
+  - miniflare@5.20261006.1-alpha
+  - wrangler@4.149.0
