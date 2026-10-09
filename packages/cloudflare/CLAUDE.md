@@ -150,6 +150,6 @@ pnpm cf-typegen          # wrangler types -> worker-configuration.d.ts
 pnpm db:migrate:local    # migrations against the local D1
 pnpm db:migrate          # migrations against the remote D1
 pnpm typecheck
-pnpm test                # runs inside workerd via @cloudflare/vitest-pool-workers
+pnpm test                # runs inside workerd via @cloudflare/vitest-plugin
 pnpm exec vitest run test/<file>.test.ts
 ```

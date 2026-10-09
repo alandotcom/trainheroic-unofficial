@@ -1,4 +1,4 @@
-/// <reference types="@cloudflare/vitest-pool-workers/types" />
+/// <reference types="@cloudflare/vitest-plugin/types" />
 
 declare module "cloudflare:test" {
   // Bindings available to tests come from wrangler.jsonc.

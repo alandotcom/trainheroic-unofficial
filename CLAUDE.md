@@ -92,7 +92,7 @@ cd packages/js && pnpm exec vitest run test/workout-encode.test.ts
 cd packages/js && pnpm exec vitest run -t "broadcasts a scalar over sets"
 ```
 
-The `cloudflare` package runs its tests inside workerd via `@cloudflare/vitest-pool-workers`
+The `cloudflare` package runs its tests inside workerd via `@cloudflare/vitest-plugin`
 (see its `vitest.config.ts`), so they exercise the real Worker runtime. Every other package
 uses plain Node vitest.
 

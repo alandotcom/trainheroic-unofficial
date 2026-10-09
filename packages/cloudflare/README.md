@@ -40,7 +40,7 @@ Typecheck and tests run locally with no Cloudflare account:
 
 ```bash
 pnpm typecheck
-pnpm test                # runs inside workerd (Cloudflare's runtime) via @cloudflare/vitest-pool-workers
+pnpm test                # runs inside workerd (Cloudflare's runtime) via @cloudflare/vitest-plugin
 ```
 
 Deploying and migrating the remote database do need a Cloudflare account and wrangler auth
