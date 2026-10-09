@@ -1,5 +1,20 @@
 # @trainheroic-unofficial/db
 
+## 4.1.0
+
+### Minor Changes
+
+- fd0d12c: Upgrade the hosted Worker to Sentry 11.5 with every data-collection category switched off, so request headers, bodies, cookies, query strings, and database query parameters stay out of Sentry. `makeD1Warehouse` in `@trainheroic-unofficial/db/d1` no longer takes an `instrument` option; pass a binding that is already instrumented.
+
+### Patch Changes
+
+- 4fb4bed: Update zod to 4.6.5, Hono to 4.13.13, and the Drizzle ORM 1.0 release candidate to its newest snapshot.
+- dad246b: Run the test suites on vitest 5.0.3. The hosted Worker's tests move to `@cloudflare/vitest-plugin` 1.4.0, the first release with vitest 5 support, and wrangler moves to 4.149.0 to match the plugin. These are development dependencies, so published package contents are unchanged.
+- Updated dependencies [4fb4bed]
+- Updated dependencies [dad246b]
+  - @trainheroic-unofficial/dto@4.1.0
+  - @trainheroic-unofficial/js@4.1.0
+
 ## 4.0.0
 
 ### Patch Changes

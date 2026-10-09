@@ -1,5 +1,26 @@
 # @trainheroic-unofficial/website
 
+## 0.0.30
+
+### Patch Changes
+
+- ba7ce8c: Upgrade the documentation site to Blume 2.
+- ba7ce8c: Build the docs header and sidebar on Blume's public exports.
+- ba7ce8c: Describe the documentation site as Blume content in the workspace notes.
+- ba7ce8c: Rework the documentation with Blume 2 components: a role picker on the capabilities page, a surface picker with a first request on the developer landing page, an architecture diagram, terminal blocks that copy only commands, typed option and return-value tables for the SDK, section index cards, related pages, search keywords, and meta descriptions sized for search results.
+- ba7ce8c: Apply the site's design system to the documentation pages: the cobalt accent, warm paper background, square corners, a warm dark mode, a labeled search control, and a sidebar without duplicate entries.
+- ba7ce8c: Keep the home page's section headings readable when a row is hovered or focused.
+- c17881d: Redirect the old GitHub Pages address to trainheroic-unofficial.com instead of publishing a second copy of the site.
+- ba7ce8c: Define the hosted MCP URL, support email, and repository URL once for every page, and give the documentation pages the same footer links as the home page.
+- ba7ce8c: Give the home and export pages the same dark mode as the documentation, with a Dark/Light toggle in the header on every page.
+- ba7ce8c: Keep the committed social preview images stable across builds by rendering them only on demand.
+- ba7ce8c: Mark every tool in the MCP tool catalog as read-only, writing, or confirmation-gated.
+- ba7ce8c: Serve every page at the slashless URL that the sitemap and canonical tags use, and show the site's 404 page for unknown paths.
+- ba7ce8c: Turn on Cloudflare preview URLs for the website Worker so each build gets its own preview link.
+- Updated dependencies [4fb4bed]
+- Updated dependencies [dad246b]
+  - @trainheroic-unofficial/js@4.1.0
+
 ## 0.0.29
 
 ### Patch Changes

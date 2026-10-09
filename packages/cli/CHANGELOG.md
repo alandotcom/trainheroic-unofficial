@@ -1,5 +1,17 @@
 # @trainheroic-unofficial/cli
 
+## 4.1.0
+
+### Patch Changes
+
+- a8b7bf2: Re-indent wrapped list items in the bundled agent skill files so they render as part of their list.
+- 4fb4bed: Update zod to 4.6.5, Hono to 4.13.13, and the Drizzle ORM 1.0 release candidate to its newest snapshot.
+- dad246b: Run the test suites on vitest 5.0.3. The hosted Worker's tests move to `@cloudflare/vitest-plugin` 1.4.0, the first release with vitest 5 support, and wrangler moves to 4.149.0 to match the plugin. These are development dependencies, so published package contents are unchanged.
+- Updated dependencies [4fb4bed]
+- Updated dependencies [dad246b]
+  - @trainheroic-unofficial/dto@4.1.0
+  - @trainheroic-unofficial/js@4.1.0
+
 ## 4.0.0
 
 ### Major Changes
