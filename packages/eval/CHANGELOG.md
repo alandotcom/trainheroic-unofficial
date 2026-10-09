@@ -1,5 +1,14 @@
 # @trainheroic-unofficial/eval
 
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [4fb4bed]
+- Updated dependencies [dad246b]
+  - @trainheroic-unofficial/dto@4.1.0
+  - @trainheroic-unofficial/js@4.1.0
+
 ## 4.0.0
 
 ### Patch Changes

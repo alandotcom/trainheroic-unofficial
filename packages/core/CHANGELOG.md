@@ -1,5 +1,17 @@
 # @trainheroic-unofficial/core
 
+## 4.1.0
+
+### Patch Changes
+
+- 4f83b95: Upgrade the MCP TypeScript SDK to 2.3.1 and the hosted Worker's `agents` package to 0.27.0. Servers convert tool schemas only when tools are listed, which cuts the work the hosted Worker does on every request, and a closed connection no longer raises an unhandled rejection on Cloudflare Workers.
+- 4fb4bed: Update zod to 4.6.5, Hono to 4.13.13, and the Drizzle ORM 1.0 release candidate to its newest snapshot.
+- dad246b: Run the test suites on vitest 5.0.3. The hosted Worker's tests move to `@cloudflare/vitest-plugin` 1.4.0, the first release with vitest 5 support, and wrangler moves to 4.149.0 to match the plugin. These are development dependencies, so published package contents are unchanged.
+- Updated dependencies [4fb4bed]
+- Updated dependencies [dad246b]
+  - @trainheroic-unofficial/dto@4.1.0
+  - @trainheroic-unofficial/js@4.1.0
+
 ## 4.0.0
 
 ### Major Changes

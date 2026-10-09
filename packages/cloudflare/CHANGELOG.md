@@ -1,5 +1,24 @@
 # @trainheroic-unofficial/cloudflare
 
+## 4.1.0
+
+### Patch Changes
+
+- 4f83b95: Upgrade the MCP TypeScript SDK to 2.3.1 and the hosted Worker's `agents` package to 0.27.0. Servers convert tool schemas only when tools are listed, which cuts the work the hosted Worker does on every request, and a closed connection no longer raises an unhandled rejection on Cloudflare Workers.
+- f288f5b: Upgrade the hosted Worker to `@cloudflare/workers-oauth-provider` 1.2.3. Tokens are bound to `<origin>/mcp`, which is the resource existing grants already carry, so connected users stay signed in. A user whose connector was added with a `/mcp/coach` or `/mcp/athlete` URL is asked to reconnect once. The daily OAuth purge now resumes where the previous run stopped, and Sentry receives only server errors and resource or client-metadata failures from the OAuth provider.
+- 4fb4bed: Update zod to 4.6.5, Hono to 4.13.13, and the Drizzle ORM 1.0 release candidate to its newest snapshot.
+- fd0d12c: Upgrade the hosted Worker to Sentry 11.5 with every data-collection category switched off, so request headers, bodies, cookies, query strings, and database query parameters stay out of Sentry. `makeD1Warehouse` in `@trainheroic-unofficial/db/d1` no longer takes an `instrument` option; pass a binding that is already instrumented.
+- dad246b: Run the test suites on vitest 5.0.3. The hosted Worker's tests move to `@cloudflare/vitest-plugin` 1.4.0, the first release with vitest 5 support, and wrangler moves to 4.149.0 to match the plugin. These are development dependencies, so published package contents are unchanged.
+- b473739: Run the hosted Worker's tests with `@cloudflare/vitest-plugin`, the renamed successor to the deprecated `@cloudflare/vitest-pool-workers`.
+- Updated dependencies [4f83b95]
+- Updated dependencies [4fb4bed]
+- Updated dependencies [fd0d12c]
+- Updated dependencies [dad246b]
+  - @trainheroic-unofficial/core@4.1.0
+  - @trainheroic-unofficial/dto@4.1.0
+  - @trainheroic-unofficial/js@4.1.0
+  - @trainheroic-unofficial/db@4.1.0
+
 ## 4.0.0
 
 ### Patch Changes
