@@ -190,6 +190,12 @@ storage-specific (the D1 warehouse syncs are the current example).
 
 ## Agent skills
 
+### Sentry access
+
+The workspace root `.env` contains `SENTRY_AUTH_TOKEN` for `alan-zy/trainheroic-mcp`.
+Load it into the command environment before investigating Sentry issues, including when the
+CLI reports that it is not authenticated. Keep the token out of command text and output.
+
 ### Reverse-engineer a TrainHeroic API
 
 End-to-end loop when a new undocumented endpoint is discovered: probe, dto, SDK,

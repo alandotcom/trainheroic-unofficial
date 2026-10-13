@@ -2,7 +2,13 @@ import * as Sentry from "@sentry/cloudflare";
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { authHandler } from "./auth/handler";
 import { athleteMcpHandler, coachMcpHandler, fullMcpHandler } from "./mcp";
-import { oauthProviderErrorReporter, sentryOptions } from "./sentry";
+import {
+  oauthProviderErrorReporter,
+  sentryOptions,
+  shouldReportOAuthProviderError,
+} from "./sentry";
+import { oauthErrorIdentity, readOAuthErrorRequest } from "./auth/oauth-error-context";
+import type { OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
 
 export { TrainHeroicUpstream } from "./upstream-coordinator";
 
@@ -16,7 +22,10 @@ const PURGE_CURSOR_KEY = "purge-cursor";
 // set to that origin's `/mcp`. `/mcp/coach` and `/mcp/athlete` sit under `/mcp`, so one token
 // works on all three mount paths, and the 401 challenge on any of them points clients at the
 // `/.well-known/oauth-protected-resource/mcp` document.
-function oauthProvider(origin: string): OAuthProvider {
+function oauthProvider(
+  origin: string,
+  onError: OAuthProviderOptions["onError"] = oauthProviderErrorReporter,
+): OAuthProvider {
   return new OAuthProvider({
     // Most specific routes first: `apiHandlers` is matched by prefix in insertion order, so
     // `/mcp/coach` and `/mcp/athlete` must precede `/mcp` or they'd be swallowed by it.
@@ -43,7 +52,7 @@ function oauthProvider(origin: string): OAuthProvider {
     // OAuth wire errors remain generic; report only the provider's tagged internal diagnosis.
     // The reporter deliberately omits the Request and diagnostic detail to keep URLs and secrets
     // out of Sentry.
-    onError: oauthProviderErrorReporter,
+    onError,
   });
 }
 
@@ -74,7 +83,29 @@ function tooManyRequests(): Response {
 const handler = {
   fetch: async (request: Request, env: Env, ctx: ExecutionContext): Promise<Response> => {
     if (await isRateLimited(request, env)) return tooManyRequests();
-    return oauthProvider(new URL(request.url).origin).fetch(request, env, ctx);
+    const url = new URL(request.url);
+    const contentType = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+    const diagnosticRequest =
+      url.pathname === "/token" &&
+      request.method === "POST" &&
+      contentType === "application/x-www-form-urlencoded"
+        ? readOAuthErrorRequest(request.clone())
+        : undefined;
+    let providerError: Parameters<NonNullable<OAuthProviderOptions["onError"]>>[0] | undefined;
+    const provider = oauthProvider(url.origin, (error) => {
+      if (!diagnosticRequest || !shouldReportOAuthProviderError(error)) {
+        return oauthProviderErrorReporter(error);
+      }
+      providerError = error;
+    });
+    const response = await provider.fetch(request, env, ctx);
+    // Capture before withSentry finishes the request and flushes its events.
+    if (providerError && diagnosticRequest) {
+      const bounded = await diagnosticRequest;
+      const identity = bounded ? await oauthErrorIdentity(bounded, env.OAUTH_KV) : undefined;
+      oauthProviderErrorReporter(providerError, identity);
+    }
+    return response;
   },
   // KV hygiene: drop expired/orphaned grants, tokens, and client registrations. Each run checks
   // at most `batchSize` grants and tokens, then stores a cursor in OAUTH_KV so the next daily run

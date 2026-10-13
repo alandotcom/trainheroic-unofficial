@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/cloudflare";
 import type { CloudflareOptions } from "@sentry/cloudflare";
 import type { OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
 import type { TrainHeroicHttpError, TrainHeroicHttpErrorHandler } from "@trainheroic-unofficial/js";
+import type { OAuthErrorIdentity } from "./auth/oauth-error-context";
 
 type OAuthProviderError = Parameters<NonNullable<OAuthProviderOptions["onError"]>>[0];
 type OAuthInternalError = {
@@ -106,15 +107,27 @@ export function mcpUserKey(thUserId: number): string {
 }
 
 /** Report an application-owned OAuth diagnostic without request URLs or upstream detail. */
-export function reportOAuthInternalError(error: OAuthInternalError): void {
-  Sentry.captureException(new Error("OAuth provider internal error"), {
-    tags: {
-      "oauth.error.code": error.code,
-      "oauth.error.status": String(error.status),
-      "oauth.internal.category": error.category,
-      "oauth.internal.reason": error.reason,
+export function reportOAuthInternalError(
+  error: OAuthInternalError,
+  identity?: OAuthErrorIdentity,
+): void {
+  const resourceRejection = error.status < 500 && error.category === "resource-indicator";
+  Sentry.captureException(
+    new Error(resourceRejection ? "OAuth resource rejected" : "OAuth provider internal error"),
+    {
+      ...(resourceRejection
+        ? { level: "warning", fingerprint: ["oauth-resource", error.reason] }
+        : {}),
+      ...(identity?.email ? { user: { email: identity.email } } : {}),
+      tags: {
+        "oauth.error.code": error.code,
+        "oauth.error.status": String(error.status),
+        "oauth.internal.category": error.category,
+        "oauth.internal.reason": error.reason,
+        ...(identity ? { "mcp.session": identity.userKey } : {}),
+      },
     },
-  });
+  );
 }
 
 /**
@@ -123,24 +136,33 @@ export function reportOAuthInternalError(error: OAuthInternalError): void {
  * routine client behaviour (an expired access token, a malformed request), so only these reach
  * Sentry:
  * - `client-id-metadata-document`: a client's CIMD document could not be fetched or parsed.
- * - `resource-indicator`: a token or refresh request named a resource this Worker does not serve.
- *   A burst of these after a deploy means `resourceMetadata.resource` in `index.ts` no longer
- *   matches the resource stored on existing grants, which signs those users out.
+ * - `resource-indicator`: warning events for invalid client resource values or unbound stored
+ *   audiences. Group by reason so these failures remain distinguishable from server errors.
  */
 const REPORTED_OAUTH_CATEGORIES = new Set(["client-id-metadata-document", "resource-indicator"]);
+
+export function shouldReportOAuthProviderError(error: OAuthProviderError): boolean {
+  return error.status >= 500 || REPORTED_OAUTH_CATEGORIES.has(error.internal.category);
+}
 
 /**
  * Adapt the provider's diagnostic callback to the application's privacy-safe reporter. Reports
  * every 5xx, plus the 4xx categories in `REPORTED_OAUTH_CATEGORIES`.
  */
-export function oauthProviderErrorReporter(error: OAuthProviderError): void {
-  if (error.status < 500 && !REPORTED_OAUTH_CATEGORIES.has(error.internal.category)) return;
-  reportOAuthInternalError({
-    code: error.code,
-    status: error.status,
-    category: error.internal.category,
-    reason: error.internal.reason,
-  });
+export function oauthProviderErrorReporter(
+  error: OAuthProviderError,
+  identity?: OAuthErrorIdentity,
+): void {
+  if (!shouldReportOAuthProviderError(error)) return;
+  reportOAuthInternalError(
+    {
+      code: error.code,
+      status: error.status,
+      category: error.internal.category,
+      reason: error.internal.reason,
+    },
+    identity,
+  );
 }
 
 /**

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrainHeroicHttpError } from "@trainheroic-unofficial/js";
+import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 
 const sentry = vi.hoisted(() => ({
   captureException: vi.fn(),
@@ -7,6 +8,7 @@ const sentry = vi.hoisted(() => ({
   wrapMcpServerWithSentry: vi.fn(
     (server: object, _options?: { recordInputs?: boolean; recordOutputs?: boolean }) => server,
   ),
+  metrics: { count: vi.fn() },
 }));
 
 vi.mock("@sentry/cloudflare", () => ({
@@ -14,6 +16,9 @@ vi.mock("@sentry/cloudflare", () => ({
   getActiveSpan: () => undefined,
   httpServerIntegration: () => ({}),
   setTag: vi.fn(),
+  metrics: sentry.metrics,
+  withSentry: (_options: unknown, handler: object) => handler,
+  instrumentDurableObjectWithSentry: (_options: unknown, object: unknown) => object,
   withScope: (fn: (scope: { setUser: (user: unknown) => void }) => unknown) =>
     fn({ setUser: sentry.setUser }),
   wrapMcpServerWithSentry: (
@@ -21,6 +26,7 @@ vi.mock("@sentry/cloudflare", () => ({
     options?: { recordInputs?: boolean; recordOutputs?: boolean },
   ) => sentry.wrapMcpServerWithSentry(server, options),
 }));
+import worker from "../src/index";
 
 import {
   instrumentMcpServer,
@@ -148,6 +154,108 @@ describe("TrainHeroic Sentry reporters", () => {
 });
 
 describe("OAuth provider Sentry reporter", () => {
+  it("rejects unsupported content types without waiting for the request stream to close", async () => {
+    const body = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = body.writable.getWriter();
+    const ctx = createExecutionContext();
+    try {
+      const response = await worker.fetch(
+        new Request("http://localhost/token", {
+          method: "POST",
+          headers: { "content-type": "text/plain" },
+          body: body.readable,
+        }),
+        env as Env,
+        ctx,
+      );
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: "invalid_request" });
+      expect(sentry.captureException).not.toHaveBeenCalled();
+      await waitOnExecutionContext(ctx);
+    } finally {
+      await writer.abort();
+    }
+  });
+
+  it("captures the verified user through the Worker's real token error path", async () => {
+    const ctx = createExecutionContext();
+    // The provider injects OAUTH_PROVIDER into the request env during fetch.
+    const bindings = env as Env;
+    const registration = await worker.fetch(
+      new Request("http://localhost/register", {
+        method: "POST",
+        body: JSON.stringify({
+          redirect_uris: ["http://localhost/cb"],
+          token_endpoint_auth_method: "none",
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+      bindings,
+      ctx,
+    );
+    const { client_id: clientId } = (await registration.json()) as { client_id: string };
+    const token = "200003:sentry-grant:private-refresh-secret";
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+    const hash = Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+    await env.OAUTH_KV.put(
+      "grant:200003:sentry-grant",
+      JSON.stringify({
+        id: "sentry-grant",
+        userId: "200003",
+        clientId,
+        metadata: { label: "coach@example.com" },
+        refreshTokenId: hash,
+        expiresAt: Date.now() / 1000 + 3600,
+      }),
+    );
+    const response = await worker.fetch(
+      new Request("http://localhost/token", {
+        method: "POST",
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: clientId,
+          refresh_token: token,
+          resource: "http://localhost/mcp%20%5B1%5D%20(citation)",
+        }),
+      }),
+      bindings,
+      ctx,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: "invalid_target" });
+    expect(sentry.captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        user: { email: "coach@example.com" },
+        tags: expect.objectContaining({ "mcp.session": "user:200003" }),
+      }),
+    );
+    expect(JSON.stringify(sentry.captureException.mock.calls)).not.toContain(
+      "private-refresh-secret",
+    );
+    sentry.captureException.mockClear();
+    const oversized = await worker.fetch(
+      new Request("http://localhost/token", {
+        method: "POST",
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: clientId,
+          refresh_token: token,
+          resource: "http://localhost/mcp%20%5B1%5D%20(citation)",
+          padding: "x".repeat(20_000),
+        }),
+      }),
+      bindings,
+      ctx,
+    );
+    expect(oversized.status).toBe(400);
+    expect(await oversized.json()).toMatchObject({ error: "invalid_target" });
+    expect(sentry.captureException.mock.calls[0]?.[1]).not.toHaveProperty("user");
+    await waitOnExecutionContext(ctx);
+  });
+
   it("captures application-owned OAuth diagnostics without a synthetic provider event", () => {
     reportOAuthInternalError({
       code: "server_error",
@@ -205,16 +313,33 @@ describe("OAuth provider Sentry reporter", () => {
     expect(sentry.captureException).not.toHaveBeenCalled();
   });
 
-  it("reports a refresh that names a resource the Worker does not serve", () => {
-    oauthProviderErrorReporter({
-      code: "invalid_target",
-      description: "The resource parameter must name exactly one configured protected resource",
-      status: 400,
-      headers: {},
-      internal: { category: "resource-indicator", reason: "resource_not_configured" },
-    });
+  it("reports a rejected resource as a warning with verified account context", () => {
+    oauthProviderErrorReporter(
+      {
+        code: "invalid_target",
+        description: "The resource parameter must name exactly one configured protected resource",
+        status: 400,
+        headers: {},
+        internal: { category: "resource-indicator", reason: "resource_not_configured" },
+      },
+      { userKey: "user:200003", email: "coach@example.com" },
+    );
 
-    expect(sentry.captureException).toHaveBeenCalledOnce();
+    expect(sentry.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "OAuth resource rejected" }),
+      {
+        level: "warning",
+        fingerprint: ["oauth-resource", "resource_not_configured"],
+        user: { email: "coach@example.com" },
+        tags: {
+          "oauth.error.code": "invalid_target",
+          "oauth.error.status": "400",
+          "oauth.internal.category": "resource-indicator",
+          "oauth.internal.reason": "resource_not_configured",
+          "mcp.session": "user:200003",
+        },
+      },
+    );
   });
 
   it("reports every server error whatever its category", () => {

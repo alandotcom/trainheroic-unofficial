@@ -8,10 +8,12 @@ import {
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
+import { oauthErrorIdentity } from "../src/auth/oauth-error-context";
 
 const PKCE_VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 const PKCE_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 const REDIRECT_URI = "http://localhost/cb";
+let signInNumber = 0;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -25,6 +27,7 @@ function field(html: string, name: string): string {
 // Register a public client and sign a coach in through the login page, returning the client id
 // and an authorization code. The TrainHeroic login call is stubbed.
 async function signIn(): Promise<{ clientId: string; code: string }> {
+  const ip = `192.0.2.${++signInNumber}`;
   vi.stubGlobal(
     "fetch",
     vi.fn(async () =>
@@ -33,7 +36,7 @@ async function signIn(): Promise<{ clientId: string; code: string }> {
   );
   const reg = await SELF.fetch("http://localhost/register", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "CF-Connecting-IP": ip },
     body: JSON.stringify({ redirect_uris: [REDIRECT_URI], token_endpoint_auth_method: "none" }),
   });
   const { client_id: clientId } = (await reg.json()) as { client_id: string };
@@ -48,7 +51,11 @@ async function signIn(): Promise<{ clientId: string; code: string }> {
     (page.headers.getSetCookie().find((c) => c.startsWith("th_csrf=")) ?? "").split(";")[0] ?? "";
   const post = await SELF.fetch("http://localhost/authorize", {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", cookie },
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      cookie,
+      "CF-Connecting-IP": ip,
+    },
     body: new URLSearchParams({
       email: "coach@example.com",
       password: "pw",
@@ -77,6 +84,33 @@ function exchange(clientId: string, code: string, resource: string): Promise<Res
 }
 
 describe("OAuth protected resource", () => {
+  it("rejects citation-contaminated authorization URLs before creating a grant", async () => {
+    const registration = await SELF.fetch("http://localhost/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ redirect_uris: [REDIRECT_URI], token_endpoint_auth_method: "none" }),
+    });
+    const { client_id: clientId } = (await registration.json()) as { client_id: string };
+    const before = await env.OAUTH_KV.list({ prefix: "grant:" });
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: clientId,
+      redirect_uri: REDIRECT_URI,
+      scope: "mcp",
+      code_challenge: PKCE_CHALLENGE,
+      code_challenge_method: "S256",
+      resource: "http://localhost/mcp%20%5B1%5D%20(https://trainheroic-unofficial.com/connect)",
+    });
+    const response = await SELF.fetch(`http://localhost/authorize?${params}`, {
+      redirect: "manual",
+    });
+    expect(response.status).toBe(302);
+    expect(new URL(response.headers.get("location") ?? "").searchParams.get("error")).toBe(
+      "invalid_target",
+    );
+    expect((await env.OAUTH_KV.list({ prefix: "grant:" })).keys).toEqual(before.keys);
+  });
+
   it("advertises the request origin's /mcp as the resource", async () => {
     for (const origin of ["http://localhost", "https://mcp.example.com"]) {
       const response = await SELF.fetch(`${origin}/.well-known/oauth-protected-resource/mcp`);
@@ -105,6 +139,43 @@ describe("OAuth protected resource", () => {
     const bad = await exchange(refused.clientId, refused.code, "http://localhost/mcp/coach");
     expect(bad.status).toBe(400);
     expect(((await bad.json()) as { error: string }).error).toBe("invalid_target");
+  });
+
+  it("attributes provider-issued codes and current or previous refresh tokens", async () => {
+    const { clientId, code } = await signIn();
+    const expected = { userKey: "user:200003", email: "coach@example.com" };
+    const diagnostic = (parameters: Record<string, string>) =>
+      new Request("http://localhost/token", {
+        method: "POST",
+        body: new URLSearchParams({ client_id: clientId, ...parameters }),
+      });
+    const codeRequest = () => diagnostic({ grant_type: "authorization_code", code });
+    expect(await oauthErrorIdentity(codeRequest(), env.OAUTH_KV)).toEqual(expected);
+
+    const exchangeResponse = await exchange(clientId, code, "http://localhost/mcp");
+    expect(exchangeResponse.status).toBe(200);
+    const { refresh_token: refreshToken } = (await exchangeResponse.json()) as {
+      refresh_token: string;
+    };
+    expect(await oauthErrorIdentity(codeRequest(), env.OAUTH_KV)).toBeUndefined();
+    const refreshRequest = (token: string) =>
+      diagnostic({ grant_type: "refresh_token", refresh_token: token });
+    expect(await oauthErrorIdentity(refreshRequest(refreshToken), env.OAUTH_KV)).toEqual(expected);
+
+    const rotation = await SELF.fetch("http://localhost/token", {
+      method: "POST",
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        client_id: clientId,
+        refresh_token: refreshToken,
+        resource: "http://localhost/mcp",
+      }),
+    });
+    expect(rotation.status).toBe(200);
+    const { refresh_token: rotatedToken } = (await rotation.json()) as { refresh_token: string };
+    expect(rotatedToken).not.toBe(refreshToken);
+    expect(await oauthErrorIdentity(refreshRequest(rotatedToken), env.OAUTH_KV)).toEqual(expected);
+    expect(await oauthErrorIdentity(refreshRequest(refreshToken), env.OAUTH_KV)).toEqual(expected);
   });
 });
 

@@ -45,6 +45,10 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   localhost/`workers.dev` defaults rather than adding to them, which 403s local dev. No MCP
   Durable Objects (see `docs/adr/0001-mcp-sdk-v2-migration.md`, issue #73).
 - `src/auth/`: the `/authorize` login flow, the login page, and the crypto helpers.
+  `oauth-error-context.ts` attributes token-endpoint error events by matching the submitted
+  code or refresh-token SHA-256 hash and client ID to a live grant. It reads only a bounded
+  request copy, returns the grant's email label and opaque user key, and never decrypts props.
+  Re-audit the stored hash fields when upgrading the pinned OAuth provider.
 - `src/store/`: the per-tenant D1 layer. `ExerciseStore` implements the SDK's `ExerciseIndex`
   interface (the hosted counterpart to the in-memory `ExerciseLibrary`); the programming and
   messaging stores back the warehouse zones. Queries go through Drizzle ORM (pinned to the v1

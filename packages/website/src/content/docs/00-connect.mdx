@@ -23,6 +23,9 @@ tools; athletes get their own workouts, history, PRs, and working maxes.
     {{mcp-url}}
     ```
 
+    Use the code block's copy button. The connector URL must end at `/mcp`; leave out
+    citation numbers, brackets, and links added by a chat response.
+
   </Step>
 
   <Step title="Sign in">
@@ -64,6 +67,10 @@ Claude asks for confirmation before publishing workouts, sending messages, delet
 or logging athlete-facing results.
 
 ## If something goes wrong
+
+If Claude cannot connect or asks you to sign in repeatedly, check the connector URL against
+the code block above. A URL containing extra text needs to be removed and added again with
+the clean URL, then signed in again.
 
 Ask Claude to report the problem. The hosted connector can send the maintainers a short report
 with recent tool context, after you approve it.
