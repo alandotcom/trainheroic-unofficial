@@ -1,5 +1,17 @@
 # @trainheroic-unofficial/cloudflare
 
+## 4.1.1
+
+### Patch Changes
+
+- 2111a05: Attach the verified account email and correlation key to OAuth token errors when the submitted
+  token matches a live grant. Report resource rejections as warnings grouped by reason, and
+  explain how to copy a clean connector URL and recover from a URL containing a pasted citation.
+- @trainheroic-unofficial/core@4.1.1
+  - @trainheroic-unofficial/db@4.1.1
+  - @trainheroic-unofficial/dto@4.1.1
+  - @trainheroic-unofficial/js@4.1.1
+
 ## 4.1.0
 
 ### Patch Changes
