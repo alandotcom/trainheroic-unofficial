@@ -1,5 +1,12 @@
 # @trainheroic-unofficial/athlete-mcp
 
+## 4.1.1
+
+### Patch Changes
+
+- @trainheroic-unofficial/core@4.1.1
+  - @trainheroic-unofficial/js@4.1.1
+
 ## 4.1.0
 
 ### Patch Changes
