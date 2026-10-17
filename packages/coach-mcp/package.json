@@ -29,13 +29,13 @@
     "@modelcontextprotocol/server": "2.3.1",
     "@trainheroic-unofficial/core": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
-    "tsdown": "^0.23.0",
+    "@types/node": "^26.6.5",
+    "tsdown": "^0.23.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.4"
   }
 }
