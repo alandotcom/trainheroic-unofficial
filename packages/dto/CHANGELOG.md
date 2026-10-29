@@ -1,5 +1,9 @@
 # @trainheroic-unofficial/dto
 
+## 4.2.0
+
+No changes in this release.
+
 ## 4.1.1
 
 No changes in this release.
