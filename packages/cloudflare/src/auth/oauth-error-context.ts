@@ -32,11 +32,30 @@ export async function readOAuthErrorRequest(request: Request): Promise<Request |
       }
       chunks.push(chunk.value);
     }
-    return new Request(request.url, {
-      method: request.method,
-      headers: { "content-type": request.headers.get("content-type") ?? "" },
-      body: new Blob(chunks),
-    });
+    // The Authorization header carries HTTP Basic client credentials. The copy stays in memory
+    // for `oauthErrorIdentity` to read the client ID and is never sent anywhere.
+    const headers = new Headers({ "content-type": request.headers.get("content-type") ?? "" });
+    const authorization = request.headers.get("authorization");
+    if (authorization) headers.set("authorization", authorization);
+    return new Request(request.url, { method: request.method, headers, body: new Blob(chunks) });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The client ID from RFC 6749 HTTP Basic client credentials (`client_secret_basic`), decoded the
+ * way the OAuth provider decodes it. Confidential clients send their ID only in this header, so the
+ * form body has no `client_id` to compare against the grant.
+ */
+function basicClientId(header: string | null): string | undefined {
+  const match = header?.match(/^basic[ \t]+([^ \t]+)$/iu);
+  if (!match?.[1]) return undefined;
+  try {
+    const credentials = atob(match[1]);
+    const separator = credentials.indexOf(":");
+    if (separator === -1) return undefined;
+    return decodeURIComponent(credentials.slice(0, separator).replace(/\+/gu, " "));
   } catch {
     return undefined;
   }
@@ -67,7 +86,8 @@ export async function oauthErrorIdentity(
     const parsed = grantSchema.safeParse(await kv.get(`grant:${userId}:${grantId}`, "json"));
     if (!parsed.success) return;
     const grant = parsed.data;
-    if (grant.userId !== userId || grant.id !== grantId || grant.clientId !== single("client_id")) {
+    const clientId = single("client_id") ?? basicClientId(bounded.headers.get("authorization"));
+    if (grant.userId !== userId || grant.id !== grantId || grant.clientId !== clientId) {
       return;
     }
     if (grant.expiresAt !== undefined && grant.expiresAt <= Date.now() / 1000 + 60) return;

@@ -86,6 +86,21 @@ it("does not attribute expired or missing grants", async () => {
   expect(await oauthErrorIdentity(request(), env.OAUTH_KV)).toBeUndefined();
 });
 
+it("reads the client ID from HTTP Basic credentials when the body has none", async () => {
+  await saveGrant();
+  const basic = (clientId: string) =>
+    new Request("http://localhost/token", {
+      method: "POST",
+      headers: { authorization: `Basic ${btoa(`${clientId}:client-secret`)}` },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: TOKEN }),
+    });
+
+  expect(await oauthErrorIdentity(basic("test-client"), env.OAUTH_KV)).toMatchObject({
+    userKey: "user:200003",
+  });
+  expect(await oauthErrorIdentity(basic("another-client"), env.OAUTH_KV)).toBeUndefined();
+});
+
 it("returns only a correlation key when a verified grant has no email", async () => {
   await saveGrant({ metadata: undefined });
   expect(await oauthErrorIdentity(request(), env.OAUTH_KV)).toEqual({ userKey: "user:200003" });

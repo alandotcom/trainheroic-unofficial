@@ -46,8 +46,11 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
   Durable Objects (see `docs/adr/0001-mcp-sdk-v2-migration.md`, issue #73).
 - `src/auth/`: the `/authorize` login flow, the login page, and the crypto helpers.
   `oauth-error-context.ts` attributes token-endpoint error events by matching the submitted
-  code or refresh-token SHA-256 hash and client ID to a live grant. It reads only a bounded
-  request copy, returns the grant's email label and opaque user key, and never decrypts props.
+  code or refresh-token SHA-256 hash and client ID (form body or HTTP Basic credentials) to a
+  live grant. It reads only a bounded in-memory request copy, returns the grant's email label and
+  opaque user key, and never decrypts props. A resource rejection that matches no live grant is
+  a client retrying a grant the server no longer holds, so `tokenEndpointErrorReporter` counts it
+  as the `oauth.resource.rejected_unattributed` metric instead of opening a Sentry issue.
   Re-audit the stored hash fields when upgrading the pinned OAuth provider.
 - `src/store/`: the per-tenant D1 layer. `ExerciseStore` implements the SDK's `ExerciseIndex`
   interface (the hosted counterpart to the in-memory `ExerciseLibrary`); the programming and

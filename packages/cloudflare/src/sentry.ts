@@ -167,6 +167,30 @@ export function oauthProviderErrorReporter(
 }
 
 /**
+ * Report a provider error raised at `/token`, where `identity` is the live grant (if any) that the
+ * submitted code or refresh token belongs to (see `oauthErrorIdentity`).
+ *
+ * A resource rejection that matches no live grant comes from a client retrying a grant this server
+ * no longer holds (revoked, expired, or purged) or a token it never issued. No signed-in user is
+ * affected and the client retries on its own schedule, so it becomes an aggregate
+ * `oauth.resource.rejected_unattributed` metric instead of a warning event. A rejection that
+ * matches a live grant means a real user cannot refresh, so it stays a warning event with their
+ * email.
+ */
+export function tokenEndpointErrorReporter(
+  error: OAuthProviderError,
+  identity?: OAuthErrorIdentity,
+): void {
+  if (!identity && error.status < 500 && error.internal.category === "resource-indicator") {
+    Sentry.metrics.count("oauth.resource.rejected_unattributed", 1, {
+      attributes: { reason: error.internal.reason },
+    });
+    return;
+  }
+  oauthProviderErrorReporter(error, identity);
+}
+
+/**
  * Stamp the current execution context with a correlation key so one user's traces and error
  * events share a queryable key. Sets a scope tag (carried by error events), a scope attribute
  * (carried by every span, log, and metric created afterwards), and an attribute on the span that

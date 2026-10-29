@@ -33,6 +33,7 @@ import {
   oauthProviderErrorReporter,
   reportOAuthInternalError,
   sentryOptions,
+  tokenEndpointErrorReporter,
   trainHeroicHttpErrorReporter,
   trainHeroicLoginErrorReporter,
 } from "../src/sentry";
@@ -268,7 +269,11 @@ describe("OAuth provider Sentry reporter", () => {
     );
     expect(oversized.status).toBe(400);
     expect(await oversized.json()).toMatchObject({ error: "invalid_target" });
-    expect(sentry.captureException.mock.calls[0]?.[1]).not.toHaveProperty("user");
+    // A body too large to attribute matches no live grant, so it is counted, not reported.
+    expect(sentry.captureException).not.toHaveBeenCalled();
+    expect(sentry.metrics.count).toHaveBeenCalledWith("oauth.resource.rejected_unattributed", 1, {
+      attributes: { reason: "resource_not_configured" },
+    });
     await waitOnExecutionContext(ctx);
   });
 
@@ -356,6 +361,40 @@ describe("OAuth provider Sentry reporter", () => {
         },
       },
     );
+  });
+
+  it("counts a token-endpoint resource rejection that matches no live grant without an event", () => {
+    tokenEndpointErrorReporter({
+      code: "invalid_target",
+      description: "The resource parameter must name exactly one configured protected resource",
+      status: 400,
+      headers: {},
+      internal: { category: "resource-indicator", reason: "resource_not_configured" },
+    });
+
+    expect(sentry.captureException).not.toHaveBeenCalled();
+    expect(sentry.metrics.count).toHaveBeenCalledWith("oauth.resource.rejected_unattributed", 1, {
+      attributes: { reason: "resource_not_configured" },
+    });
+  });
+
+  it("reports a token-endpoint resource rejection for a live grant as a warning", () => {
+    tokenEndpointErrorReporter(
+      {
+        code: "invalid_target",
+        description: "The resource parameter must name exactly one configured protected resource",
+        status: 400,
+        headers: {},
+        internal: { category: "resource-indicator", reason: "resource_not_configured" },
+      },
+      { userKey: "user:200003", email: "coach@example.com" },
+    );
+
+    expect(sentry.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "OAuth resource rejected" }),
+      expect.objectContaining({ level: "warning", user: { email: "coach@example.com" } }),
+    );
+    expect(sentry.metrics.count).not.toHaveBeenCalled();
   });
 
   it("reports every server error whatever its category", () => {

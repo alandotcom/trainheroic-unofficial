@@ -6,6 +6,7 @@ import {
   oauthProviderErrorReporter,
   sentryOptions,
   shouldReportOAuthProviderError,
+  tokenEndpointErrorReporter,
 } from "./sentry";
 import { oauthErrorIdentity, readOAuthErrorRequest } from "./auth/oauth-error-context";
 import type { OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
@@ -103,7 +104,7 @@ const handler = {
     if (providerError && diagnosticRequest) {
       const bounded = await diagnosticRequest;
       const identity = bounded ? await oauthErrorIdentity(bounded, env.OAUTH_KV) : undefined;
-      oauthProviderErrorReporter(providerError, identity);
+      tokenEndpointErrorReporter(providerError, identity);
     }
     return response;
   },
