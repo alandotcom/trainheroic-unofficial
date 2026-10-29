@@ -101,6 +101,11 @@ runtime-agnostic `.` entry of `js`, never on `js/node`.
 - `COOKIE_ENCRYPTION_KEY` is the only required secret and signs the CSRF and OAuth round-trip
   values; `ALLOWED_EMAILS` and `SENTRY_DSN` are optional secrets. Credentials are never a deploy
   secret here: each user enters them at login and they live in the OAuth grant's encrypted `props`.
+- TrainHeroic outage statuses (502, 503, 504, and Cloudflare 520-530, see
+  `isTrainHeroicUnavailableStatus` in `js`) are counted as the `trainheroic.upstream.unavailable`
+  metric (status and host only) and never open a Sentry issue, because the Worker cannot fix a
+  TrainHeroic outage. The login form answers them with a 503 "TrainHeroic is not responding"
+  message instead of "Invalid email or password".
 - Sentry is privacy-constrained on purpose: the data it sends is the error, the TrainHeroic
   account email, sanitized TrainHeroic failure metadata (method, status, host, a bounded
   request-field summary, and sanitized provider response diagnostics), aggregate

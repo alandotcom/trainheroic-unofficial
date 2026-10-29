@@ -1,4 +1,8 @@
-import { notifyHttpError } from "./http-error";
+import {
+  TrainHeroicUnavailableError,
+  isTrainHeroicUnavailableStatus,
+  notifyHttpError,
+} from "./http-error";
 import type { TrainHeroicHttpErrorHandler } from "./http-error";
 import { defaultTrainHeroicTransport } from "./transport";
 import type { TrainHeroicTransport } from "./transport";
@@ -42,8 +46,10 @@ export type LoginOptions = {
 };
 
 /**
- * Authenticate against TrainHeroic. Returns the session bundle, or null on bad
- * credentials. TrainHeroic returns only { id, scope, role, session_id } (verified in
+ * Authenticate against TrainHeroic. Returns the session bundle, or null when TrainHeroic
+ * rejects the login. Throws `TrainHeroicUnavailableError` when TrainHeroic is unreachable (an
+ * outage status such as a Cloudflare 522), so callers can tell the user to retry later.
+ * TrainHeroic returns only { id, scope, role, session_id } (verified in
  * the Phase 0 spike: no refresh_token, no api_token, no TTL). The 48-char session_id
  * is sent as the `session-token` header and works against both API hosts.
  */
@@ -65,6 +71,8 @@ export async function loginTrainHeroic(
   if (!res.ok) {
     await res.body?.cancel().catch(() => {});
     notifyHttpError(options.onHttpError, "POST", url, res.status);
+    if (isTrainHeroicUnavailableStatus(res.status))
+      throw new TrainHeroicUnavailableError(res.status);
     return null;
   }
 

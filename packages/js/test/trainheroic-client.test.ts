@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrainHeroicAuthError, TrainHeroicClient } from "../src/client";
+import { TrainHeroicUnavailableError } from "../src/http-error";
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -346,6 +347,24 @@ describe("TrainHeroicClient", () => {
     expect(logins).toBe(1);
     expect(apiRequests).toBe(0);
     expect(onHttpError).toHaveBeenCalledOnce();
+  });
+
+  it("rejects with an unavailable error when TrainHeroic's login endpoint is down", async () => {
+    let apiRequests = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/auth")) return new Response("origin timed out", { status: 522 });
+        apiRequests += 1;
+        return json({ ok: true });
+      }),
+    );
+    const client = new TrainHeroicClient("a@b.com", "pw");
+
+    await expect(client.request("GET", "/user/simple")).rejects.toBeInstanceOf(
+      TrainHeroicUnavailableError,
+    );
+    expect(apiRequests).toBe(0);
   });
 
   it("targets the apis host when base is 'apis'", async () => {

@@ -40,6 +40,7 @@ import {
 afterEach(() => {
   sentry.captureException.mockReset();
   sentry.setUser.mockReset();
+  sentry.metrics.count.mockReset();
   sentry.wrapMcpServerWithSentry.mockClear();
 });
 
@@ -131,6 +132,21 @@ describe("TrainHeroic Sentry reporters", () => {
     expect(JSON.stringify(sentry.captureException.mock.calls[0])).not.toContain(
       "coach@example.com",
     );
+  });
+
+  it.each([
+    ["MCP request", trainHeroicHttpErrorReporter],
+    ["interactive login", trainHeroicLoginErrorReporter],
+  ])("counts a TrainHeroic outage during %s without opening an issue", (_label, reporter) => {
+    reporter("user@example.com")(
+      new TrainHeroicHttpError("POST", "https://apis.trainheroic.com/auth", 522),
+    );
+
+    expect(sentry.captureException).not.toHaveBeenCalled();
+    expect(sentry.setUser).not.toHaveBeenCalled();
+    expect(sentry.metrics.count).toHaveBeenCalledWith("trainheroic.upstream.unavailable", 1, {
+      attributes: { status: "522", host: "apis.trainheroic.com" },
+    });
   });
 
   it("suppresses expected interactive-login rejections at the hosted boundary", () => {

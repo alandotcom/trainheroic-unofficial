@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/cloudflare";
 import type { CloudflareOptions } from "@sentry/cloudflare";
 import type { OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
+import { isTrainHeroicUnavailableStatus } from "@trainheroic-unofficial/js";
 import type { TrainHeroicHttpError, TrainHeroicHttpErrorHandler } from "@trainheroic-unofficial/js";
 import type { OAuthErrorIdentity } from "./auth/oauth-error-context";
 
@@ -202,9 +203,22 @@ function captureTrainHeroicHttpError(error: TrainHeroicHttpError): void {
   });
 }
 
-/** Bind every upstream error event to the TrainHeroic account that made the request. */
+/**
+ * Bind every upstream error event to the TrainHeroic account that made the request.
+ *
+ * Outage statuses (a gateway error or a Cloudflare 52x, see `isTrainHeroicUnavailableStatus`) mean
+ * TrainHeroic itself was down, which this Worker cannot fix, so they become an aggregate
+ * `trainheroic.upstream.unavailable` metric instead of an error event that would open an alerting
+ * issue. The metric carries only the status and host, never the email.
+ */
 export function trainHeroicHttpErrorReporter(email: string): TrainHeroicHttpErrorHandler {
   return (error) => {
+    if (isTrainHeroicUnavailableStatus(error.status)) {
+      Sentry.metrics.count("trainheroic.upstream.unavailable", 1, {
+        attributes: { status: String(error.status), host: error.host },
+      });
+      return;
+    }
     Sentry.withScope((scope) => {
       scope.setUser({ email });
       captureTrainHeroicHttpError(error);

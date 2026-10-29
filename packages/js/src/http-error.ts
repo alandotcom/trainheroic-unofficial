@@ -297,6 +297,31 @@ export class TrainHeroicHttpError extends Error {
   }
 }
 
+/**
+ * True for statuses that mean TrainHeroic's servers could not be reached or did not answer: a
+ * gateway failure (502, 503, 504) or a Cloudflare edge error (520-530). TrainHeroic sits behind
+ * Cloudflare, so a 522 means the edge timed out connecting to TrainHeroic's origin. These describe
+ * an upstream outage, so the same request can succeed when retried later.
+ */
+export function isTrainHeroicUnavailableStatus(status: number): boolean {
+  return status === 502 || status === 503 || status === 504 || (status >= 520 && status <= 530);
+}
+
+/**
+ * Thrown when TrainHeroic answers with an outage status (see `isTrainHeroicUnavailableStatus`).
+ * The message tells the reader to retry later, so a model relaying it does not ask the user to
+ * re-check credentials that are fine.
+ */
+export class TrainHeroicUnavailableError extends Error {
+  override readonly name = "TrainHeroicUnavailableError";
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`TrainHeroic is not responding right now (HTTP ${status}). Try again in a few minutes.`);
+    this.status = status;
+  }
+}
+
 export type TrainHeroicHttpErrorHandler = (error: TrainHeroicHttpError) => void | PromiseLike<void>;
 
 /** Call observability hooks without allowing them to change SDK behavior. */

@@ -14,11 +14,17 @@ function requestUrl(input: string | URL | Request): string {
   return typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
 }
 
-function stubOAuthDependencies(cimd?: { metadataUrl: string; redirectUri: string }): void {
+function stubOAuthDependencies(
+  cimd?: { metadataUrl: string; redirectUri: string },
+  authStatus = 200,
+): void {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: string | URL | Request) => {
       const url = requestUrl(input);
+      if (url.endsWith("/auth") && authStatus !== 200) {
+        return new Response("upstream error", { status: authStatus });
+      }
       if (cimd && url === cimd.metadataUrl) {
         return Response.json({
           client_id: cimd.metadataUrl,
@@ -70,7 +76,8 @@ async function registerClient(): Promise<string> {
   return clientId;
 }
 
-async function authorize(clientId: string, redirectUri: string): Promise<string> {
+/** Render the login page for a registered client and submit the login form once. */
+async function submitLogin(clientId: string, redirectUri: string): Promise<Response> {
   const authUrl =
     `http://localhost/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}&scope=mcp` +
@@ -85,7 +92,7 @@ async function authorize(clientId: string, redirectUri: string): Promise<string>
       ";",
     )[0] ?? "";
 
-  const response = await SELF.fetch("http://localhost/authorize", {
+  return SELF.fetch("http://localhost/authorize", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", cookie },
     body: new URLSearchParams({
@@ -96,6 +103,10 @@ async function authorize(clientId: string, redirectUri: string): Promise<string>
     }).toString(),
     redirect: "manual",
   });
+}
+
+async function authorize(clientId: string, redirectUri: string): Promise<string> {
+  const response = await submitLogin(clientId, redirectUri);
   expect(response.status).toBe(302);
   const code = new URL(response.headers.get("location") ?? "").searchParams.get("code");
   expect(code).toBeTruthy();
@@ -255,6 +266,18 @@ describe("OAuth authorize flow (end to end in workerd)", () => {
     });
 
     expect(refresh.status).toBe(200);
+  });
+
+  it("tells the user TrainHeroic is down when its login endpoint times out", async () => {
+    const clientId = await registerClient();
+    stubOAuthDependencies(undefined, 522);
+
+    const response = await submitLogin(clientId, "http://localhost/cb");
+
+    expect(response.status).toBe(503);
+    const html = await response.text();
+    expect(html).toContain("TrainHeroic is not responding right now.");
+    expect(html).not.toContain("Invalid TrainHeroic email or password.");
   });
 
   it("rejects a POST with a mismatched CSRF token", async () => {

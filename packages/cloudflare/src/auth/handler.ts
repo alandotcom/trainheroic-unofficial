@@ -10,7 +10,11 @@ import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { sql } from "drizzle-orm";
-import { loginTrainHeroic, type TrainHeroicSession } from "@trainheroic-unofficial/js";
+import {
+  loginTrainHeroic,
+  TrainHeroicUnavailableError,
+  type TrainHeroicSession,
+} from "@trainheroic-unofficial/js";
 import { account } from "@trainheroic-unofficial/db";
 import { makeD1Warehouse } from "@trainheroic-unofficial/db/d1";
 import type { Props } from "../types";
@@ -229,9 +233,21 @@ app.post("/authorize", async (c) => {
     );
   }
 
-  const session = await loginTrainHeroic(email, password, {
-    onHttpError: trainHeroicLoginErrorReporter(email),
-  });
+  let session: TrainHeroicSession | null;
+  try {
+    session = await loginTrainHeroic(email, password, {
+      onHttpError: trainHeroicLoginErrorReporter(email),
+    });
+  } catch (error) {
+    if (!(error instanceof TrainHeroicUnavailableError)) throw error;
+    return renderLogin(
+      c,
+      oauthReq,
+      client,
+      503,
+      "TrainHeroic is not responding right now. Try again in a few minutes.",
+    );
+  }
   if (!session) {
     Sentry.metrics.count("auth.login.failed", 1);
     return renderLogin(c, oauthReq, client, 401, "Invalid TrainHeroic email or password.");

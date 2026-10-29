@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loginTrainHeroic } from "../src/auth";
+import { TrainHeroicUnavailableError } from "../src/http-error";
 
 function jsonResponse(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -39,6 +40,25 @@ describe("loginTrainHeroic", () => {
       const reported = JSON.stringify(onHttpError.mock.calls[0]?.[0]);
       expect(reported).not.toContain("private@example.com");
       expect(reported).not.toContain("very-secret");
+    },
+  );
+
+  it.each([502, 503, 504, 522])(
+    "throws an unavailable error on an HTTP %i outage response after reporting it",
+    async (status) => {
+      const onHttpError = vi.fn();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response("origin timed out", { status })),
+      );
+
+      const login = loginTrainHeroic("a@b.com", "pw", { onHttpError });
+
+      await expect(login).rejects.toBeInstanceOf(TrainHeroicUnavailableError);
+      await expect(login).rejects.toThrow(
+        `TrainHeroic is not responding right now (HTTP ${status})`,
+      );
+      expect(onHttpError).toHaveBeenCalledWith(expect.objectContaining({ status }));
     },
   );
 
