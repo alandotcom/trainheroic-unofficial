@@ -17,14 +17,14 @@
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
     "@trainheroic-unofficial/js": "workspace:*",
-    "astro": "^7.3.7",
-    "blume": "^2.2.1"
+    "astro": "^7.4.2",
+    "blume": "^2.2.6"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@trainheroic-unofficial/eval": "workspace:*",
     "tsx": "^4.23.15",
-    "wrangler": "^4.149.0"
+    "wrangler": "^4.153.0"
   },
   "engines": {
     "node": ">=24"

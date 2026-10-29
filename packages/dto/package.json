@@ -33,10 +33,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "tsdown": "^0.23.0",
-    "vitest": "^5.0.3"
+    "tsdown": "^0.23.2",
+    "vitest": "^5.0.5"
   }
 }
