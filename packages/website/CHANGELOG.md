@@ -1,5 +1,12 @@
 # @trainheroic-unofficial/website
 
+## 0.0.33
+
+### Patch Changes
+
+- Updated dependencies [46d178c]
+  - @trainheroic-unofficial/js@4.2.0
+
 ## 0.0.32
 
 ### Patch Changes
