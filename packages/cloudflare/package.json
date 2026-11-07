@@ -15,28 +15,28 @@
     "db:migrate:local": "wrangler d1 migrations apply trainheroic --local"
   },
   "dependencies": {
-    "@cfworker/json-schema": "^4.1.1",
-    "@cloudflare/workers-oauth-provider": "1.2.3",
-    "@modelcontextprotocol/server": "2.3.1",
-    "@sentry/cloudflare": "^11.5.0",
+    "@cfworker/json-schema": "^4.1.6",
+    "@cloudflare/workers-oauth-provider": "1.2.4",
+    "@modelcontextprotocol/server": "2.4.0",
+    "@sentry/cloudflare": "^11.10.0",
     "@trainheroic-unofficial/core": "workspace:*",
     "@trainheroic-unofficial/db": "workspace:*",
     "@trainheroic-unofficial/dto": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
-    "agents": "^0.27.0",
-    "drizzle-orm": "1.0.0-rc.5-5935859",
-    "hono": "^4.13.13",
-    "zod": "^4.6.5"
+    "agents": "^0.33.0",
+    "drizzle-orm": "1.0.0-rc.5",
+    "hono": "^4.13.16",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@babel/core": "^8.0.7",
-    "@cloudflare/vitest-plugin": "^1.4.0",
-    "@cloudflare/workers-types": "^5.20261008.1",
-    "@modelcontextprotocol/client": "2.3.1",
-    "@types/node": "^26.6.4",
-    "drizzle-kit": "1.0.0-rc.5-5935859",
+    "@babel/core": "^8.1.0",
+    "@cloudflare/vitest-plugin": "^1.5.1",
+    "@cloudflare/workers-types": "^5.20261104.1",
+    "@modelcontextprotocol/client": "2.4.0",
+    "@types/node": "^26.6.6",
+    "drizzle-kit": "1.0.0-rc.5",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.3",
-    "wrangler": "^4.149.0"
+    "vitest": "^5.1.0",
+    "wrangler": "^4.157.0"
   }
 }
