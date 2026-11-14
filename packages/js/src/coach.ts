@@ -21,6 +21,7 @@ import {
 import type { TrainHeroicClient } from "./client";
 import { splitDateRange } from "./date-window";
 import { chunk, coerceInt, isRecord } from "./exercise-util";
+import { trainHeroicApiErrorMessage } from "./http-error";
 import { checkResponse } from "./response-check";
 import { definedProps } from "./util";
 import { calendarWriteError } from "./workout-session";
@@ -526,8 +527,32 @@ async function requestAnalytics(
     body[ANALYTICS_BODY_KEY[k]] = k === "exerciseId" ? String(v) : v;
   }
   const res = await client.request("POST", spec.path, { body });
-  if (!res.ok) throw new Error(`Analytics ${args.metric} failed (HTTP ${res.status}).`);
+  if (!res.ok) {
+    const message = trainHeroicApiErrorMessage(`Analytics ${args.metric}`, res.status, res.data);
+    throw new Error(withHint(message, analyticsErrorHint(res.data)));
+  }
   return res.data;
+}
+
+/**
+ * Explain TrainHeroic's terse analytics rejections so the caller can fix its input.
+ * lift-1rm-history answers "Invalid exercise id" for any exercise that is not a weighted lift
+ * (verified with Run, Push-Up, and an unknown id; Back Squat succeeds).
+ */
+function analyticsErrorHint(responseBody: unknown): string | null {
+  if (typeof responseBody === "string" && responseBody.includes("Invalid exercise id")) {
+    return (
+      "exerciseId must be a weighted lift such as Back Squat (id 1); bodyweight, distance, " +
+      "and unknown exercises are rejected."
+    );
+  }
+  return null;
+}
+
+/** Append a sentence of guidance to an error message that may or may not end in a period. */
+function withHint(message: string, hint: string | null): string {
+  if (hint === null) return message;
+  return `${message.endsWith(".") ? message : `${message}.`} ${hint}`;
 }
 
 function reportRows(report: unknown): unknown[] | null {
