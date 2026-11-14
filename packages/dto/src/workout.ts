@@ -165,6 +165,8 @@ export type ReadBlock = {
 /** A whole session read back from the calendar. */
 export type ReadResult = {
   pwId: number;
+  /** The session's underlying workout id, or null when the read-back omits it. */
+  workoutId: number | null;
   date: string;
   published: unknown;
   instruction: string;
@@ -177,3 +179,17 @@ export const sessionTemplateCreateSchema = z.object({
   instruction: z.string().optional(),
 });
 export type SessionTemplateCreate = z.infer<typeof sessionTemplateCreateSchema>;
+
+/** Input for copying an existing calendar session into the session library. */
+export const sessionSaveAsTemplateSchema = z.object({
+  workoutId: z
+    .number()
+    .int()
+    .describe("The session's workout_id (workout_build returns it as workoutId)."),
+  pwId: z
+    .number()
+    .int()
+    .describe("The session's programWorkout id (workout_build returns it as pwId)."),
+  title: z.string().trim().min(1).describe("Title of the new library template."),
+});
+export type SessionSaveAsTemplate = z.infer<typeof sessionSaveAsTemplateSchema>;

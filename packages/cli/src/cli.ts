@@ -33,6 +33,7 @@ import {
   copySession,
   createProgram,
   createSessionTemplate,
+  saveSessionAsTemplate,
   deleteProgram,
   definedProps,
   deleteComment,
@@ -184,7 +185,7 @@ Coach — manage a roster (needs a coach account):
   session lifecycle:
   coach session-copy --to-program <id> --pw <id> --to-date Y-M-D
   coach session-unpublish --pw <id> --yes
-  coach session-save-template --workout <id>
+  coach session-save-template --workout <id> --pw <id> --title "..."
   coach session-templates
   coach session-template-create --title "..." [--instruction "..."]
   coach session-template-delete --id <id> --yes
@@ -1538,16 +1539,16 @@ async function cmdCoachSessionUnpublish(client: TrainHeroicClient, a: string[]):
 }
 
 async function cmdCoachSessionSaveTemplate(client: TrainHeroicClient, a: string[]): Promise<void> {
-  const usage = "coach session-save-template --workout <id>";
-  const { values } = parse(a, { workout: { type: "string" } });
+  const usage = 'coach session-save-template --workout <id> --pw <id> --title "..."';
+  const { values } = parse(a, {
+    workout: { type: "string" },
+    pw: { type: "string" },
+    title: { type: "string" },
+  });
   const workoutId = toInt(need(values.workout as string | undefined, usage), "--workout");
-  return out(
-    await mutate(
-      client,
-      "POST",
-      `/2.0/coach/calendar/programWorkout/saveWorkoutAsTemplate/${workoutId}`,
-    ),
-  );
+  const pwId = toInt(need(values.pw as string | undefined, usage), "--pw");
+  const title = need(values.title as string | undefined, usage);
+  return out(await saveSessionAsTemplate(client, { workoutId, pwId, title }));
 }
 
 async function cmdCoachSessionTemplateCreate(

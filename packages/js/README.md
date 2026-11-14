@@ -260,8 +260,10 @@ the stated unit matches it and sets any other stated unit on this session, as de
 `buildSession` returns `{ pwId, workoutId, advisories }`: `pwId` is the program-workout id (the
 placement of the session in the program, which is the handle subsequent calls take), and
 `workoutId` is the underlying workout id. Use `pwId` with `readSession(client, programId, date, pwId)`
-to read the session back. `publishSession(client, pwId)` publishes it later;
-`removeSession(client, programId, pwId)` deletes it.
+to read the session back; the read-back also carries `workoutId`. `publishSession(client, pwId)`
+publishes it later; `removeSession(client, programId, pwId)` deletes it.
+`saveSessionAsTemplate(client, { workoutId, pwId, title })` copies the session into the coach's
+session library.
 
 ## Reading athlete training
 

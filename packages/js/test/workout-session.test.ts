@@ -582,6 +582,7 @@ describe("readSession", () => {
             programWorkouts: [
               {
                 id: 20,
+                workout_id: "10",
                 year: 2026,
                 month: 6,
                 day: 22,
@@ -613,6 +614,7 @@ describe("readSession", () => {
       }),
     );
     const res = await readSession(new TrainHeroicClient("a@b.com", "pw"), 5, [2026, 6, 22], 20);
+    expect(res.workoutId).toBe(10);
     expect(res.blocks[0]?.leaderboard).toContain("ROUNDS");
     expect(res.blocks[0]?.exercises[0]?.primaryUnit).toBe("reps");
     expect(res.blocks[0]?.exercises[0]?.loadUnit).toBe("lb");

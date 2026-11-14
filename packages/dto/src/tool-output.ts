@@ -173,6 +173,7 @@ const workoutReadBlockOutputSchema = z.object({
 
 export const workoutReadOutputSchema = z.object({
   pwId: z.number(),
+  workoutId: z.number().nullable(),
   date: z.string(),
   published: z.json().optional(),
   instruction: z.string(),
