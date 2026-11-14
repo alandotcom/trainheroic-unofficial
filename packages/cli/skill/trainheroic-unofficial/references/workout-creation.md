@@ -309,3 +309,4 @@ athlete's round count (e.g. ~5–6 rounds for a ~10–12 min triplet) and confir
 - Delete: `POST /2.0/coach/calendar/removeProgramWorkout` `{ "programId", "pwId" }`
 - Copy/repeat to a date: `POST /2.0/coach/calendar/copyProgramWorkout`
 - Save as template: `POST /2.0/coach/calendar/programWorkout/saveWorkoutAsTemplate/{workoutId}`
+  with body `{ "id": <pwId>, "title": "..." }` (`$TH coach session-save-template`)

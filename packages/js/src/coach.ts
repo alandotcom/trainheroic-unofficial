@@ -13,6 +13,7 @@
 import {
   parseWorkoutDate,
   programCreateResponseSchema,
+  type SessionSaveAsTemplate,
   type SessionTemplateCreate,
   type TeamPublishPatch,
   type TeamVolumeAthlete,
@@ -746,6 +747,45 @@ export async function createSessionTemplate(
   }
   if (!isRecord(res.data) || coerceInt(res.data.id) === null) {
     throw new Error("Session template create response is missing an id.");
+  }
+  return res.data;
+}
+
+/**
+ * Copy an existing calendar session, with its blocks and exercises, into the coach's session
+ * library as a new template
+ * (`POST /2.0/coach/calendar/programWorkout/saveWorkoutAsTemplate/{workoutId}`). The path takes
+ * the session's workout id and the body's `id` takes its programWorkout id (pwId), which is what
+ * the coach web app sends. TrainHeroic answers HTTP 500 when the body is missing, when the body
+ * has no `id`, or when the two ids are swapped.
+ */
+export async function saveSessionAsTemplate(
+  client: TrainHeroicClient,
+  args: SessionSaveAsTemplate,
+): Promise<Record<string, unknown>> {
+  const title = args.title.trim();
+  if (title === "") throw new Error("Session template title must not be blank.");
+  const res = await client.request(
+    "POST",
+    `/2.0/coach/calendar/programWorkout/saveWorkoutAsTemplate/${args.workoutId}`,
+    { body: { id: args.pwId, title } },
+  );
+  if (!res.ok) {
+    const message = trainHeroicApiErrorMessage(
+      `Saving session ${args.pwId} (workout ${args.workoutId}) as a template`,
+      res.status,
+      res.data,
+    );
+    throw new Error(
+      withHint(
+        message,
+        "Check that workoutId and pwId belong to the same session; a session read-back " +
+          "returns both.",
+      ),
+    );
+  }
+  if (!isRecord(res.data) || coerceInt(res.data.id) === null) {
+    throw new Error("Session template save response is missing an id.");
   }
   return res.data;
 }

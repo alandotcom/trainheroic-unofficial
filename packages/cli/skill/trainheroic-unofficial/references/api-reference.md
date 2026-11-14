@@ -1328,7 +1328,17 @@ causes this legacy endpoint to return HTTP 500.
 
 #### `POST /2.0/coach/calendar/programWorkout/saveWorkoutAsTemplate/{workoutId}`
 
-Saves an existing session as a reusable template in the session library. No request body needed — uses the workout ID in the URL path.
+Copies an existing session, with its blocks and exercises, into the session library as a new
+template. The path takes the session's `workout_id`, and the body takes the session's
+programWorkout id (pwId) as `id`, plus the template `title`:
+
+```json
+{ "id": 163487882, "title": "Lower body A" }
+```
+
+Verified 2026-11-14: a missing body, a body without `id`, and swapped ids (pwId in the path)
+all return HTTP 500. Without `title` the template is saved untitled. The coach web app sends
+the whole programWorkout object as the body; `id` is the only field TrainHeroic needs.
 
 ---
 

@@ -313,6 +313,7 @@ export async function readSession(
 
   return {
     pwId,
+    workoutId: coerceInt(pw.workout_id),
     // Zero-padded so the value round-trips into the YYYY-MM-DD `dateString` args the athlete
     // tools require.
     date: `${str(pw.year)}-${str(pw.month).padStart(2, "0")}-${str(pw.day).padStart(2, "0")}`,

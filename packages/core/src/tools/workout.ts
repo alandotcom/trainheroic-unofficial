@@ -6,6 +6,7 @@ import {
   opaqueOutputSchema,
   parseWorkoutDate,
   removedSessionOutputSchema,
+  sessionSaveAsTemplateSchema,
   sessionTemplateCreateSchema,
   sessionTemplateCreatedOutputSchema,
   toolOutputSchema,
@@ -18,6 +19,7 @@ import {
   type BuildOptions,
   copySession,
   createSessionTemplate,
+  saveSessionAsTemplate,
   definedProps,
   publishSession,
   readSession,
@@ -254,14 +256,19 @@ function registerLifecycle(server: McpServer, ctx: ToolContext): void {
     {
       title: "Save a session to the library",
       description:
-        "Save an existing session as a reusable template in the session library " +
-        "(POST .../programWorkout/saveWorkoutAsTemplate/{workoutId}). Pass the workout_id.",
-      inputSchema: { workoutId: z.number() },
+        "Copy an existing calendar session, with its blocks and exercises, into the session " +
+        "library as a new template " +
+        "(POST .../programWorkout/saveWorkoutAsTemplate/{workoutId}). Pass the session's " +
+        "workoutId and pwId (workout_build returns both; workout_read returns both for a " +
+        "session on a date) and a title for the template.",
+      inputSchema: sessionSaveAsTemplateSchema.shape,
       outputSchema: opaqueOutputSchema,
       annotations: ADDITIVE,
     },
-    ({ workoutId }) =>
-      apiCall(ctx, "POST", `/2.0/coach/calendar/programWorkout/saveWorkoutAsTemplate/${workoutId}`),
+    ({ workoutId, pwId, title }) =>
+      attempt(async () =>
+        jsonResult(await saveSessionAsTemplate(ctx.client, { workoutId, pwId, title })),
+      ),
   );
 }
 
