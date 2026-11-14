@@ -25,8 +25,9 @@ const ANALYTICS_QUERY_DESC =
   "range, so don't then fan out blind per-lift athlete_lift_history calls. Despite 'athlete' " +
   "in the name this metric accepts 1–N userIds. " +
   "readiness-team takes a single `date`; every other metric takes dateStart/dateEnd. " +
-  "lift-1rm-history, lift-progress-team, and working-max-history also need exerciseId. All " +
-  "dates are YYYY-MM-DD.";
+  "lift-1rm-history, lift-progress-team, and working-max-history also need exerciseId, a " +
+  "weighted lift such as Back Squat (lift-1rm-history answers 'Invalid exercise id' for " +
+  "bodyweight, distance, and unknown exercises). All dates are YYYY-MM-DD.";
 
 /** Analytics report pulls. Read-only despite the POST verb, so ungated. */
 export function registerAnalyticsTools(server: McpServer, ctx: ToolContext): void {

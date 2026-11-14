@@ -194,3 +194,21 @@ describe("teamVolume", () => {
     ).rejects.toThrow(/at least one athleteId/u);
   });
 });
+
+describe("queryAnalytics", () => {
+  it("relays TrainHeroic's rejection text and explains an invalid lift id", async () => {
+    const transport = vi.fn(async () => json("Invalid exercise id", 400));
+
+    await expect(
+      queryAnalytics(new TrainHeroicClient("a@b.com", "pw", "live-session", { transport }), {
+        metric: "lift-1rm-history",
+        userIds: [11],
+        exerciseId: 82,
+        dateStart: "2026-10-01",
+        dateEnd: "2026-11-14",
+      }),
+    ).rejects.toThrow(
+      /lift-1rm-history failed \(HTTP 400\): Invalid exercise id\. exerciseId must be a weighted lift/u,
+    );
+  });
+});
