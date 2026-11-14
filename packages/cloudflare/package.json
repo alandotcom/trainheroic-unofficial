@@ -24,7 +24,7 @@
     "@trainheroic-unofficial/dto": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
     "agents": "^0.33.0",
-    "drizzle-orm": "1.0.0-rc.5-5935859",
+    "drizzle-orm": "1.0.0-rc.5",
     "hono": "^4.13.18",
     "zod": "^4.6.7"
   },
@@ -34,7 +34,7 @@
     "@cloudflare/workers-types": "^5.20261113.1",
     "@modelcontextprotocol/client": "2.4.0",
     "@types/node": "^26.6.6",
-    "drizzle-kit": "1.0.0-rc.5-5935859",
+    "drizzle-kit": "1.0.0-rc.5",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0",
     "wrangler": "^4.162.0"
