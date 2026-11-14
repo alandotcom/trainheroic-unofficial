@@ -5,6 +5,7 @@
 import type { ProgramWorkout } from "@trainheroic-unofficial/dto";
 import { parseWorkoutDate } from "@trainheroic-unofficial/dto";
 import type { TrainHeroicClient } from "./client";
+import { trainHeroicApiErrorMessage } from "./http-error";
 import { coerceInt, isRecord, str } from "./exercise-util";
 
 async function getArray<T>(client: TrainHeroicClient, path: string, label: string): Promise<T[]> {
@@ -32,23 +33,51 @@ export function fetchCoachAthleteWorkouts(
   );
 }
 
+/** A failed coach month-summary read; `status` is TrainHeroic's HTTP status. */
+export class CoachMonthSummaryError extends Error {
+  override readonly name = "CoachMonthSummaryError";
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 /**
  * A coach's month view of a roster athlete's logged sessions
  * (`/2.0/coach/athlete/calendar/summary`). The trailing path segment is required by the API but
  * ignored (any value returns the whole month); it mirrors the coach web app, which sends 7. The
  * `userId` in each row is the roster athlete, not the calling coach.
+ *
+ * TrainHeroic answers this endpoint with HTTP 500 for some athlete-months while the date-range
+ * read (`fetchCoachAthleteWorkouts`) still works for the same athlete, so an HTTP 500 says so.
  */
-export function fetchCoachAthleteCalendarSummary(
+export async function fetchCoachAthleteCalendarSummary(
   client: TrainHeroicClient,
   athleteId: number,
   year: number,
   month: number,
 ): Promise<unknown[]> {
-  return getArray(
-    client,
+  const res = await client.request<unknown>(
+    "GET",
     `/2.0/coach/athlete/calendar/summary/${athleteId}/${year}/${month}/7`,
-    "coach athlete calendar summary",
   );
+  const label = `Coach athlete calendar summary for athlete ${athleteId} in ${year}-${String(month).padStart(2, "0")}`;
+  if (res.ok) {
+    if (Array.isArray(res.data)) return res.data;
+    throw new Error(`${label} returned an unexpected response shape.`);
+  }
+  const message = trainHeroicApiErrorMessage(label, res.status, res.data);
+  if (res.status === 500) {
+    throw new CoachMonthSummaryError(
+      `${message.endsWith(".") ? message : `${message}.`} TrainHeroic's month summary fails for ` +
+        "some athletes whose date-range workout read still answers; read the same dates " +
+        "through the date-range read.",
+      res.status,
+    );
+  }
+  throw new CoachMonthSummaryError(message, res.status);
 }
 
 /** A roster athlete's coach-writable calendar (from `GET /v5/calendars/athletes/{id}`). */
