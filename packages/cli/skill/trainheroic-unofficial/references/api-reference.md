@@ -564,25 +564,21 @@ This creates A1: Back Squat, A2: Front Squat displayed as a superset.
 | 14    | RPE                 | rating         |
 | 18    | Time (seconds, alt) | `0:30`         |
 
-> **The unit is fixed per exercise — you cannot set it at prescribe time (verified).**
-> On save the API discards the `param_1_type`/`param_2_type` you send and restores
-> the exercise's library defaults. The `param_*_data_N` _values_ are kept, so a
-> value sent under the wrong assumed unit renders under the exercise's real unit.
+> **Insert stores the exercise's default units; a save by id overrides them (verified).**
+> Inserting a row (no `id`) through `saveWorkoutSetExercises` discards the
+> `param_1_type`/`param_2_type` you send and stores the exercise's library defaults. The
+> `param_*_data_N` _values_ are kept, so a value sent under another unit renders under the
+> default unit. Posting the same row again with the `id` the insert returned keeps the
+> types you send. The coach web app works this way: it inserts the exercise, then saves the
+> row again when the coach picks a unit such as Weight (%).
 >
-> - **`param_1_type` (primary) is always forced to the exercise default.** e.g. stock
->   `Run` (id 82) is `10` (miles); sending `6` (meters) is ignored and `200` shows as
->   _200 miles_. To program meters, pick a meters-native exercise (`Sprint` 127,
->   `Rowing` 101, `Shuttle Sprint` 42523) or a custom exercise — there is no metric
->   "Run". `$TH coach exercise resolve` now prints a `units` array (ordered by entry slot,
->   `[param 1, param 2]`); check it.
-> - **`param_2_type` (secondary) is forced to the default too, with one exception:**
->   if the exercise has no secondary param (default `0`/none) you may add weight
->   (`1`) — this is how weighted Pull-Ups/Dips work. You cannot swap an exercise's
->   existing secondary unit, and **`2` (% of max) and `14` (RPE) never stick on a
->   weight-default lift — both coerce to weight, so the numbers render as pounds.**
->   Put % or RPE in the `instruction` text instead.
-> - the workout builder reads the local exercise cache and prints a `WARNING` when a
->   sent param type will be overridden.
+> - Verified on 2026-11-14: stock `Back Squat` (id 1, default `3`/`1`) keeps `2` (% of max)
+>   and `14` (RPE) in `param_2_type`, and stock `Run` (id 82, default `10` miles) keeps `6`
+>   (meters) in `param_1_type`, after the save by id.
+> - `$TH coach exercise resolve` prints a `units` array (ordered by entry slot,
+>   `[param 1, param 2]`) with the defaults.
+> - The workout builder maps each stated `primaryUnit`/`secondaryUnit` to a type and does
+>   the second save for every row whose stored types differ from the requested ones.
 
 **Common param type combos (from 2067 exercises):**
 
@@ -604,7 +600,7 @@ This creates A1: Back Squat, A2: Front Squat displayed as a superset.
 - `no_sets` = 0 (normal), non-zero may indicate special handling
 - `instruction` = Per-exercise coach notes
 
-**Note:** The API ignores the `title` field and uses the exercise's real title from `exercise_id`. It also overrides **both** `param_1_type` and `param_2_type` to the exercise's library defaults (see the fixed-unit note above) — the data values you send are kept, but the unit is the exercise's, not the one you requested.
+**Note:** The API ignores the `title` field and uses the exercise's real title from `exercise_id`. An insert also stores the exercise's library `param_1_type` and `param_2_type`; save the row again with its `id` to keep other types (see the units note above).
 
 #### Step 5: Publish Session
 

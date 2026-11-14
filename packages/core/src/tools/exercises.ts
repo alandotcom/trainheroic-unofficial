@@ -92,9 +92,9 @@ function registerExerciseReads(server: McpServer, index: ToolContext["index"]): 
         "Map a name to an exercise id via the local mirror. Prefer this over exercise_search when " +
         "you want a single authoritative id for a known name. Returns the match plus ranked " +
         "candidates; when ambiguous, match is null and you should pick from candidates. " +
-        "Each result's `units` array lists the fixed measurement units by entry slot; they " +
-        "are fixed per exercise — check them before prescribing. `can_edit` is 1 only for the " +
-        "coach's own custom exercises and 0 for built-in library exercises.",
+        "Each result's `units` array lists the exercise's default measurement units by entry " +
+        "slot; workout_build uses them unless a prescription states another unit. `can_edit` " +
+        "is 1 only for the coach's own custom exercises and 0 for built-in library exercises.",
       inputSchema: { name: z.string().min(1) },
       outputSchema: toolOutputSchema(exerciseResolveOutputSchema),
       annotations: READ,

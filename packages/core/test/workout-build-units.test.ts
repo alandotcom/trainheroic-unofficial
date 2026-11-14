@@ -27,25 +27,25 @@ function buildHandler(param1: number | null, param2: number | null) {
 describe("workout_build unit validation", () => {
   it.each([
     {
-      name: "meters on a miles exercise",
-      values: { reps: 200, primaryUnit: "m" },
+      name: "a unit that conflicts with an explicit param type",
+      values: { reps: 200, primaryUnit: "m", param_1_type: 10 },
       param1: 10,
       param2: 0,
-      expected: /primaryUnit m.*mi/iu,
+      expected: /primaryUnit m conflicts with param_1_type 10 \(mi\)/u,
     },
     {
-      name: "time on a weight exercise",
+      name: "a unit that names two param types",
       values: { weight: 30, secondaryUnit: "sec" },
       param1: 3,
       param2: 1,
-      expected: /secondaryUnit sec.*lb/iu,
+      expected: /secondaryUnit sec matches .*set param_2_type/u,
     },
     {
-      name: "weight on a time exercise",
-      values: { weight: 30, secondaryUnit: "lb" },
+      name: "an unknown unit",
+      values: { weight: 30, secondaryUnit: "stone" },
       param1: 3,
-      param2: 4,
-      expected: /secondaryUnit lb.*sec/iu,
+      param2: 1,
+      expected: /unknown unit 'stone'/u,
     },
   ])("rejects $name before writing a draft", async ({ values, param1, param2, expected }) => {
     const { handler, request } = buildHandler(param1, param2);

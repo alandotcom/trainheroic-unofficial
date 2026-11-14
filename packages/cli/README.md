@@ -56,8 +56,10 @@ program's URL in the TrainHeroic web app, or run `trainheroic coach programs`). 
 library id; get one with `coach exercise resolve`. `reps` and `weight` take a scalar or a
 per-set array (`"reps": [5, 5, 3]`). `reps` is the primary value slot and `weight` is the
 secondary slot, so either can represent distance or time on an exercise configured that way.
-State `primaryUnit` for `reps` and `secondaryUnit` for `weight` using the fixed units returned
-by `coach exercise resolve`. The build stops before writing if a unit differs. The full schema
+State `primaryUnit` for `reps` and `secondaryUnit` for `weight`. `coach exercise resolve` returns
+each exercise's default units; a different stated unit, such as `%max` on Back Squat, is set on
+that session. The build stops before writing if a unit is unknown or conflicts with an explicit
+`param_1_type`/`param_2_type`. The full schema
 is `WorkoutSpec` in [`@trainheroic-unofficial/dto`](../dto).
 
 ```jsonc

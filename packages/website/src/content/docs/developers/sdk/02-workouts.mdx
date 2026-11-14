@@ -22,14 +22,11 @@ optionally publish it. The safer workflow is draft first, inspect second, publis
   </Step>
 </Steps>
 
-```ts lineNumbers expandable {30}
+```ts lineNumbers expandable {27}
 import { buildSession } from "@trainheroic-unofficial/js";
 
 const { match } = await library.resolve("Back Squat");
 if (!match) throw new Error("Choose one exercise before building");
-if (match.units[0] !== "reps" || match.units[1] !== "lb") {
-  throw new Error("Choose an exercise with reps and pounds as its fixed units");
-}
 
 const { pwId, workoutId } = await buildSession(client, {
   programId: 12345,
@@ -58,7 +55,11 @@ const { pwId, workoutId } = await buildSession(client, {
 
 `reps` and `weight` accept one scalar for every set or a per-set array such as
 `reps: [5, 5, 3]`. State `primaryUnit` for the `reps` slot and `secondaryUnit` for the
-`weight` slot. `buildSession` checks both against the exercise library before writing.
+`weight` slot. When a stated unit matches the exercise's library default, `buildSession` keeps
+that default. A different unit is set on this session only, so `secondaryUnit: "%max"`
+prescribes a percentage of max on a built-in pounds lift and `primaryUnit: "m"` puts meters on
+a miles exercise. `buildSession` throws before writing when a unit is unknown or conflicts with
+an explicit `param_1_type` or `param_2_type`.
 
 ## Options
 

@@ -55,8 +55,8 @@ re-exported through `index.ts`. The central pieces:
 - The read-back types (`ReadResult`, `ReadBlock`, `ReadExercise`) describe a session decoded
   back out of the API into a readable shape, and `Advisory` carries the unit notes and
   warnings the encoder emits. Workout input requires `primaryUnit` for populated `reps`
-  and `secondaryUnit` for populated `weight`; the builder checks those units against the
-  exercise library before writing.
+  and `secondaryUnit` for populated `weight`; the builder maps each unit to a TrainHeroic param
+  type, using the exercise's library default when it already has that unit.
 - The `responses` module holds the tolerant schemas the SDK uses to sanity-check an API
   response before trusting it; these schemas accept unknown fields.
 

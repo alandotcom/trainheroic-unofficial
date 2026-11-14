@@ -6,10 +6,10 @@ import type { ExerciseRow, ExerciseView, ResolveResult } from "@trainheroic-unof
 export { chunk };
 
 /**
- * Display labels for TrainHeroic parameter types. The unit is FIXED PER EXERCISE
- * (the API forces param_1_type/param_2_type back to the library default on save), so
- * resolve/search surface it to stop callers picking, say, the miles "Run" for a
- * metric workout. Keep in sync with the workout builder's unit table.
+ * Display labels for TrainHeroic parameter types. Each library exercise has a default type per
+ * slot, which resolve/search surface so callers know, say, that stock "Run" defaults to miles.
+ * A session can set a different type on an exercise; the workout builder maps a stated unit
+ * back to its type code through this table, so keep it in sync with the builder's unit aliases.
  */
 export const PARAM_UNIT: Readonly<Record<number, string | null>> = {
   0: null,
@@ -28,7 +28,7 @@ export const PARAM_UNIT: Readonly<Record<number, string | null>> = {
   18: "sec",
 };
 
-// TrainHeroic parameter-type codes. The fixed-unit labels live in PARAM_UNIT above.
+// TrainHeroic parameter-type codes. Their unit labels live in PARAM_UNIT above.
 export const PARAM_NONE = 0;
 export const PARAM_WEIGHT = 1;
 export const PARAM_PCT_MAX = 2;
@@ -65,7 +65,7 @@ export function unitLabel(paramType: unknown): string | null {
 }
 
 /**
- * Fixed measurement units for an exercise, ordered by entry slot (param 1, then param 2).
+ * Default measurement units for an exercise, ordered by entry slot (param 1, then param 2).
  * Positional, not semantic: some exercises reverse the slots, so the array is not labelled
  * by role. A null entry is an unset slot.
  */

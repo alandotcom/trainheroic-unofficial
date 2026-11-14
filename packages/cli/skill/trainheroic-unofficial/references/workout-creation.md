@@ -13,10 +13,10 @@ All calls use the coach base (`https://api.trainheroic.com`) with the
 > correctly. Reach for the manual steps below only when debugging or doing
 > something the builder does not cover.
 >
-> **RPE rule (verified the hard way):** never prescribe RPE as a structured param.
-> `param_2_type: 14` is silently overridden to weight on any lift whose library
-> default param is weight, so the RPE values render as pounds. Put RPE in the
-> exercise `instruction` ("RPE 8"), prescribe reps, and leave load blank.
+> **Units rule:** an insert stores the exercise's library param types, so RPE
+> (`param_2_type: 14`) or % of max (`2`) on a pounds lift renders as pounds until the
+> row is saved again with its `id`. The builder does that second save; in manual calls,
+> repeat the `saveWorkoutSetExercises` POST with the returned row `id`.
 
 ## Step 1 — Get a program/calendar to write to
 
@@ -144,7 +144,9 @@ Fields that cause a 500 when missing:
 - `workout_set_exercise_template_id` — `null`
 
 The API ignores the `title` you send and substitutes the real title for
-`exercise_id`. It may also override `param_2_type` from the exercise's defaults.
+`exercise_id`. An insert also stores the exercise's default `param_1_type` and
+`param_2_type`. To keep other types, POST the same entry again with the `id` from the
+insert response.
 
 ## Step 5 — Publish
 
@@ -215,25 +217,23 @@ Most common combos: `p1=3,p2=1` (reps @ weight, e.g. Back Squat), `p1=3,p2=0`
 `param_1_data_N` is the value for param 1 in set N; `param_2_data_N` likewise for
 param 2. `param_count` is the number of sets (max 10).
 
-### The unit is fixed per exercise (verified)
+### Default units and session overrides (verified)
 
-On save the API **discards the `param_1_type`/`param_2_type` you send and restores
-the exercise's library defaults.** Your `param_*_data_N` values are kept, so a value
-sent under the wrong assumed unit silently renders under the exercise's real unit.
+An insert (an entry without `id`) **stores the exercise's library `param_1_type`/`param_2_type`
+whatever you send.** Your `param_*_data_N` values are kept, so a value sent under another unit
+renders under the default unit. Posting the same entry again with the row `id` from the insert
+response keeps the types you send. The coach web app's unit picker (for example Weight (%))
+uses this second save.
 
-- **`param_1_type` (primary): always forced to the exercise default.** You cannot
-  change the primary unit at prescribe time. Stock `Run` (id 82) is miles, so a
-  "200 m run" written on `Run` renders as _200 miles_. For meters use a meters-native
-  exercise (`Sprint` 127, `Rowing` 101, `Shuttle Sprint` 42523) or a custom exercise.
-- **`param_2_type` (secondary): forced to the default too, except** you may add weight
-  (`1`) to an exercise that has no secondary param (default `0`/none) — that is how
-  weighted Pull-Ups/Dips work. `2` (% of max) and `14` (RPE) do **not** stick on a
-  weight-default lift; both coerce to weight and render as pounds.
-- Check an exercise's real units first: `$TH coach exercise resolve "<name>"` prints a
-  `units` array, ordered by entry slot (`[param 1, param 2]`). In the workout spec,
-  include `primaryUnit` when `reps` contains a value and `secondaryUnit` when `weight`
-  contains a value. The builder checks both units before creating a draft, and its
-  read-back labels the stored units.
+- Verified live on 2026-11-14: stock `Back Squat` (id 1) keeps `param_2_type` `2` (% of max)
+  and `14` (RPE), and stock `Run` (id 82, miles) keeps `param_1_type` `6` (meters).
+- Check an exercise's default units with `$TH coach exercise resolve "<name>"`, which prints a
+  `units` array ordered by entry slot (`[param 1, param 2]`).
+- In the workout spec, include `primaryUnit` when `reps` contains a value and `secondaryUnit`
+  when `weight` contains a value. The builder keeps the default when it has the stated unit,
+  maps any other unit to its own type, and does the second save. `sec` and `in` each name two
+  types, so set `param_N_type` with them when they differ from the default. The read-back
+  labels the stored units.
 
 ## Prescription patterns
 
@@ -245,18 +245,18 @@ sent under the wrong assumed unit silently renders under the exercise's real uni
   (e.g. reps `5,3,1,3,5` at weight `185,225,275,225,185`).
 - **Bodyweight**: `param_2_type: 0` and leave every `param_2_data_N` empty.
 - **Weighted bodyweight** (weighted Pull-Up/Dip): add `param_2_type: 1` with loads.
-  Adding weight sticks _only_ on exercises whose default secondary is none (`0`).
+  An insert keeps the added weight only when the exercise's default secondary is none
+  (`0`); for any other default, save the row again by `id` (the builder does this).
 - **Max / AMRAP reps (verified)**: the rep slots are free text — put the literal
   string `"Max"` (or `"AMRAP"`, `"ME"`) in `param_1_data_N`; it round-trips verbatim
   and you can mix it with numbers (e.g. last set `"Max"`). The builder accepts
   `"reps": ["Max", "Max"]` or `"reps": [5, 5, "Max"]`.
-- **RPE and % of max (verified caveat)**: `param_2_type: 14` (RPE) and `2` (% of max)
-  do **not** stick on exercises whose library default param is weight — the API
-  overrides them back to weight, so the numbers render as pounds. Reliable approach:
-  prescribe reps with `param_2_type: 0` (load left blank for athlete autoregulation)
-  and put the target in the exercise `instruction` (e.g. `"RPE 8"` or `"75% of max"`).
-  The `instruction` field round-trips intact. (This is one case of the fixed-unit
-  rule above.)
+- **RPE and % of max (verified)**: with the builder, put the values in `weight` and set
+  `"secondaryUnit": "%max"` or `"secondaryUnit": "RPE"`; this works on built-in pounds
+  lifts such as Back Squat. In manual calls, the insert stores pounds, so repeat the
+  `saveWorkoutSetExercises` POST with the row `id` and `param_2_type` `2` or `14` (see the
+  units section above). The builder's `rpe` field instead writes `"RPE 8"` into the exercise
+  `instruction`, which round-trips intact.
 
 ## Common exercise IDs
 

@@ -1,16 +1,15 @@
 // Pure encoder for the workout builder. No I/O, so it is unit-testable directly.
-// Mirrors build_workout.py: fills every field saveWorkoutSetExercises needs (else
-// HTTP 500), keeps RPE out of structured params (the API coerces it to weight), and
-// encodes Red-Zone leaderboards.
+// Fills every field saveWorkoutSetExercises needs (else HTTP 500), resolves each slot's
+// param type from its stated unit, and encodes Red-Zone leaderboards.
 
 import type { Advisory, BlockSpec, ExerciseSpec } from "@trainheroic-unofficial/dto";
 import {
+  type ExerciseDefaults,
   type ExerciseIndex,
   MAX_PARAM_SLOTS,
   PARAM_NONE,
-  PARAM_PCT_MAX,
   PARAM_REPS,
-  PARAM_RPE,
+  PARAM_UNIT,
   PARAM_WEIGHT,
   unitLabel,
 } from "./exercise-util";
@@ -272,7 +271,9 @@ export function makeExercise(
     const arr = weightArr ?? Array.from({ length: count }, () => ex.weight as number);
     param2Values = arr.map((v) => String(v));
   } else {
-    param2Type = PARAM_NONE;
+    // `resolveExerciseUnits` sets an empty slot to the library default, which is also what the
+    // insert stores, so the saved row matches this request and needs no second save.
+    param2Type = ex.param_2_type ?? PARAM_NONE;
     param2Values = null;
   }
 
@@ -343,10 +344,6 @@ export function buildBlockPayload(
   });
 }
 
-function unitOr(t: number | null): string {
-  return unitLabel(t) ?? "?";
-}
-
 const UNIT_ALIASES: Readonly<Record<string, string>> = {
   rep: "reps",
   reps: "reps",
@@ -390,63 +387,102 @@ function statedUnit(value: string, label: string): string {
   return normalized;
 }
 
-function validateSlotUnit(
+/** TrainHeroic param type codes keyed by their unit label (`sec` and `in` each name two). */
+const TYPES_BY_UNIT: ReadonlyMap<string, readonly number[]> = (() => {
+  const map = new Map<string, number[]>();
+  for (const [code, unit] of Object.entries(PARAM_UNIT)) {
+    if (unit !== null) map.set(unit, [...(map.get(unit) ?? []), Number(code)]);
+  }
+  return map;
+})();
+
+/**
+ * Pick the param type a populated slot is written with. An explicit `param_N_type` wins and
+ * must agree with the stated unit. Otherwise the exercise's library default is kept when it
+ * already has the stated unit, and any other unit maps to its own type code.
+ */
+function resolveSlotType(
   label: string,
-  field: string,
+  slot: 1 | 2,
   stated: string | undefined,
-  paramType: number | undefined,
-  fixedType: number | null,
-  allowAddedWeight = false,
-): void {
+  explicit: number | undefined,
+  libraryDefault: number | null,
+): number {
+  const field = slot === 1 ? "primaryUnit" : "secondaryUnit";
   if (stated === undefined) throw new Error(`${label}: ${field} is required for this value.`);
   const intended = statedUnit(stated, `${label} / ${field}`);
-  const fixed = unitLabel(fixedType);
-  const addedWeight =
-    allowAddedWeight && (fixedType === PARAM_NONE || fixedType === null) && intended === "lb";
-  if (intended !== fixed && !addedWeight) {
-    throw new Error(
-      `${label}: ${field} ${intended} does not match the exercise's fixed ${fixed ?? "unset"} unit. Choose an exercise with the requested unit before building.`,
-    );
+  if (explicit !== undefined) {
+    if (unitLabel(explicit) !== intended) {
+      throw new Error(
+        `${label}: ${field} ${intended} conflicts with param_${slot}_type ${explicit} (${unitLabel(explicit) ?? "unset"}).`,
+      );
+    }
+    return explicit;
   }
-  if (paramType !== undefined && unitLabel(paramType) !== intended) {
-    throw new Error(
-      `${label}: ${field} ${intended} conflicts with param type ${paramType} (${unitLabel(paramType) ?? "unset"}).`,
-    );
+  if (libraryDefault !== null && unitLabel(libraryDefault) === intended) return libraryDefault;
+  const [only, ...others] = TYPES_BY_UNIT.get(intended) ?? [];
+  if (only === undefined) {
+    throw new Error(`${label}: ${field} ${intended} has no TrainHeroic param type.`);
   }
+  if (others.length === 0) return only;
+  throw new Error(
+    `${label}: ${field} ${intended} matches TrainHeroic param types ${[only, ...others].join(" and ")}; set param_${slot}_type to choose one.`,
+  );
 }
 
-/** Validate both populated slots against the library before any workout write. */
-function validateExerciseUnits(
-  blockTitle: string,
+/**
+ * Return a copy of `ex` with `param_1_type` and `param_2_type` set to the types the encoder
+ * writes. A slot without values always gets the library default (an explicit type there is
+ * ignored, and `resolveExerciseUnits` warns about it), so only a slot with values can carry a
+ * type that differs from the library.
+ */
+function withResolvedParamTypes(
+  label: string,
   ex: ExerciseSpec,
-  defaults: { param1: number | null; param2: number | null },
-): void {
-  const label = `${blockTitle} / ${ex.title ?? ex.id}`;
-  if (ex.reps !== undefined) {
-    validateSlotUnit(label, "primaryUnit", ex.primaryUnit, ex.param_1_type, defaults.param1);
-  }
-  if (ex.weight !== undefined) {
-    validateSlotUnit(
-      label,
-      "secondaryUnit",
-      ex.secondaryUnit,
-      ex.param_2_type,
-      defaults.param2,
-      true,
-    );
-  }
+  defaults: ExerciseDefaults,
+): ExerciseSpec {
+  const param1 =
+    ex.reps === undefined
+      ? (defaults.param1 ?? PARAM_REPS)
+      : resolveSlotType(label, 1, ex.primaryUnit, ex.param_1_type, defaults.param1);
+  const param2 =
+    ex.weight === undefined
+      ? (defaults.param2 ?? PARAM_NONE)
+      : resolveSlotType(label, 2, ex.secondaryUnit, ex.param_2_type, defaults.param2);
+  return { ...ex, param_1_type: param1, param_2_type: param2 };
 }
 
-/** Flag spec params the API will silently override to the exercise's fixed units. */
+/**
+ * The slots (1 = primary, 2 = secondary) of a resolved exercise that hold values in a type
+ * other than the library default. This is the one definition of a unit override: the advisory
+ * notes describe these slots, and `buildSession` re-saves a row until TrainHeroic stores
+ * exactly these types.
+ */
+export function overriddenSlots(ex: ExerciseSpec, defaults: ExerciseDefaults): Array<1 | 2> {
+  const overridden: Array<1 | 2> = [];
+  if (ex.reps !== undefined && ex.param_1_type !== defaults.param1) overridden.push(1);
+  if (ex.weight !== undefined && ex.param_2_type !== defaults.param2) overridden.push(2);
+  return overridden;
+}
+
+/** A param type's unit label for advisory text; "unset" for a slot without a type. */
+function unitName(type: number | null | undefined): string {
+  return unitLabel(type) ?? "unset";
+}
+
+/**
+ * Describe how a resolved exercise's units relate to its library defaults, and flag spec
+ * fields the encoder ignores. `ex` carries the resolved `param_1_type` and `param_2_type`
+ * (from `resolveExerciseUnits`).
+ */
 export function unitAdvisory(
-  blockTitle: string,
+  label: string,
   ex: ExerciseSpec,
-  defaults: { param1: number | null; param2: number | null },
+  defaults: ExerciseDefaults,
 ): Advisory {
   const notes: string[] = [];
   const warnings: string[] = [];
-  const u = unitOr;
-  const label = `${blockTitle} / ${ex.title ?? ex.id}`;
+  const u = unitName;
 
   // An explicit `sets` is ignored when `reps` is an array (array length wins); surface
   // it rather than silently building a different number of sets than asked for.
@@ -456,62 +492,93 @@ export function unitAdvisory(
     );
   }
 
-  const sentP1 = ex.param_1_type;
-  if (sentP1 !== undefined && sentP1 !== null && Math.trunc(Number(sentP1)) !== defaults.param1) {
-    const sp1 = Math.trunc(Number(sentP1));
-    warnings.push(
-      `${label}: param_1_type ${sentP1} (${u(sp1)}) is ignored — this exercise is fixed to ${u(defaults.param1)}; values render as ${u(defaults.param1)}.`,
-    );
-  } else if (defaults.param1 !== PARAM_REPS && defaults.param1 !== null) {
+  const overrides = overriddenSlots(ex, defaults);
+  if (overrides.includes(1)) {
     notes.push(
-      `${label}: values are in ${u(defaults.param1)} (the exercise's fixed primary unit).`,
+      `${label}: primary values are in ${u(ex.param_1_type)}, set on this session in place of the exercise's default ${u(defaults.param1)}.`,
+    );
+  } else if (ex.reps !== undefined && ex.param_1_type !== PARAM_REPS) {
+    notes.push(
+      `${label}: values are in ${u(ex.param_1_type)} (the exercise's default primary unit).`,
     );
   }
-
-  if (ex.weight !== undefined && ex.weight !== null) {
-    const effP2 =
-      defaults.param2 === PARAM_NONE || defaults.param2 === null ? PARAM_WEIGHT : defaults.param2;
-    const sentP2 = Math.trunc(Number(ex.param_2_type ?? effP2));
-    if (sentP2 !== effP2) {
-      if (sentP2 === PARAM_PCT_MAX || sentP2 === PARAM_RPE) {
-        warnings.push(
-          `${label}: ${u(sentP2)} does not stick on this exercise — it renders as ${u(effP2)}. Put it in the exercise 'instr' text and leave load blank.`,
-        );
-      } else {
-        warnings.push(
-          `${label}: load renders as ${u(effP2)}, not ${u(sentP2)} (this exercise's secondary unit is fixed).`,
-        );
-      }
-    }
+  // Pounds in a secondary slot the library leaves unset is added load on a bodyweight exercise
+  // (a weighted pull-up), which needs no note.
+  const addedLoad =
+    ex.param_2_type === PARAM_WEIGHT &&
+    (defaults.param2 === PARAM_NONE || defaults.param2 === null);
+  if (overrides.includes(2) && !addedLoad) {
+    notes.push(
+      `${label}: secondary values are in ${u(ex.param_2_type)}, set on this session in place of the exercise's default ${u(defaults.param2)}.`,
+    );
   }
   return { notes, warnings };
 }
 
+/** Warn about explicit param types on slots without values, which the encoder ignores. */
+function ignoredTypeWarnings(label: string, ex: ExerciseSpec): string[] {
+  const warnings: string[] = [];
+  if (ex.reps === undefined && ex.param_1_type !== undefined) {
+    warnings.push(
+      `${label}: param_1_type ${ex.param_1_type} is ignored because reps has no values; the slot keeps the exercise's default.`,
+    );
+  }
+  if (ex.weight === undefined && ex.param_2_type !== undefined) {
+    warnings.push(
+      `${label}: param_2_type ${ex.param_2_type} is ignored because weight has no values; the slot keeps the exercise's default.`,
+    );
+  }
+  return warnings;
+}
+
+/** A block list with resolved param types, the library defaults used, and advisories. */
+export type ResolvedUnits = {
+  blocks: BlockSpec[];
+  defaultsById: Map<number, ExerciseDefaults>;
+  advisories: Advisory;
+};
+
 /**
- * Validate every populated value's stated unit against current TrainHeroic exercise data,
- * then collect non-blocking advisories. The write path calls this before creating a workout;
- * TrainHeroic silently replaces mismatched types.
+ * Resolve every exercise's param types against current TrainHeroic exercise data and collect
+ * non-blocking advisories. Throws, before anything is written, when a populated slot has no
+ * stated unit, an unknown unit, or a unit that disagrees with an explicit param type. The
+ * returned blocks carry the resolved `param_1_type` and `param_2_type` on every exercise.
+ */
+export async function resolveExerciseUnits(
+  blocks: readonly BlockSpec[],
+  index: AdvisoryIndex,
+): Promise<ResolvedUnits> {
+  const ids = [
+    ...new Set(
+      blocks.flatMap((b) => b.exercises.map((ex) => Number(ex.id))).filter(Number.isFinite),
+    ),
+  ];
+  const defaultsById = await index.currentDefaultsMany(ids);
+  const notes: string[] = [];
+  const warnings: string[] = [];
+  const resolved = blocks.map((block) => ({
+    ...block,
+    exercises: block.exercises.map((ex) => {
+      const label = `${block.title} / ${ex.title ?? ex.id}`;
+      const def = defaultsById.get(Number(ex.id));
+      if (!def) throw new Error(`${label}: exercise id ${ex.id} was not found in the library.`);
+      const typed = withResolvedParamTypes(label, ex, def);
+      const advisory = unitAdvisory(label, typed, def);
+      notes.push(...advisory.notes);
+      warnings.push(...ignoredTypeWarnings(label, ex), ...advisory.warnings);
+      return typed;
+    }),
+  }));
+  return { blocks: resolved, defaultsById, advisories: { notes, warnings } };
+}
+
+/**
+ * Validate units and collect advisories without writing a workout. This is the preview entry
+ * point; `resolveExerciseUnits` also returns the resolved blocks that `buildSession` writes.
  */
 export async function collectAdvisories(
   blocks: readonly BlockSpec[],
   index: AdvisoryIndex,
 ): Promise<Advisory> {
-  const pairs = blocks.flatMap((b) => b.exercises.map((ex) => ({ block: b, ex })));
-  const ids = [...new Set(pairs.map((p) => Number(p.ex.id)).filter((id) => Number.isFinite(id)))];
-  const defaultsById = await index.currentDefaultsMany(ids);
-  const notes: string[] = [];
-  const warnings: string[] = [];
-  pairs.forEach((p) => {
-    const def = defaultsById.get(Number(p.ex.id));
-    if (!def) {
-      throw new Error(
-        `${p.block.title} / ${p.ex.title ?? p.ex.id}: exercise id ${p.ex.id} was not found in the library.`,
-      );
-    }
-    validateExerciseUnits(p.block.title, p.ex, def);
-    const advisory = unitAdvisory(p.block.title, p.ex, def);
-    notes.push(...advisory.notes);
-    warnings.push(...advisory.warnings);
-  });
-  return { notes, warnings };
+  return (await resolveExerciseUnits(blocks, index)).advisories;
 }

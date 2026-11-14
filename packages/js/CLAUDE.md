@@ -36,9 +36,12 @@ new helper goes, ask whether it must work on workerd; if yes, it cannot touch `n
   behavior when touching request code.
 - Two hosts, selected by `RequestOptions.base`. Default is the coach host.
 - The workout encoder has non-obvious rules driven by the real API: fill every parameter
-  slot (the HTTP 500 guard), broadcast scalars across sets, route RPE into the instruction,
-  and reject values whose stated units differ from current TrainHeroic exercise data before
-  a workout write. The search mirror's seven-day cache cannot establish write-time units.
+  slot (the HTTP 500 guard), broadcast scalars across sets, route the `rpe` field into the
+  instruction, and resolve each stated unit to a param type against current TrainHeroic
+  exercise defaults before a workout write. An insert stores the library types, so
+  `buildSession` re-saves by id any row whose overridden slots (`overriddenSlots`) the insert
+  stored in the library type.
+  The search mirror's seven-day cache cannot establish write-time defaults.
   The encoder tests pin this behavior; keep them green.
 - Shapes come from `dto`. Do not redefine a type here that already exists there.
 

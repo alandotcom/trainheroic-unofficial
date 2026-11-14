@@ -19,13 +19,19 @@ export const exerciseSpecSchema = z
       .trim()
       .min(1)
       .optional()
-      .describe("Intended primary unit from exercise_resolve, such as reps, m, mi, or sec."),
+      .describe(
+        "Unit of the primary values, such as reps, m, mi, or sec. A unit other than the " +
+          "exercise's default from exercise_resolve is set on this session.",
+      ),
     secondaryUnit: z
       .string()
       .trim()
       .min(1)
       .optional()
-      .describe("Intended secondary unit from exercise_resolve, such as lb or sec."),
+      .describe(
+        "Unit of the secondary values, such as lb, %max, RPE, or sec. A unit other than the " +
+          "exercise's default from exercise_resolve is set on this session.",
+      ),
     rpe: z.union([z.number(), z.string()]).optional(),
     instr: z.string().optional(),
     param_1_type: z.number().optional(),
