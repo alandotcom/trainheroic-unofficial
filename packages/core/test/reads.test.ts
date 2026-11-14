@@ -8,17 +8,38 @@ type ToolResult = { isError?: boolean; content: Array<{ type: string; text: stri
 type Handler = (args: Record<string, unknown>, ctx: ServerContext) => Promise<ToolResult>;
 type Request = (method: string, path: string) => Promise<ClientResult>;
 
-function getProgramHandler(request: Request): Handler {
+function readToolHandler(name: string, request: Request): Handler {
   const handlers = new Map<string, Handler>();
   const server = {
-    registerTool: (name: string, _config: unknown, handler: Handler) => handlers.set(name, handler),
+    registerTool: (tool: string, _config: unknown, handler: Handler) => handlers.set(tool, handler),
   } as unknown as McpServer;
   const client = { request } as unknown as ToolContext["client"];
   registerReadTools(server, { client, index: {} } as unknown as ToolContext);
-  const handler = handlers.get("get_program");
+  const handler = handlers.get(name);
   expect(handler).toBeDefined();
   return handler!;
 }
+
+function getProgramHandler(request: Request): Handler {
+  return readToolHandler("get_program", request);
+}
+
+describe("athlete_training", () => {
+  it("points a failing month summary at athlete_saved_workouts", async () => {
+    const handler = readToolHandler("athlete_training", async () => ({
+      ok: false,
+      status: 500,
+      data: { message: "Server Error" },
+    }));
+
+    const result = await handler({ athleteId: 7, year: 2026, month: 11 }, {} as ServerContext);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toMatch(
+      /athlete 7 in 2026-11 failed \(HTTP 500\).*Call athlete_saved_workouts/u,
+    );
+  });
+});
 
 describe("get_program", () => {
   it("returns nested detail when the program-detail endpoint supports the calendar", async () => {

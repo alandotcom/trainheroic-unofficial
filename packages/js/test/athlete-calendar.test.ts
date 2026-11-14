@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrainHeroicClient } from "../src/client";
-import { fetchCoachAthleteCalendar, resolveBuildProgramId } from "../src/coach-athlete-calendar";
+import {
+  CoachMonthSummaryError,
+  fetchCoachAthleteCalendar,
+  fetchCoachAthleteCalendarSummary,
+  resolveBuildProgramId,
+} from "../src/coach-athlete-calendar";
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -94,5 +99,33 @@ describe("resolveBuildProgramId", () => {
       date: "2026-8-26",
     });
     expect(id).toBe(5060391);
+  });
+});
+
+describe("fetchCoachAthleteCalendarSummary", () => {
+  function client(response: Response): TrainHeroicClient {
+    return new TrainHeroicClient("a@b.com", "pw", "live-session", {
+      transport: vi.fn(async () => response),
+    });
+  }
+
+  it("raises an HTTP 500 as a typed error that points at the date-range read", async () => {
+    const read = fetchCoachAthleteCalendarSummary(
+      client(json({ message: "Server Error" }, 500)),
+      7,
+      2026,
+      6,
+    );
+    await expect(read).rejects.toBeInstanceOf(CoachMonthSummaryError);
+    await expect(read).rejects.toMatchObject({ status: 500 });
+    await expect(read).rejects.toThrow(
+      /athlete 7 in 2026-06 failed \(HTTP 500\): Server Error\. .*date-range read/u,
+    );
+  });
+
+  it("reports a successful response that is not a row list as an unexpected shape", async () => {
+    await expect(
+      fetchCoachAthleteCalendarSummary(client(json({ unexpected: true })), 7, 2026, 11),
+    ).rejects.toThrow(/athlete 7 in 2026-11 returned an unexpected response shape\./u);
   });
 });

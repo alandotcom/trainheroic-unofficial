@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   coachAthleteTrainingOutputSchema,
@@ -11,6 +11,7 @@ import {
   userSimpleSchema,
 } from "@trainheroic-unofficial/dto";
 import {
+  CoachMonthSummaryError,
   fetchCoachAthleteCalendarSummary,
   fetchExerciseHistoryDetail,
   fetchRosterActivity,
@@ -27,6 +28,7 @@ import {
   apiResponseResult,
   attempt,
   clipArray,
+  errorResult,
   idParam,
   jsonResult,
   READ,
@@ -148,6 +150,33 @@ const SIMPLE_GETS: ReadonlyArray<{
     path: SESSION_TEMPLATES_LIST_PATH,
   },
 ];
+
+/**
+ * Body of the athlete_training handler. TrainHeroic's month summary answers HTTP 500 for some
+ * athletes whose date-range read still works, so that failure names athlete_saved_workouts.
+ */
+async function athleteTrainingResult(
+  ctx: ToolContext,
+  athleteId: number,
+  year: number,
+  month: number,
+): Promise<CallToolResult> {
+  let raw: unknown[];
+  try {
+    raw = await fetchCoachAthleteCalendarSummary(ctx.client, athleteId, year, month);
+  } catch (error) {
+    if (error instanceof CoachMonthSummaryError && error.status === 500) {
+      return errorResult(
+        `${error.message} Call athlete_saved_workouts with startDate and endDate spanning the ` +
+          "month.",
+      );
+    }
+    throw error;
+  }
+  return jsonResult(presentCoachAthleteTraining(raw, athleteId, year, month), {
+    hint: "One session per row for the month. Use the exercise titles to pick lifts, then athlete_lift_history for their PRs.",
+  });
+}
 
 /** Roster-level reads: the fixed GETs plus the filterable athlete and team lists. */
 function registerRosterReads(server: McpServer, ctx: ToolContext): void {
@@ -357,17 +386,7 @@ function registerEntityReads(server: McpServer, ctx: ToolContext): void {
       annotations: READ,
     },
     ({ athleteId, year, month }) =>
-      attempt(async () => {
-        const raw = await fetchCoachAthleteCalendarSummary(
-          ctx.client,
-          toId(athleteId),
-          year,
-          month,
-        );
-        return jsonResult(presentCoachAthleteTraining(raw, toId(athleteId), year, month), {
-          hint: "One session per row for the month. Use the exercise titles to pick lifts, then athlete_lift_history for their PRs.",
-        });
-      }),
+      attempt(() => athleteTrainingResult(ctx, toId(athleteId), year, month)),
   );
 
   server.registerTool(
