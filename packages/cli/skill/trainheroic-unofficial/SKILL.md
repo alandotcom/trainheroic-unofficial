@@ -238,17 +238,17 @@ Environment-specific facts that defy reasonable assumptions:
   repeated. `{"content": "..."}` returns `400 Invalid parameters`; so does trimming any
   field. The CLI sends the full body. There is **no draft state**: a POST is delivered
   immediately, so gate sends behind explicit user confirmation (`--yes`).
-- **Units are fixed per exercise — you can't set them at prescribe time.** On save the API
-  discards the `param_1_type`/`param_2_type` you send and restores the exercise's library
-  defaults (the _values_ are kept). So the stock `Run` (miles) can't be made metric; a
-  "200 m run" on it shows as 200 _miles_. And `param_2_type` `2` (% of max) and `14` (RPE)
-  coerce to weight on a weight lift, rendering as pounds — put % or RPE in the
-  `instruction` (the builder does this from `rpe`). You _can_ add weight (`1`) to a
-  no-secondary-param lift (weighted Pull-Ups). Check units with `$TH coach exercise resolve`
-  (the `units` array, ordered by entry slot `[param 1, param 2]`). Include
-  `primaryUnit` with every `reps` value and `secondaryUnit` with every `weight` value;
-  these fields name the intended unit for each positional slot. The builder rejects
-  mismatches before creating a draft. "Max"/"AMRAP" reps work as free text in the
+- **Each exercise has default units, and a session can override them.** An insert through
+  `saveWorkoutSetExercises` stores the exercise's library `param_1_type`/`param_2_type`
+  whatever you send (the _values_ are kept). Saving the same row again with its `id` keeps the
+  types you send, which is how the coach app's unit picker sets Weight (%) on any lift. The
+  builder does both saves for you. `$TH coach exercise resolve` shows the default units (the
+  `units` array, ordered by entry slot `[param 1, param 2]`). Include `primaryUnit` with
+  every `reps` value and `secondaryUnit` with every `weight` value. A unit other than the
+  default is set on that session: `"secondaryUnit": "%max"` prescribes % of max on Back
+  Squat, `"RPE"` prescribes RPE as load, and `"primaryUnit": "m"` makes the stock `Run`
+  (miles) metric. `sec` and `in` each name two TrainHeroic types, so pair them with
+  `param_N_type` when they are not the default. "Max"/"AMRAP" reps work as free text in the
   rep slots.
 - **`saveWorkoutSetExercises` returns HTTP 500** unless every field is present: all ten
   `param_1_data_N`/`param_2_data_N` slots (empty string for unused), `set_num`, `key`,
@@ -260,8 +260,8 @@ Environment-specific facts that defy reasonable assumptions:
 - **A created session exposes two IDs**: `workout_id` (for adding blocks) and `id` (the
   programWorkout id, used to publish and to delete; the CLI calls it `pw`).
 - **The API ignores the exercise `title` you send** and uses the real title for
-  `exercise_id`; it also overrides both `param_1_type` and `param_2_type` to the exercise
-  default (see the units gotcha above).
+  `exercise_id`; an insert also stores the exercise's default `param_1_type` and
+  `param_2_type` until the row is saved again by id (see the units gotcha above).
 - **Response envelopes vary.** `2.0/coach/*` tag/exercise endpoints wrap data as
   `{"success": 1, "data": {...}}`; most others return bare objects/arrays.
 - **This API is undocumented and can change.** `references/api-reference.md` has a "Still

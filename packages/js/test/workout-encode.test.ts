@@ -5,6 +5,7 @@ import {
   defaultBlockType,
   findSetSplits,
   makeExercise,
+  resolveExerciseUnits,
   repsList,
   resolveLeaderboard,
   setSplitSummary,
@@ -345,26 +346,137 @@ describe("defaultBlockType", () => {
 });
 
 describe("unitAdvisory", () => {
-  it("warns when a sent primary unit will be overridden", () => {
-    const a = unitAdvisory("Cardio", { id: 1, param_1_type: 6 }, { param1: 10, param2: null });
-    expect(a.warnings[0]).toMatch(/ignored/u);
-  });
-  it("notes a non-rep fixed primary unit", () => {
-    const a = unitAdvisory("Cardio", { id: 1 }, { param1: 10, param2: null });
-    expect(a.notes[0]).toMatch(/mi/u);
-  });
-  it("warns that RPE in a weight slot will not stick", () => {
+  it("notes a primary unit set in place of the library default", () => {
     const a = unitAdvisory(
-      "Press",
-      { id: 1, weight: [100], param_2_type: 14 },
+      "Cardio / Run",
+      { id: 1, reps: [200], param_1_type: 6 },
+      { param1: 10, param2: null },
+    );
+    expect(a.notes[0]).toMatch(/primary values are in m, .*default mi/u);
+    expect(a.warnings).toHaveLength(0);
+  });
+  it("notes a non-rep default primary unit", () => {
+    const a = unitAdvisory(
+      "Cardio / Run",
+      { id: 1, reps: [2], param_1_type: 10 },
+      { param1: 10, param2: null },
+    );
+    expect(a.notes[0]).toMatch(/values are in mi \(the exercise's default primary unit\)/u);
+  });
+  it("notes a %max load set in place of a pounds default", () => {
+    const a = unitAdvisory(
+      "Squat / Back Squat",
+      { id: 1, weight: [70], param_2_type: 2 },
       { param1: 3, param2: 1 },
     );
-    expect(a.warnings[0]).toMatch(/does not stick/u);
+    expect(a.notes[0]).toMatch(/secondary values are in %max, .*default lb/u);
+    expect(a.warnings).toHaveLength(0);
   });
-  it("is silent when the spec matches the fixed units", () => {
-    const a = unitAdvisory("Press", { id: 1, reps: [5] }, { param1: 3, param2: 1 });
+  it("treats pounds in an unset secondary slot as added load", () => {
+    const a = unitAdvisory(
+      "Pull-up",
+      { id: 1, weight: [20], param_2_type: 1 },
+      { param1: 3, param2: 0 },
+    );
+    expect(a.notes).toHaveLength(0);
+  });
+  it("is silent when the spec matches the default units", () => {
+    const a = unitAdvisory(
+      "Press",
+      { id: 1, reps: [5], param_1_type: 3, param_2_type: 1 },
+      { param1: 3, param2: 1 },
+    );
     expect(a.notes).toHaveLength(0);
     expect(a.warnings).toHaveLength(0);
+  });
+});
+
+describe("resolveExerciseUnits", () => {
+  const index = {
+    currentDefaultsMany: async () =>
+      new Map([
+        [1, { param1: 3, param2: 1 }],
+        [82, { param1: 10, param2: 0 }],
+        [7, { param1: 3, param2: 4 }],
+      ]),
+  };
+
+  it("maps a stated unit that differs from the library default to its own type", async () => {
+    const { blocks } = await resolveExerciseUnits(
+      [
+        {
+          title: "Main",
+          exercises: [
+            { id: 1, reps: 5, primaryUnit: "reps", weight: [70, 75], secondaryUnit: "%max" },
+            { id: 82, reps: 200, primaryUnit: "meters" },
+          ],
+        },
+      ],
+      index,
+    );
+    expect(blocks[0]?.exercises[0]).toMatchObject({ param_1_type: 3, param_2_type: 2 });
+    expect(blocks[0]?.exercises[1]).toMatchObject({ param_1_type: 6, param_2_type: 0 });
+  });
+
+  it("keeps the library default when it has the stated unit, including sec on a time slot", async () => {
+    const { blocks } = await resolveExerciseUnits(
+      [
+        {
+          title: "Hold",
+          exercises: [{ id: 7, reps: 1, primaryUnit: "reps", weight: 30, secondaryUnit: "sec" }],
+        },
+      ],
+      index,
+    );
+    expect(blocks[0]?.exercises[0]).toMatchObject({ param_1_type: 3, param_2_type: 4 });
+  });
+
+  it("accepts an explicit param type that agrees with the stated unit", async () => {
+    const { blocks } = await resolveExerciseUnits(
+      [
+        {
+          title: "Main",
+          exercises: [{ id: 1, weight: 30, secondaryUnit: "sec", param_2_type: 18 }],
+        },
+      ],
+      index,
+    );
+    expect(blocks[0]?.exercises[0]).toMatchObject({ param_2_type: 18 });
+  });
+
+  it("resolves pounds in an unset secondary slot as added load without a note", async () => {
+    const { blocks, advisories } = await resolveExerciseUnits(
+      [
+        {
+          title: "Run",
+          exercises: [{ id: 82, reps: 1, primaryUnit: "mi", weight: 20, secondaryUnit: "lb" }],
+        },
+      ],
+      index,
+    );
+    expect(blocks[0]?.exercises[0]).toMatchObject({ param_1_type: 10, param_2_type: 1 });
+    expect(advisories.notes).toEqual([
+      "Run / 82: values are in mi (the exercise's default primary unit).",
+    ]);
+  });
+
+  it("ignores an explicit param type on a slot without values and warns", async () => {
+    const { blocks, advisories } = await resolveExerciseUnits(
+      [{ title: "Squat", exercises: [{ id: 1, reps: 5, primaryUnit: "reps", param_2_type: 0 }] }],
+      index,
+    );
+    expect(blocks[0]?.exercises[0]).toMatchObject({ param_2_type: 1 });
+    expect(advisories.warnings[0]).toMatch(
+      /param_2_type 0 is ignored because weight has no values/u,
+    );
+  });
+
+  it("keeps the library default on a slot without values", async () => {
+    const { blocks } = await resolveExerciseUnits(
+      [{ title: "Squat", exercises: [{ id: 1, reps: 5, primaryUnit: "reps", rpe: 8 }] }],
+      index,
+    );
+    expect(blocks[0]?.exercises[0]).toMatchObject({ param_1_type: 3, param_2_type: 1 });
   });
 });
 
@@ -412,22 +524,22 @@ describe("collectAdvisories", () => {
 
   it.each([
     {
-      name: "meters saved as miles",
-      exercise: { id: 1, title: "Run", reps: 200, primaryUnit: "m", param_1_type: 6 },
+      name: "a stated unit that conflicts with an explicit param type",
+      exercise: { id: 1, title: "Run", reps: 200, primaryUnit: "m", param_1_type: 10 },
       defaults: { param1: 10, param2: 0 },
-      expected: /Run.*m.*mi/iu,
+      expected: /Run: primaryUnit m conflicts with param_1_type 10 \(mi\)/u,
     },
     {
-      name: "time saved as weight",
-      exercise: { id: 1, title: "Hold", weight: 30, secondaryUnit: "sec", param_2_type: 4 },
+      name: "a unit that names two param types",
+      exercise: { id: 1, title: "Hold", weight: 30, secondaryUnit: "sec" },
       defaults: { param1: 3, param2: 1 },
-      expected: /Hold.*sec.*lb/iu,
+      expected: /Hold: secondaryUnit sec matches .*4 and 18; set param_2_type/u,
     },
     {
-      name: "weight saved as time",
-      exercise: { id: 1, title: "Hold", weight: 30, secondaryUnit: "lb" },
-      defaults: { param1: 3, param2: 4 },
-      expected: /Hold.*lb.*sec/iu,
+      name: "an unknown unit",
+      exercise: { id: 1, title: "Carry", weight: 30, secondaryUnit: "stone" },
+      defaults: { param1: 3, param2: 1 },
+      expected: /Carry.*unknown unit 'stone'/u,
     },
   ])("rejects $name before the draft is created", async ({ exercise, defaults, expected }) => {
     const index = {

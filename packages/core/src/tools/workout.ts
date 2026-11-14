@@ -56,11 +56,13 @@ function registerBuild(server: McpServer, ctx: ToolContext): void {
         "or a top-level 'instruction' for the session note (Coach Instructions). Returns the " +
         "draft ids and a read-back. For each exercise, state primaryUnit when reps is present " +
         "and secondaryUnit when weight is present; these are positional values, even when the " +
-        "unit is distance or time. Use exercise_resolve to check the exercise's fixed units " +
-        "before building. A mismatch fails before the draft is created. Exercises above 10 " +
-        "sets are split into consecutive same-titled blocks and require confirmation " +
-        "(elicitation, or confirm:true). " +
-        "Review, then workout_publish.",
+        "unit is distance or time. exercise_resolve lists each exercise's default units. A " +
+        "stated unit that differs from the default is set on this session, so % of max " +
+        "(secondaryUnit '%max') or RPE works on a built-in pounds lift and meters work on a " +
+        "miles exercise. A unit that conflicts with an explicit param_N_type fails before the " +
+        "draft is created. Exercises above 10 sets are split into consecutive same-titled " +
+        "blocks and require confirmation (elicitation, or confirm:true). Review, then " +
+        "workout_publish.",
       inputSchema: {
         programId: z.number().optional(),
         athleteId: idParam.optional(),

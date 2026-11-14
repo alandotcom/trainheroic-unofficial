@@ -210,8 +210,9 @@ $TH athlete exercise-note --set-exercise 2712369448 --notes "green band" --yes
 
 - `profile` must send `use_metric` and `stats` must send `date`, or the API returns 400.
   The CLI fills `use_metric` (toggle with `--metric`); pass `--date` to `stats`.
-- Units are **fixed per exercise** and surfaced positionally as `[param 1, param 2]` (e.g.
-  `["reps", "lb"]`). They are not labelled by role: some exercises reverse the slots.
+- Each exercise has **default units**, surfaced positionally as `[param 1, param 2]` (e.g.
+  `["reps", "lb"]`). They are not labelled by role: some exercises reverse the slots. A coach
+  can set other units on one session, such as % of max on Back Squat.
 - `log-set`, `workout-note`, and `exercise-note` write to your coach-visible log. Gate them
   behind explicit user confirmation, never run them autonomously, and verify the result.
   `log-set`'s request shape was reverse-engineered from the mobile app (a two-step write:

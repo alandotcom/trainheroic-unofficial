@@ -24,9 +24,10 @@ import {
 import { checkResponse } from "./response-check";
 import {
   buildBlockPayload,
-  collectAdvisories,
   LEADERBOARD_LABEL,
   makeExercise,
+  overriddenSlots,
+  resolveExerciseUnits,
   setSplitSummary,
   splitOversizedBlocks,
 } from "./workout-encode";
@@ -46,6 +47,102 @@ export type BuildOptions = {
 };
 
 const EXERCISE_SAVE_CONCURRENCY = 4;
+const SAVE_EXERCISES_PATH = "/2.0/coach/calendar/saveWorkoutSetExercises";
+
+/** One exercise entry for `saveWorkoutSetExercises` and the slots whose type it overrides. */
+type ExerciseSave = { entry: Record<string, unknown>; overrides: ReadonlyArray<1 | 2> };
+
+/**
+ * Pair each sent entry with the row TrainHeroic returned for it. A block's rows are matched on
+ * `order` (unique within one block's payload) and must carry the same `exercise_id` and an id.
+ * Throws when the response is not a row array or a row is missing, because the caller cannot
+ * then confirm which units TrainHeroic stored.
+ */
+function matchSavedRows(
+  saves: readonly ExerciseSave[],
+  response: unknown,
+  pwId: number,
+): Array<{ save: ExerciseSave; row: Record<string, unknown>; id: number }> {
+  if (!Array.isArray(response)) {
+    throw new Error(
+      `saveWorkoutSetExercises returned an unexpected response shape for draft session ${pwId}.`,
+    );
+  }
+  const rows = response.filter(
+    (row): row is Record<string, unknown> => typeof row === "object" && row !== null,
+  );
+  return saves.map((save) => {
+    const row = rows.find(
+      (r) =>
+        coerceInt(r.order) === coerceInt(save.entry.order) &&
+        coerceInt(r.exercise_id) === coerceInt(save.entry.exercise_id),
+    );
+    const id = coerceInt(row?.id);
+    if (row === undefined || id === null) {
+      throw new Error(
+        `saveWorkoutSetExercises returned no row for exercise ${String(save.entry.exercise_id)} ` +
+          `(order ${String(save.entry.order)}) on draft session ${pwId}.`,
+      );
+    }
+    return { save, row, id };
+  });
+}
+
+/** True when the stored row holds the requested type in every overridden slot. */
+function keepsOverrides(save: ExerciseSave, row: Record<string, unknown>): boolean {
+  return save.overrides.every(
+    (slot) => coerceInt(row[`param_${slot}_type`]) === coerceInt(save.entry[`param_${slot}_type`]),
+  );
+}
+
+/**
+ * Save one block's exercises. TrainHeroic stores a newly inserted row with the exercise's
+ * library param types whatever the request says, and keeps the requested types when the same
+ * row is saved again with its `id`; the coach web app's unit picker saves single rows by id
+ * the same way. So each row with an overridden slot (say %max load on a pounds lift) that the
+ * insert stored in the library type is saved a second time by id. Throws when the second save
+ * still does not hold the requested types, because the values would render in the wrong unit.
+ */
+async function saveBlockExercises(
+  client: TrainHeroicClient,
+  pwId: number,
+  saves: readonly ExerciseSave[],
+): Promise<void> {
+  const inserted = await req(
+    client,
+    "POST",
+    SAVE_EXERCISES_PATH,
+    saves.map((save) => save.entry),
+  );
+  const corrections = matchSavedRows(saves, inserted, pwId)
+    .filter(({ save, row }) => !keepsOverrides(save, row))
+    .map(({ save, id }) => ({ entry: { ...save.entry, id }, overrides: save.overrides }));
+  if (corrections.length === 0) return;
+
+  const updated = await req(
+    client,
+    "POST",
+    SAVE_EXERCISES_PATH,
+    corrections.map((save) => save.entry),
+  );
+  const unkept = matchSavedRows(corrections, updated, pwId).filter(
+    ({ save, row }) => !keepsOverrides(save, row),
+  );
+  if (unkept.length > 0) {
+    // TrainHeroic replaces the sent title with the exercise's real one, so name rows by that.
+    const names = unkept
+      .map(({ save, row }) =>
+        typeof row.title === "string" && row.title !== ""
+          ? row.title
+          : `exercise ${String(save.entry.exercise_id)}`,
+      )
+      .join(", ");
+    throw new Error(
+      `TrainHeroic did not keep the requested units for ${names} on draft session ${pwId}. ` +
+        "Remove the draft or correct those exercises in the coach app.",
+    );
+  }
+}
 
 /**
  * Coach calendar writes (`createWorkoutForDay`, timeline create, `copyProgramWorkout`) 500/401
@@ -107,8 +204,9 @@ export async function buildSession(
   if (splitSummary !== null && opts.confirmSetSplit !== true) {
     throw new Error(`${splitSummary} Set confirmSetSplit:true to allow this change.`);
   }
-  const advisories = await collectAdvisories(validatedBlocks, opts.index);
-  const blocks = splitSummary === null ? validatedBlocks : splitOversizedBlocks(validatedBlocks);
+  const resolved = await resolveExerciseUnits(validatedBlocks, opts.index);
+  const advisories = resolved.advisories;
+  const blocks = splitSummary === null ? resolved.blocks : splitOversizedBlocks(resolved.blocks);
   const sess = await req<Record<string, unknown>>(client, "POST", createPath(opts), {});
   checkResponse(sessionCreateResponseSchema, sess, "session create");
   const workoutId = Number(sess.workout_id);
@@ -129,15 +227,19 @@ export async function buildSession(
   const payloads = blocks.map((block, i) => {
     const wsid = byOrder.get(i + 1);
     if (wsid === undefined) throw new Error(`No saved block for order ${i + 1}.`);
-    return block.exercises.map((ex, j) => {
+    return block.exercises.map((ex, j): ExerciseSave => {
       counter += 1;
-      return makeExercise(ex, wsid, j + 1, `k::${workoutId}${String(counter).padStart(3, "0")}`);
+      const defaults = resolved.defaultsById.get(Number(ex.id));
+      return {
+        entry: makeExercise(ex, wsid, j + 1, `k::${workoutId}${String(counter).padStart(3, "0")}`),
+        overrides: defaults === undefined ? [] : overriddenSlots(ex, defaults),
+      };
     });
   });
   await mapPool(
     payloads.filter((p) => p.length > 0),
     EXERCISE_SAVE_CONCURRENCY,
-    (payload) => req(client, "POST", "/2.0/coach/calendar/saveWorkoutSetExercises", payload),
+    (saves) => saveBlockExercises(client, pwId, saves),
   );
 
   // Session note (Coach Instructions). Set before publish so it leaves the draft/published

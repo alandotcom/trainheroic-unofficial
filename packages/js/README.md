@@ -221,9 +221,6 @@ import { buildSession, type BlockSpec } from "@trainheroic-unofficial/js";
 
 const { match } = await library.resolve("Back Squat");
 if (!match) throw new Error("Resolve to a single exercise before building.");
-if (match.units[0] !== "reps" || match.units[1] !== "lb") {
-  throw new Error("Choose an exercise with reps and pounds as its fixed units.");
-}
 
 const blocks: BlockSpec[] = [
   {
@@ -257,8 +254,8 @@ Each exercise needs an `id`; `sets`, `reps`, `weight`, `rpe`, and a per-exercise
 optional. `reps` and `weight` take a scalar (broadcast across every set) or a per-set array
 like `reps: [5, 5, 3]`. State `primaryUnit` for `reps` and `secondaryUnit` for `weight`.
 The full field list is `ExerciseSpec` / `BlockSpec` in
-[`@trainheroic-unofficial/dto`](../dto). `buildSession` checks those units against the
-exercise library and rejects a mismatch before writing.
+[`@trainheroic-unofficial/dto`](../dto). `buildSession` keeps an exercise's default unit when
+the stated unit matches it and sets any other stated unit on this session, as described under "The workout encoder".
 
 `buildSession` returns `{ pwId, workoutId, advisories }`: `pwId` is the program-workout id (the
 placement of the session in the program, which is the handle subsequent calls take), and
@@ -314,14 +311,23 @@ console.log(analyticsMetricCatalog());
 `buildSession` calls the encoder for you; you only deal with it directly to preview values.
 TrainHeroic's exercise payload expects every parameter slot present, so the encoder fills all
 of them (empty slots included) to avoid an HTTP 500. A scalar prescription is broadcast across
-the set count. RPE goes into the instruction text because the API coerces a numeric slot to
-load. Each populated slot in a spec states its intended unit. `collectAdvisories` rejects a
-unit that differs from the exercise's fixed parameter type before a workout is written.
+the set count. The `rpe` field goes into the instruction text; to prescribe RPE as a structured
+load, put the values in `weight` with `secondaryUnit: "RPE"`. Each populated slot in a spec
+states its unit, and `resolveExerciseUnits` maps that unit to a TrainHeroic param type. It keeps
+the exercise's library default when the default already has the stated unit, and otherwise uses
+the stated unit's own type, so a spec can prescribe `%max` on a pounds lift or meters on a miles
+exercise. It throws before any write when a unit is unknown, conflicts with an explicit
+`param_N_type`, or names two types (`sec` and `in`; set `param_N_type` to choose).
 
-`buildSession` calls `collectAdvisories(blocks, index)` before its first write and returns
-its non-blocking notes and warnings in `advisories`. Call `collectAdvisories` directly to
-preview validation without writing a workout. Validation fetches current units from
-TrainHeroic; an unavailable library response stops the build.
+TrainHeroic stores a newly inserted exercise row with the library's param types whatever the
+request says, and keeps the requested types when the same row is saved again by id (the coach
+web app's unit picker works this way). `buildSession` therefore re-saves by id each row whose
+stored types differ from the resolved ones, and throws if TrainHeroic still does not keep them.
+
+`buildSession` returns the resolver's non-blocking notes and warnings in `advisories`; a note
+names each unit set in place of an exercise's default. Call `collectAdvisories` to preview
+validation without writing a workout. Resolution fetches current defaults from TrainHeroic; an
+unavailable library response stops the build.
 
 ## Develop
 
