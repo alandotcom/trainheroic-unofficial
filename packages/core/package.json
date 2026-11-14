@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.6",
-    "@modelcontextprotocol/server": "2.3.1",
+    "@modelcontextprotocol/server": "2.4.0",
     "@trainheroic-unofficial/dto": "workspace:*",
     "@trainheroic-unofficial/js": "workspace:*",
     "zod": "^4.6.7"
