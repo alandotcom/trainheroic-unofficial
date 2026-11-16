@@ -2,16 +2,17 @@
 import Layout from "../layouts/Layout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
+import ExportHelp from "../components/ExportHelp.astro";
 ---
 
 <Layout
-  title="Export your workout history"
-  description="Export your TrainHeroic workout history as CSV, JSON, or text. Your browser signs in to TrainHeroic directly, and your password never reaches our servers."
+  title="Export TrainHeroic workout history to CSV or JSON"
+  description="Download your TrainHeroic workout history as CSV for Excel or Google Sheets, JSON, or text. Preview sets, reps and weights with this browser-only export tool."
 >
   <Header />
   <main id="main" class="export">
     <div class="export-shell export__head">
-      <h1>Export your workout history</h1>
+      <h1>Export your TrainHeroic workout history</h1>
       <p class="lead" id="lead">
         Sign in, preview your logged sessions, then download the lot as a spreadsheet (CSV),
         structured data (JSON), or a plain-text log.
@@ -110,6 +111,9 @@ import Footer from "../components/Footer.astro";
         <button id="download" type="button" disabled>Download</button>
         <p id="download-status" class="status download-status" role="status" aria-live="polite"></p>
       </div>
+    </div>
+    <div class="export-shell">
+      <ExportHelp />
     </div>
   </main>
   <Footer />

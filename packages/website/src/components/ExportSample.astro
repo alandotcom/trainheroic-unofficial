@@ -1,0 +1,63 @@
+---
+import { serializeWorkoutHistory, type WorkoutHistoryExport } from "@trainheroic-unofficial/js";
+
+const sample: WorkoutHistoryExport[] = [{
+  id: null,
+  date: "2026-11-02",
+  title: "Sample strength session",
+  program: "Example program",
+  team: null,
+  logged: true,
+  personal: true,
+  blocks: [{
+    order: 1,
+    title: "Strength",
+    isTest: false,
+    exercises: [{
+      exerciseId: null,
+      title: "Back Squat",
+      units: ["reps", "lb"],
+      sets: [1, 2].map((set) => ({
+        set,
+        prescribed: {
+          reps: 5, weight: 225, weightUnit: "lb",
+          params: [{ unit: "reps", value: 5 }, { unit: "lb", value: 225 }],
+          display: "5 @ 225",
+        },
+        performed: {
+          reps: set === 1 ? 5 : 4, weight: 225, weightUnit: "lb",
+          params: [{ unit: "reps", value: set === 1 ? 5 : 4 }, { unit: "lb", value: 225 }],
+          display: set === 1 ? "5 @ 225" : "4 @ 225",
+        },
+      })),
+    }],
+  }],
+}];
+const csv = serializeWorkoutHistory(sample, "csv", { filenameBase: "trainheroic-sample" });
+const downloadHref = `data:${csv.contentType};charset=utf-8,${encodeURIComponent(csv.content)}`;
+---
+
+<section aria-labelledby="export-sample-title">
+  <h2 id="export-sample-title">Preview a TrainHeroic CSV export</h2>
+  <p>
+    This fictional example shows two sets with separate planned and logged results. The second
+    set was programmed for five reps and logged as four reps at 225 lb. Your export uses the
+    same columns and format.
+  </p>
+  <div class="sample-scroll" role="region" aria-label="Sample CSV, scroll sideways to read all columns" tabindex="0">
+    <pre><code>{csv.content}</code></pre>
+  </div>
+  <p>
+    <a href={downloadHref} download={csv.filename}>Download the sample CSV</a> to try it in Excel
+    or Google Sheets. No sign-in is needed for this sample.
+  </p>
+</section>
+
+<style>
+  section { margin-block: 1.5rem; }
+  h2 { margin-bottom: 0.75rem; font-size: 1.25rem; }
+  p { line-height: 1.65; }
+  .sample-scroll { overflow-x: auto; margin-block: 1rem; background: var(--color-surface); }
+  .sample-scroll:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; }
+  pre { margin: 0; padding: 0.75rem; font-size: 0.8rem; }
+</style>

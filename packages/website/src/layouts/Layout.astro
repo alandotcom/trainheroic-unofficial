@@ -1,5 +1,9 @@
 ---
 import { pageHref, sitePath, withBase } from "../lib/paths.ts";
+import data from "blume:data";
+import Analytics from "blume/components/layout/Analytics.astro";
+import ConsentHead from "blume/components/layout/ConsentHead.astro";
+import ConsentBanner from "blume/components/layout/ConsentBanner.astro";
 
 interface Props {
   title: string;
@@ -27,8 +31,28 @@ const {
 
 const pageTitle = `${title} · ${SITE_NAME}`;
 const site = Astro.site ?? SITE_URL;
-const canonical = new URL(path === "/" ? "" : path.slice(1), site);
+function absolutePageUrl(pagePath: string): URL {
+  const url = new URL(withBase(pagePath), site);
+  url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+  return url;
+}
+
+const canonical = absolutePageUrl(path);
 const ogImage = new URL(withBase(image), site);
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "@id": canonical.href,
+  url: canonical.href,
+  name: pageTitle,
+  description,
+  inLanguage: "en",
+  isPartOf: {
+    "@type": "WebSite",
+    name: SITE_NAME,
+    url: absolutePageUrl("/").href,
+  },
+};
 ---
 
 <!doctype html>
@@ -40,6 +64,8 @@ const ogImage = new URL(withBase(image), site);
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <meta name="description" content={description} />
+    {data.config.consent && <ConsentHead consent={data.config.consent} />}
+    {path !== "/export" && <Analytics analytics={data.config.analytics} />}
     <meta name="theme-color" content="#f3f1e9" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#141412" media="(prefers-color-scheme: dark)" />
     {/* Blume's docs pages pick the theme from the "blume-theme" key in localStorage, falling
@@ -56,6 +82,9 @@ const ogImage = new URL(withBase(image), site);
       })();
     </script>
     <link rel="canonical" href={canonical} />
+    <link rel="describedby" type="text/plain" href={pageHref("/llms.txt", Astro.url.pathname)} />
+    <link rel="describedby" type="application/json" href={pageHref("/agent-readability.json", Astro.url.pathname)} />
+    <link rel="ai-catalog" type="application/ai-catalog+json" href={pageHref("/.well-known/ai-catalog.json", Astro.url.pathname)} />
     <link rel="icon" type="image/svg+xml" href={pageHref("favicon.svg", Astro.url.pathname)} />
     <link
       rel="apple-touch-icon"
@@ -79,6 +108,11 @@ const ogImage = new URL(withBase(image), site);
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
     <meta name="twitter:image:alt" content={imageAlt} />
+    <script
+      is:inline
+      type="application/ld+json"
+      set:html={JSON.stringify(structuredData).replace(/</g, "\\u003c")}
+    />
   </head>
   <body>
     {
@@ -97,9 +131,32 @@ const ogImage = new URL(withBase(image), site);
     }
     <a class="skip-link" href="#main">Skip to main content</a>
     <slot />
+    <ConsentBanner policy="/privacy" />
   </body>
 </html>
 
 <style is:global>
   @import "../styles/global.css";
+
+  [data-blume-consent-banner] {
+    position: fixed;
+    inset: auto 1rem 1rem auto;
+    z-index: 100;
+    width: min(24rem, calc(100% - 2rem));
+    padding: 1rem;
+    color: var(--color-ink);
+    background: var(--color-bg);
+    border: 1px solid var(--color-line);
+    box-shadow: 0 4px 24px rgb(0 0 0 / 15%);
+  }
+  [data-blume-consent-banner] p { margin: 0; font-size: .875rem; }
+  [data-blume-consent-banner] > div { display: flex; gap: .75rem; margin-top: .75rem; }
+  [data-blume-consent-choice] {
+    flex: 1;
+    padding: .5rem 1rem;
+    border: 1px solid var(--color-line);
+    color: inherit;
+    background: transparent;
+    cursor: pointer;
+  }
 </style>

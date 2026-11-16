@@ -1,0 +1,113 @@
+---
+import { pageHref } from "../lib/paths.ts";
+import ExportSample from "./ExportSample.astro";
+---
+
+<section class="export-help" aria-labelledby="export-help-title">
+  <h2 id="export-help-title">How to download your TrainHeroic data</h2>
+  <ol>
+    <li>Sign in with your existing TrainHeroic email and password.</li>
+    <li>Review the loaded sessions. Use <strong>Change range</strong> to choose dates.</li>
+    <li>Select <strong>Only logged</strong> if you want to exclude unlogged sessions.</li>
+    <li>Choose CSV, JSON, or Text from <strong>Format</strong>, then select <strong>Download</strong>.</li>
+  </ol>
+  <p>
+    This unofficial tool reads the workout history available to your account. It does not change
+    your training. Your browser signs in to TrainHeroic directly. Read the
+    <a href={pageHref("/privacy", Astro.url.pathname)}>privacy policy</a> for storage details.
+  </p>
+
+  <h2>Choose a workout export format</h2>
+  <dl>
+    <dt>CSV for Excel or Google Sheets</dt>
+    <dd>
+      One row per exercise set, with prescribed and performed values in separate columns.
+      Open the downloaded CSV in Excel, or import it into Google Sheets to filter dates,
+      compare lifts, or build your own charts.
+    </dd>
+    <dt>JSON for scripts and backups</dt>
+    <dd>
+      A structured list of workouts with blocks, exercises, sets, and unit information.
+      Choose JSON when you need the workout hierarchy or want to process the export with code.
+    </dd>
+    <dt>Text for reading or printing</dt>
+    <dd>
+      A readable session log. Open the downloaded file in a text editor to print it or save it
+      as a PDF. See the <a href={pageHref("/guides/print-workouts", Astro.url.pathname)}>printing guide</a>.
+    </dd>
+  </dl>
+
+  <ExportSample />
+
+  <details>
+    <summary>Which columns are in the TrainHeroic CSV export?</summary>
+    <p>The CSV contains these 14 columns, in this order:</p>
+    <pre><code>date,program,team,workout,block,exercise,set,prescribed_reps,prescribed_weight,performed_reps,performed_weight,weight_unit,prescribed,performed</code></pre>
+    <p>
+      The first seven columns identify the session, exercise, and set. The next five contain
+      numeric reps and weights where available, plus the weight unit. The final two preserve
+      the readable prescription and result, including values such as time or distance that
+      do not fit the reps and weight columns. Missing values stay blank. Check
+      <code>weight_unit</code> before comparing loads; this export does not convert units.
+    </p>
+    <p>
+      CSV includes exercises with set rows. JSON also retains the session and block structure,
+      so use JSON when sessions without sets matter to your analysis.
+    </p>
+  </details>
+  <details>
+    <summary>Can I export an entire program or move it to another training app?</summary>
+    <p>
+      This tool exports the sessions accessible through your athlete account for the loaded date
+      range. It does not download a reusable coach program template or automatically import data
+      into another app. Use CSV or JSON as the source for a migration, and check the destination
+      app's import format. For programming from a spreadsheet, read the
+      <a href={pageHref("/guides/import-workouts", Astro.url.pathname)}>workout import guide</a>.
+    </p>
+  </details>
+  <details>
+    <summary>Is this a full account or GDPR data export?</summary>
+    <p>
+      This is a workout-history export. It does not include every category of account data, such
+      as messages, billing records, or profile information. TrainHeroic offers an
+      <a href="https://account.trainheroic.com/data-export">official account-data export</a>.
+      Its <a href="https://support.trainheroic.com/hc/en-us/articles/19026188372621-As-an-athlete-how-do-I-download-my-personal-data-GDPR-Export">export instructions</a>
+      describe a ZIP of CSV files from the athlete web portal.
+    </p>
+  </details>
+  <details>
+    <summary>Why are sessions or performed values missing?</summary>
+    <p>
+      Check the date range and the <strong>Only logged</strong> filter first. A prescribed set
+      can have blank performed values when no result was recorded. The tool can only export
+      data TrainHeroic returns for the signed-in account. If a session you can see in TrainHeroic
+      is missing here, include its date and the error text in a
+      <a href={pageHref("/support", Astro.url.pathname)}>support request</a>.
+    </p>
+  </details>
+  <p>
+    For repeatable downloads and local files, use the
+    <a href={pageHref("/developers/cli", Astro.url.pathname)}>TrainHeroic CLI</a>.
+    For AI-assisted analysis, <a href={pageHref("/connect", Astro.url.pathname)}>connect TrainHeroic to Claude</a>.
+  </p>
+</section>
+
+<style>
+  .export-help {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-line);
+    line-height: 1.65;
+  }
+
+  h2 { margin-block: 1.5rem 0.75rem; font-size: 1.25rem; }
+  ol { padding-left: 1.5rem; }
+  li + li { margin-top: 0.375rem; }
+  dt { margin-top: 1rem; font-weight: 650; }
+  dd { margin: 0.25rem 0 1rem; }
+  details { padding-block: 0.75rem; border-top: 1px solid var(--color-line); }
+  summary { cursor: pointer; font-weight: 600; }
+  summary:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; }
+  details p { margin-top: 0.75rem; }
+  pre { overflow-x: auto; padding: 0.75rem; background: var(--color-surface); }
+</style>

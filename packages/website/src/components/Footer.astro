@@ -8,8 +8,12 @@ const path = sitePath(Astro.url.pathname);
 <footer class="site-footer shell narrow">
   <p>Unofficial project. TrainHeroic is a separate company.</p>
   <div class="site-footer__links">
+    <a href={pageHref("/guides", path)}>Workout guides</a>
+    <a href={pageHref("/integrations", path)}>Integrations</a>
+    <a href={pageHref("/faq", path)}>FAQ</a>
     <a href={pageHref("/support", path)}>Support</a>
     <a href={pageHref("/privacy", path)}>Privacy</a>
+    <button type="button" data-blume-consent-open>Cookie settings</button>
     <a href={pageHref("/terms", path)}>Terms</a>
     <a href={REPO_URL} aria-label="GitHub (opens in new tab)" target="_blank" rel="noopener noreferrer">GitHub</a>
     <a href={NPM_ORG_URL} aria-label="npm (opens in new tab)" target="_blank" rel="noopener noreferrer">npm</a>

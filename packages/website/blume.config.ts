@@ -1,4 +1,6 @@
 import { defineConfig } from "blume";
+import { script } from "blume/analytics";
+import { native } from "blume/consent";
 import { MCP_URL, NPM_ORG_URL, REPO_URL, SUPPORT_EMAIL } from "./src/data/site.ts";
 
 const base = process.env.ASTRO_BASE;
@@ -48,6 +50,9 @@ export default defineConfig({
   footer: {
     copyright: "Unofficial project. TrainHeroic is a separate company.",
     links: [
+      { label: "Workout guides", href: "/guides" },
+      { label: "Integrations", href: "/integrations" },
+      { label: "FAQ", href: "/faq" },
       { label: "Support", href: "/support" },
       { label: "Privacy", href: "/privacy" },
       { label: "Terms", href: "/terms" },
@@ -55,7 +60,11 @@ export default defineConfig({
       { label: "Hosted MCP", href: MCP_URL },
     ],
   },
-  // The "Was this page helpful?" rating reports through analytics adapters, and this site
-  // configures none, so a reader's answer would be recorded nowhere.
+  // A local bootstrap sends only canonical public URLs and fixed action names to GA4.
+  // Blume holds this script until the visitor accepts analytics cookies.
+  analytics: [script({ src: "/analytics.js" })],
+  consent: native({ policy: "/privacy" }),
+  search: { analytics: { queries: false } },
+  // Feedback is not part of the measurement plan.
   feedback: false,
 });

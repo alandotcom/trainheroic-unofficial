@@ -202,7 +202,8 @@ p {
   margin-bottom: 0.5rem;
 }
 
-.site-footer a {
+.site-footer a,
+.site-footer button {
   min-width: 44px;
   min-height: 44px;
   display: inline-flex;
@@ -211,7 +212,15 @@ p {
   text-decoration: none;
 }
 
-.site-footer a:hover {
+.site-footer button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.site-footer a:hover,
+.site-footer button:hover {
   color: var(--color-ink);
   text-decoration: underline;
 }

@@ -12,7 +12,8 @@
     "prebuild": "pnpm gen:mcp-tools",
     "build": "blume validate --strict && blume build --strict",
     "preview": "blume preview",
-    "typecheck": "blume check --strict"
+    "typecheck": "blume check --strict",
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",

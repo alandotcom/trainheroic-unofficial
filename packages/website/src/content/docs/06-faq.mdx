@@ -1,0 +1,109 @@
+---
+title: TrainHeroic Unofficial FAQ
+description: Answers about the TrainHeroic API, Claude connector, workout exports, printing, spreadsheet imports, account access and privacy.
+sidebar:
+  label: FAQ
+search:
+  keywords: [faq, questions, api, claude, export, csv, print, import, desktop]
+related:
+  - /connect
+  - /export
+  - /guides
+  - /developers
+---
+
+Find answers about connecting your account, downloading training history, and working with
+TrainHeroic through the unofficial toolkit. Each answer links to the relevant tool or guide.
+
+## Is TrainHeroic Unofficial an official TrainHeroic product?
+
+TrainHeroic Unofficial is an independent community project and is not affiliated with or
+endorsed by TrainHeroic. You need an existing TrainHeroic account to use its connector, API client, or
+export tool. For help with the TrainHeroic app, billing, or your account, contact
+[TrainHeroic support](https://support.trainheroic.com/).
+
+## How can I access the TrainHeroic API?
+
+This toolkit provides a TypeScript SDK, CLI, and MCP server over the undocumented endpoints
+used by TrainHeroic's apps. The SDK and CLI authenticate with your existing TrainHeroic email
+and password. This project does not issue a separate TrainHeroic API key. Start with the
+[API documentation](/developers) for authentication and a first request. Upstream endpoints
+can change, so pin package versions in applications that depend on them.
+
+## Can I connect my TrainHeroic account to Claude or another AI assistant?
+
+Yes. Add the hosted MCP server as a custom connector in Claude.ai and sign in with your
+TrainHeroic account. Follow the [Claude setup guide](/connect) for the connector URL and steps.
+Claude Code, Cursor, and other clients that support remote HTTP MCP servers with OAuth can
+use the [MCP configuration guide](/developers/mcp). The assistant needs an authorized
+connection before it can read your account through this project.
+
+## Does the connector work for athletes and coaches?
+
+Both roles are supported. Athletes get their own workouts, training history, personal records,
+working maxes, and logging tools. Coaches also get roster, programming, analytics, and
+messaging tools. A coach account can access its own athlete training as well. The
+[capability reference](/capabilities) explains the available tools and confirmation rules.
+
+## Can I use the toolkit in a desktop browser?
+
+Yes. The [browser export tool](/export) lets you preview and download workout history from a
+desktop browser. An AI client with the connector can also read scheduled workouts and history
+available to your account. These are specific ways to work with your training outside the
+mobile app. For custom desktop workflows, see the [integrations overview](/integrations).
+
+## How do I export TrainHeroic workout history to Excel or Google Sheets?
+
+Open the [workout export tool](/export), sign in, choose a date range, and download CSV. Open
+the file in Excel or import it into Google Sheets. The CSV has one row per exercise set,
+including separate prescribed and performed reps and weights where available. JSON preserves
+the workout hierarchy; Text provides a readable log. The export page documents every CSV
+column and explains missing values and units.
+
+## Can I print TrainHeroic workouts or save them as a PDF?
+
+Yes. Download the Text format from the [export tool](/export), open the file in a text editor,
+and use Print. Choose the print dialog's PDF option to save a PDF. For upcoming sessions,
+an authorized AI assistant can retrieve the scheduled workouts and format a response for
+you to review and print. Follow the [printing guide](/guides/print-workouts) for both workflows.
+
+## Can I import Excel or CSV programming into TrainHeroic?
+
+You can prepare spreadsheet rows for Claude or map them to the SDK's workout specification.
+Creating workouts in a coach program requires coach access to that program. Resolve exercise
+names, specify units, and create one draft first so you can verify the saved session against
+the spreadsheet. The [spreadsheet import guide](/guides/import-workouts) covers preparation,
+draft review, and publishing. File parsing depends on your AI client or your own code.
+
+## Does the export include entire programs or all my account data?
+
+The browser exporter downloads athlete sessions accessible to your account for the selected
+date range. It does not create a reusable backup of a coach's program library or download
+every category of account data, such as messages and billing records. For a broader download,
+use [TrainHeroic's official account-data export](https://account.trainheroic.com/data-export).
+Moving a workout export into another app requires mapping the file to that app's import format.
+
+## Can the AI assistant change my TrainHeroic data?
+
+Yes, when your account has access to the requested action. Building a draft creates a session
+in TrainHeroic. Actions such as publishing workouts, sending messages, deleting data, and
+logging athlete-facing results require confirmation through the MCP tools. For a review-only
+task, ask the assistant to read the relevant data and make no changes. See the
+[capability reference](/capabilities) for the tool-level rules.
+
+## Where are my password and training data stored?
+
+The hosted connector keeps TrainHeroic credentials in the encrypted properties of your OAuth
+grant. Hosted sync tools can copy requested training data into the service's history database.
+The browser exporter sends credentials and requests directly to TrainHeroic and caches workout
+history in your browser; logging out clears that workout cache. Your AI client also receives
+the results of its tool calls. Read the [privacy policy](/privacy) for each workflow's storage
+and deletion details.
+
+## Why does the connector fail or keep asking me to sign in?
+
+First check the connector URL against the clean URL in the [setup guide](/connect). Extra
+text, brackets, or citation numbers can break the connection. If the URL is incorrect, remove
+the connector, add it again with the clean URL, and sign in again. If the problem continues,
+follow the [support guide](/support) and include the exact error and the tool you were using.
+Keep passwords and tokens out of support messages.

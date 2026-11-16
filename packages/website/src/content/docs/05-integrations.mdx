@@ -1,0 +1,66 @@
+---
+title: TrainHeroic integrations
+description: Connect TrainHeroic to Claude and MCP clients, export workouts to Excel or Google Sheets, or build a custom integration with the unofficial API toolkit.
+search:
+  keywords: [integrations, connect, claude, cursor, excel, google sheets, automation]
+related:
+  - /faq
+  - /connect
+  - /developers
+  - /guides
+---
+
+TrainHeroic Unofficial connects your existing TrainHeroic account to AI assistants, spreadsheets,
+and custom software. Choose a workflow below. Each option uses the same unofficial toolkit;
+available data and actions depend on your TrainHeroic account.
+
+| Connect to | Use it for | Get started |
+| --- | --- | --- |
+| Claude.ai | Ask about workouts, review progress, or draft coach programming | [Add the custom connector](/connect) |
+| Claude Code, Cursor, and MCP clients | Use TrainHeroic tools from an AI coding environment | [Configure the MCP server](/developers/mcp) |
+| Excel or Google Sheets | Analyze a downloaded copy of your workout history | [Export workout history as CSV](/export) |
+| Shell scripts and local automation | Run repeatable commands and save JSON results | [Install the CLI](/developers/cli) |
+| TypeScript or JavaScript applications | Build a dashboard, report, or programming workflow | [Use the API client](/developers/sdk) |
+
+## Connect TrainHeroic to an AI assistant
+
+The hosted MCP endpoint is:
+
+```text
+{{mcp-url}}
+```
+
+The client must support remote HTTP MCP servers and OAuth sign-in. For Claude.ai, the
+[connection guide](/connect) walks through adding a custom connector. Other clients have
+their own server configuration and authorization flow. An ordinary chat without the connector
+cannot read your TrainHeroic account through this project.
+
+Athletes can ask about scheduled sessions, workout history, PRs, and working maxes. Coaches
+also get roster, readiness, compliance, programming, and messaging tools. The
+[capability reference](/capabilities) explains which actions require confirmation.
+
+## Use TrainHeroic data in Excel or Google Sheets
+
+The [browser export tool](/export) downloads a CSV with one row per exercise set. Import that
+file into your spreadsheet to compare prescribed and performed reps and weights. This is a
+manual file transfer; the spreadsheet does not stay synchronized with TrainHeroic. Download
+a new export when you need updated results.
+
+For a broader account download, TrainHeroic also has an
+[official data export](https://account.trainheroic.com/data-export). This site's exporter focuses
+on choosing sessions and downloading workout history in CSV, JSON, or readable text.
+
+For a readable copy, choose Text and follow the [printing guide](/guides/print-workouts).
+For programming that starts in a spreadsheet, follow the
+[workout import guide](/guides/import-workouts).
+
+## Build a custom TrainHeroic integration
+
+Use the [TypeScript SDK](/developers/sdk) when your application needs direct API calls.
+Use the [CLI](/developers/cli) for scripts that consume JSON, or the MCP server when an AI
+client will choose and call tools. The [API documentation](/developers) explains authentication
+and gives a first request for each interface.
+
+This project is unaffiliated with TrainHeroic and uses undocumented endpoints. It provides
+the integrations listed here; availability of other services' native TrainHeroic connections
+must be checked with those services.

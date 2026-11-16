@@ -1,0 +1,5 @@
+# Consolidate the trailing-slash variants present in Search Console permanently.
+# Cloudflare's automatic HTML normalization otherwise uses a temporary 307.
+/export/ /export 301
+/developers/ /developers 301
+/developers/skill/ /developers/skill 301

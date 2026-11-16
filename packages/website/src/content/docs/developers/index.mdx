@@ -1,9 +1,28 @@
 ---
-title: Developer docs
-description: Build on TrainHeroic with a Claude Code skill, a JSON command-line tool, a TypeScript SDK, or MCP servers that share one typed client.
+title: TrainHeroic API documentation
+description: Use the unofficial TrainHeroic API with a TypeScript SDK, CLI or MCP server. Learn authentication, read workout history, and build coach programming integrations.
+sidebar:
+  label: API overview
 search:
   keywords: [api, integration, getting started, quickstart, developer]
 ---
+
+Build a TrainHeroic integration with an unofficial TypeScript API client, command-line tool,
+or MCP server. The toolkit uses the undocumented endpoints behind TrainHeroic's apps and signs
+in with an existing TrainHeroic account. This is a community project, unaffiliated with TrainHeroic.
+
+## API access and authentication
+
+You authenticate with your TrainHeroic email and password rather than an API key issued by
+this project. The SDK acquires a session token on the first request and signs in again once
+after a 401 or 403. Keep credentials in environment variables when using the SDK or CLI.
+The [hosted MCP server](/developers/mcp) handles sign-in through an OAuth connection.
+
+Your account determines access: athletes can read their own training and log results;
+coaches also have roster, programming, analytics, and messaging tools. See the
+[capability reference](/capabilities) for supported operations and confirmation rules.
+
+## Choose an API client
 
 The toolkit has four entry points over the same TrainHeroic client and typed data shapes. Pick
 the one that matches who drives the work, and the page shows that surface's first request.
@@ -109,6 +128,22 @@ flowchart LR
   core --> hosted["Hosted MCP<br/>Cloudflare Worker"]
   cli --> skill["Claude Code skill"]
 ```
+
+## Read the docs from scripts and coding agents
+
+Use the [Markdown documentation index](/llms.txt) to find setup and API guides. These files
+describe the toolkit; accessing them does not sign in to TrainHeroic or expose account data.
+
+If a documentation request returns HTTP 403 with Cloudflare error 1010, send a descriptive
+user agent identifying your application:
+
+```console
+$ curl -A "my-trainheroic-docs-client/1.0" https://trainheroic-unofficial.com/llms.txt
+```
+
+Cloudflare documents this behavior for non-browser clients in its
+[error 1010 guide](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/).
+An error from the TrainHeroic API itself is a separate authentication or upstream problem.
 
 ## Runtime requirements
 

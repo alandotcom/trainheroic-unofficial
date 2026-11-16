@@ -1,0 +1,62 @@
+---
+title: How to print TrainHeroic workouts or save a PDF
+description: Download a readable TrainHeroic workout log, print sessions from a text editor, or save them as a PDF. Learn how to request future sessions through Claude.
+sidebar:
+  label: Print workouts or save a PDF
+search:
+  keywords: [print, printing, pdf, paper, sessions, future workouts]
+related:
+  - /export
+  - /connect
+  - /guides/import-workouts
+---
+
+You can print a copy of your TrainHeroic workout history by downloading a text log from the
+[unofficial export tool](/export), opening the file in a text editor, and using the editor's
+Print command. To keep a PDF, choose your operating system's PDF option in the print dialog.
+The exporter itself downloads CSV, JSON, and text files.
+
+## Print completed workouts
+
+1. Open [Export workout history](/export) and sign in with your TrainHeroic account.
+2. Use **Change range** to select the dates you want, then select **Apply**.
+3. Select **Only logged** if you want completed sessions only.
+4. Choose **Text (readable log)** under **Format**, then select **Download**.
+5. Open the `.txt` file in a text editor. Review the sessions, then choose **Print**.
+6. Select your printer or choose the print dialog's option to save a PDF.
+
+The text log groups exercises and sets by date and session. Each set includes its performed
+value and its planned value when those values are available. A missing result appears as a
+dash. The export focuses on sets and results; it does not reproduce the app's full layout,
+exercise videos, or coaching instructions.
+
+## Print upcoming sessions
+
+The export tool starts with a range based on your logged history. For upcoming training,
+connect [TrainHeroic to Claude](/connect) and ask for specific dates. The assistant can read
+the scheduled workouts your account can access and format a printable response.
+
+<Prompt description="Prepare a printable training week." actions={["copy"]}>
+  Read my scheduled TrainHeroic workouts for the next seven days. Format them as a printable
+  training log with each date, exercise, prescribed sets, reps, load, and available instructions.
+  Mark missing values clearly. Do not change any training data.
+</Prompt>
+
+Review the response against the scheduled sessions before printing it. To create a PDF, copy
+the reviewed response into a document editor and use that editor's PDF export or Print command.
+Your account must already have access to the sessions you request.
+
+## Print a spreadsheet instead
+
+Choose **CSV (spreadsheet)** in the [export tool](/export) if you want to filter exercises,
+hide columns, or adjust page breaks before printing. Open the file in Excel or import it into
+Google Sheets, then use the spreadsheet's print settings. The CSV has one row per set, so a
+long date range can produce many pages.
+
+## What about a complete coach program?
+
+The browser exporter reads athlete workout history for a date range. It does not create a
+reusable backup of a coach's program library. Coaches can use the
+[MCP tools](/developers/mcp) to inspect programs and sessions they manage, then request a
+formatted summary for review and printing. Keep the original program in TrainHeroic when you
+need its full structure and instructions.

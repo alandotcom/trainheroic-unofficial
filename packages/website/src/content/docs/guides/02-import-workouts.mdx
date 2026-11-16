@@ -1,0 +1,77 @@
+---
+title: Import Excel or CSV workouts into TrainHeroic
+description: Turn spreadsheet programming into TrainHeroic draft workouts with Claude or the TypeScript SDK. Map exercises, verify sets and units, then publish after review.
+sidebar:
+  label: Import spreadsheet workouts
+search:
+  keywords: [import, excel, csv, spreadsheet, workout builder, programming, template]
+related:
+  - /connect
+  - /developers/sdk/workouts
+  - /export
+---
+
+You can turn an Excel sheet or CSV into TrainHeroic draft workouts using the unofficial
+Claude connector or TypeScript SDK. A coach account needs access to the destination program.
+The toolkit accepts structured workout specifications; preparing the spreadsheet data and
+mapping exercises happens before the workout is created.
+
+## Prepare your spreadsheet
+
+Give every exercise an explicit session date, block, exercise name, set count, reps, load,
+and load unit. Include the destination team or program so the assistant does not have to
+guess where to write. Keep instructions in their own column.
+
+For example, a simple source sheet might contain:
+
+| Date | Block | Exercise | Sets | Reps | Load | Unit |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-23 | Strength | Back Squat | 5 | 5 | 225 | lb |
+| 2026-11-23 | Strength | Bench Press | 3 | 8 | 135 | lb |
+
+This table is a suggested input layout, not a required upload schema. Preserve per-set values
+when the prescription changes across sets. Spell out time, distance, percentage-of-max, and
+weight units so a number such as `75` cannot be mistaken for the wrong type of load.
+
+## Build drafts with Claude
+
+1. [Connect TrainHeroic to Claude](/connect) with your coach account.
+2. Provide the spreadsheet through your AI client's file attachment feature, or paste the rows
+   as text. The connector's tools receive the resulting workout specifications.
+3. Ask Claude to identify the destination program and resolve each exercise against the
+   TrainHeroic exercise library. Review ambiguous exercise matches before creating sessions.
+4. Create one draft session and read it back. Check the date, exercise order, sets, reps,
+   load, units, and instructions against the source sheet.
+5. After the first session matches, create and review the remaining drafts. Publish only the
+   sessions you have approved.
+
+<Prompt description="Create and verify the first session from a spreadsheet." actions={["copy"]}>
+  Use these spreadsheet rows to prepare programming for my TrainHeroic team. First show me
+  the destination program and exercise matches. Ask me about ambiguous names or units. Then
+  create only the first session as a draft and read it back for comparison. Do not publish it.
+</Prompt>
+
+Creating a draft writes a session to TrainHeroic. Publishing makes it visible to athletes and
+requires confirmation through the MCP tools. Inspect the destination calendar before rerunning
+a failed import: a session may have been created before a later step failed.
+
+## Automate an import with code
+
+For repeatable imports, parse the spreadsheet or CSV in your own application and map each
+session to the SDK's `buildSession()` input. Resolve exercise IDs with the exercise library,
+pass explicit units, and set `publish: false`. The
+[workout builder guide](/developers/sdk/workouts) documents the input and provides a complete
+example. The [CLI](/developers/cli) can also build a session from a JSON specification with
+`coach workout build --file`.
+
+The SDK supports scalar prescriptions and per-set arrays. For percentage-based programming,
+use the builder's `%max` unit and verify the saved prescription before publishing. Direct SDK
+callers are responsible for their own confirmation policy.
+
+## Can I re-import a workout-history export?
+
+The [history CSV](/export) contains one row per set with separate prescribed and performed
+values. It is an analysis format, not a workout-builder input. To reuse it as programming,
+group rows into sessions and exercises, choose the prescription values, resolve exercise IDs,
+and map the result into a workout specification. Historical results do not automatically
+become new prescriptions.

@@ -1,9 +1,16 @@
 ---
-title: MCP servers
-description: Connect Claude Code, Cursor, or any MCP client to the hosted TrainHeroic server over HTTP with OAuth sign-in, or run a local stdio server instead.
+title: TrainHeroic MCP server
+description: Connect TrainHeroic to Claude Code, Cursor or another MCP client. Use the hosted server with OAuth sign-in, or run a local coach or athlete server.
+sidebar:
+  label: MCP servers
 search:
   keywords: [mcp, model context protocol, oauth, claude code, cursor, http, endpoint]
 ---
+
+The TrainHeroic MCP server lets an AI assistant read training history, review progress, and
+work with coach programming through the Model Context Protocol. For Claude.ai, follow the
+[connector setup guide](/connect). For code editors and other MCP clients, use the configuration
+below.
 
 The hosted server is the simplest MCP deployment: one URL, OAuth login, and a tool set selected
 from the role on your TrainHeroic account. To keep the server process and your credentials on
@@ -36,6 +43,19 @@ $ claude mcp add trainheroic --transport http {{mcp-url}}
 The client opens the TrainHeroic sign-in the first time the server needs authorization. The
 server keeps your TrainHeroic credentials inside the encrypted OAuth grant and never forwards
 the client's bearer token to TrainHeroic. The [privacy policy](/privacy) has the details.
+
+## Verify the connection
+
+After signing in, try a read-only request:
+
+<Prompt description="Check the connection without changing training." actions={["copy"]}>
+  Read my next scheduled TrainHeroic workout and show its date and exercises. If there is no
+  scheduled workout, say so. Do not create, publish, or log anything.
+</Prompt>
+
+A successful tool response confirms the connection can read your account, including when the
+response says no workout is scheduled. Signing in alone does not confirm that a training tool
+has run. If authorization succeeds but the tool fails, use the [support guide](/support).
 
 ## Role-aware tools
 
