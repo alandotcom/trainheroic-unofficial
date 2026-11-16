@@ -1,5 +1,45 @@
 # @trainheroic-unofficial/core
 
+## 4.3.0
+
+### Minor Changes
+
+- da269f0: Let `workout_build` and `buildSession` prescribe a unit other than an exercise's library default,
+  such as a percentage of max (`"secondaryUnit": "%max"`) or RPE on a built-in pounds lift like Back
+  Squat, or meters on the stock miles `Run`. TrainHeroic stores an inserted exercise row with the
+  library's param types, and keeps the requested types when the row is saved again by id, which is how
+  the coach web app's unit picker works.
+
+  `buildSession` resolves each stated unit to a param type (new `resolveExerciseUnits`), inserts the
+  rows, and saves again by id each row whose overridden slots (new `overriddenSlots`) the insert
+  stored in the library type. It throws when the save response is not a row list, when a sent
+  exercise has no matching row, or when the second save still does not keep the requested types. A
+  unit that differs from the default is set on the session and reported as an advisory note. An
+  explicit `param_N_type` on a slot without values is ignored with a warning, so that slot keeps the
+  library default as before. The build still fails before writing when a unit is unknown, conflicts
+  with an explicit `param_N_type`, or is `sec` or `in` without a `param_N_type` (each names two
+  TrainHeroic types).
+
+### Patch Changes
+
+- 5764ab4: `analytics_query` errors now include TrainHeroic's response text. Before, a lift metric called with
+  an exercise that is not a weighted lift failed with only "Analytics lift-1rm-history failed
+  (HTTP 400)." The error now relays "Invalid exercise id" and explains that `exerciseId` must be a
+  weighted lift such as Back Squat, so an agent can correct the call.
+- fd07a53: Fix `session_save_as_template` and `coach session-save-template`, which failed with HTTP 500 for
+  every caller. TrainHeroic's `saveWorkoutAsTemplate/{workoutId}` endpoint also needs a body whose
+  `id` is the session's programWorkout id; the tool sent no body. The new SDK function
+  `saveSessionAsTemplate(client, { workoutId, pwId, title })` sends `{ id: pwId, title }`, and the
+  tool and CLI command now take `workoutId`, `pwId`, and `title` (`--workout`, `--pw`, `--title`).
+  `workout_read` and `readSession` now return the session's `workoutId`, so a session found on a
+  calendar date has both ids.
+- Updated dependencies [5764ab4]
+- Updated dependencies [580f62d]
+- Updated dependencies [fd07a53]
+- Updated dependencies [da269f0]
+  - @trainheroic-unofficial/js@4.3.0
+  - @trainheroic-unofficial/dto@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes
