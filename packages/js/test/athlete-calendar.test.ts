@@ -123,6 +123,30 @@ describe("fetchCoachAthleteCalendarSummary", () => {
     );
   });
 
+  it("keeps the known HTTP 500 out of HTTP error telemetry", async () => {
+    const onHttpError = vi.fn();
+    const telemetryClient = new TrainHeroicClient("a@b.com", "pw", "live-session", {
+      onHttpError,
+      transport: vi.fn(async () => json({ message: "Server Error" }, 500)),
+    });
+    await expect(
+      fetchCoachAthleteCalendarSummary(telemetryClient, 7, 2026, 6),
+    ).rejects.toBeInstanceOf(CoachMonthSummaryError);
+    expect(onHttpError).not.toHaveBeenCalled();
+  });
+
+  it("still reports other HTTP failures to HTTP error telemetry", async () => {
+    const onHttpError = vi.fn();
+    const telemetryClient = new TrainHeroicClient("a@b.com", "pw", "live-session", {
+      onHttpError,
+      transport: vi.fn(async () => json({ message: "Bad Gateway" }, 502)),
+    });
+    await expect(
+      fetchCoachAthleteCalendarSummary(telemetryClient, 7, 2026, 6),
+    ).rejects.toMatchObject({ status: 502 });
+    expect(onHttpError).toHaveBeenCalledOnce();
+  });
+
   it("reports a successful response that is not a row list as an unexpected shape", async () => {
     await expect(
       fetchCoachAthleteCalendarSummary(client(json({ unexpected: true })), 7, 2026, 11),

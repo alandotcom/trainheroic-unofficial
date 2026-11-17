@@ -52,6 +52,8 @@ export class CoachMonthSummaryError extends Error {
  *
  * TrainHeroic answers this endpoint with HTTP 500 for some athlete-months while the date-range
  * read (`fetchCoachAthleteWorkouts`) still works for the same athlete, so an HTTP 500 says so.
+ * The request lists 500 as an expected status so the client's HTTP error telemetry skips this
+ * known upstream failure; the thrown `CoachMonthSummaryError` carries it to the caller.
  */
 export async function fetchCoachAthleteCalendarSummary(
   client: TrainHeroicClient,
@@ -62,6 +64,7 @@ export async function fetchCoachAthleteCalendarSummary(
   const res = await client.request<unknown>(
     "GET",
     `/2.0/coach/athlete/calendar/summary/${athleteId}/${year}/${month}/7`,
+    { expectedStatuses: [500] },
   );
   const label = `Coach athlete calendar summary for athlete ${athleteId} in ${year}-${String(month).padStart(2, "0")}`;
   if (res.ok) {
