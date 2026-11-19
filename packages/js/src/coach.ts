@@ -527,7 +527,12 @@ async function requestAnalytics(
     if (v === undefined) continue;
     body[ANALYTICS_BODY_KEY[k]] = k === "exerciseId" ? String(v) : v;
   }
-  const res = await client.request("POST", spec.path, { body });
+  // The "Invalid exercise id" rejection is a caller input error that the thrown message explains,
+  // so it stays out of HTTP error telemetry. Other analytics failures are still reported.
+  const res = await client.request("POST", spec.path, {
+    body,
+    isExpectedFailure: (status, data) => status === 400 && isInvalidExerciseIdResponse(data),
+  });
   if (!res.ok) {
     const message = trainHeroicApiErrorMessage(`Analytics ${args.metric}`, res.status, res.data);
     throw new Error(withHint(message, analyticsErrorHint(res.data)));
@@ -541,13 +546,18 @@ async function requestAnalytics(
  * (verified with Run, Push-Up, and an unknown id; Back Squat succeeds).
  */
 function analyticsErrorHint(responseBody: unknown): string | null {
-  if (typeof responseBody === "string" && responseBody.includes("Invalid exercise id")) {
+  if (isInvalidExerciseIdResponse(responseBody)) {
     return (
       "exerciseId must be a weighted lift such as Back Squat (id 1); bodyweight, distance, " +
       "and unknown exercises are rejected."
     );
   }
   return null;
+}
+
+/** True for TrainHeroic's plain-text analytics rejection of an exerciseId it cannot chart. */
+function isInvalidExerciseIdResponse(responseBody: unknown): boolean {
+  return typeof responseBody === "string" && responseBody.includes("Invalid exercise id");
 }
 
 /** Append a sentence of guidance to an error message that may or may not end in a period. */

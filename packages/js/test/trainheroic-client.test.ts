@@ -291,6 +291,26 @@ describe("TrainHeroicClient", () => {
     expect(onHttpError).not.toHaveBeenCalled();
   });
 
+  it("reports a failure only when isExpectedFailure rejects its status and body", async () => {
+    const onHttpError = vi.fn();
+    const bodies = ["Known rejection", "Unknown rejection"];
+    const client = new TrainHeroicClient("a@b.com", "pw", "live-session", {
+      onHttpError,
+      transport: vi.fn(async () => json(bodies.shift(), 400)),
+    });
+    const isExpectedFailure = vi.fn(
+      (status: number, data: unknown) => status === 400 && data === "Known rejection",
+    );
+
+    const known = await client.request("POST", "/v5/analytics", { isExpectedFailure });
+    const unknown = await client.request("POST", "/v5/analytics", { isExpectedFailure });
+
+    expect(known).toMatchObject({ ok: false, status: 400, data: "Known rejection" });
+    expect(unknown).toMatchObject({ ok: false, status: 400, data: "Unknown rejection" });
+    expect(isExpectedFailure).toHaveBeenCalledTimes(2);
+    expect(onHttpError).toHaveBeenCalledTimes(1);
+  });
+
   it("shares one login across concurrent cold requests", async () => {
     let logins = 0;
     vi.stubGlobal(

@@ -34,6 +34,13 @@ export type RequestOptions = {
   base?: ApiBase;
   /** Final non-2xx statuses the caller handles as part of normal control flow. */
   expectedStatuses?: readonly number[];
+  /**
+   * Narrower form of `expectedStatuses` for failures recognized by their parsed response body
+   * as well as their status. Return true when the caller handles this failure as part of normal
+   * control flow, which keeps it out of `ClientOptions.onHttpError`. Only final non-2xx
+   * responses whose body was read reach the predicate.
+   */
+  isExpectedFailure?: (status: number, data: unknown) => boolean;
 };
 
 export type ClientResult<T = unknown> = {
@@ -52,8 +59,9 @@ export type ClientOptions = {
   onSession?: (sessionId: string) => void;
   /**
    * Called once when a login or API request finishes with a non-2xx response. Transient 401/403
-   * API responses that succeed after the built-in re-login and final statuses declared through
-   * `RequestOptions.expectedStatuses` are not reported. The callback is best-effort: telemetry
+   * API responses that succeed after the built-in re-login, final statuses declared through
+   * `RequestOptions.expectedStatuses`, and failures matched by `RequestOptions.isExpectedFailure`
+   * are not reported. The callback is best-effort: telemetry
    * failures never change the API result returned to the caller.
    */
   onHttpError?: TrainHeroicHttpErrorHandler;
@@ -177,7 +185,7 @@ export class TrainHeroicClient {
     }
     const data = parseResponseText(text);
 
-    if (shouldReport) {
+    if (shouldReport && options.isExpectedFailure?.(res.status, data) !== true) {
       notifyHttpError(this.#onHttpError, method, url, res.status, {
         requestBody: options.body,
         responseBody: data,

@@ -211,4 +211,42 @@ describe("queryAnalytics", () => {
       /lift-1rm-history failed \(HTTP 400\): Invalid exercise id\. exerciseId must be a weighted lift/u,
     );
   });
+
+  it("keeps the invalid lift id rejection out of HTTP error telemetry", async () => {
+    const onHttpError = vi.fn();
+    const client = new TrainHeroicClient("a@b.com", "pw", "live-session", {
+      onHttpError,
+      transport: vi.fn(async () => json("Invalid exercise id", 400)),
+    });
+
+    await expect(
+      queryAnalytics(client, {
+        metric: "lift-1rm-history",
+        userIds: [11],
+        exerciseId: 82,
+        dateStart: "2026-10-01",
+        dateEnd: "2026-11-14",
+      }),
+    ).rejects.toThrow(/Invalid exercise id/u);
+    expect(onHttpError).not.toHaveBeenCalled();
+  });
+
+  it("still reports other analytics HTTP 400s to HTTP error telemetry", async () => {
+    const onHttpError = vi.fn();
+    const client = new TrainHeroicClient("a@b.com", "pw", "live-session", {
+      onHttpError,
+      transport: vi.fn(async () => json({ message: "Invalid date" }, 400)),
+    });
+
+    await expect(
+      queryAnalytics(client, {
+        metric: "lift-1rm-history",
+        userIds: [11],
+        exerciseId: 1,
+        dateStart: "2026-10-01",
+        dateEnd: "2026-11-14",
+      }),
+    ).rejects.toThrow(/HTTP 400/u);
+    expect(onHttpError).toHaveBeenCalledTimes(1);
+  });
 });
