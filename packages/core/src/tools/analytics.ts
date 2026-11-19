@@ -1,8 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { opaqueOutputSchema } from "@trainheroic-unofficial/dto";
-import { ANALYTICS_METRIC_KEYS, definedProps, queryAnalytics } from "@trainheroic-unofficial/js";
-import { attempt, idParam, jsonResult, READ, toId } from "../context";
+import {
+  ANALYTICS_METRIC_KEYS,
+  analyticsMetricUsesExercise,
+  definedProps,
+  queryAnalytics,
+  supportsLiftAnalytics,
+} from "@trainheroic-unofficial/js";
+import type { AnalyticsMetric, ExerciseIndex } from "@trainheroic-unofficial/js";
+import { attempt, errorResult, idParam, jsonResult, READ, toId } from "../context";
 import type { ToolContext } from "../context";
 
 // The analytics metric catalog (keys → endpoint/scope/required inputs) and request-body
@@ -25,9 +32,36 @@ const ANALYTICS_QUERY_DESC =
   "range, so don't then fan out blind per-lift athlete_lift_history calls. Despite 'athlete' " +
   "in the name this metric accepts 1–N userIds. " +
   "readiness-team takes a single `date`; every other metric takes dateStart/dateEnd. " +
-  "lift-1rm-history, lift-progress-team, and working-max-history also need exerciseId, a " +
-  "weighted lift such as Back Squat (lift-1rm-history answers 'Invalid exercise id' for " +
-  "bodyweight, distance, and unknown exercises). All dates are YYYY-MM-DD.";
+  "lift-1rm-history, lift-progress-team, and working-max-history also need exerciseId: a " +
+  "library exercise recorded as a load lifted for reps, such as Back Squat (id 1). In " +
+  "exercise_search results that means units [reps, lb], [reps, %max], or lb in the first " +
+  "slot. Bodyweight, timed, distance, and loaded-carry exercises (units such as [ft, lb] or " +
+  "[sec, lb]) are rejected, so skip them instead of calling. All dates are YYYY-MM-DD.";
+
+/**
+ * Explain why an exercise metric cannot chart `exerciseId`, or return null to let the request
+ * proceed. The check reads the exercise's default param types from the library mirror, so a
+ * mirrored exercise that TrainHeroic would reject with "Invalid exercise id" is answered here
+ * without an upstream call. An id missing from the mirror (a custom exercise created since the
+ * last sync, or a wrong id) still goes to TrainHeroic, whose rejection carries its own hint.
+ */
+async function exerciseMetricProblem(
+  index: ExerciseIndex,
+  metric: AnalyticsMetric,
+  exerciseId: number,
+): Promise<string | null> {
+  if (!analyticsMetricUsesExercise(metric)) return null;
+  const defaults = (await index.defaultsMany([exerciseId])).get(exerciseId);
+  if (defaults === undefined || supportsLiftAnalytics(defaults)) return null;
+  const exercise = await index.get(exerciseId);
+  const title = typeof exercise?.title === "string" ? exercise.title : `Exercise ${exerciseId}`;
+  const units = JSON.stringify(exercise?.units ?? []);
+  return (
+    `${metric} cannot chart "${title}" (id ${exerciseId}, units ${units}). TrainHeroic's ` +
+    "exercise analytics only accept a load lifted for reps: units [reps, lb], [reps, %max], " +
+    "or lb in the first slot, such as Back Squat (id 1). Skip this exercise or pick a lift."
+  );
+}
 
 /** Analytics report pulls. Read-only despite the POST verb, so ungated. */
 export function registerAnalyticsTools(server: McpServer, ctx: ToolContext): void {
@@ -50,15 +84,20 @@ export function registerAnalyticsTools(server: McpServer, ctx: ToolContext): voi
       annotations: READ,
     },
     ({ metric, teamId, userIds, exerciseId, date, dateStart, dateEnd, useMetric }) =>
-      attempt(async () =>
-        jsonResult(
+      attempt(async () => {
+        const exercise = exerciseId !== undefined ? toId(exerciseId) : undefined;
+        if (exercise !== undefined) {
+          const problem = await exerciseMetricProblem(ctx.index, metric, exercise);
+          if (problem !== null) return errorResult(problem);
+        }
+        return jsonResult(
           await queryAnalytics(
             ctx.client,
             definedProps({
               metric,
               teamId: teamId !== undefined ? toId(teamId) : undefined,
               userIds: userIds?.map(toId),
-              exerciseId: exerciseId !== undefined ? toId(exerciseId) : undefined,
+              exerciseId: exercise,
               date,
               dateStart,
               dateEnd,
@@ -66,7 +105,7 @@ export function registerAnalyticsTools(server: McpServer, ctx: ToolContext): voi
             }),
           ),
           { hint: "Narrow with a tighter date range or fewer athletes." },
-        ),
-      ),
+        );
+      }),
   );
 }

@@ -21,7 +21,15 @@ import {
 } from "@trainheroic-unofficial/dto";
 import type { TrainHeroicClient } from "./client";
 import { splitDateRange } from "./date-window";
-import { chunk, coerceInt, isRecord } from "./exercise-util";
+import {
+  PARAM_PCT_MAX,
+  PARAM_REPS,
+  PARAM_WEIGHT,
+  chunk,
+  coerceInt,
+  isRecord,
+} from "./exercise-util";
+import type { ExerciseDefaults } from "./exercise-util";
 import { trainHeroicApiErrorMessage } from "./http-error";
 import { checkResponse } from "./response-check";
 import { definedProps } from "./util";
@@ -444,6 +452,39 @@ const ANALYTICS_METRICS: Record<AnalyticsMetric, MetricSpec> = {
   },
 };
 
+/** True when the metric charts one exercise and so takes `exerciseId`. */
+export function analyticsMetricUsesExercise(metric: AnalyticsMetric): boolean {
+  return ANALYTICS_METRICS[metric].inputs.includes("exerciseId");
+}
+
+// Param-type code TrainHeroic puts in slot 2 of kettlebell lifts such as Russian KB Swing and
+// Turkish Get Up. The exercise analytics accept it as a load, alongside lb and %max.
+const PARAM_KETTLEBELL_LOAD = 19;
+const LOAD_PARAM_TYPES: ReadonlySet<number> = new Set([
+  PARAM_WEIGHT,
+  PARAM_PCT_MAX,
+  PARAM_KETTLEBELL_LOAD,
+]);
+
+/**
+ * Whether TrainHeroic's exercise analytics (lift-1rm-history, working-max-history,
+ * lift-progress-team) accept an exercise, judged from its default param types. Those reports
+ * chart a load lifted for reps, and they answer HTTP 400 "Invalid exercise id" for everything
+ * else. An exercise qualifies when slot 1 is weight (the stock "Body Weight" exercise, or DB
+ * Farmer's Carry recorded as lb × sec), or when slot 1 is reps or unset and slot 2 is a load
+ * (lb, %max, or the kettlebell load code). A load paired with distance or time in slot 1, such as
+ * KB Farmer's Walk (ft × lb) or Step Up (Goblet) (sec × lb), is rejected.
+ *
+ * A live probe on 2026-11-19 covered every param-type pair in a 2,387-exercise library against
+ * lift-1rm-history, plus representative pairs against the other two metrics.
+ */
+export function supportsLiftAnalytics(defaults: ExerciseDefaults): boolean {
+  const { param1, param2 } = defaults;
+  if (param1 === PARAM_WEIGHT) return true;
+  const repsOrUnset = param1 === PARAM_REPS || param1 === null;
+  return repsOrUnset && param2 !== null && LOAD_PARAM_TYPES.has(param2);
+}
+
 /**
  * A serializable description of every analytics metric: its scope (does it need a `teamId` or
  * `userIds`) and which date/exercise inputs it requires vs. optionally accepts. The CLI/MCP
@@ -541,15 +582,16 @@ async function requestAnalytics(
 }
 
 /**
- * Explain TrainHeroic's terse analytics rejections so the caller can fix its input.
- * lift-1rm-history answers "Invalid exercise id" for any exercise that is not a weighted lift
- * (verified with Run, Push-Up, and an unknown id; Back Squat succeeds).
+ * Explain TrainHeroic's terse analytics rejections so the caller can fix its input. The exercise
+ * metrics answer "Invalid exercise id" for an id outside the coach's library and for any exercise
+ * that `supportsLiftAnalytics` rejects.
  */
 function analyticsErrorHint(responseBody: unknown): string | null {
   if (isInvalidExerciseIdResponse(responseBody)) {
     return (
-      "exerciseId must be a weighted lift such as Back Squat (id 1); bodyweight, distance, " +
-      "and unknown exercises are rejected."
+      "exerciseId must be a library exercise recorded as a load lifted for reps, such as Back " +
+      "Squat (id 1): units [reps, lb], [reps, %max], or lb in the first slot. Bodyweight, " +
+      "timed, distance, and loaded-carry exercises are rejected."
     );
   }
   return null;

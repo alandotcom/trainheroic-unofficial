@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrainHeroicClient } from "../src/client";
-import { queryAnalytics, teamVolume } from "../src/coach";
+import {
+  analyticsMetricUsesExercise,
+  queryAnalytics,
+  supportsLiftAnalytics,
+  teamVolume,
+} from "../src/coach";
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -208,7 +213,7 @@ describe("queryAnalytics", () => {
         dateEnd: "2026-11-14",
       }),
     ).rejects.toThrow(
-      /lift-1rm-history failed \(HTTP 400\): Invalid exercise id\. exerciseId must be a weighted lift/u,
+      /lift-1rm-history failed \(HTTP 400\): Invalid exercise id\. exerciseId must be a library exercise recorded as a load lifted for reps/u,
     );
   });
 
@@ -248,5 +253,36 @@ describe("queryAnalytics", () => {
       }),
     ).rejects.toThrow(/HTTP 400/u);
     expect(onHttpError).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("supportsLiftAnalytics", () => {
+  // Param-type pairs from the 2026-11-19 live probe of lift-1rm-history:
+  // [param1, param2, accepted, example exercise].
+  const CASES: Array<[number | null, number | null, boolean, string]> = [
+    [3, 1, true, "Back Squat"],
+    [3, 2, true, "Clean Deadlift"],
+    [3, 19, true, "Russian KB Swing"],
+    [null, 1, true, "Shoulder to Overhead"],
+    [1, 0, true, "Body Weight"],
+    [1, 4, true, "DB Farmer's Carry"],
+    [11, 1, false, "KB Farmer's Walk"],
+    [18, 1, false, "Step Up (Goblet)"],
+    [5, 1, false, "DB Farmer's Walk"],
+    [3, 0, false, "Pull-Up"],
+    [3, null, false, "Sit-up"],
+    [10, 4, false, "Run"],
+    [null, null, false, "Bodyweight Row"],
+  ];
+
+  it.each(CASES)("param types %s/%s accepted=%s (%s)", (param1, param2, accepted) => {
+    expect(supportsLiftAnalytics({ param1, param2 })).toBe(accepted);
+  });
+
+  it("applies only to the metrics that take an exerciseId", () => {
+    expect(analyticsMetricUsesExercise("lift-1rm-history")).toBe(true);
+    expect(analyticsMetricUsesExercise("working-max-history")).toBe(true);
+    expect(analyticsMetricUsesExercise("lift-progress-team")).toBe(true);
+    expect(analyticsMetricUsesExercise("training-summary-athlete")).toBe(false);
   });
 });
